@@ -55,7 +55,9 @@
       "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_PzPoWu/**)",
       "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_StNdbY/**)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_RjgXGD/**)"
     ],
     "deny": [],
     "ask": []
