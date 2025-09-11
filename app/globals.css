@@ -1,0 +1,249 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+@custom-variant high-contrast (&:is(.high-contrast *));
+
+:root {
+  /* Updated to LCAPIX brand colors with green primary and mint surface */
+  --background: oklch(0.99 0.005 120);
+  --foreground: oklch(0.15 0.01 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 240);
+
+  /* Brand colors - Green 500/600/700 system */
+  --primary: oklch(0.608 0.182 142.5); /* green-500 */
+  --primary-foreground: oklch(0.99 0.005 120);
+  --primary-hover: oklch(0.548 0.166 142.5); /* green-600 */
+  --primary-active: oklch(0.486 0.148 142.5); /* green-700 */
+
+  /* Mint surface gradient background */
+  --surface: radial-gradient(ellipse at center, oklch(0.95 0.02 150) 0%, oklch(0.99 0.005 120) 100%);
+
+  /* Slate neutrals */
+  --secondary: oklch(0.961 0.006 240);
+  --secondary-foreground: oklch(0.278 0.029 240);
+  --muted: oklch(0.961 0.006 240);
+  --muted-foreground: oklch(0.533 0.015 240);
+  --accent: oklch(0.961 0.006 240);
+  --accent-foreground: oklch(0.278 0.029 240);
+
+  /* Status colors */
+  --success: oklch(0.608 0.182 142.5);
+  --success-foreground: oklch(0.99 0.005 120);
+  --warning: oklch(0.768 0.171 70.67);
+  --warning-foreground: oklch(0.15 0.01 240);
+  --error: oklch(0.577 0.245 27.325);
+  --error-foreground: oklch(0.99 0.005 120);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.99 0.005 120);
+  --border: oklch(0.898 0.013 240);
+  --input: oklch(1 0 0);
+  --ring: oklch(0.608 0.182 142.5);
+
+  --chart-1: oklch(0.608 0.182 142.5);
+  --chart-2: oklch(0.548 0.166 142.5);
+  --chart-3: oklch(0.768 0.171 70.67);
+  --chart-4: oklch(0.577 0.245 27.325);
+  --chart-5: oklch(0.486 0.148 142.5);
+
+  --radius: 0.75rem; /* 12px radius as specified */
+
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.15 0.01 240);
+  --sidebar-primary: oklch(0.608 0.182 142.5);
+  --sidebar-primary-foreground: oklch(0.99 0.005 120);
+  --sidebar-accent: oklch(0.961 0.006 240);
+  --sidebar-accent-foreground: oklch(0.278 0.029 240);
+  --sidebar-border: oklch(0.898 0.013 240);
+  --sidebar-ring: oklch(0.608 0.182 142.5);
+}
+
+.dark {
+  /* Dark theme with proper contrast ratios */
+  --background: oklch(0.11 0.01 240);
+  --foreground: oklch(0.961 0.006 240);
+  --card: oklch(0.15 0.01 240);
+  --card-foreground: oklch(0.961 0.006 240);
+  --popover: oklch(0.15 0.01 240);
+  --popover-foreground: oklch(0.961 0.006 240);
+
+  --primary: oklch(0.608 0.182 142.5);
+  --primary-foreground: oklch(0.11 0.01 240);
+  --primary-hover: oklch(0.668 0.198 142.5);
+  --primary-active: oklch(0.548 0.166 142.5);
+
+  --surface: radial-gradient(ellipse at center, oklch(0.18 0.02 150) 0%, oklch(0.11 0.01 240) 100%);
+
+  --secondary: oklch(0.278 0.029 240);
+  --secondary-foreground: oklch(0.961 0.006 240);
+  --muted: oklch(0.278 0.029 240);
+  --muted-foreground: oklch(0.639 0.013 240);
+  --accent: oklch(0.278 0.029 240);
+  --accent-foreground: oklch(0.961 0.006 240);
+
+  --success: oklch(0.668 0.198 142.5);
+  --success-foreground: oklch(0.11 0.01 240);
+  --warning: oklch(0.828 0.189 70.67);
+  --warning-foreground: oklch(0.11 0.01 240);
+  --error: oklch(0.637 0.237 27.325);
+  --error-foreground: oklch(0.11 0.01 240);
+
+  --destructive: oklch(0.637 0.237 27.325);
+  --destructive-foreground: oklch(0.11 0.01 240);
+  --border: oklch(0.278 0.029 240);
+  --input: oklch(0.278 0.029 240);
+  --ring: oklch(0.608 0.182 142.5);
+
+  --sidebar: oklch(0.15 0.01 240);
+  --sidebar-foreground: oklch(0.961 0.006 240);
+  --sidebar-primary: oklch(0.608 0.182 142.5);
+  --sidebar-primary-foreground: oklch(0.11 0.01 240);
+  --sidebar-accent: oklch(0.278 0.029 240);
+  --sidebar-accent-foreground: oklch(0.961 0.006 240);
+  --sidebar-border: oklch(0.278 0.029 240);
+  --sidebar-ring: oklch(0.608 0.182 142.5);
+}
+
+.high-contrast {
+  /* High contrast theme for accessibility */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0 0 0);
+
+  --primary: oklch(0 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --primary-hover: oklch(0.2 0 0);
+  --primary-active: oklch(0.1 0 0);
+
+  --surface: oklch(1 0 0);
+
+  --secondary: oklch(0.9 0 0);
+  --secondary-foreground: oklch(0 0 0);
+  --muted: oklch(0.9 0 0);
+  --muted-foreground: oklch(0.3 0 0);
+  --accent: oklch(0.9 0 0);
+  --accent-foreground: oklch(0 0 0);
+
+  --success: oklch(0.2 0.3 142.5);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.4 0.3 70.67);
+  --warning-foreground: oklch(1 0 0);
+  --error: oklch(0.3 0.4 27.325);
+  --error-foreground: oklch(1 0 0);
+
+  --destructive: oklch(0.3 0.4 27.325);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0 0 0);
+  --input: oklch(1 0 0);
+  --ring: oklch(0 0 0);
+
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0 0 0);
+  --sidebar-primary: oklch(0 0 0);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.9 0 0);
+  --sidebar-accent-foreground: oklch(0 0 0);
+  --sidebar-border: oklch(0 0 0);
+  --sidebar-ring: oklch(0 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Added brand-specific color tokens */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-error: var(--error);
+  --color-error-foreground: var(--error-foreground);
+  --color-surface: var(--surface);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Added motion preferences support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Added utility classes for brand surface gradient */
+@layer utilities {
+  .bg-surface {
+    background: var(--surface);
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-active;
+  }
+
+  .btn-success {
+    @apply bg-success text-success-foreground;
+  }
+
+  .btn-warning {
+    @apply bg-warning text-warning-foreground;
+  }
+
+  .btn-error {
+    @apply bg-error text-error-foreground;
+  }
+}
