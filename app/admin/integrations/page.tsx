@@ -7,6 +7,7 @@ import { AppLayout } from '@/components/app-layout';
 import { apiGet } from '@/lib/api-client';
 import { StatusCards } from '@/components/integrations/status-cards';
 import { ImportButtons } from '@/components/integrations/import-buttons';
+import { LogViewer } from '@/components/integrations/log-viewer';
 
 interface Status {
   substances: { total: number; enriched: number };
@@ -18,12 +19,14 @@ export default function IntegrationsAdminPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [logRefresh, setLogRefresh] = useState(0);
 
   const refresh = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const data = await apiGet<any>('/api/integrations/status');
       setStatus(data);
+      setLogRefresh(n => n + 1);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -53,6 +56,12 @@ export default function IntegrationsAdminPage() {
               <div>
                 <h2 className="text-lg font-semibold mb-3">Actions</h2>
                 <ImportButtons onRefresh={refresh} />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold mb-3">Recent activity</h2>
+                <div className="rounded-lg border bg-white">
+                  <LogViewer refreshKey={logRefresh} />
+                </div>
               </div>
             </>
           )}
