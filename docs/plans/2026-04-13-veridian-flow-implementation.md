@@ -18,14 +18,57 @@
 
 ## Ground rules for every task
 
+### THE PRIME DIRECTIVE (non-negotiable)
+
+**Design accommodates features, never the other way around.**
+
+This is a **visual overhaul only**. Every existing feature, API, schema, and piece of business logic stays exactly as it works today. If a stitch mockup suggests a feature that conflicts with an existing one, the existing feature wins and the mockup gets adapted. If a mockup omits a feature we already have, the mockup gets extended to include it.
+
+**What is PROTECTED and cannot change in this pass:**
+
+| Protected layer | What this means |
+|---|---|
+| **Database schema** | Zero `ALTER TABLE`, zero new migrations, zero column renames. AWS RDS schema is frozen. |
+| **API routes** (`app/api/**`) | URL shapes, methods, request bodies, response shapes — all frozen. Zod schemas unchanged. |
+| **LCA engine** (`lib/lca-engine.ts`, `lib/comparison-engine.ts`) | Calculation logic, factor matching, region/method fallback — frozen. |
+| **Integration clients** (`lib/integrations/**`) | PubChem / openLCA / Electricity Maps / BLS / EIA / Metals-API clients — frozen. |
+| **Auth** (`lib/auth.ts`, `components/auth-guard.tsx`) | JWT / bcrypt / Zustand-persist hydration fix — frozen. |
+| **Existing features** | Every feature on the 40/40 CRUD test list still works end-to-end. 84+ tests stay green. |
+| **PDF generator** (`lib/pdf-generator.ts`) | Data Sources section, source attribution — frozen. |
+| **`cost_rates` cache, `integration_log` audit** | Frozen. |
+| **Run Assessment flow** (modal → POST → engine → results) | Frozen. |
+
+**What is ALLOWED to change:**
+
+- Markup structure of pages (JSX)
+- CSS classes + tokens
+- Component decomposition (extracting `<CaseCanvas>` from `page.tsx`, etc.)
+- Layout (sidebar vs top nav, 2-pane vs 3-pane)
+- Typography + color + spacing
+- Adding new *visual* components (KPI cards, chart wrappers, shells)
+- Adding new *page-level* components in `components/` subdirs
+- Reworking form layouts (as long as the submit handler + API call stay identical)
+
+**Red flags — STOP and ask the user if a task requires:**
+- Dropping a column from any table → ❌ stop
+- Changing an API response shape → ❌ stop
+- Removing a keyboard shortcut or button that wires to a feature → ❌ stop
+- Renaming or restructuring any route under `/api/*` → ❌ stop
+- Modifying Zod schemas in API routes → ❌ stop
+- "Temporarily disabling" a test to make a refactor compile → ❌ stop
+- Any subagent suggesting "this feature doesn't fit the new design, we could remove it" → ❌ stop, surface to user
+
+### Other ground rules
+
 - **Human-in-the-loop:** After each phase closes, stop. User verifies in Claude Preview and says "proceed" before the next phase starts.
 - **Stitch HTML is the spec**, not the verbatim code. We port structure + styling, but React components replace div-soup, shadcn replaces inline HTML, and real API data replaces mock text.
 - **No pushing to remote.** All commits local on `main`.
 - **Existing tests stay green.** Phase 0 adds the testing library; every other phase preserves the 84 existing test passes.
-- **No API / schema changes.** This is a visual overhaul only.
+- **No API / schema changes.** (See Prime Directive above.)
 - **Material Design 3 tokens from stitch map to shadcn/Tailwind tokens via Phase 0.** Don't paste MD3 token names into app code; use our tokens.
 - **Icons:** Stitch uses Material Symbols Outlined. Port to `lucide-react` (already installed). If a Lucide equivalent doesn't exist, fall back to a Material Symbols Next.js loader (future task).
 - **Preview verification:** every page port ends with a screenshot via `mcp__Claude_Preview__preview_screenshot` that visually matches the corresponding `screen.png` mockup.
+- **Feature parity checkpoint:** after every phase, run the full CRUD regression pass (40/40 endpoints) to prove no feature broke. A single red endpoint halts the next phase.
 
 ---
 
