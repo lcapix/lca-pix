@@ -80,52 +80,52 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted }: Props
 
         <div className="space-y-4 py-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-on-surface-variant mb-1.5">
               Valuation method
             </label>
             <select
               value={method}
               onChange={e => setMethod(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg bg-surface-container-low px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               {methods.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-on-surface-variant mt-1">
               Only methods imported into your database are shown.
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-on-surface-variant mb-1.5">
               Region
             </label>
             <select
               value={region}
               onChange={e => setRegion(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg bg-surface-container-low px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               {REGIONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
             </select>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-on-surface-variant mt-1">
               Location-specific factors are used when available (e.g. electricity grid carbon).
               Global fallback is used otherwise.
             </p>
           </div>
 
-          {error && <div className="text-sm text-red-600">{error}</div>}
+          {error && <div className="text-sm text-error">{error}</div>}
         </div>
 
         <DialogFooter>
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded border border-gray-300 text-gray-700 text-sm hover:bg-gray-50"
+            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface text-sm hover:bg-surface-container-high transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={run}
             disabled={running}
-            className="px-4 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50"
+            className="px-4 py-2 rounded-lg veridian-gradient text-on-primary text-sm font-semibold shadow-[0_8px_20px_-6px_rgba(0,106,68,0.4)] hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:hover:scale-100"
           >
             {running ? 'Running…' : 'Run assessment'}
           </button>
