@@ -1,43 +1,29 @@
-"use client"
+'use client'
 
-import { useParams, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+// Phase LI.3 — Comparison detail page ported from LCAPIX/pages-misc.jsx
+// (ComparePage). Real-data fetching (comparison payload + optional per-case
+// component trees) and mutation handlers (delete, export) are PRESERVED from
+// the prior Phase 8 implementation. Only the visual layer is swapped to the
+// LCAPIX prototype shape: head-to-head cards, verdict, GroupedBarChart, and
+// the category diff table.
+
+import { useEffect, useState } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { Loader2, AlertCircle, ArrowLeft, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+
+import { apiRequest } from '@/lib/api-client'
 import {
-  BarChart,
-  Bar,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts"
-import {
-  ArrowLeft,
-  Download,
-  Trophy,
-  TrendingDown,
-  TrendingUp,
-  Star,
-  BarChart3,
-  Trash2,
-  CheckCircle,
-} from "lucide-react"
-import { toast } from "sonner"
-import { apiRequest } from "@/lib/api-client"
-import { AssessmentCardSkeleton } from "@/components/skeletons/assessment-card-skeleton"
-import { DashboardGrid } from "@/components/analytics/dashboard-grid"
-import { Num } from "@/components/ui/num"
+  Breadcrumb,
+  Icon,
+  StatusDot,
+  GroupedBarChart,
+  fmtNum,
+  fmtInt,
+} from '@/components/lcapix'
 
 // ============================================================================
-// TYPE DEFINITIONS
+// TYPE DEFINITIONS (preserved)
 // ============================================================================
 
 interface Component {
@@ -96,9 +82,6 @@ interface ComparisonData {
   }
 }
 
-// Veridian-aligned palette for series
-const SERIES_COLORS = ["#006a44", "#29695b", "#9f393c", "#6d7a71", "#008558"]
-
 export default function ComparisonResultsPage() {
   const params = useParams()
   const router = useRouter()
@@ -109,7 +92,9 @@ export default function ComparisonResultsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [baseCaseComponents, setBaseCaseComponents] = useState<Component[]>([])
-  const [comparativeCaseComponents, setComparativeCaseComponents] = useState<Component[]>([])
+  const [comparativeCaseComponents, setComparativeCaseComponents] = useState<
+    Component[]
+  >([])
   const [loadingComponents, setLoadingComponents] = useState(false)
 
   useEffect(() => {
@@ -123,16 +108,21 @@ export default function ComparisonResultsPage() {
 
       if (response.success) {
         const comparisonData = response.comparison
-        comparisonData.category_comparisons = comparisonData.category_comparisons.map((cc: any) => ({
-          ...cc,
-          case_results: typeof cc.case_results === 'string'
-            ? JSON.parse(cc.case_results)
-            : cc.case_results
-        }))
+        comparisonData.category_comparisons =
+          comparisonData.category_comparisons.map((cc: any) => ({
+            ...cc,
+            case_results:
+              typeof cc.case_results === 'string'
+                ? JSON.parse(cc.case_results)
+                : cc.case_results,
+          }))
         setComparison(comparisonData)
 
         if (comparisonData.cases.length === 2) {
-          fetchComponentHierarchies(comparisonData.base_case_id, comparisonData.case_ids)
+          fetchComponentHierarchies(
+            comparisonData.base_case_id,
+            comparisonData.case_ids
+          )
         }
       } else {
         toast.error('Failed to load comparison')
@@ -147,18 +137,25 @@ export default function ComparisonResultsPage() {
     }
   }
 
-  const fetchComponentHierarchies = async (baseCaseId: number, caseIds: number[]) => {
+  const fetchComponentHierarchies = async (
+    baseCaseId: number,
+    caseIds: number[]
+  ) => {
     try {
       setLoadingComponents(true)
 
-      const baseResponse = await apiRequest(`/api/cases/${baseCaseId}/components`)
+      const baseResponse = await apiRequest(
+        `/api/cases/${baseCaseId}/components`
+      )
       if (baseResponse.success) {
         setBaseCaseComponents(baseResponse.components || [])
       }
 
-      const comparativeCaseId = caseIds.find(id => id !== baseCaseId)
+      const comparativeCaseId = caseIds.find((id) => id !== baseCaseId)
       if (comparativeCaseId) {
-        const compResponse = await apiRequest(`/api/cases/${comparativeCaseId}/components`)
+        const compResponse = await apiRequest(
+          `/api/cases/${comparativeCaseId}/components`
+        )
         if (compResponse.success) {
           setComparativeCaseComponents(compResponse.components || [])
         }
@@ -177,7 +174,7 @@ export default function ComparisonResultsPage() {
     try {
       setIsDeleting(true)
       const response = await apiRequest(`/api/comparisons/${comparisonId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
 
       if (response.success) {
@@ -195,445 +192,658 @@ export default function ComparisonResultsPage() {
   }
 
   const handleExportPDF = () => {
-    toast.info('PDF export coming soon!')
+    window.print()
   }
+
+  const handleExportCSV = () => {
+    if (!comparison) return
+    const rows: string[][] = []
+    rows.push(['Category', ...comparison.cases.map((c) => c.case_name), 'Best'])
+    comparison.category_comparisons.forEach((cc) => {
+      const best = comparison.cases.find((c) => c.case_id === cc.best_case_id)
+      rows.push([
+        cc.category_name,
+        ...comparison.cases.map((c) => {
+          const cv = cc.case_results.find((cr) => cr.case_id === c.case_id)
+          return cv ? String(cv.absolute_value) : ''
+        }),
+        best?.case_name ?? '',
+      ])
+    })
+    const csv = rows.map((r) => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `comparison-${comparisonId}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+  }
+
+  // ——— Loading / empty states ———
 
   if (isLoading) {
     return (
-      <div className="max-w-[1400px] mx-auto p-8 space-y-6">
-        <div className="h-12 w-64 bg-surface-container-low rounded-md animate-pulse" />
-        <AssessmentCardSkeleton />
-      </div>
+      <>
+        <Breadcrumb
+          items={[
+            { label: 'Projects', page: 'home' },
+            {
+              label: 'Project',
+              onClick: () => router.push(`/project/${projectId}`),
+            },
+            { label: 'Comparison' },
+          ]}
+        />
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '120px 24px',
+            gap: 16,
+          }}
+        >
+          <Loader2
+            className="h-8 w-8 animate-spin"
+            style={{ color: 'var(--brand-primary)' }}
+          />
+          <p style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>
+            Loading comparison…
+          </p>
+        </div>
+      </>
     )
   }
 
   if (!comparison) {
     return (
-      <div className="max-w-[1400px] mx-auto p-8">
-        <div className="bg-surface-container-lowest rounded-2xl p-12 text-center shadow-botanical">
-          <p className="text-on-surface-variant">Comparison not found</p>
-          <Button onClick={() => router.push(`/project/${projectId}`)} className="mt-4 veridian-gradient text-on-primary">
-            Back to Project
-          </Button>
+      <>
+        <Breadcrumb
+          items={[
+            { label: 'Projects', page: 'home' },
+            {
+              label: 'Project',
+              onClick: () => router.push(`/project/${projectId}`),
+            },
+            { label: 'Comparison' },
+          ]}
+        />
+        <div
+          style={{
+            padding: '80px 32px',
+            maxWidth: 560,
+            margin: '0 auto',
+            textAlign: 'center',
+          }}
+        >
+          <AlertCircle
+            className="h-10 w-10"
+            style={{ color: 'var(--text-tertiary)', margin: '0 auto 16px' }}
+          />
+          <h2
+            style={{
+              fontSize: 20,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              marginBottom: 8,
+            }}
+          >
+            Comparison not found
+          </h2>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => router.push(`/project/${projectId}`)}
+          >
+            Back to project
+          </button>
         </div>
-      </div>
+      </>
     )
   }
 
-  // Calculate overall rankings
-  const caseRankings = comparison.cases.map(caseItem => {
-    const totalScore = comparison.category_comparisons.reduce((sum, cat) => {
-      const caseValue = cat.case_results.find(cr => cr.case_id === caseItem.case_id)
-      return sum + (caseValue?.absolute_value || 0)
+  // ——— Derivations ———
+
+  const baseCase = comparison.cases.find(
+    (c) => c.case_id === comparison.base_case_id
+  )
+
+  // Per-case totals summed across categories (abs).
+  const caseTotals = new Map<number, number>()
+  comparison.cases.forEach((ci) => {
+    const total = comparison.category_comparisons.reduce((sum, cat) => {
+      const cv = cat.case_results.find((cr) => cr.case_id === ci.case_id)
+      return sum + Math.abs(cv?.absolute_value || 0)
     }, 0)
-
-    const wins = comparison.category_comparisons.filter(
-      cat => cat.best_case_id === caseItem.case_id
-    ).length
-
-    const losses = comparison.category_comparisons.filter(
-      cat => cat.worst_case_id === caseItem.case_id
-    ).length
-
-    return { ...caseItem, totalScore, wins, losses }
-  }).sort((a, b) => a.totalScore - b.totalScore)
-
-  const baseCase = comparison.cases.find(c => c.case_id === comparison.base_case_id)
-  const comparativeCase = comparison.cases.find(c => c.case_id !== comparison.base_case_id)
-  const isTwoCaseComparison = comparison.cases.length === 2
-
-  const baseCaseTotalImpact = comparison.category_comparisons.reduce((sum, cat) => {
-    const caseValue = cat.case_results.find(cr => cr.case_id === comparison.base_case_id)
-    return sum + (caseValue?.absolute_value || 0)
-  }, 0)
-
-  const comparativeCaseTotalImpact = comparativeCase ? comparison.category_comparisons.reduce((sum, cat) => {
-    const caseValue = cat.case_results.find(cr => cr.case_id === comparativeCase.case_id)
-    return sum + (caseValue?.absolute_value || 0)
-  }, 0) : 0
-
-  // Grouped bar data: one row per category, series per case
-  const groupedBarData = comparison.category_comparisons.map(cc => {
-    const row: any = { category: cc.category_name }
-    comparison.cases.forEach(ci => {
-      const found = cc.case_results.find(cr => cr.case_id === ci.case_id)
-      row[ci.case_name] = found ? Math.abs(found.absolute_value) : 0
-    })
-    return row
+    caseTotals.set(ci.case_id, total)
   })
 
-  // Radar: normalized per category (0-100 vs. max across cases)
-  const radarData = comparison.category_comparisons.map(cc => {
-    const row: any = { category: cc.category_name }
-    const max = Math.max(...cc.case_results.map(r => Math.abs(r.absolute_value)), 1)
-    comparison.cases.forEach(ci => {
-      const found = cc.case_results.find(cr => cr.case_id === ci.case_id)
-      const v = found ? Math.abs(found.absolute_value) : 0
-      row[ci.case_name] = max > 0 ? (v / max) * 100 : 0
-    })
-    return row
-  })
+  const baseCaseTotal = baseCase ? caseTotals.get(baseCase.case_id) || 0 : 0
 
-  const overallDeltaPct = baseCaseTotalImpact > 0 && comparativeCase
-    ? ((baseCaseTotalImpact - comparativeCaseTotalImpact) / baseCaseTotalImpact) * 100
-    : 0
-  const comparativeWins = isTwoCaseComparison && comparativeCase
-    ? comparison.category_comparisons.filter(cc => cc.best_case_id === comparativeCase.case_id).length
-    : 0
-  const verdictBetter = overallDeltaPct > 0
+  // Grouped bar chart: up to 5 categories × all cases.
+  const topCats = comparison.category_comparisons.slice(0, 5)
+  const barGroups = topCats.map((cc) => ({
+    label: cc.category_name,
+    values: comparison.cases.map((ci) => {
+      const cv = cc.case_results.find((cr) => cr.case_id === ci.case_id)
+      return cv ? Math.abs(cv.absolute_value) : 0
+    }),
+  }))
+  const barSeriesLabels = comparison.cases.map((c) => c.case_name)
+
+  // Best-scenario verdict.
+  const bestVerdict = (() => {
+    if (!baseCase || comparison.cases.length < 2) return null
+    const others = comparison.cases.filter((c) => c.case_id !== baseCase.case_id)
+    let best = others[0]
+    let bestTotal = caseTotals.get(best.case_id) || 0
+    for (const o of others) {
+      const t = caseTotals.get(o.case_id) || 0
+      if (t < bestTotal) {
+        best = o
+        bestTotal = t
+      }
+    }
+    if (baseCaseTotal <= 0) return null
+    const deltaPct = ((baseCaseTotal - bestTotal) / baseCaseTotal) * 100
+    const winCount = comparison.category_comparisons.filter(
+      (cc) => cc.best_case_id === best.case_id
+    ).length
+    return {
+      best,
+      deltaPct,
+      winCount,
+      totalCats: comparison.category_comparisons.length,
+    }
+  })()
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="bg-surface-container-lowest border-b border-outline-variant/15">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-          <div className="flex items-center justify-between flex-wrap gap-6">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push(`/project/${projectId}`)}
-                className="text-on-surface-variant hover:text-primary"
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Project
-              </Button>
-              <div className="border-l border-outline-variant/30 h-8" />
-              <div>
-                <span className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Lifecycle Analysis</span>
-                <h1 className="text-3xl font-extrabold tracking-tighter text-on-surface leading-none mt-1 flex items-center gap-2">
-                  <BarChart3 className="h-6 w-6 text-primary" />
-                  {comparison.comparison_name}
-                </h1>
-                <p className="text-sm text-on-surface-variant mt-2">
-                  {comparison.project_name} · {new Date(comparison.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
+    <>
+      <Breadcrumb
+        items={[
+          { label: 'Projects', page: 'home' },
+          {
+            label: comparison.project_name,
+            onClick: () => router.push(`/project/${projectId}`),
+          },
+          { label: comparison.comparison_name },
+        ]}
+      />
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExportPDF}>
-                <Download className="h-4 w-4 mr-2" />
-                Export PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="text-error border-error/30 hover:bg-error/10"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
+      <div
+        style={{
+          padding: '24px 32px 80px',
+          maxWidth: 1440,
+          margin: '0 auto',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: 24,
+            gap: 12,
+          }}
+        >
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => router.push(`/project/${projectId}`)}
+            aria-label="Back to project"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+          </button>
+          <div style={{ flex: 1 }}>
+            <h1
+              className="display"
+              style={{
+                fontSize: 26,
+                fontWeight: 600,
+                margin: 0,
+                letterSpacing: '-0.01em',
+              }}
+            >
+              {comparison.comparison_name}
+            </h1>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--text-tertiary)',
+                marginTop: 4,
+              }}
+            >
+              Comparing {comparison.cases.length} cases ·{' '}
+              {new Date(comparison.created_at).toLocaleDateString()} ·{' '}
+              {comparison.created_by_username}
             </div>
           </div>
+          <button className="btn btn-secondary btn-sm" onClick={handleExportPDF}>
+            <Icon name="download" size={14} /> PDF Export
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ marginLeft: 8 }}
+            onClick={handleExportCSV}
+          >
+            <Icon name="share" size={14} /> Export CSV
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{
+              marginLeft: 8,
+              color: 'var(--signal-error)',
+              borderColor: 'var(--signal-error)',
+            }}
+            onClick={handleDelete}
+            disabled={isDeleting}
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </button>
         </div>
-      </div>
 
-      {/* Main */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
-        <DashboardGrid>
-          {/* Verdict / head-to-head hero */}
-          <div className="col-span-12 lg:col-span-5 relative group">
-            <div className="absolute -inset-1 veridian-gradient-soft rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000" />
-            <div className="relative glass-panel p-10 rounded-3xl h-full flex flex-col justify-between min-h-[360px] shadow-botanical">
-              <div>
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
-                    <CheckCircle className="h-5 w-5" />
-                  </div>
-                  <span className="font-mono text-xs font-semibold text-secondary uppercase tracking-widest">
-                    {isTwoCaseComparison ? 'Head-to-Head Verdict' : 'Multi-Case Comparison'}
+        {/* Head-to-head cards */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${comparison.cases.length}, 1fr)`,
+            gap: 16,
+            marginBottom: 20,
+          }}
+        >
+          {comparison.cases.map((ci, i) => {
+            const isBase = ci.case_id === comparison.base_case_id
+            const total = caseTotals.get(ci.case_id) || 0
+            const delta =
+              !isBase && baseCaseTotal > 0
+                ? ((total - baseCaseTotal) / baseCaseTotal) * 100
+                : null
+            const wins = comparison.category_comparisons.filter(
+              (cc) => cc.best_case_id === ci.case_id
+            ).length
+            return (
+              <div
+                key={ci.case_id}
+                className="card"
+                style={{
+                  padding: 24,
+                  borderLeft: `3px solid var(--chart-${(i % 5) + 1})`,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 2,
+                      background: `var(--chart-${(i % 5) + 1})`,
+                    }}
+                  />
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>
+                    {ci.case_name}
+                  </span>
+                  <span
+                    className="chip"
+                    style={{ fontSize: 10, marginLeft: 'auto' }}
+                  >
+                    {isBase ? 'BASE' : 'COMP'}
                   </span>
                 </div>
-                {isTwoCaseComparison && comparativeCase ? (
-                  <>
-                    <h2 className={`text-[4.5rem] font-extrabold tracking-tighter leading-none ${verdictBetter ? 'text-primary' : 'text-error'}`}>
-                      {verdictBetter ? '↓' : '↑'} <Num value={Math.abs(overallDeltaPct)} precision={1} />%
-                    </h2>
-                    <p className="text-sm text-on-surface-variant mt-4 max-w-md">
-                      <span className="font-semibold text-on-surface">{comparativeCase.case_name}</span>
-                      {' '}{verdictBetter ? 'reduces' : 'increases'} total environmental impact vs.{' '}
-                      <span className="font-semibold text-on-surface">{baseCase?.case_name}</span> baseline.
-                    </p>
-                    <div className="flex gap-3 mt-6 flex-wrap">
-                      <div className="px-3 py-1.5 rounded-full bg-primary-fixed/30 text-on-primary-fixed-variant text-xs font-bold">
-                        <Num value={comparativeWins} /> / <Num value={comparison.category_comparisons.length} /> categories better
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h2 className="text-[4.5rem] font-extrabold tracking-tighter leading-none text-on-surface">
-                      <Num value={comparison.cases.length} />
-                    </h2>
-                    <p className="text-sm text-on-surface-variant mt-4 max-w-md">
-                      Cases compared across <Num value={comparison.category_comparisons.length} /> impact categories.
-                    </p>
-                  </>
-                )}
-              </div>
-              <div className="mt-6 flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-on-surface-variant">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                Base: {baseCase?.case_name}
-              </div>
-            </div>
-          </div>
-
-          {/* KPI row — per case */}
-          <div className="col-span-12 lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {comparison.cases.map((caseItem, index) => {
-              const isBase = caseItem.case_id === comparison.base_case_id
-              const totalImpact = comparison.category_comparisons.reduce((sum, cat) => {
-                const cv = cat.case_results.find(cr => cr.case_id === caseItem.case_id)
-                return sum + (cv?.absolute_value || 0)
-              }, 0)
-              const wins = comparison.category_comparisons.filter(c => c.best_case_id === caseItem.case_id).length
-              const deltaVsBase = !isBase && baseCaseTotalImpact > 0
-                ? ((baseCaseTotalImpact - totalImpact) / baseCaseTotalImpact) * 100
-                : 0
-              return (
+                <div className="eyebrow" style={{ marginBottom: 6 }}>
+                  TOTAL IMPACT
+                </div>
                 <div
-                  key={caseItem.case_id}
-                  className={`rounded-2xl p-6 shadow-botanical ${isBase ? 'bg-surface-container-low' : 'bg-secondary-container/40'}`}
+                  className="mono"
+                  style={{
+                    fontSize: 34,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '-0.02em',
+                  }}
                 >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-on-surface-variant truncate pr-2 flex items-center gap-1.5">
-                      {isBase && <Star className="h-3.5 w-3.5 text-primary fill-primary" />}
-                      {caseItem.case_name}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className={isBase
-                        ? 'bg-surface-container text-on-surface border-transparent'
-                        : 'bg-primary-container/20 text-primary border-transparent'}
+                  {total > 0 ? fmtNum(total, 2) : '—'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                  aggregate across {comparison.category_comparisons.length}{' '}
+                  categories
+                </div>
+                {!isBase && delta !== null && (
+                  <div
+                    style={{
+                      marginTop: 10,
+                      display: 'flex',
+                      gap: 10,
+                      fontSize: 12,
+                    }}
+                  >
+                    <span
+                      className="mono"
+                      style={{
+                        color:
+                          delta < 0
+                            ? 'var(--signal-success)'
+                            : 'var(--signal-error)',
+                        fontWeight: 500,
+                      }}
                     >
-                      {isBase ? 'Baseline' : 'Comparative'}
-                    </Badge>
+                      {delta < 0 ? '↓' : '↑'} {fmtNum(Math.abs(delta), 1)}%
+                    </span>
+                    <span
+                      className="mono"
+                      style={{ color: 'var(--text-tertiary)' }}
+                    >
+                      vs. {baseCase?.case_name}
+                    </span>
                   </div>
-                  <div className="text-4xl font-extrabold tracking-tighter text-on-surface">
-                    <Num value={totalImpact} precision={2} />
-                  </div>
-                  <div className="mt-2 flex items-center gap-3 text-xs text-on-surface-variant">
-                    <span><Num value={wins} /> wins</span>
-                    {!isBase && (
-                      <span className={`font-semibold flex items-center gap-0.5 ${deltaVsBase > 0 ? 'text-primary' : 'text-error'}`}>
-                        {deltaVsBase > 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
-                        <Num value={Math.abs(deltaVsBase)} precision={1} />%
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Grouped bar chart */}
-          <div className="col-span-12 lg:col-span-7 bg-surface-container-lowest rounded-2xl p-8 shadow-botanical">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold tracking-tight text-on-surface">Category Comparison</h3>
-              <p className="text-sm text-on-surface-variant">Absolute impact per case, grouped by category</p>
-            </div>
-            <ResponsiveContainer width="100%" height={420}>
-              <BarChart data={groupedBarData} barCategoryGap="22%" barGap={6}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(61,74,65,0.15)" />
-                <XAxis dataKey="category" angle={-30} textAnchor="end" height={110} stroke="#3d4a41" tick={{ fontSize: 11 }} />
-                <YAxis stroke="#3d4a41" tick={{ fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{
-                    background: '#ffffff',
-                    border: '1px solid rgba(188,202,191,0.4)',
-                    borderRadius: 8,
-                    fontFamily: 'IBM Plex Mono, monospace',
+                )}
+                <div
+                  style={{
+                    marginTop: 16,
+                    paddingTop: 16,
+                    borderTop: '1px solid var(--border-subtle)',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto',
+                    rowGap: 6,
                     fontSize: 12,
                   }}
-                />
-                <Legend wrapperStyle={{ paddingTop: 16, fontSize: 12 }} iconType="circle" />
-                {comparison.cases.map((ci, idx) => (
-                  <Bar
-                    key={ci.case_id}
-                    dataKey={ci.case_name}
-                    fill={SERIES_COLORS[idx % SERIES_COLORS.length]}
-                    radius={[6, 6, 0, 0]}
-                  />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Radar */}
-          <div className="col-span-12 lg:col-span-5 bg-surface-container-lowest rounded-2xl p-8 shadow-botanical">
-            <div className="mb-6">
-              <h3 className="text-xl font-bold tracking-tight text-on-surface">Normalized Profile</h3>
-              <p className="text-sm text-on-surface-variant">Each category scaled 0–100 vs. worst case</p>
-            </div>
-            <ResponsiveContainer width="100%" height={420}>
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="rgba(61,74,65,0.18)" />
-                <PolarAngleAxis dataKey="category" tick={{ fontSize: 11, fill: '#3d4a41' }} />
-                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10, fill: '#6d7a71' }} />
-                <Tooltip
-                  contentStyle={{
-                    background: '#ffffff',
-                    border: '1px solid rgba(188,202,191,0.4)',
-                    borderRadius: 8,
-                    fontFamily: 'IBM Plex Mono, monospace',
-                    fontSize: 12,
-                  }}
-                />
-                <Legend wrapperStyle={{ paddingTop: 16, fontSize: 12 }} iconType="circle" />
-                {comparison.cases.map((ci, idx) => (
-                  <Radar
-                    key={ci.case_id}
-                    name={ci.case_name}
-                    dataKey={ci.case_name}
-                    stroke={SERIES_COLORS[idx % SERIES_COLORS.length]}
-                    fill={SERIES_COLORS[idx % SERIES_COLORS.length]}
-                    fillOpacity={0.28}
-                  />
-                ))}
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Diff table — tonal stripes, no 1px borders */}
-          <div className="col-span-12 bg-surface-container-lowest rounded-2xl p-8 shadow-botanical">
-            <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
-              <div>
-                <h3 className="text-xl font-bold tracking-tight text-on-surface">Diff Table</h3>
-                <p className="text-sm text-on-surface-variant">
-                  Δ values are relative to {baseCase?.case_name}
-                </p>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left py-3 px-4 text-[10px] font-mono uppercase tracking-wider text-on-surface-variant">Category</th>
-                    {comparison.cases.map(ci => (
-                      <th key={ci.case_id} className="text-right py-3 px-4 text-[10px] font-mono uppercase tracking-wider text-on-surface-variant">
-                        {ci.case_id === comparison.base_case_id ? '★ ' : ''}{ci.case_name}
-                      </th>
-                    ))}
-                    <th className="text-center py-3 px-4 text-[10px] font-mono uppercase tracking-wider text-primary">Best</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparison.category_comparisons.map((categoryComp, rowIdx) => {
-                    const bestCase = comparison.cases.find(c => c.case_id === categoryComp.best_case_id)
-                    const stripe = rowIdx % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low'
-                    return (
-                      <tr key={categoryComp.result_id} className={stripe}>
-                        <td className="py-3 px-4 text-sm font-medium text-on-surface">{categoryComp.category_name}</td>
-                        {comparison.cases.map(ci => {
-                          const cv = categoryComp.case_results.find(cr => cr.case_id === ci.case_id)
-                          const isBase = ci.case_id === comparison.base_case_id
-                          const isBest = ci.case_id === categoryComp.best_case_id
-                          const isWorst = ci.case_id === categoryComp.worst_case_id
-                          const improvement = cv && cv.delta_from_base < 0
-                          return (
-                            <td key={ci.case_id} className="py-3 px-4 text-right">
-                              <div className={`inline-flex flex-col items-end ${isBest ? 'text-primary' : isWorst ? 'text-error' : 'text-on-surface'}`}>
-                                <span className="text-sm font-semibold">
-                                  <Num value={cv?.absolute_value ?? 0} precision={4} />
-                                </span>
-                                {!isBase && cv && (
-                                  <span className={`text-[10px] font-mono ${improvement ? 'text-primary' : 'text-error'}`}>
-                                    {cv.delta_percentage > 0 ? '+' : ''}
-                                    <Num value={cv.delta_percentage} precision={1} />%
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          )
-                        })}
-                        <td className="py-3 px-4 text-center">
-                          <Badge variant="outline" className="bg-primary-container/20 text-primary border-transparent text-[10px]">
-                            {bestCase?.case_name ?? '—'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Rankings card (multi-case) */}
-          {!isTwoCaseComparison && (
-            <div className="col-span-12 bg-surface-container-lowest rounded-2xl p-8 shadow-botanical">
-              <div className="flex items-center gap-2 mb-6">
-                <Trophy className="h-5 w-5 text-primary" />
-                <div>
-                  <h3 className="text-xl font-bold tracking-tight text-on-surface">Overall Environmental Performance</h3>
-                  <p className="text-sm text-on-surface-variant">Lower total impact ranks higher</p>
+                >
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    Category wins
+                  </span>
+                  <span
+                    className="mono"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {fmtInt(wins)} / {fmtInt(comparison.category_comparisons.length)}
+                  </span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Rank</span>
+                  <span
+                    className="mono"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    #
+                    {[...caseTotals.entries()]
+                      .sort((a, b) => a[1] - b[1])
+                      .findIndex(([id]) => id === ci.case_id) + 1}
+                  </span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Status</span>
+                  <span>
+                    <StatusDot status="success" />
+                  </span>
                 </div>
               </div>
-              <div className="space-y-2">
-                {caseRankings.map((ranking, index) => {
-                  const stripe = index % 2 === 0 ? 'bg-transparent' : 'bg-surface-container-low'
+            )
+          })}
+        </div>
+
+        {/* Verdict */}
+        {bestVerdict && (
+          <div
+            className="card"
+            style={{
+              padding: 24,
+              marginBottom: 20,
+              background:
+                'linear-gradient(135deg, var(--brand-subtle), transparent 70%)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 8,
+                  background: 'var(--brand-primary)',
+                  color: 'oklch(0.15 0.01 240)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="target" size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>
+                  Your best-case scenario is{' '}
+                  <span style={{ color: 'var(--brand-primary)' }}>
+                    {bestVerdict.best.case_name}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-secondary)',
+                    marginTop: 2,
+                  }}
+                >
+                  Reduces total impact by{' '}
+                  <span
+                    className="mono"
+                    style={{
+                      color:
+                        bestVerdict.deltaPct > 0
+                          ? 'var(--signal-success)'
+                          : 'var(--signal-error)',
+                    }}
+                  >
+                    {bestVerdict.deltaPct > 0 ? '↓' : '↑'}{' '}
+                    {fmtNum(Math.abs(bestVerdict.deltaPct), 1)}%
+                  </span>{' '}
+                  vs.{' '}
+                  <span
+                    style={{ color: 'var(--text-primary)', fontWeight: 500 }}
+                  >
+                    {baseCase?.case_name}
+                  </span>
+                  . Wins{' '}
+                  <span className="mono">
+                    {fmtInt(bestVerdict.winCount)} / {fmtInt(bestVerdict.totalCats)}
+                  </span>{' '}
+                  categories.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Grouped bar chart */}
+        <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>
+            Impact by category · across scenarios
+          </div>
+          <GroupedBarChart groups={barGroups} seriesLabels={barSeriesLabels} />
+        </div>
+
+        {/* Category diff table */}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div
+            style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--border-subtle)',
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            Category-level difference
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `2fr repeat(${comparison.cases.length}, 1fr) 1fr`,
+              padding: '10px 20px',
+              background: 'var(--surface-overlay)',
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              fontWeight: 600,
+            }}
+          >
+            <div>Category</div>
+            {comparison.cases.map((ci) => (
+              <div key={ci.case_id} style={{ textAlign: 'right' }}>
+                {ci.case_id === comparison.base_case_id ? '★ ' : ''}
+                {ci.case_name.split(' ')[0]}
+              </div>
+            ))}
+            <div style={{ textAlign: 'right' }}>Best</div>
+          </div>
+          {comparison.category_comparisons.map((cc) => {
+            const bestCaseObj = comparison.cases.find(
+              (c) => c.case_id === cc.best_case_id
+            )
+            return (
+              <div
+                key={cc.result_id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `2fr repeat(${comparison.cases.length}, 1fr) 1fr`,
+                  padding: '12px 20px',
+                  borderTop: '1px solid var(--border-subtle)',
+                  fontSize: 13,
+                }}
+              >
+                <div style={{ color: 'var(--text-primary)' }}>
+                  {cc.category_name}
+                </div>
+                {comparison.cases.map((ci) => {
+                  const cv = cc.case_results.find(
+                    (cr) => cr.case_id === ci.case_id
+                  )
+                  const isBase = ci.case_id === comparison.base_case_id
+                  const isBest = ci.case_id === cc.best_case_id
+                  const val = cv ? Math.abs(cv.absolute_value) : 0
+                  const deltaPct = cv?.delta_percentage
                   return (
                     <div
-                      key={ranking.case_id}
-                      className={`flex items-center gap-4 p-4 rounded-xl ${index === 0 ? 'veridian-gradient-soft' : stripe}`}
+                      key={ci.case_id}
+                      className="mono"
+                      style={{
+                        textAlign: 'right',
+                        color: isBest
+                          ? 'var(--signal-success)'
+                          : 'var(--text-secondary)',
+                      }}
                     >
-                      <div className={`text-3xl font-mono font-bold tracking-tighter ${index === 0 ? 'text-primary' : 'text-on-surface-variant'}`}>
-                        #{index + 1}
-                      </div>
-                      {index === 0 && <Trophy className="h-6 w-6 text-primary fill-primary" />}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-on-surface truncate">{ranking.case_name}</div>
-                        <div className="text-xs text-on-surface-variant mt-0.5">
-                          Total Impact <Num value={ranking.totalScore} precision={2} /> · <Num value={ranking.wins} /> wins · <Num value={ranking.losses} /> losses
-                        </div>
-                      </div>
-                      {ranking.case_id === comparison.base_case_id && (
-                        <Badge variant="outline" className="bg-surface-container text-on-surface border-transparent">
-                          Base
-                        </Badge>
+                      {val > 0 ? fmtNum(val, 2) : '—'}
+                      {!isBase && deltaPct !== undefined && deltaPct !== 0 && (
+                        <span
+                          style={{
+                            marginLeft: 6,
+                            fontSize: 11,
+                            color:
+                              deltaPct < 0
+                                ? 'var(--signal-success)'
+                                : 'var(--signal-error)',
+                          }}
+                        >
+                          {deltaPct < 0 ? '↓' : '↑'}
+                          {fmtNum(Math.abs(deltaPct), 0)}%
+                        </span>
                       )}
                     </div>
                   )
                 })}
+                <div
+                  style={{
+                    textAlign: 'right',
+                    fontSize: 11,
+                    color: 'var(--brand-primary)',
+                  }}
+                >
+                  {bestCaseObj?.case_name.split(' ')[0] ?? '—'}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })}
+        </div>
 
-          {/* Summary stats */}
-          <div className="col-span-12 bg-surface-container-low rounded-2xl p-8">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-              <div>
-                <div className="text-3xl font-extrabold tracking-tighter text-primary">
-                  <Num value={comparison.metadata.total_cases_compared} />
-                </div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-on-surface-variant mt-2">Cases Compared</div>
+        {/* Metadata footer */}
+        <div
+          style={{
+            marginTop: 20,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 12,
+          }}
+        >
+          {[
+            {
+              label: 'Cases Compared',
+              value: fmtInt(comparison.metadata.total_cases_compared),
+            },
+            {
+              label: 'Categories',
+              value: fmtInt(comparison.metadata.total_categories_analyzed),
+            },
+            {
+              label: 'Base Components',
+              value: fmtInt(baseCaseComponents.length),
+            },
+            {
+              label: 'Calc Time',
+              value:
+                fmtInt(comparison.metadata.calculation_time_ms || 0) + ' ms',
+            },
+          ].map((k) => (
+            <div
+              key={k.label}
+              className="card"
+              style={{ padding: 16, textAlign: 'center' }}
+            >
+              <div
+                className="mono"
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: 'var(--text-primary)',
+                }}
+              >
+                {k.value}
               </div>
-              <div>
-                <div className="text-3xl font-extrabold tracking-tighter text-secondary">
-                  <Num value={comparison.metadata.total_categories_analyzed} />
-                </div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-on-surface-variant mt-2">Impact Categories</div>
-              </div>
-              <div>
-                <div className="text-3xl font-extrabold tracking-tighter text-primary">
-                  <Num value={caseRankings[0]?.wins || 0} />
-                </div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-on-surface-variant mt-2">Best Performer Wins</div>
-              </div>
-              <div>
-                <div className="text-3xl font-extrabold tracking-tighter text-on-surface">
-                  <Num value={comparison.metadata.calculation_time_ms || 0} />
-                  <span className="text-base font-medium text-on-surface-variant ml-1">ms</span>
-                </div>
-                <div className="text-[10px] font-mono uppercase tracking-wider text-on-surface-variant mt-2">Calc Time</div>
+              <div
+                className="eyebrow"
+                style={{ marginTop: 4, fontSize: 10 }}
+              >
+                {k.label}
               </div>
             </div>
+          ))}
+        </div>
+
+        {loadingComponents && (
+          <div
+            style={{
+              marginTop: 16,
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+            }}
+          >
+            Loading component trees…
           </div>
-        </DashboardGrid>
+        )}
+        {!loadingComponents && comparativeCaseComponents.length > 0 && (
+          <div
+            style={{
+              marginTop: 16,
+              fontSize: 12,
+              color: 'var(--text-tertiary)',
+              textAlign: 'center',
+            }}
+          >
+            {fmtInt(baseCaseComponents.length)} base ·{' '}
+            {fmtInt(comparativeCaseComponents.length)} comparative components
+            loaded
+          </div>
+        )}
       </div>
-    </div>
+    </>
   )
 }
