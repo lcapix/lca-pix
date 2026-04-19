@@ -165,11 +165,14 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
     const el = viewportRef.current
     if (!el) return
     const handler = (e: WheelEvent) => {
-      // Only zoom on deliberate intent: ⌘/Ctrl + wheel, or trackpad pinch
-      // (which Chromium reports as wheel + ctrlKey). Plain scroll bubbles
-      // up so the page scrolls normally when the cursor is over the canvas.
-      if (!e.ctrlKey && !e.metaKey) return
+      // Case editor is fullscreen — there is no page scroll to bubble
+      // to, so EVERY wheel event inside the canvas is swallowed. Zoom
+      // only on deliberate intent (⌘/Ctrl + wheel, or trackpad pinch
+      // which Chromium reports as wheel + ctrlKey). Plain scrolls are
+      // consumed silently so the canvas neither zooms nor shifts the
+      // page.
       e.preventDefault()
+      if (!e.ctrlKey && !e.metaKey) return
       const rect = el.getBoundingClientRect()
       const cx = e.clientX - rect.left
       const cy = e.clientY - rect.top

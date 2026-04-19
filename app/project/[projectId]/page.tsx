@@ -30,7 +30,7 @@ import {
   fmtNum,
   fmtInt,
 } from '@/components/lcapix'
-import { DEMO_CONTRIBUTORS, DEMO_TREE } from '@/lib/lcapix-demo'
+import { DEMO_CONTRIBUTORS, DEMO_TREE, HIERARCHY_TYPES, type DemoTreeNode } from '@/lib/lcapix-demo'
 
 // NOTE: AuthGuard + top nav are provided by app/project/layout.tsx
 // (AuthGuard → AppShell). Do not render AppTopBar here or we get a
@@ -45,6 +45,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
+  const [selectedTreeNode, setSelectedTreeNode] = useState<DemoTreeNode | null>(null)
 
   // Tree Modal State (preserved from previous implementation)
   const [isTreeModalOpen, setIsTreeModalOpen] = useState(false)
@@ -703,7 +704,11 @@ export default function ProjectPage() {
                 }}
               />
               {activeCase ? (
-                <MiniCanvas tree={DEMO_TREE} />
+                <MiniCanvas
+                  tree={DEMO_TREE}
+                  selectedId={selectedTreeNode?.id ?? null}
+                  onSelect={setSelectedTreeNode}
+                />
               ) : (
                 <div
                   style={{
@@ -742,6 +747,137 @@ export default function ProjectPage() {
                 </div>
               )}
             </div>
+
+            {/* Node details — shown when a node in the MiniCanvas is selected */}
+            {selectedTreeNode && (() => {
+              const t = HIERARCHY_TYPES.find((h) => h.id === selectedTreeNode.type)
+              const cost = (selectedTreeNode as any).cost ?? 0
+              const flows = (selectedTreeNode as any).flows ?? 0
+              return (
+                <div
+                  className="card"
+                  style={{
+                    marginTop: 16,
+                    padding: 20,
+                    borderLeft: `3px solid ${t?.color ?? 'var(--brand-primary)'}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        className="eyebrow"
+                        style={{ color: t?.color ?? 'var(--text-tertiary)', marginBottom: 6 }}
+                      >
+                        {t?.label ?? selectedTreeNode.type}
+                      </div>
+                      <div
+                        className="title"
+                        style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}
+                      >
+                        {selectedTreeNode.label}
+                      </div>
+                      <div className="body-sm mono" style={{ color: 'var(--text-tertiary)' }}>
+                        ID: {selectedTreeNode.id}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTreeNode(null)}
+                      aria-label="Dismiss details"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--text-tertiary)',
+                        padding: 4,
+                        borderRadius: 4,
+                      }}
+                    >
+                      <Icon name="x" size={16} />
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 16,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                      gap: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: 'var(--surface-overlay)',
+                        borderRadius: 8,
+                        padding: '10px 12px',
+                      }}
+                    >
+                      <div
+                        className="label-sm"
+                        style={{ marginBottom: 4 }}
+                      >
+                        Flows
+                      </div>
+                      <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {flows}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: 'var(--surface-overlay)',
+                        borderRadius: 8,
+                        padding: '10px 12px',
+                      }}
+                    >
+                      <div
+                        className="label-sm"
+                        style={{ marginBottom: 4 }}
+                      >
+                        Cost
+                      </div>
+                      <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--brand-primary)' }}>
+                        ${cost}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: 'var(--surface-overlay)',
+                        borderRadius: 8,
+                        padding: '10px 12px',
+                      }}
+                    >
+                      <div
+                        className="label-sm"
+                        style={{ marginBottom: 4 }}
+                      >
+                        Children
+                      </div>
+                      <div className="mono" style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {selectedTreeNode.children?.length ?? 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {activeCase && (
+                    <div
+                      style={{
+                        marginTop: 14,
+                        paddingTop: 14,
+                        borderTop: '1px solid var(--border-subtle)',
+                        display: 'flex',
+                        gap: 8,
+                      }}
+                    >
+                      <Link href={`/project/${projectId}/case/${activeCase.id}`}>
+                        <button type="button" className="btn btn-secondary btn-sm">
+                          <Icon name="external" size={12} /> Open in editor
+                        </button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
 
           {/* Right: stacked cards */}

@@ -12,6 +12,10 @@ import { HIERARCHY_TYPES, type DemoTreeNode } from '@/lib/lcapix-demo'
 
 export interface MiniCanvasProps {
   tree: DemoTreeNode
+  /** Fired when user clicks a node card. Receives the raw tree node. */
+  onSelect?: (node: DemoTreeNode) => void
+  /** id of currently selected node — draws a selection ring. */
+  selectedId?: string | null
 }
 
 interface FlatNode {
@@ -27,11 +31,14 @@ interface PositionedNode extends FlatNode {
   y: number
 }
 
-export function MiniCanvas({ tree }: MiniCanvasProps) {
-  // Flatten with depth + parent pointer
+export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
+  // Flatten with depth + parent pointer, keep the raw node so onSelect
+  // can hand the full payload back to the parent.
   const flat: FlatNode[] = []
+  const rawById: Record<string, DemoTreeNode> = {}
   const walk = (node: DemoTreeNode, depth = 0, parent: string | null = null) => {
     flat.push({ id: node.id, type: node.type, label: node.label, depth, parent })
+    rawById[node.id] = node
     ;(node.children || []).forEach((c) => walk(c, depth + 1, node.id))
   }
   walk(tree)
@@ -241,6 +248,10 @@ export function MiniCanvas({ tree }: MiniCanvasProps) {
               data-n
               onMouseEnter={() => setHovered(p.id)}
               onMouseLeave={() => setHovered(null)}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect?.(rawById[p.id])
+              }}
               style={{
                 position: 'absolute',
                 left: p.x,
@@ -248,13 +259,19 @@ export function MiniCanvas({ tree }: MiniCanvasProps) {
                 width: NODE_W,
                 height: NODE_H,
                 background: 'var(--surface-raised)',
-                border: isHov
-                  ? `1.5px solid ${t?.color}`
-                  : '1px solid var(--border-subtle)',
+                border:
+                  selectedId === p.id
+                    ? `1.5px solid ${t?.color}`
+                    : isHov
+                      ? `1.5px solid ${t?.color}`
+                      : '1px solid var(--border-subtle)',
                 borderRadius: 6,
-                boxShadow: isHov
-                  ? `0 0 0 3px oklch(from ${t?.color} l c h / 0.18), var(--shadow-md)`
-                  : 'var(--shadow-sm)',
+                boxShadow:
+                  selectedId === p.id
+                    ? `0 0 0 3px oklch(from ${t?.color} l c h / 0.28), var(--shadow-md)`
+                    : isHov
+                      ? `0 0 0 3px oklch(from ${t?.color} l c h / 0.18), var(--shadow-md)`
+                      : 'var(--shadow-sm)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
