@@ -25,3 +25,24 @@ export type { BreadcrumbProps, BreadcrumbItem } from './breadcrumb'
 
 export { MiniCanvas } from './project/mini-canvas'
 export type { MiniCanvasProps } from './project/mini-canvas'
+
+export {
+  TreeCanvas,
+  ListView,
+  GraphView,
+  NodeDetailsStrip,
+  MetricMini,
+  InspectorPanel,
+  InspectorSection,
+} from './case'
+export type {
+  TreeCanvasProps,
+  CanvasView,
+  ListViewProps,
+  GraphViewProps,
+  NodeDetailsStripProps,
+  InspectorPanelProps,
+  InspectorSectionProps,
+  InspectorEditFormData,
+  InspectorFlow,
+} from './case'
