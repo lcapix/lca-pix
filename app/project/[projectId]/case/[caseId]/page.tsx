@@ -2924,18 +2924,21 @@ export default function CaseViewPage() {
         {/* Left Sidebar - Tree (Hidden in tree visualization mode) */}
         {!showTreeVisualization && (
         <div
-          className="border-r border-outline-variant/30 bg-white flex flex-col shadow-sm relative"
+          className="border-r border-outline-variant/30 bg-surface-container-lowest flex flex-col shadow-botanical relative"
           style={{ width: `${sidebarWidth}%` }}
         >
           {/* Header */}
-          <div className="p-4 border-b border-outline-variant/30">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-lg text-on-surface">{currentCase.name}</h3>
-              <Badge className="bg-primary text-white text-xs px-2 py-1">
-                {currentCase.type === 'base' ? 'Base' : 'Comparative'}
+          <div className="p-5 border-b border-outline-variant/30">
+            <p className="font-mono text-[10px] uppercase tracking-widest text-outline mb-2">Process Hierarchy</p>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h3 className="font-display text-xl font-semibold tracking-tight text-on-surface leading-tight">{currentCase.name}</h3>
+              <Badge className="bg-primary text-on-primary text-[10px] font-mono uppercase tracking-wider px-2 py-1 shrink-0">
+                {currentCase.type === 'base' ? 'BASE' : 'COMP'}
               </Badge>
             </div>
-            <p className="text-sm text-on-surface-variant mb-3">{componentCount} components</p>
+            <p className="font-mono text-[11px] uppercase tracking-wider text-on-surface-variant mb-3">
+              <span className="num">{componentCount}</span> {componentCount === 1 ? 'component' : 'components'} &middot; ACTIVE
+            </p>
 
             {/* Tree View Toggle - Elegant Card Design */}
             <button
@@ -3051,8 +3054,8 @@ export default function CaseViewPage() {
 
 
         {/* Main Content Area */}
-        <div className="flex-1 bg-white overflow-hidden">
-          <div className={showTreeVisualization ? "" : "h-full max-w-7xl mx-auto p-8"}>
+        <div className="flex-1 bg-surface-container-low overflow-hidden">
+          <div className={showTreeVisualization ? "" : "h-full max-w-7xl mx-auto px-6 md:px-10 lg:px-14 py-8"}>
             {renderMainContent()}
           </div>
         </div>
