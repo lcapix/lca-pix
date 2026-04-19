@@ -1,43 +1,40 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter_Tight, IBM_Plex_Mono } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 
-const inter = Inter({
+const interTight = Inter_Tight({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-inter",
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700", "800"],
+})
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
 })
 
 export const metadata: Metadata = {
-  title: "LCAPIX - Life Cycle Assessment Platform",
-  description: "Professional LCA project management and analysis platform",
-  generator: "v0.app",
+  title: "LCAPIX — Botanical Precision in Sustainability Data",
+  description: "Life-cycle assessment with cost + environmental impact in one view. CML · ReCiPe · TRACI methods. ISO 14040/14044 compliant.",
+  generator: "LCAPIX v3",
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <style>{`
-html {
-  font-family: ${inter.style.fontFamily};
-  --font-sans: ${inter.variable};
-}
-        `}</style>
-      </head>
-      <body className={inter.className}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          themes={["light", "dark", "high-contrast"]}
-        >
+    <html
+      lang="en"
+      className={`${interTight.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
+      <body className="font-sans antialiased bg-background text-on-surface" suppressHydrationWarning>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} themes={["light", "dark", "high-contrast"]}>
           {children}
         </ThemeProvider>
       </body>
