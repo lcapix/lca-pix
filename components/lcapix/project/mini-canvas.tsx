@@ -95,6 +95,10 @@ export function MiniCanvas({ tree }: MiniCanvasProps) {
   }, [maxX, maxY])
 
   const onWheel = (e: React.WheelEvent) => {
+    // Only zoom when the user is deliberately zooming (⌘/Ctrl + scroll).
+    // Plain scroll bubbles up so the page can scroll normally while the
+    // cursor is over the canvas.
+    if (!e.ctrlKey && !e.metaKey) return
     e.preventDefault()
     const d = -e.deltaY * 0.0015
     setXf((t) => ({ ...t, k: Math.max(0.3, Math.min(2, t.k + d)) }))

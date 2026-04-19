@@ -98,15 +98,20 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
     <div
       style={{
         height: 56,
-        background: 'var(--surface-base)',
+        // Opaque glass: semi-transparent white with backdrop blur so
+        // content scrolls *behind* the nav cleanly (no visual bleed).
+        background: 'rgba(248, 250, 248, 0.92)',
+        backdropFilter: 'blur(14px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
         borderBottom: '1px solid var(--border-subtle)',
+        boxShadow: '0 1px 0 rgba(25, 28, 27, 0.04)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 16px',
         gap: 12,
         position: 'sticky',
         top: 0,
-        zIndex: 50,
+        zIndex: 100,
         flexWrap: 'nowrap',
         minWidth: 0,
       }}

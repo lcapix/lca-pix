@@ -165,6 +165,10 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
     const el = viewportRef.current
     if (!el) return
     const handler = (e: WheelEvent) => {
+      // Only zoom on deliberate intent: ⌘/Ctrl + wheel, or trackpad pinch
+      // (which Chromium reports as wheel + ctrlKey). Plain scroll bubbles
+      // up so the page scrolls normally when the cursor is over the canvas.
+      if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
       const rect = el.getBoundingClientRect()
       const cx = e.clientX - rect.left
