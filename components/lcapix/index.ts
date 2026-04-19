@@ -47,6 +47,12 @@ export type {
   InspectorFlow,
 } from './case'
 
+export { GroupedBarChart } from './analytics'
+export type {
+  GroupedBarChartProps,
+  GroupedBarChartGroup,
+} from './analytics'
+
 export { CategoryBarChart, RunTimeline } from './results'
 export type {
   CategoryBarChartProps,
