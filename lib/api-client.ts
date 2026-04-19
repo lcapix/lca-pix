@@ -59,15 +59,20 @@ export async function apiRequest(
     throw new Error("Authentication required")
   }
 
+  // Append a cache-busting query param to defeat browsers that have
+  // stale 308 redirects cached from a previous server config. The
+  // HTTP-cache layer treats `?_t=<ts>` as a new resource so the cached
+  // 308 never matches. cache: 'no-store' alone is not enough for 308s
+  // in Chromium — 308 is "permanent" and persists across cache modes.
+  const bustedUrl = url.includes('?')
+    ? `${url}&_t=${Date.now()}`
+    : `${url}?_t=${Date.now()}`
+
   // Make the request — wrap to coerce network-level aborts (caused by
   // window.location.href navigation) into our standard auth error.
-  // cache: 'no-store' defends against browsers that have stale 308
-  // redirects cached from a previous server config (e.g. if the app
-  // ever ran with trailingSlash: true, the browser may infinite-loop
-  // on /api/projects → /api/projects/ → /api/projects).
   let response: Response
   try {
-    response = await fetch(url, { cache: 'no-store', ...fetchOptions, headers })
+    response = await fetch(bustedUrl, { cache: 'no-store', ...fetchOptions, headers })
   } catch (err) {
     if (redirectingForAuth) {
       // fetch was aborted by our own navigation — silent.
