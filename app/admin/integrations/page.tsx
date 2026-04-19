@@ -307,7 +307,11 @@ function OverviewTab({
                     </span>
                   </TableCell>
                   <TableCell className="px-8 py-6 text-right">
-                    <button className="text-[var(--outline)] hover:text-[var(--primary)]">
+                    <button
+                      type="button"
+                      aria-label="More actions"
+                      className="text-[var(--outline)] hover:text-[var(--primary)]"
+                    >
                       <MoreVertical className="h-4 w-4 inline" />
                     </button>
                   </TableCell>
