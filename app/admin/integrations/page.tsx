@@ -8,7 +8,7 @@ import { apiGet } from '@/lib/api-client';
 import { ImportButtons } from '@/components/integrations/import-buttons';
 import { LogViewer } from '@/components/integrations/log-viewer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -68,6 +68,21 @@ const OPERATIONAL_CONNECTIONS = [
     latency: 'TIMEOUT',
     uptime: '82.11%',
   },
+];
+
+const DATA_SOURCES = [
+  { name: 'openLCA', description: 'LCIA methods & characterization factors', status: 'connected' },
+  { name: 'PubChem', description: 'Substance registry enrichment', status: 'connected' },
+  { name: 'Electricity Maps', description: 'Regional grid carbon intensity', status: 'configured' },
+  { name: 'BLS', description: 'Labor cost indices', status: 'configured' },
+  { name: 'EIA', description: 'Energy cost rates', status: 'configured' },
+  { name: 'Metals-API', description: 'Commodity metals pricing', status: 'idle' },
+];
+
+const API_KEYS = [
+  { label: 'openLCA Production', prefix: 'olca_live_', masked: '••••••••••8F2A', scope: 'read/write', created: '2025-11-04' },
+  { label: 'PubChem Public', prefix: 'pub_pk_', masked: '••••••••••9D11', scope: 'read', created: '2025-09-18' },
+  { label: 'Electricity Maps', prefix: 'em_', masked: '••••••••••C47B', scope: 'read', created: '2026-01-22' },
 ];
 
 const HEALTH_DOT: Record<string, string> = {
@@ -329,6 +344,121 @@ function OverviewTab({
   );
 }
 
+function DataSourcesTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-bold text-xl tracking-tight mb-1">Data Sources</h4>
+        <p className="text-sm text-[var(--on-surface-variant)]">
+          Integrated environmental and cost data providers.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {DATA_SOURCES.map((src) => (
+          <Card
+            key={src.name}
+            className="bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)]/30 rounded-xl"
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold">{src.name}</CardTitle>
+                <Badge
+                  className={
+                    src.status === 'connected'
+                      ? 'bg-[var(--secondary-container)] text-[var(--on-secondary-container)] font-mono text-[10px] uppercase'
+                      : src.status === 'configured'
+                      ? 'bg-[var(--surface-container-high)] text-[var(--on-surface-variant)] font-mono text-[10px] uppercase'
+                      : 'bg-[var(--surface-container)] text-[var(--outline)] font-mono text-[10px] uppercase'
+                  }
+                >
+                  {src.status}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-[var(--on-surface-variant)]">{src.description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ApiKeysTab() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="font-bold text-xl tracking-tight mb-1">API Keys</h4>
+          <p className="text-sm text-[var(--on-surface-variant)]">
+            Credentials configured for external integrations.
+          </p>
+        </div>
+        <Button className="veridian-gradient text-white">
+          <KeyRound className="h-4 w-4 mr-2" /> New Key
+        </Button>
+      </div>
+
+      <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-hidden border border-[var(--outline-variant)]/30">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-[var(--surface-container-low)] hover:bg-[var(--surface-container-low)]">
+              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
+                Label
+              </TableHead>
+              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
+                Key
+              </TableHead>
+              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
+                Scope
+              </TableHead>
+              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
+                Created
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {API_KEYS.map((k) => (
+              <TableRow key={k.label} className="hover:bg-[var(--surface)]">
+                <TableCell className="px-8 py-5 font-semibold text-sm">{k.label}</TableCell>
+                <TableCell className="px-8 py-5 font-mono text-sm">
+                  <span className="text-[var(--on-surface-variant)]">{k.prefix}</span>
+                  {k.masked}
+                </TableCell>
+                <TableCell className="px-8 py-5">
+                  <Badge className="bg-[var(--surface-container-high)] text-[var(--on-surface-variant)] font-mono text-[10px] uppercase">
+                    {k.scope}
+                  </Badge>
+                </TableCell>
+                <TableCell className="px-8 py-5 font-mono text-sm text-[var(--on-surface-variant)]">
+                  {k.created}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+function ActivityLogTab({ logRefresh }: { logRefresh: number }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-bold text-xl tracking-tight mb-1">Activity Log</h4>
+        <p className="text-sm text-[var(--on-surface-variant)]">
+          Recent integration runs and sync events.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-[var(--outline-variant)]/30 bg-[var(--surface-container-lowest)] overflow-hidden">
+        <LogViewer refreshKey={logRefresh} />
+      </div>
+    </div>
+  );
+}
+
 export default function IntegrationsAdminPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
@@ -409,19 +539,13 @@ export default function IntegrationsAdminPage() {
               )}
             </TabsContent>
             <TabsContent value="data-sources">
-              <div className="text-[var(--on-surface-variant)] py-12 text-center">
-                Coming in next commit.
-              </div>
+              <DataSourcesTab />
             </TabsContent>
             <TabsContent value="api-keys">
-              <div className="text-[var(--on-surface-variant)] py-12 text-center">
-                Coming in next commit.
-              </div>
+              <ApiKeysTab />
             </TabsContent>
             <TabsContent value="activity">
-              <div className="text-[var(--on-surface-variant)] py-12 text-center">
-                Coming in next commit.
-              </div>
+              <ActivityLogTab logRefresh={logRefresh} />
             </TabsContent>
           </Tabs>
         </div>
