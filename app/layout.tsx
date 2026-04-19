@@ -4,6 +4,7 @@ import { Inter_Tight, IBM_Plex_Mono } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { GlobalCommandPalette } from "@/components/global/command-palette"
+import { ShortcutHelp } from "@/components/global/shortcut-help"
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -38,6 +39,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} themes={["light", "dark", "high-contrast"]}>
           {children}
           <GlobalCommandPalette />
+          <ShortcutHelp />
         </ThemeProvider>
       </body>
     </html>
