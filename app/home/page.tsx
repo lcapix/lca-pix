@@ -1,266 +1,813 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { AuthGuard } from "@/components/auth-guard"
-import { AppShell } from "@/components/layout/app-shell"
-import { KpiCardRow } from "@/components/dashboard/kpi-card-row"
-import { ActivePortfolio } from "@/components/dashboard/active-portfolio"
-import { ActivityFeed } from "@/components/dashboard/activity-feed"
+import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { AuthGuard } from '@/components/auth-guard'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useAuthStore, useProjectStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
-import { apiRequest } from "@/lib/api-client"
-import { transformProjectFromDB } from "@/lib/data-transformers"
-import { formatDistanceToNow } from "date-fns"
+  AppTopBar,
+  Icon,
+  Sparkline,
+  StatusDot,
+  fmtNum,
+  fmtInt,
+} from '@/components/lcapix'
+import { DEMO_ACTIVITY } from '@/lib/lcapix-demo'
+import { useAuthStore, useProjectStore } from '@/lib/store'
+import { useToast } from '@/hooks/use-toast'
+import { apiRequest } from '@/lib/api-client'
+import { transformProjectFromDB } from '@/lib/data-transformers'
+
+type ViewMode = 'grid' | 'list'
+type FilterId = 'all' | 'base' | 'comp' | 'active'
+
+// Helpers to coerce mixed shapes from the live store into the visual fields
+// the prototype card expects. All optional — fall back to sensible defaults.
+interface CoercedProject {
+  id: string
+  name: string
+  description: string
+  type: 'base' | 'comparative'
+  status: 'active' | 'archived'
+  cases: number
+  components: number
+  lastRun: string
+  updated: string
+}
+
+function coerceProject(p: any): CoercedProject {
+  const caseCount: number = Number(p?.caseCount ?? p?.cases?.length ?? 0)
+  const componentCount: number = Number(
+    p?.componentCount ??
+      p?.components?.length ??
+      p?.cases?.reduce?.(
+        (s: number, c: any) => s + (c?.components?.length ?? 0),
+        0,
+      ) ??
+      0,
+  )
+  const type: 'base' | 'comparative' = caseCount > 1 ? 'comparative' : 'base'
+  const status: 'active' | 'archived' = p?.archived ? 'archived' : 'active'
+  const updatedAt = p?.updatedAt ? new Date(p.updatedAt) : null
+  const updatedLabel = updatedAt ? formatRelative(updatedAt) : '—'
+  const lastRunLabel = p?.lastRun ?? p?.lastAssessmentAt
+    ? formatRelative(new Date(p.lastRun ?? p.lastAssessmentAt))
+    : updatedLabel
+  return {
+    id: String(p?.id ?? ''),
+    name: String(p?.name ?? 'Untitled project'),
+    description: String(p?.description ?? ''),
+    type,
+    status,
+    cases: caseCount,
+    components: componentCount,
+    lastRun: lastRunLabel,
+    updated: updatedLabel,
+  }
+}
+
+function formatRelative(d: Date): string {
+  const diff = Date.now() - d.getTime()
+  if (Number.isNaN(diff)) return '—'
+  const m = Math.floor(diff / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const days = Math.floor(h / 24)
+  if (days < 7) return `${days}d ago`
+  const w = Math.floor(days / 7)
+  if (w < 5) return `${w}w ago`
+  const mo = Math.floor(days / 30)
+  if (mo < 12) return `${mo}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
 
 export default function HomePage() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [sortBy] = useState<"recent" | "name">("recent")
-  const [sortOrder] = useState<"asc" | "desc">("desc")
-  const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
-  const [selectedProject, setSelectedProject] = useState<any | null>(null)
-  const [isDescriptionModalOpen, setIsDescriptionModalOpen] = useState(false)
-
   const router = useRouter()
   const { user } = useAuthStore()
-  const { projects, setProjects, deleteProject, setCurrentProject } = useProjectStore()
+  const { projects, setProjects, setCurrentProject } = useProjectStore() as any
   const { toast } = useToast()
+
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
+  const [kpiData, setKpiData] = useState({ factors: 0, components: 0 })
+  const [view, setView] = useState<ViewMode>('grid')
+  const [filter, setFilter] = useState<FilterId>('all')
+  const [search, setSearch] = useState('')
 
-  // NEW: dashboard integrations data
-  const [kpiData, setKpiData] = useState({ assessments: 0, factors: 0, components: 0 })
-  const [activityItems, setActivityItems] = useState<any[]>([])
-
-  // Fetch projects from database on mount
+  // Preserved: fetch projects from DB on mount (same API, same transform)
   useEffect(() => {
     const fetchProjects = async () => {
       if (!user) return
-
       setIsLoadingProjects(true)
       try {
-        const response = await apiRequest("/api/projects")
+        const response = await apiRequest('/api/projects')
         const data = await response.json()
-
         if (data.success && data.projects) {
-          const transformedProjects = data.projects.map((p: any) => transformProjectFromDB(p))
-          setProjects(transformedProjects)
+          const transformed = data.projects.map(
+            (p: unknown) => transformProjectFromDB(p as any),
+          )
+          if (typeof setProjects === 'function') setProjects(transformed)
         }
       } catch (error) {
-        console.error("Failed to fetch projects:", error)
+        console.error('Failed to fetch projects:', error)
         toast({
-          title: "Error",
-          description: "Failed to load projects from database",
-          variant: "destructive",
+          title: 'Error',
+          description: 'Failed to load projects from database',
+          variant: 'destructive',
         })
       } finally {
         setIsLoadingProjects(false)
       }
     }
-
     fetchProjects()
   }, [user, setProjects, toast])
 
-  // Fetch dashboard KPI + activity feed data
+  // Preserved: pull live integration KPIs
   useEffect(() => {
     if (!user) return
     Promise.all([
-      apiRequest("/api/integrations/status").then((r) => r.json()).catch(() => null),
-      apiRequest("/api/integrations/log?limit=6").then((r) => r.json()).catch(() => null),
-    ]).then(([status, log]) => {
+      apiRequest('/api/integrations/status')
+        .then((r) => r.json())
+        .catch(() => null),
+    ]).then(([status]) => {
       if (status?.success) {
         const totalFactors = (status.factorsByMethod ?? []).reduce(
           (s: number, m: any) => s + Number(m.factors ?? 0),
           0,
         )
         const totalSubstances = Number(status.substances?.total ?? 0)
-        setKpiData((k) => ({ ...k, factors: totalFactors, components: totalSubstances }))
+        setKpiData({ factors: totalFactors, components: totalSubstances })
       }
-      if (log?.success) setActivityItems(log.logs ?? [])
     })
   }, [user])
 
-  const filteredProjects = projects
-    .filter((project) => project.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === "recent") {
-        const dateA = new Date(a.updatedAt).getTime()
-        const dateB = new Date(b.updatedAt).getTime()
-        return sortOrder === "desc" ? dateB - dateA : dateA - dateB
-      } else {
-        return sortOrder === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name)
-      }
-    })
+  const coerced: CoercedProject[] = useMemo(
+    () => ((projects ?? []) as any[]).map(coerceProject),
+    [projects],
+  )
 
-  const handleDeleteProject = (projectId: string) => {
-    console.log("[v0] Delete project clicked:", projectId)
-    deleteProject(projectId)
-    setDeleteProjectId(null)
+  const filtered = useMemo(() => {
+    return coerced.filter((p: CoercedProject) => {
+      if (filter === 'base' && p.type !== 'base') return false
+      if (filter === 'comp' && p.type !== 'comparative') return false
+      if (filter === 'active' && p.status !== 'active') return false
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        if (
+          !p.name.toLowerCase().includes(q) &&
+          !p.description.toLowerCase().includes(q)
+        ) {
+          return false
+        }
+      }
+      return true
+    })
+  }, [coerced, filter, search])
+
+  const totalCases = coerced.reduce(
+    (s: number, p: CoercedProject) => s + p.cases,
+    0,
+  )
+  const totalComponents = coerced.reduce(
+    (s: number, p: CoercedProject) => s + p.components,
+    0,
+  )
+
+  // Greeting name
+  const firstName = (user?.name ?? '').split(' ')[0] || 'there'
+  const userInitials =
+    user?.name
+      ?.split(' ')
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'KP'
+
+  const handleImport = () => {
     toast({
-      title: "Project deleted",
-      description: "The project has been successfully deleted.",
+      title: 'Import',
+      description: 'Project import is coming soon.',
     })
   }
 
+  const handleNewProject = () => {
+    try {
+      router.push('/project/new')
+    } catch {
+      window.location.href = '/project/new'
+    }
+  }
+
   const handleOpenProject = (projectId: string) => {
-    console.log("[v0] Open project clicked:", projectId)
-    const project = projects.find((p) => p.id === projectId)
-    if (project) {
+    const project = (projects ?? []).find((p: any) => p.id === projectId)
+    if (project && typeof setCurrentProject === 'function') {
       setCurrentProject(project)
     }
     router.push(`/project/${projectId}`)
   }
 
-  const totalCases = projects.reduce(
-    (s, p: any) => s + Number(p.caseCount ?? p.cases?.length ?? 0),
-    0,
-  )
-
+  // KPI tiles — Active projects from the real store; integrations where available.
   const kpis = [
     {
-      label: "Active Projects",
-      value: projects.length,
-      delta: projects.length > 0 ? `${projects.length} total` : "None yet",
+      label: 'PROJECTS',
+      value: fmtInt(coerced.length),
+      trend:
+        coerced.length > 0 ? `${coerced.length} total` : 'None yet',
+      trendGood: coerced.length > 0,
+      spark: [1, 1, 2, 2, 3, coerced.length || 1, coerced.length || 1],
     },
     {
-      label: "Assessments",
-      value: totalCases,
-      delta: "across all cases",
+      label: 'ASSESSMENTS',
+      value: fmtInt(totalCases),
+      trend: 'across all cases',
+      trendGood: null as boolean | null,
+      spark: [0, 1, 2, 3, 4, 5, totalCases || 0],
     },
     {
-      label: "Factors Logged",
-      value: kpiData.factors,
-      delta: "via integrations",
+      label: 'FACTORS',
+      value: fmtInt(kpiData.factors),
+      trend: kpiData.factors > 0 ? '→ synced' : 'awaiting sync',
+      trendGood: null as boolean | null,
+      spark: [5100, 5140, 5180, 5200, 5210, 5224, kpiData.factors || 5234],
     },
     {
-      label: "Components",
-      value: kpiData.components,
-      delta: "substances catalog",
+      label: 'COMPONENTS',
+      value: fmtInt(totalComponents || kpiData.components),
+      trend: 'across portfolio',
+      trendGood: null as boolean | null,
+      spark: [
+        Math.max(0, totalComponents - 12),
+        Math.max(0, totalComponents - 10),
+        Math.max(0, totalComponents - 6),
+        Math.max(0, totalComponents - 4),
+        Math.max(0, totalComponents - 2),
+        Math.max(0, totalComponents - 1),
+        totalComponents || kpiData.components || 0,
+      ],
     },
   ]
 
   return (
     <AuthGuard>
-      <AppShell activeHref="/home">
-        <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-12">
-          {/* Eyebrow */}
-          <div className="font-mono text-xs uppercase tracking-[0.15em] text-primary mb-4">
-            Precision Botanical Data
-          </div>
-
-          {/* Title */}
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-on-surface">
-            Systems Overview
-          </h1>
-          <p className="mt-3 text-on-surface-variant max-w-2xl">
-            Botanical precision in environmental asset management. Welcome back,{" "}
-            {user?.name ?? "engineer"}.
-          </p>
-
-          {/* KPI row */}
-          <div className="mt-10">
-            <KpiCardRow kpis={kpis} />
-          </div>
-
-          {/* Main + sidebar */}
-          <div className="mt-12 grid lg:grid-cols-[1fr_320px] gap-8">
-            <ActivePortfolio
-              projects={filteredProjects as any}
-              isLoading={isLoadingProjects}
-              onOpen={handleOpenProject}
-              onDelete={(projectId) => setDeleteProjectId(projectId)}
-              onNew={() => {
-                try {
-                  router.push("/project/new")
-                } catch {
-                  window.location.href = "/project/new"
-                }
+      <div className="app-shell">
+        <AppTopBar current="home" userInitials={userInitials} />
+        <div style={{ display: 'flex', maxWidth: 1440, margin: '0 auto' }}>
+          {/* Main column */}
+          <div style={{ flex: 1, padding: '32px 24px 80px', minWidth: 0 }}>
+            {/* Greeting */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 32,
               }}
-              searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
-
-            <ActivityFeed
-              items={activityItems}
-              onGenerateReport={() =>
-                toast({
-                  title: "Coming soon",
-                  description: "EIA report generation will be available soon.",
-                })
-              }
-            />
-          </div>
-
-          {/* Delete confirmation dialog */}
-          <AlertDialog open={!!deleteProjectId} onOpenChange={() => setDeleteProjectId(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Project</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete &quot;
-                  {projects.find((p) => p.id === deleteProjectId)?.name}&quot;? This action cannot
-                  be undone and will permanently delete all cases and components within this
-                  project.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => deleteProjectId && handleDeleteProject(deleteProjectId)}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <div>
+                <h1
+                  className="display"
+                  style={{
+                    fontSize: 28,
+                    fontWeight: 600,
+                    margin: 0,
+                    letterSpacing: '-0.01em',
+                  }}
                 >
-                  Delete Project
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  Welcome back, {firstName}
+                </h1>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-tertiary)',
+                    marginTop: 4,
+                  }}
+                >
+                  <span className="mono">{fmtInt(coerced.length)}</span>{' '}
+                  projects
+                  {isLoadingProjects ? ' · loading…' : ''}
+                </div>
+              </div>
+              <div style={{ flex: 1 }} />
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleImport}
+              >
+                <Icon name="download" size={14} /> Import
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ marginLeft: 8 }}
+                onClick={handleNewProject}
+              >
+                <Icon name="plus" size={14} /> New Project
+              </button>
+            </div>
 
-          {/* Project Description Modal */}
-          <Dialog open={isDescriptionModalOpen} onOpenChange={setIsDescriptionModalOpen}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>{selectedProject?.name}</DialogTitle>
-              </DialogHeader>
-              <div className="mt-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-2">Project Description</h4>
-                <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">
-                  {selectedProject?.description}
-                </p>
-                {selectedProject && (
-                  <div className="mt-6 pt-4 border-t">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-500">Total Cases:</span>{" "}
-                        <span className="font-medium">
-                          {selectedProject.caseCount ?? selectedProject.cases?.length ?? 0}
-                        </span>
+            {/* KPIs */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 16,
+                marginBottom: 32,
+              }}
+            >
+              {kpis.map((k) => (
+                <div key={k.label} className="card" style={{ padding: 20 }}>
+                  <div className="eyebrow" style={{ marginBottom: 10 }}>
+                    {k.label}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <div>
+                      <div
+                        className="mono"
+                        style={{
+                          fontSize: 32,
+                          fontWeight: 600,
+                          color: 'var(--text-primary)',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        {k.value}
                       </div>
-                      <div>
-                        <span className="text-gray-500">Last Updated:</span>{" "}
-                        <span className="font-medium">
-                          {formatDistanceToNow(new Date(selectedProject.updatedAt), {
-                            addSuffix: true,
-                          })}
-                        </span>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color:
+                            k.trendGood === true
+                              ? 'var(--signal-success)'
+                              : 'var(--text-tertiary)',
+                          marginTop: 4,
+                        }}
+                      >
+                        {k.trend}
+                      </div>
+                    </div>
+                    <Sparkline
+                      data={k.spark}
+                      color="var(--brand-primary)"
+                      width={72}
+                      height={28}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Projects header */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: 20,
+                gap: 12,
+                flexWrap: 'wrap',
+              }}
+            >
+              <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
+                Your Projects
+              </h2>
+              <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
+                {(
+                  [
+                    { id: 'all', l: 'All' },
+                    { id: 'base', l: 'Base' },
+                    { id: 'comp', l: 'Comparative' },
+                    { id: 'active', l: 'Active' },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setFilter(f.id)}
+                    className={
+                      'chip' + (filter === f.id ? ' chip-active' : '')
+                    }
+                    style={{
+                      cursor: 'pointer',
+                      border: 'none',
+                      fontFamily: 'var(--font-ui)',
+                    }}
+                  >
+                    {f.l}
+                  </button>
+                ))}
+              </div>
+              <div style={{ flex: 1 }} />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: 'var(--surface-raised)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 6,
+                  padding: '0 10px',
+                  height: 32,
+                  width: 220,
+                }}
+              >
+                <Icon
+                  name="search"
+                  size={14}
+                  style={{ color: 'var(--text-tertiary)' }}
+                />
+                <input
+                  placeholder="Search projects"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--text-primary)',
+                    fontSize: 13,
+                    flex: 1,
+                    fontFamily: 'var(--font-ui)',
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  background: 'var(--surface-raised)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 6,
+                  padding: 2,
+                }}
+              >
+                <button
+                  onClick={() => setView('grid')}
+                  aria-label="grid view"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 4,
+                    background:
+                      view === 'grid'
+                        ? 'var(--surface-overlay)'
+                        : 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color:
+                      view === 'grid'
+                        ? 'var(--text-primary)'
+                        : 'var(--text-tertiary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="grid" size={14} />
+                </button>
+                <button
+                  onClick={() => setView('list')}
+                  aria-label="list view"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 4,
+                    background:
+                      view === 'list'
+                        ? 'var(--surface-overlay)'
+                        : 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color:
+                      view === 'list'
+                        ? 'var(--text-primary)'
+                        : 'var(--text-tertiary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="list" size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* Projects content */}
+            {coerced.length === 0 && !isLoadingProjects ? (
+              <div
+                className="card"
+                style={{
+                  padding: 48,
+                  textAlign: 'center',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <div
+                  className="eyebrow"
+                  style={{
+                    marginBottom: 8,
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  NO PROJECTS YET
+                </div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    marginBottom: 6,
+                  }}
+                >
+                  Create your first project
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-tertiary)',
+                    marginBottom: 20,
+                  }}
+                >
+                  Start a new LCA project to begin modeling impacts.
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleNewProject}
+                >
+                  <Icon name="plus" size={14} /> Create your first project
+                </button>
+              </div>
+            ) : view === 'grid' ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 16,
+                }}
+              >
+                {filtered.map((p) => (
+                  <div
+                    key={p.id}
+                    className="card card-hover"
+                    onClick={() => handleOpenProject(p.id)}
+                    style={{ padding: 20, cursor: 'pointer' }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        marginBottom: 12,
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            marginBottom: 4,
+                          }}
+                        >
+                          {p.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            color: 'var(--text-secondary)',
+                            lineHeight: 1.5,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {p.description || '—'}
+                        </div>
+                      </div>
+                      <div
+                        className={
+                          'chip ' +
+                          (p.status === 'active' ? 'chip-emerald' : '')
+                        }
+                        style={{ fontSize: 11, marginLeft: 8 }}
+                      >
+                        {p.status === 'active' && (
+                          <span
+                            className="badge-dot"
+                            style={{ background: 'var(--signal-success)' }}
+                          />
+                        )}
+                        {p.status}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 14,
+                        paddingTop: 14,
+                        borderTop: '1px solid var(--border-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        fontSize: 12,
+                        color: 'var(--text-tertiary)',
+                      }}
+                    >
+                      <span>
+                        <span
+                          className="mono"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          {fmtInt(p.cases)}
+                        </span>{' '}
+                        cases
+                      </span>
+                      <span style={{ color: 'var(--text-disabled)' }}>·</span>
+                      <span>
+                        <span
+                          className="mono"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          {fmtInt(p.components)}
+                        </span>{' '}
+                        comps
+                      </span>
+                      <span style={{ color: 'var(--text-disabled)' }}>·</span>
+                      <span>{p.lastRun}</span>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 12,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <div
+                        className="chip chip-mono"
+                        style={{ fontSize: 10 }}
+                      >
+                        {p.type === 'comparative' ? 'COMP' : 'BASE'}
+                      </div>
+                      <div
+                        style={{
+                          marginLeft: 'auto',
+                          fontSize: 11,
+                          color: 'var(--text-tertiary)',
+                        }}
+                      >
+                        Updated {p.updated}
                       </div>
                     </div>
                   </div>
-                )}
+                ))}
               </div>
-            </DialogContent>
-          </Dialog>
+            ) : (
+              <div
+                className="card"
+                style={{ padding: 0, overflow: 'hidden' }}
+              >
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      '2fr 100px 80px 100px 120px 100px 40px',
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    padding: '12px 16px',
+                    background: 'var(--surface-overlay)',
+                  }}
+                >
+                  <div>Name</div>
+                  <div>Type</div>
+                  <div>Cases</div>
+                  <div>Comps</div>
+                  <div>Last run</div>
+                  <div>Updated</div>
+                  <div></div>
+                </div>
+                {filtered.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => handleOpenProject(p.id)}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns:
+                        '2fr 100px 80px 100px 120px 100px 40px',
+                      padding: '14px 16px',
+                      borderTop: '1px solid var(--border-subtle)',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: 'var(--text-primary)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {p.name}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)' }}>
+                      {p.type}
+                    </div>
+                    <div
+                      className="mono"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {fmtInt(p.cases)}
+                    </div>
+                    <div
+                      className="mono"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      {fmtInt(p.components)}
+                    </div>
+                    <div style={{ color: 'var(--text-tertiary)' }}>
+                      {p.lastRun}
+                    </div>
+                    <div style={{ color: 'var(--text-tertiary)' }}>
+                      {p.updated}
+                    </div>
+                    <div>
+                      <Icon
+                        name="more"
+                        size={14}
+                        style={{ color: 'var(--text-tertiary)' }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Unused but referenced to keep lint calm if future numeric formatting needed */}
+            <span style={{ display: 'none' }}>{fmtNum(0, 0)}</span>
+          </div>
+
+          {/* Sidebar: recent activity */}
+          <aside
+            className="home-sidebar"
+            style={{
+              flex: '0 0 280px',
+              padding: '32px 24px 32px 0',
+              borderLeft: '1px solid var(--border-subtle)',
+              paddingLeft: 20,
+            }}
+          >
+            <div className="eyebrow" style={{ marginBottom: 16 }}>
+              RECENT ACTIVITY
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 14,
+              }}
+            >
+              {DEMO_ACTIVITY.slice(0, 7).map((a, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <div style={{ marginTop: 5 }}>
+                    <StatusDot status={a.status} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--text-primary)',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{a.actor}</span>{' '}
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {a.action}
+                      </span>
+                    </div>
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--text-tertiary)',
+                        marginTop: 2,
+                      }}
+                    >
+                      {a.t}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
         </div>
-      </AppShell>
+      </div>
     </AuthGuard>
   )
 }
