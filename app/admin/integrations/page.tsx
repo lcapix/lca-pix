@@ -245,7 +245,7 @@ function OverviewTab({
           </div>
         </div>
 
-        <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-hidden shadow-[0_24px_48px_-12px_rgba(25,28,27,0.04)]">
+        <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-x-auto shadow-[0_24px_48px_-12px_rgba(25,28,27,0.04)]">
           <Table>
             <TableHeader>
               <TableRow className="bg-[var(--surface-container-low)] hover:bg-[var(--surface-container-low)]">
@@ -400,7 +400,7 @@ function ApiKeysTab() {
         </Button>
       </div>
 
-      <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-hidden border border-[var(--outline-variant)]/30">
+      <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-x-auto border border-[var(--outline-variant)]/30">
         <Table>
           <TableHeader>
             <TableRow className="bg-[var(--surface-container-low)] hover:bg-[var(--surface-container-low)]">
@@ -486,10 +486,10 @@ export default function IntegrationsAdminPage() {
   return (
     <AuthGuard>
       <AppLayout>
-        <div className="p-8 lg:p-12 max-w-7xl mx-auto">
+        <div className="p-4 sm:p-6 md:p-8 lg:p-12 max-w-7xl mx-auto">
           {/* Editorial header */}
           <div className="mb-10">
-            <h2 className="text-5xl lg:text-[3.5rem] font-extrabold tracking-tighter text-[var(--primary)] leading-tight mb-2">
+            <h2 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tighter text-[var(--primary)] leading-tight mb-2">
               Integrations.
             </h2>
             <p className="text-[var(--on-surface-variant)] max-w-xl leading-relaxed">
@@ -499,7 +499,7 @@ export default function IntegrationsAdminPage() {
           </div>
 
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-transparent border-b border-[var(--outline-variant)]/30 rounded-none h-auto w-full justify-start gap-8 p-0 mb-10">
+            <TabsList className="bg-transparent border-b border-[var(--outline-variant)]/30 rounded-none h-auto w-full justify-start gap-4 sm:gap-8 p-0 mb-10 overflow-x-auto">
               <TabsTrigger
                 value="overview"
                 className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[var(--primary)] data-[state=active]:text-[var(--primary)] rounded-none pb-4 font-semibold text-sm text-[var(--outline)]"
