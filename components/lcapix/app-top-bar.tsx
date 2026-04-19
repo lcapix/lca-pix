@@ -98,20 +98,23 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
     <div
       style={{
         height: 56,
-        // Opaque glass: semi-transparent white with backdrop blur so
-        // content scrolls *behind* the nav cleanly (no visual bleed).
-        background: 'rgba(248, 250, 248, 0.92)',
-        backdropFilter: 'blur(14px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(14px) saturate(1.4)',
+        // Fully opaque background — no blur, no transparency. Content
+        // that scrolls under the nav must be completely hidden, not
+        // just softly blurred. Using the solid token for light-mode
+        // parity with the rest of the shell.
+        background: '#f8faf8',
         borderBottom: '1px solid var(--border-subtle)',
-        boxShadow: '0 1px 0 rgba(25, 28, 27, 0.04)',
+        boxShadow: '0 2px 12px -6px rgba(25, 28, 27, 0.08)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 16px',
         gap: 12,
         position: 'sticky',
         top: 0,
-        zIndex: 100,
+        // z-index 1000 beats any card/modal/overlay on the page below
+        // (the page's highest was 50; we pick 1000 for future-proofing
+        // against any dialog or tooltip that might otherwise clip).
+        zIndex: 1000,
         flexWrap: 'nowrap',
         minWidth: 0,
       }}
