@@ -54,5 +54,8 @@ describe('GET /api/integrations/openlca/import', () => {
     expect(body.success).toBe(true);
     expect(body.methods).toBeInstanceOf(Array);
     expect(body.methods.find((m: any) => m.name === 'CML 2001')).toBeTruthy();
+    expect(body.methods.find((m: any) => m.name === 'ReCiPe Midpoint (H)')).toBeTruthy();
+    expect(body.methods.find((m: any) => m.name === 'TRACI 2.1')).toBeTruthy();
+    expect(body.methods.length).toBeGreaterThanOrEqual(3);
   });
 });

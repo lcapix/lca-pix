@@ -5,9 +5,13 @@ import { requireAuth } from '@/lib/auth';
 import { importFactorMethod } from '@/lib/integrations/openlca/import';
 import { logIntegration } from '@/lib/integrations/log';
 import { CML_2001_V4_FACTORS } from '@/lib/integrations/openlca/data/cml-2001-v4';
+import { RECIPE_MIDPOINT_H_FACTORS } from '@/lib/integrations/openlca/data/recipe-midpoint-h';
+import { TRACI_21_FACTORS } from '@/lib/integrations/openlca/data/traci-2.1';
 
 const SUPPORTED: Record<string, typeof CML_2001_V4_FACTORS> = {
   'CML 2001': CML_2001_V4_FACTORS,
+  'ReCiPe Midpoint (H)': RECIPE_MIDPOINT_H_FACTORS,
+  'TRACI 2.1': TRACI_21_FACTORS,
 };
 
 const Body = z.object({
