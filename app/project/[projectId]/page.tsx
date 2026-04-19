@@ -489,10 +489,10 @@ export default function ProjectPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-8">
                       {/* Main: tree visualization + mini */}
                       <div className="space-y-4">
-                        <div className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest">
+                        <div className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest shadow-botanical">
                           <div className="flex items-center justify-between px-5 py-3 border-b border-outline-variant/15">
                             <div className="flex items-center gap-3">
-                              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-on-surface-variant">
+                              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-on-surface-variant">
                                 Case Tree
                               </span>
                               <Badge variant="outline" className="text-xs">
@@ -503,7 +503,7 @@ export default function ProjectPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => openTreeModal(selectedCase.id)}
-                              className="h-8 text-xs"
+                              className="h-8 text-xs text-primary hover:text-primary hover:bg-primary/5"
                             >
                               <Maximize2 className="h-3 w-3 mr-1" />
                               View Hierarchy
