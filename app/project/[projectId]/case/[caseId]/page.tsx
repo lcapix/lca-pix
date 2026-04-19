@@ -2311,8 +2311,8 @@ export default function CaseViewPage() {
         <div className="h-full overflow-hidden">
           <div className="max-w-7xl mx-auto py-6 px-10">
             {/* Title on green background */}
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-on-surface mb-2">
+            <div className="text-center mb-8">
+              <h2 className="font-display text-3xl font-semibold tracking-tight text-on-surface mb-2">
                 {isCreating ? "Create New Component" : `Edit Component`}
               </h2>
               <p className="text-sm text-on-surface-variant">
@@ -2321,20 +2321,20 @@ export default function CaseViewPage() {
             </div>
 
             {/* Horizontal Form Layout */}
-            <Card className="shadow-lg border border-outline-variant/30 bg-white overflow-hidden">
-              <CardContent className="p-10">
+            <Card className="bg-surface-container-lowest shadow-botanical rounded-xl border-0 overflow-hidden">
+              <CardContent className="p-8 md:p-10">
                 {/* Tabs for Details and Costs */}
                 <Tabs value={editFormTab} onValueChange={setEditFormTab} className="w-full">
-                  <TabsList className="flex w-full mb-6 p-1 bg-surface-container rounded-lg h-auto">
-                    <TabsTrigger value="details" className="flex-1 text-base py-3 rounded data-[state=active]:bg-white data-[state=active]:shadow-sm">Details</TabsTrigger>
-                    <TabsTrigger value="costs" className="flex-1 text-base py-3 rounded data-[state=active]:bg-white data-[state=active]:shadow-sm">Costs</TabsTrigger>
+                  <TabsList className="flex w-full mb-8 p-1 bg-surface-container-low rounded-full h-auto gap-1">
+                    <TabsTrigger value="details" className="flex-1 font-mono text-xs uppercase tracking-wider py-2.5 rounded-full data-[state=active]:veridian-gradient data-[state=active]:text-on-primary data-[state=active]:shadow-botanical text-on-surface-variant">Details</TabsTrigger>
+                    <TabsTrigger value="costs" className="flex-1 font-mono text-xs uppercase tracking-wider py-2.5 rounded-full data-[state=active]:veridian-gradient data-[state=active]:text-on-primary data-[state=active]:shadow-botanical text-on-surface-variant">Costs</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="details" className="space-y-6">
                   {/* Row 1: Process Name and Type */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="processName" className="text-base font-semibold text-on-surface">Process Name</Label>
+                      <Label htmlFor="processName" className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Process Name</Label>
                       <Input
                         id="processName"
                         value={editFormData.processName || ""}
@@ -2342,18 +2342,18 @@ export default function CaseViewPage() {
                           setEditFormData({ ...editFormData, processName: e.target.value })
                         }
                         placeholder="e.g., Aluminium Production"
-                        className="h-11 text-base px-4"
+                        className="h-11 text-base px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus-visible:border-primary focus-visible:border-b-2 focus-visible:ring-0 focus-visible:ring-offset-0 font-sans"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="processType" className="text-base font-semibold text-on-surface">Process Type</Label>
+                      <Label htmlFor="processType" className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Process Type</Label>
                       <Select
                         value={editFormData.processType || ""}
                         onValueChange={(value) =>
                           setEditFormData({ ...editFormData, processType: value })
                         }
                       >
-                        <SelectTrigger className="h-11 text-base px-4">
+                        <SelectTrigger className="h-11 text-base px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus:border-primary focus:border-b-2 focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary font-sans">
                           <SelectValue placeholder="e.g., Elemental Task" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2378,7 +2378,7 @@ export default function CaseViewPage() {
 
                   {/* Row 2: Process Description (Full Width) */}
                   <div className="space-y-2">
-                    <Label htmlFor="description" className="text-sm font-semibold text-on-surface">Process Description</Label>
+                    <Label htmlFor="description" className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Process Description</Label>
                     <Input
                       id="description"
                       value={editFormData.processDescription || ""}
@@ -2389,21 +2389,21 @@ export default function CaseViewPage() {
                         })
                       }
                       placeholder="Description of the product"
-                      className="h-9 text-sm px-3"
+                      className="h-10 text-sm px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus-visible:border-primary focus-visible:border-b-2 focus-visible:ring-0 focus-visible:ring-offset-0 font-sans"
                     />
                   </div>
 
                   {/* Parent Selection - Show if not product type */}
                   {editFormData.processType && editFormData.processType !== COMPONENT_TYPES.PRODUCT && (
                     <div className="space-y-2">
-                      <Label htmlFor="parentId" className="text-sm font-semibold text-on-surface">Parent Component</Label>
+                      <Label htmlFor="parentId" className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Parent Component</Label>
                       <Select
                         value={editFormData.parentId || "none"}
                         onValueChange={(value) =>
                           setEditFormData({ ...editFormData, parentId: value === "none" ? "" : value })
                         }
                       >
-                        <SelectTrigger className="h-9 text-sm px-3">
+                        <SelectTrigger className="h-10 text-sm px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus:border-primary focus:border-b-2 focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary font-sans">
                           <SelectValue placeholder="Select parent component (optional)" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2435,12 +2435,12 @@ export default function CaseViewPage() {
                   {/* Row 3: Driver Category, Selected Driver, Mass, Unit */}
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-on-surface">Driver Category</Label>
+                      <Label className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Driver Category</Label>
                       <Select
                         value={editFormData.driverCategory || ""}
                         onValueChange={(value) => setEditFormData({...editFormData, driverCategory: value, selectedDriver: ""})}
                       >
-                        <SelectTrigger className="h-9 text-sm px-3">
+                        <SelectTrigger className="h-10 text-sm px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus:border-primary focus:border-b-2 focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary font-sans">
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2453,7 +2453,7 @@ export default function CaseViewPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-on-surface">Selected Driver</Label>
+                      <Label className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Selected Driver</Label>
                       <Select
                         value={editFormData.selectedDriver || ""}
                         onValueChange={(value) => {
@@ -2461,7 +2461,7 @@ export default function CaseViewPage() {
                         }}
                         disabled={!editFormData.driverCategory}
                       >
-                        <SelectTrigger className="h-9 text-sm px-3">
+                        <SelectTrigger className="h-10 text-sm px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus:border-primary focus:border-b-2 focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary font-sans">
                           <SelectValue placeholder={editFormData.driverCategory ? "Select driver" : "Select category first"} />
                         </SelectTrigger>
                         <SelectContent>
@@ -2510,7 +2510,7 @@ export default function CaseViewPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="mass" className="text-sm font-semibold text-on-surface">Mass</Label>
+                      <Label htmlFor="mass" className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Mass</Label>
                       <Input
                         id="mass"
                         type="number"
@@ -2519,16 +2519,16 @@ export default function CaseViewPage() {
                         value={editFormData.mass || ""}
                         onChange={(e) => setEditFormData({...editFormData, mass: parseFloat(e.target.value) || 0})}
                         placeholder="100"
-                        className="h-9 text-sm px-3"
+                        className="h-10 text-sm px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus-visible:border-primary focus-visible:border-b-2 focus-visible:ring-0 focus-visible:ring-offset-0 font-sans"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="massUnit" className="text-sm font-semibold text-on-surface">Unit</Label>
+                      <Label htmlFor="massUnit" className="font-mono text-xs uppercase tracking-wider text-on-surface-variant">Unit</Label>
                       <Select
                         value={editFormData.massUnit || "kg"}
                         onValueChange={(value) => setEditFormData({...editFormData, massUnit: value})}
                       >
-                        <SelectTrigger className="h-9 text-sm px-3">
+                        <SelectTrigger className="h-10 text-sm px-3 bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus:border-primary focus:border-b-2 focus:ring-0 focus:ring-offset-0 [&>svg]:text-primary font-sans">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -2713,10 +2713,17 @@ export default function CaseViewPage() {
                 </Tabs>
 
                   {/* Action Buttons */}
-                  <div className="flex items-center justify-center gap-3 pt-4">
-                    <Button 
+                  <div className="flex items-center justify-end gap-3 pt-8 mt-2 border-t border-outline-variant/30">
+                    <Button
+                      variant="ghost"
+                      onClick={handleCancelEdit}
+                      className="text-primary font-mono text-sm uppercase tracking-wider hover:bg-primary/5 px-6 py-2.5 h-auto"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
                       onClick={handleSaveComponent}
-                      className="veridian-gradient text-white font-semibold px-8 py-2 text-sm h-9 rounded-md shadow-sm hover:opacity-95 transition-opacity"
+                      className="veridian-gradient text-on-primary font-medium px-6 py-2.5 h-auto rounded-md shadow-botanical hover:opacity-95 transition-opacity"
                       disabled={!editFormData.processType || !editFormData.processName?.trim()}
                     >
                       {isCreating ?
@@ -2727,13 +2734,6 @@ export default function CaseViewPage() {
                         editFormData.processType === COMPONENT_TYPES.ELEMENTAL_TASK ? "Create Elemental Task" :
                         "Create Component"
                         : "Save Changes"}
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleCancelEdit}
-                      className="px-8 py-2 text-sm font-medium border-outline-variant/40 h-9"
-                    >
-                      Cancel
                     </Button>
                   </div>
               </CardContent>
