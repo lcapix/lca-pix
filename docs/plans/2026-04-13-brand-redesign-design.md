@@ -1,7 +1,9 @@
+> **⚠️ SUPERSEDED** — The user chose the Veridian Flow / Botanical Precision direction (stitch-generated mockups in `stitch_lcapix_design_system_prompts/`) instead of Data Cool. See `2026-04-13-veridian-flow-implementation.md` for the active implementation plan and `stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md` for the active design system reference. This doc is retained for history only.
+
 # LCAPIX v3 — Brand & UI Redesign Design
 
 **Date:** 2026-04-13
-**Status:** Approved direction, ready for implementation planning
+**Status:** SUPERSEDED (see banner above). Kept for historical reference only.
 **Owner:** Kavish Pandit
 **Precedes:** `2026-04-13-brand-redesign-implementation.md`
 
