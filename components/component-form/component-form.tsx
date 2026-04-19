@@ -21,6 +21,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/api-client';
 
 import { useProjectStore, type ComponentNode } from '@/lib/store';
 import type { ProcessNode } from '@/types/component';
@@ -260,25 +261,61 @@ export function ComponentForm({
         currency: formData.currency || undefined,
       };
 
+      // Build the DB-shaped payload for the REST endpoint. The API is
+      // the source of truth; Zustand is kept in sync for optimistic
+      // UI but the server write is what persists.
+      const dbBody = {
+        component_name: payload.name,
+        component_type: payload.type,
+        parent_component_id: payload.parentId ? Number(payload.parentId) : null,
+        description: payload.description || null,
+        driver_category: payload.driverCategory || null,
+        drivers: payload.drivers && payload.drivers.length > 0 ? payload.drivers : null,
+        quantity: payload.mass ?? 1,
+        unit: payload.massUnit || 'unit',
+        opex: payload.operationalCostUSD ?? null,
+        capex: payload.capitalCostUSD ?? null,
+        labor_cost: payload.laborCost ?? null,
+        energy_cost: payload.energyCost ?? null,
+        material_cost: payload.materialCost ?? null,
+        transportation_cost: payload.transportationCost ?? null,
+        equipment_cost: payload.equipmentCost ?? null,
+        overhead_cost: payload.overheadCost ?? null,
+        currency: payload.currency || 'USD',
+      };
+
       if (isEditMode && editingId) {
+        const res = await apiRequest(`/api/components/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(dbBody),
+        });
+        if (!res.ok) throw new Error(`PUT /api/components/${editingId} → ${res.status}`);
         updateComponentNode(editingId, payload);
         toast({
-          title: 'Component Updated',
-          description: `${formData.processName} has been updated successfully`,
+          title: 'Component updated',
+          description: `${formData.processName} saved to database`,
         });
       } else {
-        addComponentNode(caseId, payload);
+        const res = await apiRequest(`/api/cases/${caseId}/components`, {
+          method: 'POST',
+          body: JSON.stringify(dbBody),
+        });
+        if (!res.ok) throw new Error(`POST /api/cases/${caseId}/components → ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        const newDbId = data?.component?.component_id ?? data?.component_id;
+        // Keep Zustand in sync for optimistic UI; use server id when available
+        addComponentNode(caseId, { ...payload, id: newDbId ? String(newDbId) : undefined } as any);
         toast({
-          title: 'Component Created',
-          description: `${formData.processName} has been added to your case`,
+          title: 'Component created',
+          description: `${formData.processName} saved to database`,
         });
       }
       router.push(`/project/${projectId}/case/${caseId}`);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Component save failed:', err);
       toast({
-        title: 'Error',
-        description: `Failed to ${isEditMode ? 'update' : 'create'} component. Please try again.`,
+        title: 'Save failed',
+        description: err?.message || `Could not ${isEditMode ? 'update' : 'create'} component. Check console.`,
         variant: 'destructive',
       });
     } finally {
