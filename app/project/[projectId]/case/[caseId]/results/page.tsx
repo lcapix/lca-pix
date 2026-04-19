@@ -4,15 +4,28 @@ import { useParams, useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
 import { type Case } from "@/lib/store"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ArrowLeft, BarChart3, Leaf, Play, X, CheckCircle, AlertCircle, Activity, Calendar, Clock, Target, Loader2, ChevronDown } from "lucide-react"
+import {
+  ArrowLeft,
+  BarChart3,
+  Play,
+  X,
+  AlertCircle,
+  Target,
+  Loader2,
+  ChevronDown,
+} from "lucide-react"
 import { toast } from "sonner"
-import { formatChemicalUnit } from "@/lib/format-utils"
 import { apiRequest } from "@/lib/api-client"
 import { transformCaseFromDB } from "@/lib/data-transformers"
 import { RunAssessmentModal } from "@/components/assessments/run-assessment-modal"
+import { ProjectShell } from "@/components/project/project-shell"
+import { TotalImpactDisplay } from "@/components/results/total-impact-display"
+import { ContributionChart } from "@/components/results/contribution-chart"
+import { FlowLevelDetail } from "@/components/results/flow-level-detail"
+import { HistoricalComparison } from "@/components/results/historical-comparison"
+import { Num } from "@/components/ui/num"
 
 // Impact categories supported
 const IMPACT_CATEGORIES = {
@@ -20,7 +33,7 @@ const IMPACT_CATEGORIES = {
   "Ozone depletion": { unit: "kg CFC-11-eq", color: "text-blue-600" },
   "Smog formation": { unit: "kg NOₓ-eq", color: "text-orange-600" },
   "Freshwater ecotoxicity": { unit: "CTUe", color: "text-cyan-600" },
-  "Acidification": { unit: "kg SO₂-eq", color: "text-purple-600" }
+  "Acidification": { unit: "kg SO₂-eq", color: "text-purple-600" },
 }
 
 // API Response Types
@@ -65,7 +78,7 @@ export default function ResultsPage() {
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
   const [isLoadingCase, setIsLoadingCase] = useState(true)
 
-  // Assessment state (similar to v2)
+  // Assessment state (PRESERVED from previous page — handlers untouched)
   const [showOptions, setShowOptions] = useState(false)
   const [isRunningAssessment, setIsRunningAssessment] = useState(false)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
@@ -80,10 +93,9 @@ export default function ResultsPage() {
     const fetchCaseData = async () => {
       setIsLoadingCase(true)
       try {
-        // Fetch case and components in parallel
         const [caseResponse, componentsResponse] = await Promise.all([
           apiRequest(`/api/cases/${caseId}`),
-          apiRequest(`/api/cases/${caseId}/components`)
+          apiRequest(`/api/cases/${caseId}/components`),
         ])
 
         if (caseResponse.ok) {
@@ -93,17 +105,18 @@ export default function ResultsPage() {
           if (caseData.success && caseData.case) {
             const transformedCase = transformCaseFromDB(caseData.case)
 
-            // Add components to case
             if (componentsData.success && componentsData.components) {
-              const { transformComponentFromDB } = await import('@/lib/data-transformers')
-              transformedCase.components = componentsData.components.map((c: any) => transformComponentFromDB(c))
+              const { transformComponentFromDB } = await import("@/lib/data-transformers")
+              transformedCase.components = componentsData.components.map((c: any) =>
+                transformComponentFromDB(c),
+              )
             }
 
             setCurrentCase(transformedCase)
           }
         }
       } catch (error) {
-        console.error('Failed to fetch case:', error)
+        console.error("Failed to fetch case:", error)
       } finally {
         setIsLoadingCase(false)
       }
@@ -113,11 +126,6 @@ export default function ResultsPage() {
       fetchCaseData()
     }
   }, [caseId])
-
-  const assessmentOptions = Object.keys(IMPACT_CATEGORIES).map(category => ({
-    label: category,
-    checked: selectedCategories.includes(category)
-  }))
 
   const anyOptionSelected = selectedCategories.length > 0
 
@@ -129,7 +137,6 @@ export default function ResultsPage() {
         if (response.ok) {
           const data = await response.json()
           if (data.assessments && data.assessments.length > 0) {
-            // Use API-provided data including impacts and componentBreakdown
             const transformedAssessments = data.assessments.map((assessment: any) => ({
               run_id: assessment.run_id,
               run_name: assessment.run_name,
@@ -141,20 +148,19 @@ export default function ResultsPage() {
               costs: assessment.costs || {
                 operational: 0,
                 capital: 0,
-                total: 0
+                total: 0,
               },
-              componentBreakdown: assessment.componentBreakdown || []
+              componentBreakdown: assessment.componentBreakdown || [],
             }))
             setAssessmentResults(transformedAssessments)
             if (transformedAssessments.length > 0) {
               setCurrentAssessment(transformedAssessments[0])
-              // Auto-expand the first (most recent) assessment
               setExpandedAssessments(new Set([transformedAssessments[0].run_id]))
             }
           }
         }
       } catch (error) {
-        console.error('Failed to fetch assessments:', error)
+        console.error("Failed to fetch assessments:", error)
       }
     }
 
@@ -166,10 +172,10 @@ export default function ResultsPage() {
   // Loading state
   if (isLoadingCase) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-[calc(100vh-64px)]">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-          <p className="text-gray-500">Loading case data...</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-on-surface-variant">Loading case data...</p>
         </div>
       </div>
     )
@@ -178,11 +184,11 @@ export default function ResultsPage() {
   // Case not found
   if (!currentCase) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-[calc(100vh-64px)]">
         <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Case not found</h2>
-          <p className="text-gray-500 mb-4">The requested case could not be loaded.</p>
+          <AlertCircle className="h-12 w-12 text-on-surface-variant mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-on-surface mb-2">Case not found</h2>
+          <p className="text-on-surface-variant mb-4">The requested case could not be loaded.</p>
           <Button onClick={() => router.back()} variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Go Back
@@ -199,20 +205,22 @@ export default function ResultsPage() {
       data.total_impacts.forEach((impact: any) => {
         impacts[impact.category_name] = {
           value: impact.impact_value,
-          unit: impact.unit
+          unit: impact.unit,
         }
       })
     }
 
-    // Calculate total costs from component breakdown
-    const componentsWithDrivers = currentCase?.components?.filter((c) =>
-      c.driverCategory && c.drivers && c.drivers.length > 0
-    ) || []
+    const componentsWithDrivers =
+      currentCase?.components?.filter(
+        (c) => c.driverCategory && c.drivers && c.drivers.length > 0,
+      ) || []
     const totalOperationalCost = componentsWithDrivers.reduce(
-      (sum, c) => sum + (c.operationalCostUSD || 0), 0
+      (sum, c) => sum + (c.operationalCostUSD || 0),
+      0,
     )
     const totalCapitalCost = componentsWithDrivers.reduce(
-      (sum, c) => sum + (c.capitalCostUSD || 0), 0
+      (sum, c) => sum + (c.capitalCostUSD || 0),
+      0,
     )
 
     const result: AssessmentResult = {
@@ -226,10 +234,10 @@ export default function ResultsPage() {
       costs: {
         operational: totalOperationalCost,
         capital: totalCapitalCost,
-        total: totalOperationalCost + totalCapitalCost
+        total: totalOperationalCost + totalCapitalCost,
       },
       componentBreakdown: data.component_breakdown || [],
-      algorithmSteps: data.algorithm_steps || []
+      algorithmSteps: data.algorithm_steps || [],
     }
 
     return result
@@ -237,9 +245,9 @@ export default function ResultsPage() {
 
   const handleCategoryChange = (category: string, checked: boolean) => {
     if (checked) {
-      setSelectedCategories(prev => [...prev, category])
+      setSelectedCategories((prev) => [...prev, category])
     } else {
-      setSelectedCategories(prev => prev.filter(c => c !== category))
+      setSelectedCategories((prev) => prev.filter((c) => c !== category))
     }
   }
 
@@ -253,14 +261,14 @@ export default function ResultsPage() {
     try {
       const result = buildAssessmentResult(data)
 
-      setAssessmentResults(prev => [result, ...prev])
+      setAssessmentResults((prev) => [result, ...prev])
       setCurrentAssessment(result)
 
       setShowOptions(false)
       setSelectedCategories([])
 
       toast.success(`Assessment completed! Run ID: ${result.run_id}`)
-      console.log('Assessment result:', result)
+      console.log("Assessment result:", result)
     } catch (error: any) {
       console.error("Failed to process assessment result:", error)
       toast.error(`Failed to process assessment result: ${error.message}`)
@@ -272,397 +280,477 @@ export default function ResultsPage() {
     setShowOptions(false)
   }
 
-  const mostRecentAssessment = assessmentResults[0] || currentAssessment
+  const mostRecentAssessment = currentAssessment || assessmentResults[0]
 
   // Component readiness analysis
   const allComponents = currentCase?.components || []
-  const componentsWithDrivers = allComponents.filter((c) =>
-    c.driverCategory && c.drivers && c.drivers.length > 0
+  const componentsWithDrivers = allComponents.filter(
+    (c) => c.driverCategory && c.drivers && c.drivers.length > 0,
   )
-  const componentsWithoutDrivers = allComponents.filter((c) =>
-    !c.driverCategory || !c.drivers || c.drivers.length === 0
-  )
-  const assessmentReady = componentsWithDrivers.length > 0
 
   const buttonText = mostRecentAssessment ? "Re-run Assessment" : "Run Assessment"
-  const runButtonText = isRunningAssessment 
-    ? "Please wait, assessment in progress..." 
-    : (showOptions && anyOptionSelected ? "Run Assessment with Selected Options" : buttonText)
+  const runButtonText = isRunningAssessment
+    ? "Please wait, assessment in progress..."
+    : showOptions && anyOptionSelected
+      ? "Run Assessment with Selected Options"
+      : buttonText
+
+  // Derive view data from the current assessment
+  const impactEntries = mostRecentAssessment
+    ? Object.entries(mostRecentAssessment.impacts)
+    : []
+
+  // Pick primary (global warming) if available, else first impact
+  const primaryEntry =
+    impactEntries.find(([k]) => /global\s*warming|carbon|co2/i.test(k)) || impactEntries[0]
+
+  // Delta% vs previous run for the primary category
+  let primaryDelta: number | null = null
+  if (primaryEntry && assessmentResults.length > 1) {
+    const [catKey] = primaryEntry
+    const sorted = [...assessmentResults].sort(
+      (a, b) => new Date(a.run_date).getTime() - new Date(b.run_date).getTime(),
+    )
+    const curIdx = sorted.findIndex(
+      (r) => r.run_id === (mostRecentAssessment as AssessmentResult).run_id,
+    )
+    if (curIdx > 0) {
+      const prev = sorted[curIdx - 1]
+      const prevVal = prev.impacts?.[catKey]?.value
+      const curVal = sorted[curIdx].impacts?.[catKey]?.value
+      if (typeof prevVal === "number" && typeof curVal === "number" && prevVal !== 0) {
+        primaryDelta = ((curVal - prevVal) / prevVal) * 100
+      }
+    }
+  }
+
+  // Contribution chart data (per component, primary category)
+  const contributionData =
+    mostRecentAssessment && primaryEntry
+      ? (mostRecentAssessment.componentBreakdown || [])
+          .map((c) => {
+            const match = c.impacts.find((i) => i.category_name === primaryEntry[0])
+            return {
+              label: c.component_name,
+              value: match?.impact_value || 0,
+              unit: match?.unit || primaryEntry[1].unit,
+            }
+          })
+          .filter((d) => d.value > 0)
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 8)
+      : []
+
+  // Flow-level rows
+  const flowRows =
+    mostRecentAssessment?.componentBreakdown?.map((c) => ({
+      id: c.component_id,
+      componentName: c.component_name,
+      componentType: c.component_type,
+      flowsProcessed: c.flows_processed,
+      impacts: c.impacts.map((i) => ({
+        categoryName: i.category_name,
+        value: i.impact_value,
+        unit: i.unit,
+      })),
+    })) || []
+
+  // Historical runs for primary category
+  const historicalRuns = primaryEntry
+    ? assessmentResults
+        .filter((r) => typeof r.impacts?.[primaryEntry[0]]?.value === "number")
+        .map((r) => ({
+          runId: r.run_id,
+          runDate: r.run_date,
+          value: r.impacts[primaryEntry[0]].value,
+          unit: r.impacts[primaryEntry[0]].unit,
+        }))
+    : []
 
   return (
-    <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* Header Section */}
-      <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="mx-auto max-w-7xl px-6 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+    <ProjectShell
+      projectName={currentCase.name || "Case"}
+      projectId={projectId}
+      activeSection="analysis"
+    >
+      <div className="max-w-[1600px] mx-auto px-6 md:px-10 py-8">
+        {/* Breadcrumb */}
+        <nav className="font-mono text-[11px] uppercase tracking-[0.12em] text-on-surface-variant mb-4">
+          <button
+            onClick={() => router.push(`/project/${projectId}`)}
+            className="hover:text-primary transition-colors"
+          >
+            Project
+          </button>
+          <span className="mx-2 opacity-50">/</span>
+          <button
+            onClick={() => router.push(`/project/${projectId}/case/${caseId}`)}
+            className="hover:text-primary transition-colors"
+          >
+            {currentCase.name}
+          </button>
+          <span className="mx-2 opacity-50">/</span>
+          <span className="text-on-surface">Results</span>
+        </nav>
+
+        {/* Page header with primary action */}
+        <div className="flex flex-wrap justify-between items-end gap-4 mb-10">
+          <div className="space-y-1">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tighter text-on-surface">
+              LCAPIX <span className="text-primary">Results</span>
+            </h1>
+            <p className="text-on-surface-variant font-mono text-xs">
+              CASE: {currentCase.name}
+              {mostRecentAssessment && (
+                <>
+                  {" · "}RUN_ID: {mostRecentAssessment.run_id}
+                  {" · "}
+                  {new Date(mostRecentAssessment.run_date)
+                    .toISOString()
+                    .replace(/[-:T]/g, ".")
+                    .slice(0, 19)}
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {!showOptions && (
               <Button
-                variant="ghost"
-                onClick={() => router.push(`/project/${projectId}/case/${caseId}`)}
-                className="hover:bg-slate-100 dark:hover:bg-slate-800"
+                onClick={() => setShowOptions(true)}
+                variant="outline"
+                className="h-11"
+                size="lg"
               >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Components
+                <Target className="h-4 w-4 mr-2" />
+                Customize
               </Button>
-              <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Assessment Results</h1>
-                <div className="flex items-center mt-1 space-x-4">
-                  <p className="text-slate-600 dark:text-slate-400">{currentCase.name}</p>
-                  <div className="flex items-center text-sm text-slate-500 dark:text-slate-400">
-                    <Calendar className="h-3 w-3 mr-1" />
-                    {new Date().toLocaleDateString()}
+            )}
+            <Button
+              onClick={handleRunAssessment}
+              disabled={isRunningAssessment}
+              size="lg"
+              className="h-11 veridian-gradient text-on-primary font-bold shadow-[0_8px_20px_-6px_rgba(0,106,68,0.4)] hover:scale-[1.02] transition-transform"
+            >
+              {isRunningAssessment ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 mr-2" />
+              )}
+              {runButtonText}
+            </Button>
+          </div>
+        </div>
+
+        {/* KPI strip — per-category top-line */}
+        {impactEntries.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            {impactEntries.slice(0, 4).map(([cat, imp], idx) => (
+              <div
+                key={cat}
+                className={`bg-surface-container-low p-6 rounded-xl ${
+                  idx === 0 ? "border-l-4 border-primary" : ""
+                }`}
+              >
+                <p className="font-mono text-[10px] text-on-surface-variant uppercase mb-1 truncate">
+                  {cat}
+                </p>
+                <p className="text-2xl font-bold num text-on-surface">
+                  <Num value={imp.value} precision={imp.value >= 100 ? 1 : 2} />
+                  <span className="text-xs font-normal ml-1 text-on-surface-variant">
+                    {imp.unit}
+                  </span>
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Customize categories panel (preserved logic, restyled) */}
+        {showOptions && (
+          <div className="mb-10 animate-in slide-in-from-top-2 duration-500">
+            <div className="bg-surface-container-low rounded-2xl p-6">
+              <h4 className="font-bold text-lg mb-1 text-on-surface flex items-center">
+                <Target className="h-5 w-5 mr-2 text-primary" />
+                Select Impact Categories
+              </h4>
+              <p className="text-on-surface-variant text-sm mb-6">
+                Choose which environmental impact categories to include in your assessment.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                {Object.entries(IMPACT_CATEGORIES).map(([category, info]) => (
+                  <div
+                    key={category}
+                    className="bg-surface-container-lowest rounded-lg p-4 hover:bg-surface-container transition-colors"
+                  >
+                    <div className="flex items-start space-x-3">
+                      <Checkbox
+                        checked={selectedCategories.includes(category)}
+                        onCheckedChange={(checked) =>
+                          handleCategoryChange(category, checked as boolean)
+                        }
+                        disabled={isRunningAssessment}
+                        className="data-[state=checked]:bg-primary data-[state=checked]:text-on-primary mt-1"
+                      />
+                      <div
+                        className="cursor-pointer flex-1"
+                        onClick={() =>
+                          handleCategoryChange(category, !selectedCategories.includes(category))
+                        }
+                      >
+                        <div className="flex items-center mb-1">
+                          <span className="text-on-surface font-medium text-sm">{category}</span>
+                        </div>
+                        <span className="font-mono text-[10px] uppercase text-on-surface-variant">
+                          {info.unit}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between pt-4">
+                <div className="text-on-surface-variant text-sm font-mono">
+                  {selectedCategories.length} of {Object.keys(IMPACT_CATEGORIES).length} selected
+                </div>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleCancel}
+                    disabled={isRunningAssessment}
+                    variant="outline"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleRunAssessment}
+                    disabled={isRunningAssessment}
+                    className="veridian-gradient text-on-primary font-semibold"
+                  >
+                    <Play className="h-4 w-4 mr-2" />
+                    Run Assessment
+                  </Button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
-
-        {/* Quick Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Components</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white">{allComponents.length}</p>
-                </div>
-                <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                  <Activity className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                </div>
+        {mostRecentAssessment && primaryEntry ? (
+          <>
+            {/* Main Bento Grid */}
+            <div className="grid grid-cols-12 gap-6 mb-12">
+              <div className="col-span-12 lg:col-span-5">
+                <TotalImpactDisplay
+                  value={primaryEntry[1].value}
+                  unit={primaryEntry[1].unit}
+                  categoryLabel={primaryEntry[0]}
+                  deltaPct={primaryDelta}
+                  equivalentText={
+                    /co2|carbon|warming/i.test(primaryEntry[0])
+                      ? "Aggregated across all configured components in this case."
+                      : undefined
+                  }
+                  targetMet={
+                    typeof primaryDelta === "number" ? primaryDelta < 0 : undefined
+                  }
+                />
               </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Configured</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">{componentsWithDrivers.length}</p>
-                </div>
-                <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Pending Setup</p>
-                  <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{componentsWithoutDrivers.length}</p>
-                </div>
-                <div className="p-3 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
-                  <AlertCircle className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Assessments Run</p>
-                  <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{assessmentResults.length}</p>
-                </div>
-                <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
-                  <Target className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Assessment Control Panel */}
-        <Card className="mb-8 bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm">
-          <CardContent className="p-6">
-            <div className="text-center mb-6">
-              <div className="p-4 bg-blue-100 dark:bg-blue-900/20 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                <Play className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Run LCA Assessment</h2>
-              <p className="text-slate-600 dark:text-slate-400">
-                {mostRecentAssessment ? 'Run a new assessment or modify parameters' : 'Start your first environmental impact analysis'}
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <Button
-                onClick={handleRunAssessment}
-                disabled={isRunningAssessment}
-                className="flex-1 py-4 font-bold shadow-lg hover:shadow-xl transition-all bg-blue-600 hover:bg-blue-700 text-white"
-                size="lg"
-              >
-                {isRunningAssessment && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>}
-                <Play className="h-5 w-5 mr-2" />
-                {runButtonText}
-              </Button>
-              {!showOptions && (
-                <Button
-                  onClick={() => setShowOptions(true)}
-                  variant="outline"
-                  className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/20"
-                  size="lg"
-                >
-                  <Target className="h-4 w-4 mr-2" />
-                  Customize Categories
-                </Button>
-              )}
-            </div>
-
-            {/* Assessment Options (clean design) */}
-            {showOptions && (
-              <div className="mt-8 animate-in slide-in-from-top-2 duration-500">
-                <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-6 border border-slate-200 dark:border-slate-700">
-                  <h4 className="font-bold text-lg mb-2 text-slate-900 dark:text-white flex items-center">
-                    <Target className="h-5 w-5 mr-2 text-blue-600" />
-                    Select Impact Categories
-                  </h4>
-                  <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">Choose which environmental impact categories to include in your assessment.</p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    {Object.entries(IMPACT_CATEGORIES).map(([category, info]) => (
-                      <div key={category} className="bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-600 hover:border-blue-300 dark:hover:border-blue-600 transition-colors">
-                        <div className="flex items-start space-x-3">
-                          <Checkbox
-                            checked={selectedCategories.includes(category)}
-                            onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
-                            disabled={isRunningAssessment}
-                            className="data-[state=checked]:bg-blue-600 data-[state=checked]:text-white mt-1"
-                          />
-                          <div className="cursor-pointer flex-1" onClick={() => handleCategoryChange(category, !selectedCategories.includes(category))}>
-                            <div className="flex items-center mb-1">
-                              <span className="text-slate-900 dark:text-white font-medium text-sm">{category}</span>
-                            </div>
-                            <span className="text-slate-500 dark:text-slate-400 text-xs">{info.unit}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700">
-                    <div className="text-slate-600 dark:text-slate-400 text-sm">
-                      {selectedCategories.length} of {Object.keys(IMPACT_CATEGORIES).length} categories selected
-                    </div>
-                    <div className="flex gap-3">
-                      <Button
-                        onClick={handleCancel}
-                        disabled={isRunningAssessment}
-                        variant="outline"
-                        className="border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleRunAssessment}
-                        disabled={isRunningAssessment}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg"
-                      >
-                        <Play className="h-4 w-4 mr-2" />
-                        Run Assessment
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {mostRecentAssessment ? (
-          <div className="grid gap-8">
-            {/* Impact Categories Results */}
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
-                  <Leaf className="h-6 w-6 mr-3 text-green-600" />
-                  Environmental Impact Results
-                </h2>
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  {Object.keys(mostRecentAssessment.impacts).length} categories assessed
-                </Badge>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {Object.entries(mostRecentAssessment.impacts).map(([category, impact]) => {
-                  const categoryInfo = IMPACT_CATEGORIES[category as keyof typeof IMPACT_CATEGORIES]
-                  return (
-                    <Card key={category} className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm hover:shadow-lg transition-all duration-300 hover:scale-105">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm">
-                          <div>
-                            <div className="font-semibold text-slate-900 dark:text-white">{category}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">{formatChemicalUnit(impact.unit)}</div>
-                          </div>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className={`text-3xl font-bold ${categoryInfo?.color}`}>
-                          {(impact.value || 0).toLocaleString()}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+              <div className="col-span-12 lg:col-span-7">
+                <ContributionChart
+                  data={contributionData}
+                  title={`Contribution by Component · ${primaryEntry[0]}`}
+                />
               </div>
             </div>
 
-            {/* Assessment History */}
+            {/* Flow-level detail */}
+            <div className="mb-12">
+              <FlowLevelDetail rows={flowRows} highlightCategory={primaryEntry[0]} />
+            </div>
+
+            {/* Historical comparison */}
+            <HistoricalComparison
+              runs={historicalRuns}
+              currentRunId={mostRecentAssessment.run_id}
+              onSelect={(runId) => {
+                const match = assessmentResults.find((r) => r.run_id === runId)
+                if (match) setCurrentAssessment(match)
+              }}
+            />
+
+            {/* Assessment history list (preserved functionality) */}
             {assessmentResults.length > 0 && (
-              <div>
+              <div className="mb-8">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center">
-                    <Clock className="h-6 w-6 mr-3 text-amber-600" />
+                  <h3 className="text-2xl font-bold tracking-tight text-on-surface">
                     Assessment History
-                  </h2>
+                  </h3>
                   <div className="flex items-center gap-3">
                     {assessmentResults.length > 1 && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setShowPreviousAssessments(!showPreviousAssessments)}
-                        className="h-8"
                       >
-                        <ChevronDown className={`h-4 w-4 mr-1 transition-transform ${showPreviousAssessments ? '' : '-rotate-90'}`} />
-                        {showPreviousAssessments ? 'Hide Previous' : `Show Previous (${assessmentResults.length - 1})`}
+                        <ChevronDown
+                          className={`h-4 w-4 mr-1 transition-transform ${
+                            showPreviousAssessments ? "" : "-rotate-90"
+                          }`}
+                        />
+                        {showPreviousAssessments
+                          ? "Hide Previous"
+                          : `Show Previous (${assessmentResults.length - 1})`}
                       </Button>
                     )}
-                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                      {assessmentResults.length} assessment{assessmentResults.length !== 1 ? 's' : ''} completed
+                    <Badge variant="outline" className="bg-secondary-container text-primary">
+                      {assessmentResults.length} run{assessmentResults.length !== 1 ? "s" : ""}
                     </Badge>
                   </div>
                 </div>
 
-                <Card className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm">
-                  <CardContent className="p-6">
-                    <div className="space-y-4">
-                      {(showPreviousAssessments ? assessmentResults : assessmentResults.slice(0, 1)).map((assessment, index) => {
-                        const isSelected = mostRecentAssessment?.run_id === assessment.run_id
-                        const isExpanded = expandedAssessments.has(assessment.run_id)
-                        const impactEntries = Object.entries(assessment.impacts || {})
+                <div className="bg-surface-container-lowest rounded-2xl p-6 space-y-3">
+                  {(showPreviousAssessments
+                    ? assessmentResults
+                    : assessmentResults.slice(0, 1)
+                  ).map((assessment) => {
+                    const isSelected = mostRecentAssessment?.run_id === assessment.run_id
+                    const isExpanded = expandedAssessments.has(assessment.run_id)
+                    const entries = Object.entries(assessment.impacts || {})
 
-                        return (
+                    return (
+                      <div
+                        key={assessment.run_id}
+                        className={`p-4 rounded-xl transition-all ${
+                          isSelected
+                            ? "bg-secondary-container/50 ring-2 ring-primary/40"
+                            : "bg-surface-container-low hover:bg-surface-container"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
                           <div
-                            key={assessment.run_id}
-                            className={`p-4 rounded-lg transition-all border-2 ${
-                              isSelected
-                                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 shadow-md'
-                                : 'bg-slate-50 dark:bg-slate-800 border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
-                            }`}
+                            className="flex items-center space-x-4 flex-1 cursor-pointer"
+                            onClick={() => setCurrentAssessment(assessment)}
                           >
-                            {/* Header row */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center space-x-4 flex-1 cursor-pointer" onClick={() => setCurrentAssessment(assessment)}>
-                                <div className={`p-2 rounded-lg ${isSelected ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-amber-100 dark:bg-amber-900/20'}`}>
-                                  <BarChart3 className={`h-4 w-4 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`} />
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-slate-900 dark:text-white">
-                                      {assessment.run_name || `Run #${assessment.run_id}`}
-                                    </span>
-                                    {isSelected && (
-                                      <Badge variant="default" className="bg-blue-600 text-xs">
-                                        Selected
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="text-sm text-slate-600 dark:text-slate-400">
-                                    {new Date(assessment.run_date).toLocaleString()} • {assessment.calculation_method}
-                                    <Badge variant={assessment.status === 'completed' ? 'default' : 'secondary'} className={`ml-2 text-xs ${assessment.status === 'completed' ? 'bg-green-100 text-green-700' : ''}`}>
-                                      {assessment.status}
-                                    </Badge>
-                                  </div>
-                                </div>
+                            <div
+                              className={`p-2 rounded-lg ${
+                                isSelected ? "veridian-gradient" : "bg-surface-container-high"
+                              }`}
+                            >
+                              <BarChart3
+                                className={`h-4 w-4 ${
+                                  isSelected ? "text-on-primary" : "text-on-surface-variant"
+                                }`}
+                              />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-on-surface">
+                                  {assessment.run_name || `Run #${assessment.run_id}`}
+                                </span>
+                                {isSelected && (
+                                  <Badge className="bg-primary text-on-primary text-xs">
+                                    Selected
+                                  </Badge>
+                                )}
                               </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-sm text-slate-500 dark:text-slate-400">
-                                  {impactEntries.length} categories
-                                </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    setExpandedAssessments(prev => {
-                                      const newSet = new Set(prev)
-                                      if (newSet.has(assessment.run_id)) {
-                                        newSet.delete(assessment.run_id)
-                                      } else {
-                                        newSet.add(assessment.run_id)
-                                      }
-                                      return newSet
-                                    })
-                                  }}
-                                >
-                                  <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-                                </Button>
+                              <div className="text-sm text-on-surface-variant font-mono">
+                                {new Date(assessment.run_date).toLocaleString()} ·{" "}
+                                {assessment.calculation_method}
                               </div>
                             </div>
-
-                            {/* Impact summary grid - only show when expanded */}
-                            {isExpanded && impactEntries.length > 0 && (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                {impactEntries.map(([category, impact]) => (
-                                  <div key={category} className="bg-white dark:bg-slate-900 rounded p-2">
-                                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate" title={category}>
-                                      {category}
-                                    </div>
-                                    <div className="font-semibold text-sm text-slate-900 dark:text-white">
-                                      {typeof impact.value === 'number' ? impact.value.toFixed(2) : '0.00'}
-                                    </div>
-                                    <div className="text-xs text-slate-400">
-                                      {formatChemicalUnit(impact.unit)}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
                           </div>
-                        )
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
+                          <div className="flex items-center gap-3">
+                            <div className="text-xs font-mono text-on-surface-variant">
+                              {entries.length} categories
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExpandedAssessments((prev) => {
+                                  const newSet = new Set(prev)
+                                  if (newSet.has(assessment.run_id)) {
+                                    newSet.delete(assessment.run_id)
+                                  } else {
+                                    newSet.add(assessment.run_id)
+                                  }
+                                  return newSet
+                                })
+                              }}
+                            >
+                              <ChevronDown
+                                className={`h-4 w-4 transition-transform ${
+                                  isExpanded ? "" : "-rotate-90"
+                                }`}
+                              />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isExpanded && entries.length > 0 && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-4 pt-4">
+                            {entries.map(([category, impact]) => (
+                              <div
+                                key={category}
+                                className="bg-surface-container-lowest rounded-lg p-3"
+                              >
+                                <div
+                                  className="font-mono text-[10px] uppercase text-on-surface-variant truncate"
+                                  title={category}
+                                >
+                                  {category}
+                                </div>
+                                <div className="num font-bold text-sm text-on-surface mt-1">
+                                  <Num
+                                    value={typeof impact.value === "number" ? impact.value : 0}
+                                    precision={2}
+                                  />
+                                </div>
+                                <div className="font-mono text-[10px] text-on-surface-variant">
+                                  {impact.unit}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
-          </div>
+          </>
         ) : (
-          <Card className="bg-white/60 backdrop-blur-sm border-slate-200/60 shadow-sm">
-            <CardContent className="text-center py-16">
-              <div className="max-w-md mx-auto">
-                <div className="p-6 bg-green-100 dark:bg-green-900/20 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                  <Leaf className="h-12 w-12 text-green-600 dark:text-green-400" />
-                </div>
-                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">Ready to Run Assessment</h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
-                  Start your first LCA assessment to analyze environmental impacts and financial costs across your components.
-                </p>
-                <div className="space-y-3">
-                  <Button
-                    onClick={handleRunAssessment}
-                    disabled={isRunningAssessment}
-                    className="w-full py-4 font-semibold shadow-lg transition-all bg-blue-600 hover:bg-blue-700 text-white hover:shadow-xl"
-                    size="lg"
-                  >
-                    {isRunningAssessment && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>}
-                    <Play className="h-5 w-5 mr-2" />
-                    {isRunningAssessment ? 'Running Assessment...' : 'Run Assessment'}
-                  </Button>
-                </div>
+          <div className="bg-surface-container-lowest rounded-2xl p-16 text-center">
+            <div className="max-w-md mx-auto">
+              <div className="w-24 h-24 rounded-full veridian-gradient mx-auto mb-6 flex items-center justify-center shadow-[0_8px_20px_-6px_rgba(0,106,68,0.4)]">
+                <Play className="h-10 w-10 text-on-primary" />
               </div>
-            </CardContent>
-          </Card>
+              <h3 className="text-2xl font-bold text-on-surface mb-3">Ready to Run Assessment</h3>
+              <p className="text-on-surface-variant mb-8 leading-relaxed">
+                {componentsWithDrivers.length > 0
+                  ? `${componentsWithDrivers.length} component${
+                      componentsWithDrivers.length === 1 ? "" : "s"
+                    } configured with drivers. Run the first LCA pass to see impacts.`
+                  : "Configure components with drivers first, then return here to run your assessment."}
+              </p>
+              <Button
+                onClick={handleRunAssessment}
+                disabled={isRunningAssessment}
+                size="lg"
+                className="veridian-gradient text-on-primary font-semibold shadow-[0_8px_20px_-6px_rgba(0,106,68,0.4)]"
+              >
+                {isRunningAssessment && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                <Play className="h-4 w-4 mr-2" />
+                {isRunningAssessment ? "Running Assessment..." : "Run Assessment"}
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -672,6 +760,6 @@ export default function ResultsPage() {
         caseId={Number(caseId)}
         onCompleted={handleAssessmentCompleted}
       />
-    </div>
+    </ProjectShell>
   )
 }
