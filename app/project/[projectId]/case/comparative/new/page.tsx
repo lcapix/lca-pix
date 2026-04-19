@@ -83,21 +83,36 @@ export default function CreateComparativeCasePage() {
     }
     setIsSubmitting(true)
     try {
-      const caseId = crypto.randomUUID()
+      // POST to the real API — source of truth is AWS RDS.
+      const res = await apiRequest(`/api/projects/${projectId}/cases`, {
+        method: "POST",
+        body: JSON.stringify({
+          case_name: formData.name.trim(),
+          case_type: "comparative",
+          description: formData.description.trim() || null,
+          parent_case_id: baselineCaseId ? Number(baselineCaseId) : null,
+        }),
+      })
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText)
+        throw new Error(msg || `POST failed (${res.status})`)
+      }
+      const data = await res.json().catch(() => ({}))
+      const newId = data?.case?.case_id ?? data?.case_id
+      // Mirror to Zustand for optimistic UI
       const caseData = {
-        id: caseId,
+        id: newId ? String(newId) : crypto.randomUUID(),
         projectId,
         name: formData.name.trim(),
         description: formData.description.trim(),
         type: "comparative" as const,
       }
-      // Preserve existing store mutation.
       addCase(projectId, caseData)
-      toast.success("Comparative case created successfully!")
-      router.push(`/project/${projectId}/case/${caseId}`)
-    } catch (error) {
+      toast.success("Comparative case created")
+      router.push(`/project/${projectId}/case/${caseData.id}`)
+    } catch (error: any) {
       console.error("Error creating comparative case:", error)
-      toast.error("Failed to create comparative case")
+      toast.error(error?.message || "Failed to create comparative case")
     } finally {
       setIsSubmitting(false)
     }

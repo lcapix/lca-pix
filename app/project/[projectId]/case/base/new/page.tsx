@@ -12,6 +12,7 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useProjectStore } from "@/lib/store"
 import { toast } from "sonner"
+import { apiRequest } from "@/lib/api-client"
 
 export default function CreateBaseCasePage() {
   const router = useRouter()
@@ -37,24 +38,24 @@ export default function CreateBaseCasePage() {
     setIsSubmitting(true)
 
     try {
-      let project = projects.find((p) => p.id === projectId)
-      if (!project) {
-        console.log("[v0] Project not found, creating new project with ID:", projectId)
-        addProject({
-          id: projectId,
-          name: formData.name.trim(),
-          description: "LCA Project created from base case",
-          ownerId: "current-user", // This should be the actual user ID
-        })
-        // Get the updated projects after adding
-        const updatedProjects = useProjectStore.getState().projects
-        project = updatedProjects.find((p) => p.id === projectId)
-        console.log("[v0] Created project:", project)
+      // POST to real API — source of truth is AWS RDS.
+      const res = await apiRequest(`/api/projects/${projectId}/cases`, {
+        method: "POST",
+        body: JSON.stringify({
+          case_name: formData.name.trim(),
+          case_type: "base",
+          description: formData.description.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText)
+        throw new Error(msg || `POST failed (${res.status})`)
       }
+      const data = await res.json().catch(() => ({}))
+      const newId = data?.case?.case_id ?? data?.case_id
+      const caseId = newId ? String(newId) : crypto.randomUUID()
 
-      const caseId = crypto.randomUUID()
-      console.log("[v0] Generated case ID:", caseId)
-
+      // Mirror to Zustand for optimistic UI
       const caseData = {
         id: caseId,
         projectId,
@@ -62,29 +63,13 @@ export default function CreateBaseCasePage() {
         description: formData.description.trim(),
         type: "base" as const,
       }
-
-      console.log("[v0] About to call addCase with:", { projectId, caseData })
       addCase(projectId, caseData)
-      console.log("[v0] addCase completed")
 
-      const { projects: finalProjects } = useProjectStore.getState()
-      console.log("[v0] Store state after addCase:", finalProjects)
-      const finalProject = finalProjects.find((p) => p.id === projectId)
-      console.log("[v0] Found project:", finalProject)
-      if (finalProject) {
-        console.log("[v0] Project cases:", finalProject.cases)
-        const foundCase = finalProject.cases.find((c) => c.id === caseId)
-        console.log("[v0] Found case in store:", foundCase)
-      }
-
-      toast.success("Base case created successfully!")
-      console.log("[v0] Base case created, navigating to case view")
-
-      // Navigate to the case view
+      toast.success("Base case created")
       router.push(`/project/${projectId}/case/${caseId}`)
-    } catch (error) {
-      console.error("[v0] Error creating base case:", error)
-      toast.error("Failed to create base case")
+    } catch (error: any) {
+      console.error("Error creating base case:", error)
+      toast.error(error?.message || "Failed to create base case")
     } finally {
       setIsSubmitting(false)
     }
