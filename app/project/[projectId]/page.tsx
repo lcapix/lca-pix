@@ -31,7 +31,7 @@ import { apiRequest } from "@/lib/api-client"
 import { transformProjectFromDB, transformCaseFromDB } from "@/lib/data-transformers"
 import { CaseMiniVisualization } from "@/components/case-mini-visualization"
 import { CaseTreeVisualization } from "@/components/case-tree-visualization"
-import { getColorsByComponentType, normalizeComponentType } from "@/lib/hierarchy-colors"
+import { normalizeComponentType } from "@/lib/hierarchy-colors"
 // AuthGuard + AppShell are provided by app/project/layout.tsx
 // (single-source-of-truth so sub-routes like /case/[id] inherit too)
 import { ProjectShell } from "@/components/project/project-shell"
@@ -159,15 +159,25 @@ export default function ProjectPage() {
     }
   }
 
-  // Flowchart helpers (preserved from original)
+  // Flowchart helpers (Veridian-tinted palette; semantic tier mapping preserved)
+  // Softer tints with transparent overlay feel, dark readable text, subtle border
+  const VERIDIAN_FLOW_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+    product:        { bg: "#f0a68a", border: "#d98568", text: "#3a1a0f" }, // terracotta
+    machine_line:   { bg: "#f0a68a", border: "#d98568", text: "#3a1a0f" }, // soft red-orange
+    subprocess:     { bg: "#f5c971", border: "#d9a84a", text: "#3a2a0a" }, // soft amber
+    operation:      { bg: "#7bb5e8", border: "#4f90c9", text: "#0f2238" }, // soft blue
+    elemental_task: { bg: "#c8b5e8", border: "#9f88cc", text: "#1f1438" }, // lavender
+  }
+
   const getFlowChartColors = (componentType: string) => {
     const normalizedType = normalizeComponentType(componentType || "product")
-    const colorConfig = getColorsByComponentType(normalizedType, "standby")
+    const colorConfig =
+      VERIDIAN_FLOW_COLORS[normalizedType] || VERIDIAN_FLOW_COLORS.product
     return {
       bg: colorConfig.bg,
       border: colorConfig.border,
       text: colorConfig.text,
-      connectionLine: "#9CA3AF",
+      connectionLine: "#bccabf", // outline-variant
     }
   }
 
@@ -235,27 +245,30 @@ export default function ProjectPage() {
           <div
             className={`
               group relative
-              rounded-xl shadow-lg
+              rounded-lg shadow-botanical hover:shadow-botanical-hover
               px-6 py-4 min-w-[180px] max-w-[240px]
               cursor-pointer transition-all duration-200
               scale-[0.8] origin-top
-              hover:shadow-xl hover:scale-[0.82]
-              ${isSearchMatch ? "ring-2 ring-yellow-400 animate-pulse" : ""}
+              hover:scale-[0.82]
+              font-['Inter_Tight',Inter,sans-serif]
+              ${isSearchMatch ? "ring-2 ring-primary/60 animate-pulse" : ""}
             `}
             style={{
               backgroundColor: colors.bg,
-              borderWidth: "3px",
+              borderWidth: "1px",
               borderStyle: "solid",
-              borderColor: colors.border,
+              borderColor: `${colors.border}4D`, // ~30% alpha soft edge
               color: colors.text,
             }}
           >
             <div className="text-center">
-              <p className="font-semibold text-base leading-snug">{node.component_name}</p>
+              <p className="font-semibold text-base leading-snug tracking-tight">
+                {node.component_name}
+              </p>
             </div>
             {children.length > 0 && (
               <button
-                className="absolute -bottom-3 left-1/2 -translate-x-1/2 h-6 w-6 bg-white border border-gray-300 rounded-full shadow-sm flex items-center justify-center hover:bg-gray-100 z-20"
+                className="absolute -bottom-3 left-1/2 -translate-x-1/2 h-6 w-6 bg-surface-container-lowest border border-outline-variant/40 rounded-full shadow-botanical flex items-center justify-center hover:bg-surface-container-high z-20"
                 onClick={(e) => {
                   e.stopPropagation()
                   setModalExpandedNodes((prev) => {
@@ -270,7 +283,7 @@ export default function ProjectPage() {
                 }}
               >
                 <ChevronDown
-                  className={`h-4 w-4 text-gray-600 transition-transform ${
+                  className={`h-4 w-4 text-on-surface-variant transition-transform ${
                     !isExpanded ? "-rotate-90" : ""
                   }`}
                 />
@@ -581,26 +594,29 @@ export default function ProjectPage() {
               className="!max-w-[98vw] !h-[95vh] flex flex-col p-0 gap-0 my-[2.5vh]"
               showCloseButton={false}
             >
-              <DialogHeader className="px-6 py-3 border-b bg-slate-50">
+              <DialogHeader className="px-6 py-3 glass-panel shadow-botanical border-b border-outline-variant/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Network className="h-5 w-5 text-blue-600" />
-                    <DialogTitle className="text-lg font-semibold">
+                    <Network className="h-5 w-5 text-primary" />
+                    <DialogTitle className="text-lg font-medium text-on-surface font-['Inter_Tight',Inter,sans-serif] tracking-tight">
                       Process Hierarchy - {modalCase?.case_name || "Loading..."}
                     </DialogTitle>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-mono uppercase tracking-[0.12em] border-outline-variant/40 bg-surface-container-low text-on-surface-variant"
+                    >
                       {modalComponents.length} components
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-outline" />
                       <Input
                         type="text"
-                        placeholder="Search components..."
+                        placeholder="SEARCH COMPONENTS..."
                         value={modalSearchQuery}
                         onChange={(e) => setModalSearchQuery(e.target.value)}
-                        className="pl-9 h-9 w-56 text-sm"
+                        className="pl-9 h-9 w-56 text-sm bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus-visible:ring-0 focus-visible:border-primary font-mono text-xs placeholder:opacity-50 placeholder:uppercase placeholder:tracking-[0.12em]"
                       />
                     </div>
                     <Button
@@ -616,7 +632,7 @@ export default function ProjectPage() {
                           setModalExpandedNodes(new Set())
                         }
                       }}
-                      className="h-9"
+                      className="h-9 border-outline-variant/40 bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                     >
                       {modalExpandedNodes.size === 0 ? (
                         <>
@@ -630,23 +646,23 @@ export default function ProjectPage() {
                         </>
                       )}
                     </Button>
-                    <div className="flex items-center gap-1 border rounded-md bg-white">
+                    <div className="flex items-center gap-1 border border-outline-variant/40 rounded-md bg-surface-container-lowest">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setModalZoom(Math.max(30, modalZoom - 5))}
-                        className="h-9 px-2"
+                        className="h-9 px-2 text-on-surface-variant hover:bg-surface-container-high"
                       >
                         <ZoomOut className="h-4 w-4" />
                       </Button>
-                      <span className="text-xs font-medium px-2 text-gray-600 min-w-[50px] text-center">
+                      <span className="text-xs font-mono tabular-nums px-2 text-on-surface-variant min-w-[50px] text-center">
                         {modalZoom}%
                       </span>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setModalZoom(Math.min(200, modalZoom + 5))}
-                        className="h-9 px-2"
+                        className="h-9 px-2 text-on-surface-variant hover:bg-surface-container-high"
                       >
                         <ZoomIn className="h-4 w-4" />
                       </Button>
@@ -658,16 +674,16 @@ export default function ProjectPage() {
                         setModalZoom(100)
                         setModalPan({ x: 0, y: 0 })
                       }}
-                      className="h-9"
+                      className="h-9 border-outline-variant/40 bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                     >
                       <Focus className="h-4 w-4 mr-1" />
                       Reset
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => setIsTreeModalOpen(false)}
-                      className="h-9"
+                      className="h-9 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                     >
                       Cancel
                     </Button>
@@ -675,20 +691,24 @@ export default function ProjectPage() {
                 </div>
               </DialogHeader>
 
-              <div className="flex-1 relative overflow-hidden bg-slate-50">
+              <div className="flex-1 relative overflow-hidden bg-surface">
                 {isLoadingModal ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-                      <p className="text-sm text-gray-600">Loading tree visualization...</p>
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+                      <p className="text-sm text-on-surface-variant font-mono uppercase tracking-[0.12em]">
+                        Loading tree visualization...
+                      </p>
                     </div>
                   </div>
                 ) : modalComponents.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
-                      <Network className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-lg font-medium text-gray-600 mb-2">No components yet</p>
-                      <p className="text-sm text-gray-500">
+                      <Network className="h-16 w-16 text-outline-variant mx-auto mb-4" />
+                      <p className="text-lg font-medium text-on-surface mb-2 font-['Inter_Tight',Inter,sans-serif] tracking-tight">
+                        No components yet
+                      </p>
+                      <p className="text-sm text-on-surface-variant">
                         Add components to build your process hierarchy
                       </p>
                     </div>
@@ -700,10 +720,10 @@ export default function ProjectPage() {
                       isPanningModal ? "cursor-grabbing" : "cursor-grab"
                     }`}
                     style={{
-                      background:
-                        "radial-gradient(circle at 1px 1px, rgb(209 213 219 / 0.3) 1px, transparent 0)",
-                      backgroundSize: "40px 40px",
-                      backgroundColor: "#f0fdfa",
+                      backgroundImage:
+                        "radial-gradient(circle at 1px 1px, rgba(188, 202, 191, 0.5) 1px, transparent 0)",
+                      backgroundSize: "32px 32px",
+                      backgroundColor: "#f8faf8",
                       overscrollBehavior: "none",
                     }}
                     onWheel={(e) => {
@@ -742,8 +762,8 @@ export default function ProjectPage() {
                         {renderFlowChart()}
                       </div>
                     </div>
-                    <div className="absolute bottom-3 left-3 text-xs text-gray-400 bg-white/80 px-2 py-1 rounded">
-                      Scroll to pan • Ctrl+Scroll to zoom • Drag to move
+                    <div className="absolute bottom-3 left-3 text-[10px] font-mono uppercase tracking-[0.12em] text-on-surface-variant/60 glass-panel px-2 py-1 rounded-md border border-outline-variant/10">
+                      Scroll to pan · Ctrl+Scroll to zoom · Drag to move
                     </div>
                   </div>
                 )}
