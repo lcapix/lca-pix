@@ -286,7 +286,7 @@ export default function ComparisonResultsPage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-surface-container-lowest border-b border-outline-variant/15">
-        <div className="max-w-[1400px] mx-auto px-8 py-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
           <div className="flex items-center justify-between flex-wrap gap-6">
             <div className="flex items-center gap-4">
               <Button
@@ -332,7 +332,7 @@ export default function ComparisonResultsPage() {
       </div>
 
       {/* Main */}
-      <div className="max-w-[1400px] mx-auto px-8 py-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
         <DashboardGrid>
           {/* Verdict / head-to-head hero */}
           <div className="col-span-12 lg:col-span-5 relative group">

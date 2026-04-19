@@ -394,7 +394,7 @@ export default function AnalyticsPage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-surface-container-lowest border-b border-outline-variant/15">
-        <div className="max-w-[1400px] mx-auto px-8 py-8">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
           <div className="flex items-center justify-between flex-wrap gap-6">
             <div className="flex items-center gap-4">
               <Link href={`/project/${projectId}`}>
@@ -442,7 +442,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-[1400px] mx-auto px-8 py-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-10">
         {isLoading ? (
           <div className="flex items-center justify-center h-96">
             <div className="text-center">
@@ -512,12 +512,12 @@ export default function AnalyticsPage() {
             {assessmentData.length >= 1 && (
               <div className="col-span-12 lg:col-span-5 relative group">
                 <div className="absolute -inset-1 veridian-gradient-soft rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000" />
-                <div className="relative glass-panel p-10 rounded-3xl h-full flex flex-col justify-between min-h-[320px] shadow-botanical">
+                <div className="relative glass-panel p-6 sm:p-8 md:p-10 rounded-3xl h-full flex flex-col justify-between min-h-[320px] shadow-botanical">
                   <div>
                     <span className="font-mono text-xs font-semibold text-secondary uppercase tracking-widest">
                       Total Impact (Baseline)
                     </span>
-                    <h2 className="text-[5rem] font-extrabold tracking-tighter leading-none text-on-surface mt-4">
+                    <h2 className="text-[3rem] sm:text-[4rem] md:text-[5rem] font-extrabold tracking-tighter leading-none text-on-surface mt-4 break-all">
                       <Num
                         value={(assessmentData.find(d => d.caseType === 'base') ?? assessmentData[0]).totalScore}
                         precision={2}
