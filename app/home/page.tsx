@@ -1,13 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { AppLayout } from "@/components/app-layout"
 import { AuthGuard } from "@/components/auth-guard"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { AppShell } from "@/components/layout/app-shell"
+import { KpiCardRow } from "@/components/dashboard/kpi-card-row"
+import { ActivePortfolio } from "@/components/dashboard/active-portfolio"
+import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,36 +17,78 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { EmptyState } from "@/components/empty-state"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuthStore, useProjectStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
-import {
-  Plus,
-  Search,
-  MoreHorizontal,
-  Edit,
-  Trash2,
-  ExternalLink,
-  SortAsc,
-  SortDesc,
-  Clock,
-  FileText,
-  BookOpen,
-  Download,
-} from "lucide-react"
+import { apiRequest } from "@/lib/api-client"
+import { transformProjectFromDB } from "@/lib/data-transformers"
 import { formatDistanceToNow } from "date-fns"
 
 export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [sortBy, setSortBy] = useState<"recent" | "name">("recent")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [sortBy] = useState<"recent" | "name">("recent")
+  const [sortOrder] = useState<"asc" | "desc">("desc")
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
+  const [selectedProject, setSelectedProject] = useState<any | null>(null)
+  const [isDescriptionModalOpen, setIsDescriptionModalOpen] = useState(false)
 
   const router = useRouter()
   const { user } = useAuthStore()
-  const { projects, deleteProject, setCurrentProject } = useProjectStore()
+  const { projects, setProjects, deleteProject, setCurrentProject } = useProjectStore()
   const { toast } = useToast()
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
+
+  // NEW: dashboard integrations data
+  const [kpiData, setKpiData] = useState({ assessments: 0, factors: 0, components: 0 })
+  const [activityItems, setActivityItems] = useState<any[]>([])
+
+  // Fetch projects from database on mount
+  useEffect(() => {
+    const fetchProjects = async () => {
+      if (!user) return
+
+      setIsLoadingProjects(true)
+      try {
+        const response = await apiRequest("/api/projects")
+        const data = await response.json()
+
+        if (data.success && data.projects) {
+          const transformedProjects = data.projects.map((p: any) => transformProjectFromDB(p))
+          setProjects(transformedProjects)
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load projects from database",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoadingProjects(false)
+      }
+    }
+
+    fetchProjects()
+  }, [user, setProjects, toast])
+
+  // Fetch dashboard KPI + activity feed data
+  useEffect(() => {
+    if (!user) return
+    Promise.all([
+      apiRequest("/api/integrations/status").then((r) => r.json()).catch(() => null),
+      apiRequest("/api/integrations/log?limit=6").then((r) => r.json()).catch(() => null),
+    ]).then(([status, log]) => {
+      if (status?.success) {
+        const totalFactors = (status.factorsByMethod ?? []).reduce(
+          (s: number, m: any) => s + Number(m.factors ?? 0),
+          0,
+        )
+        const totalSubstances = Number(status.substances?.total ?? 0)
+        setKpiData((k) => ({ ...k, factors: totalFactors, components: totalSubstances }))
+      }
+      if (log?.success) setActivityItems(log.logs ?? [])
+    })
+  }, [user])
 
   const filteredProjects = projects
     .filter((project) => project.name.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -76,287 +117,89 @@ export default function HomePage() {
     const project = projects.find((p) => p.id === projectId)
     if (project) {
       setCurrentProject(project)
-      console.log("[v0] Navigating to:", `/project/${projectId}`)
-      try {
-        console.log("[v0] Router object:", router)
-        console.log("[v0] Attempting router.push...")
-        router.push(`/project/${projectId}`)
-        console.log("[v0] Router.push completed")
-      } catch (error) {
-        console.error("[v0] Router.push failed:", error)
-        console.log("[v0] Trying window.location fallback...")
-        window.location.href = `/project/${projectId}`
-      }
     }
+    router.push(`/project/${projectId}`)
   }
 
-  const toggleSort = () => {
-    console.log("[v0] Toggle sort clicked")
-    setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-  }
+  const totalCases = projects.reduce(
+    (s, p: any) => s + Number(p.caseCount ?? p.cases?.length ?? 0),
+    0,
+  )
 
-  const hasProjects = projects.length > 0
+  const kpis = [
+    {
+      label: "Active Projects",
+      value: projects.length,
+      delta: projects.length > 0 ? `${projects.length} total` : "None yet",
+    },
+    {
+      label: "Assessments",
+      value: totalCases,
+      delta: "across all cases",
+    },
+    {
+      label: "Factors Logged",
+      value: kpiData.factors,
+      delta: "via integrations",
+    },
+    {
+      label: "Components",
+      value: kpiData.components,
+      delta: "substances catalog",
+    },
+  ]
 
   return (
     <AuthGuard>
-      <AppLayout>
-        <div className="container mx-auto px-4 py-8">
-          {/* Greeting */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">
-              {hasProjects ? `Welcome back, ${user?.name}!` : `Welcome, ${user?.name}!`}
-            </h1>
-            <p className="text-muted-foreground">
-              {hasProjects
-                ? "Continue working on your LCA projects or start a new one."
-                : "Get started with your first Life Cycle Assessment project."}
-            </p>
+      <AppShell activeHref="/home">
+        <div className="max-w-[1440px] mx-auto px-6 md:px-10 py-12">
+          {/* Eyebrow */}
+          <div className="font-mono text-xs uppercase tracking-[0.15em] text-primary mb-4">
+            Precision Botanical Data
           </div>
 
-          {/* No projects state */}
-          {!hasProjects && (
-            <div className="max-w-2xl mx-auto">
-              <EmptyState
-                icon={FileText}
-                title="You have no projects created yet"
-                description="Create your first LCA project to start analyzing environmental impacts and making sustainable decisions."
-                primaryAction={{
-                  label: "Create your first project",
-                  onClick: () => {
-                    console.log("[v0] Create first project clicked")
-                    try {
-                      console.log("[v0] Router object:", router)
-                      console.log("[v0] Attempting router.push to /project/new...")
-                      router.push("/project/new")
-                      console.log("[v0] Router.push completed")
-                    } catch (error) {
-                      console.error("[v0] Router.push failed:", error)
-                      console.log("[v0] Trying window.location fallback...")
-                      window.location.href = "/project/new"
-                    }
-                  },
-                }}
-                secondaryActions={[
-                  {
-                    label: "Import a template project",
-                    onClick: () => {
-                      console.log("[v0] Import template clicked")
-                      toast({
-                        title: "Coming soon",
-                        description: "Template import functionality will be available soon.",
-                      })
-                    },
-                    icon: Download,
-                  },
-                  {
-                    label: "Read the Guide",
-                    onClick: () => {
-                      console.log("[v0] Read guide clicked")
-                      try {
-                        console.log("[v0] Router object:", router)
-                        console.log("[v0] Attempting router.push to /guide...")
-                        router.push("/guide")
-                        console.log("[v0] Router.push completed")
-                      } catch (error) {
-                        console.error("[v0] Router.push failed:", error)
-                        console.log("[v0] Trying window.location fallback...")
-                        window.location.href = "/guide"
-                      }
-                    },
-                    icon: BookOpen,
-                  },
-                ]}
-              />
-            </div>
-          )}
+          {/* Title */}
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-on-surface">
+            Systems Overview
+          </h1>
+          <p className="mt-3 text-on-surface-variant max-w-2xl">
+            Botanical precision in environmental asset management. Welcome back,{" "}
+            {user?.name ?? "engineer"}.
+          </p>
 
-          {/* Has projects state */}
-          {hasProjects && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Your Projects</CardTitle>
-                    <CardDescription>Manage and access your LCA projects</CardDescription>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      console.log("[v0] New Project button clicked")
-                      try {
-                        console.log("[v0] Router object:", router)
-                        console.log("[v0] Attempting router.push to /project/new...")
-                        router.push("/project/new")
-                        console.log("[v0] Router.push completed")
-                      } catch (error) {
-                        console.error("[v0] Router.push failed:", error)
-                        console.log("[v0] Trying window.location fallback...")
-                        window.location.href = "/project/new"
-                      }
-                    }}
-                    className="btn-primary"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Project
-                  </Button>
-                </div>
+          {/* KPI row */}
+          <div className="mt-10">
+            <KpiCardRow kpis={kpis} />
+          </div>
 
-                {/* Toolbar */}
-                <div className="flex items-center gap-4 pt-4">
-                  <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search projects..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
+          {/* Main + sidebar */}
+          <div className="mt-12 grid lg:grid-cols-[1fr_320px] gap-8">
+            <ActivePortfolio
+              projects={filteredProjects as any}
+              isLoading={isLoadingProjects}
+              onOpen={handleOpenProject}
+              onDelete={(projectId) => setDeleteProjectId(projectId)}
+              onNew={() => {
+                try {
+                  router.push("/project/new")
+                } catch {
+                  window.location.href = "/project/new"
+                }
+              }}
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="bg-transparent">
-                        {sortBy === "recent" ? (
-                          <Clock className="mr-2 h-4 w-4" />
-                        ) : (
-                          <FileText className="mr-2 h-4 w-4" />
-                        )}
-                        Sort by {sortBy}
-                        {sortOrder === "desc" ? (
-                          <SortDesc className="ml-2 h-4 w-4" />
-                        ) : (
-                          <SortAsc className="ml-2 h-4 w-4" />
-                        )}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSortBy("recent")
-                          if (sortBy !== "recent") setSortOrder("desc")
-                          else toggleSort()
-                        }}
-                      >
-                        <Clock className="mr-2 h-4 w-4" />
-                        Recent
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setSortBy("name")
-                          if (sortBy !== "name") setSortOrder("asc")
-                          else toggleSort()
-                        }}
-                      >
-                        <FileText className="mr-2 h-4 w-4" />
-                        Name
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-
-              <CardContent>
-                {filteredProjects.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                    <h3 className="text-lg font-semibold mb-2">No projects found</h3>
-                    <p className="text-muted-foreground">Try adjusting your search terms</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filteredProjects.map((project) => (
-                      <div
-                        key={project.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => {
-                          console.log("[v0] Project card clicked:", project.id)
-                          handleOpenProject(project.id)
-                        }}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                              <FileText className="h-5 w-5 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold truncate">{project.name}</h3>
-                              <p className="text-sm text-muted-foreground truncate">{project.description}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="secondary">{project.cases.length} cases</Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              Updated {formatDistanceToNow(new Date(project.updatedAt), { addSuffix: true })}
-                            </p>
-                          </div>
-
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={(e) => {
-                                  console.log("[v0] Dropdown trigger clicked")
-                                  e.stopPropagation()
-                                }}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Open menu</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  console.log("[v0] Open menu item clicked")
-                                  e.stopPropagation()
-                                  try {
-                                    console.log("[v0] Router object:", router)
-                                    console.log("[v0] Attempting router.push...")
-                                    handleOpenProject(project.id)
-                                    console.log("[v0] handleOpenProject completed")
-                                  } catch (error) {
-                                    console.error("[v0] handleOpenProject failed:", error)
-                                  }
-                                }}
-                              >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                Open
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  console.log("[v0] Edit menu item clicked")
-                                  e.stopPropagation()
-                                }}
-                              >
-                                <Edit className="mr-2 h-4 w-4" />
-                                Edit name
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  console.log("[v0] Delete menu item clicked")
-                                  e.stopPropagation()
-                                  setDeleteProjectId(project.id)
-                                }}
-                                className="text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+            <ActivityFeed
+              items={activityItems}
+              onGenerateReport={() =>
+                toast({
+                  title: "Coming soon",
+                  description: "EIA report generation will be available soon.",
+                })
+              }
+            />
+          </div>
 
           {/* Delete confirmation dialog */}
           <AlertDialog open={!!deleteProjectId} onOpenChange={() => setDeleteProjectId(null)}>
@@ -364,8 +207,10 @@ export default function HomePage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Project</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Are you sure you want to delete &quot;{projects.find((p) => p.id === deleteProjectId)?.name}&quot;? This action
-                  cannot be undone and will permanently delete all cases and components within this project.
+                  Are you sure you want to delete &quot;
+                  {projects.find((p) => p.id === deleteProjectId)?.name}&quot;? This action cannot
+                  be undone and will permanently delete all cases and components within this
+                  project.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -379,8 +224,43 @@ export default function HomePage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Project Description Modal */}
+          <Dialog open={isDescriptionModalOpen} onOpenChange={setIsDescriptionModalOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>{selectedProject?.name}</DialogTitle>
+              </DialogHeader>
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Project Description</h4>
+                <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">
+                  {selectedProject?.description}
+                </p>
+                {selectedProject && (
+                  <div className="mt-6 pt-4 border-t">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Total Cases:</span>{" "}
+                        <span className="font-medium">
+                          {selectedProject.caseCount ?? selectedProject.cases?.length ?? 0}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Last Updated:</span>{" "}
+                        <span className="font-medium">
+                          {formatDistanceToNow(new Date(selectedProject.updatedAt), {
+                            addSuffix: true,
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
-      </AppLayout>
+      </AppShell>
     </AuthGuard>
   )
 }
