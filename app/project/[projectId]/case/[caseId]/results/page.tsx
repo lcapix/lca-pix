@@ -414,22 +414,21 @@ export default function ResultsPage() {
       : fmtNum(activeCat.value, activeCat.value < 1 ? 4 : 2)
     : '—'
 
-  // Breadcrumb items
-  const breadcrumbItems = useMemo(
-    () => [
-      { label: 'Projects', page: 'home' },
-      {
-        label: currentCase.name || 'Project',
-        onClick: () => router.push(`/project/${projectId}`),
-      },
-      {
-        label: currentCase.name || 'Case',
-        onClick: () => router.push(`/project/${projectId}/case/${caseId}`),
-      },
-      { label: 'Results' },
-    ],
-    [currentCase.name, projectId, caseId, router],
-  )
+  // Breadcrumb items — plain const; this sits after two early returns
+  // (isLoadingCase / !currentCase) so it cannot be a hook without
+  // violating rules-of-hooks.
+  const breadcrumbItems = [
+    { label: 'Projects', page: 'home' },
+    {
+      label: currentCase.name || 'Project',
+      onClick: () => router.push(`/project/${projectId}`),
+    },
+    {
+      label: currentCase.name || 'Case',
+      onClick: () => router.push(`/project/${projectId}/case/${caseId}`),
+    },
+    { label: 'Results' },
+  ]
 
   return (
     <div className="app-shell" style={{ minHeight: '100vh' }}>

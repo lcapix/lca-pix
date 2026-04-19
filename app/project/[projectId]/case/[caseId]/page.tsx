@@ -425,7 +425,14 @@ export default function CaseViewPage() {
   return (
     <div
       className="app-shell"
-      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      style={{
+        // Fill the viewport below the 56px AppTopBar; allow the page
+        // to scroll if content overflows (the right Inspector's cost
+        // fields can push past 100vh on small screens).
+        minHeight: 'calc(100vh - 56px)',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
       <Breadcrumb
         items={[
