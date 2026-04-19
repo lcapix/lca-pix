@@ -3,9 +3,11 @@
 // AppTopBar — mirrored from LCAPIX/shared.jsx lines 128-173.
 // When `onNav` is not provided, falls back to Next router push using a default id→path map.
 
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Logo } from './logo'
 import { Icon } from './icon'
+import { useAuthStore } from '@/lib/store'
 
 export interface AppTopBarProps {
   current?: string
@@ -27,13 +29,70 @@ const links: { id: string; label: string }[] = [
   { id: 'guide', label: 'Docs' },
 ]
 
-export function AppTopBar({ current, onNav, userInitials = 'KP' }: AppTopBarProps) {
+const menuItemStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  width: '100%',
+  padding: '8px 12px',
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--text-primary)',
+  fontFamily: 'var(--font-ui)',
+  fontSize: 13,
+  cursor: 'pointer',
+  borderRadius: 6,
+  textAlign: 'left',
+}
+
+export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   const router = useRouter()
+  const { user, logout } = useAuthStore()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  const initials =
+    userInitials ??
+    (user?.name
+      ? user.name
+          .split(/\s+/)
+          .map((p) => p[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase()
+      : user?.email?.[0]?.toUpperCase() || 'U')
+
   const navigate = (id: string) => {
     if (onNav) return onNav(id)
     const path = defaultRoutes[id]
     if (path) router.push(path)
   }
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user')
+    } catch {}
+    logout()
+    setMenuOpen(false)
+    router.push('/auth/login')
+  }
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   return (
     <div
@@ -129,23 +188,88 @@ export function AppTopBar({ current, onNav, userInitials = 'KP' }: AppTopBarProp
       >
         <Icon name="bell" size={15} />
       </button>
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
-          background: 'var(--brand-subtle)',
-          color: 'var(--brand-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 600,
-          fontSize: 13,
-          cursor: 'pointer',
-          flexShrink: 0,
-        }}
-      >
-        {userInitials}
+      <div ref={menuRef} style={{ position: 'relative', flexShrink: 0 }}>
+        <button
+          type="button"
+          aria-label="Account menu"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: '50%',
+            background: 'var(--brand-subtle)',
+            color: 'var(--brand-primary)',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 600,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          {initials}
+        </button>
+        {menuOpen && (
+          <div
+            role="menu"
+            className="glass"
+            style={{
+              position: 'absolute',
+              right: 0,
+              top: 40,
+              width: 240,
+              padding: 6,
+              zIndex: 100,
+            }}
+          >
+            <div style={{ padding: '10px 12px 8px' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
+                {user?.name || 'Signed in'}
+              </div>
+              <div
+                className="mono"
+                style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}
+              >
+                {user?.email || ''}
+              </div>
+            </div>
+            <div className="divider-tonal" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                router.push('/home')
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="box" size={14} /> Projects
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                router.push('/admin/integrations')
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="settings" size={14} /> Integrations
+            </button>
+            <div className="divider-tonal" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleLogout}
+              style={{ ...menuItemStyle, color: 'var(--signal-error)' }}
+            >
+              <Icon name="x" size={14} /> Log out
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
