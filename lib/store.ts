@@ -83,6 +83,7 @@ interface ProjectState {
   flows: Flow[]
   nodes: Node[]
   addProject: (project: Omit<Project, "id" | "createdAt" | "updatedAt" | "cases"> & { id?: string }) => void
+  setProjects: (projects: Project[]) => void
   updateProject: (id: string, updates: Partial<Project>) => void
   deleteProject: (id: string) => void
   setCurrentProject: (project: Project | null) => void
@@ -149,6 +150,7 @@ export const useProjectStore = create<ProjectState>()(
         }
         set((state) => ({ projects: [...state.projects, project] }))
       },
+      setProjects: (projects) => set({ projects }),
       updateProject: (id, updates) => {
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, ...updates, updatedAt: new Date() } : p)),
