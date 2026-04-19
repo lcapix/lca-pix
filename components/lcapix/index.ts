@@ -46,3 +46,12 @@ export type {
   InspectorEditFormData,
   InspectorFlow,
 } from './case'
+
+export { CategoryBarChart, RunTimeline } from './results'
+export type {
+  CategoryBarChartProps,
+  CategoryBarChartItem,
+  RunTimelineProps,
+  RunTimelineRun,
+  RunTimelineStatus,
+} from './results'
