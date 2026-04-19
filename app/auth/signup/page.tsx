@@ -5,13 +5,10 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Eye, EyeOff } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { useAuthStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
-import { AuthLayout } from "@/components/auth/auth-layout"
-import { LcapixWordmark } from "@/components/brand/lcapix-wordmark"
+import { AuthShell } from "@/components/lcapix/auth/auth-shell"
+import { Icon } from "@/components/lcapix/icon"
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState("")
@@ -119,113 +116,99 @@ export default function SignupPage() {
   }
 
   return (
-    <AuthLayout
-      rightPane={
-        <div className="h-full flex flex-col justify-between px-14 py-16 relative bg-inverse-surface text-inverse-on-surface">
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-inverse-on-surface/60">
-            Technical Supremacy No. 08
-          </div>
-
-          <blockquote className="max-w-xl">
-            <p className="text-4xl lg:text-5xl font-bold leading-[1.15] tracking-tight">
-              Sustainable engineering isn&apos;t a design choice; it&apos;s a{" "}
-              <span className="italic veridian-gradient bg-clip-text text-transparent">
-                mathematical imperative.
-              </span>
-            </p>
-          </blockquote>
-
-          <div className="flex items-end justify-between max-w-xl">
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-inverse-on-surface/50">
-              Veridian Protocol V.4.0
-            </div>
-            <div className="bg-surface-container-highest/10 border border-inverse-on-surface/10 rounded-lg px-4 py-3 backdrop-blur-sm">
-              <div className="font-mono text-[10px] uppercase tracking-wider text-inverse-on-surface/60">
-                Avg Core Impact
-              </div>
-              <div className="num text-2xl font-bold text-primary-fixed-dim">−14.2%</div>
-              <div className="text-[11px] text-inverse-on-surface/60">CO₂/kWh</div>
-            </div>
-          </div>
-        </div>
-      }
-    >
-      <LcapixWordmark size="md" subtitle="Sustainability Suite" />
-
-      <h1 className="mt-12 text-3xl font-bold tracking-tight text-on-surface">Get started</h1>
-      <p className="mt-2 text-sm text-on-surface-variant">
-        Enter your details to join the Veridian ecosystem.
+    <AuthShell>
+      <h1
+        className="display"
+        style={{ fontSize: 32, fontWeight: 600, margin: 0, marginBottom: 8, letterSpacing: "-0.01em" }}
+      >
+        Create your account.
+      </h1>
+      <p style={{ color: "var(--text-secondary)", fontSize: 14, margin: 0, marginBottom: 32 }}>
+        Start running LCAs in under a minute.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-10 space-y-5">
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
-          <Label
-            htmlFor="fullName"
-            className="font-mono text-xs uppercase tracking-[0.12em] text-on-surface-variant"
-          >
-            Full Name
-          </Label>
-          <Input
+          <label className="label" htmlFor="fullName">
+            Name
+          </label>
+          <input
             id="fullName"
+            className="input"
             type="text"
             autoComplete="name"
+            placeholder="Your full name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="mt-1.5 border-0 border-b border-outline-variant/40 rounded-none bg-surface-container-low px-3 py-2.5 focus-visible:ring-0 focus-visible:border-primary"
           />
         </div>
 
         <div>
-          <Label
-            htmlFor="email"
-            className="font-mono text-xs uppercase tracking-[0.12em] text-on-surface-variant"
-          >
-            Work Email
-          </Label>
-          <Input
+          <label className="label" htmlFor="email">
+            Email
+          </label>
+          <input
             id="email"
+            className="input"
             type="email"
             autoComplete="email"
+            placeholder="you@company.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1.5 border-0 border-b border-outline-variant/40 rounded-none bg-surface-container-low px-3 py-2.5 focus-visible:ring-0 focus-visible:border-primary"
           />
-          {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email}</p>}
+          {errors.email && (
+            <div style={{ fontSize: 12, color: "var(--status-error, #c13b2b)", marginTop: 6 }}>{errors.email}</div>
+          )}
         </div>
 
         <div>
-          <Label
-            htmlFor="password"
-            className="font-mono text-xs uppercase tracking-[0.12em] text-on-surface-variant"
-          >
+          <label className="label" htmlFor="password">
             Password
-          </Label>
-          <div className="relative">
-            <Input
+          </label>
+          <div style={{ position: "relative" }}>
+            <input
               id="password"
+              className="input"
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
+              placeholder="At least 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 border-0 border-b border-outline-variant/40 rounded-none bg-surface-container-low px-3 py-2.5 pr-10 focus-visible:ring-0 focus-visible:border-primary"
+              style={{ paddingRight: 40 }}
             />
             <button
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-2 top-1/2 -translate-y-1/2 mt-1 text-on-surface-variant hover:text-primary"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                color: "var(--text-tertiary)",
+                cursor: "pointer",
+                padding: 8,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <Icon name="eye" size={16} />
             </button>
           </div>
-          {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password}</p>}
-          <p className="mt-1.5 text-xs text-on-surface-variant">
-            Password must be at least 8 characters with one number
-          </p>
+          {errors.password ? (
+            <div style={{ fontSize: 12, color: "var(--status-error, #c13b2b)", marginTop: 6 }}>{errors.password}</div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 6 }}>
+              At least 8 characters with one number.
+            </div>
+          )}
         </div>
 
         {errors.general ? (
-          <div className="text-sm text-destructive" role="alert">
+          <div role="alert" style={{ fontSize: 13, color: "var(--status-error, #c13b2b)" }}>
             {errors.general}
           </div>
         ) : null}
@@ -233,57 +216,48 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={isLoading || !email || !password}
-          className="w-full veridian-gradient text-white font-semibold py-3 rounded-md shadow-sm hover:opacity-95 disabled:opacity-60 transition-opacity"
+          className="btn btn-primary"
+          style={{ height: 44, justifyContent: "center", marginTop: 8 }}
         >
-          {isLoading ? "Creating account…" : "Create Account →"}
+          {isLoading ? "Creating account…" : "Create account"}
         </button>
+
+        <div
+          className="divider-tonal"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            margin: "8px 0",
+            color: "var(--text-tertiary)",
+            fontSize: 12,
+          }}
+        >
+          <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+          <span>or</span>
+          <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleSignup}
+          disabled={isLoading}
+          className="btn btn-secondary"
+          style={{ height: 44, justifyContent: "center" }}
+        >
+          <Icon name="google" size={16} /> Continue with Google
+        </button>
+
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 16 }}>
+          Already have an account?{" "}
+          <Link
+            href="/auth/login"
+            style={{ color: "var(--brand-primary)", textDecoration: "none" }}
+          >
+            Log in →
+          </Link>
+        </div>
       </form>
-
-      <div className="my-8 flex items-center gap-4 text-xs text-on-surface-variant font-mono uppercase tracking-widest">
-        <div className="flex-1 h-px bg-outline-variant/30" />
-        or continue with
-        <div className="flex-1 h-px bg-outline-variant/30" />
-      </div>
-
-      <button
-        type="button"
-        onClick={handleGoogleSignup}
-        disabled={isLoading}
-        className="w-full flex items-center justify-center gap-2 border border-outline-variant/40 rounded-md py-3 font-medium text-on-surface hover:bg-surface-container-low transition-colors disabled:opacity-60"
-      >
-        <GoogleIcon />
-        Enterprise Google SSO
-      </button>
-
-      <p className="mt-8 text-sm text-on-surface-variant">
-        Already have an account?{" "}
-        <Link href="/auth/login" className="text-primary font-medium hover:underline">
-          Sign in →
-        </Link>
-      </p>
-    </AuthLayout>
-  )
-}
-
-function GoogleIcon() {
-  return (
-    <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="#EA4335"
-        d="M12 5.04c2.17 0 3.69.94 4.53 1.72l3.31-3.22C17.93 1.53 15.26 0 12 0 7.34 0 3.31 2.7 1.32 6.6l3.85 3c.94-2.8 3.52-4.56 6.83-4.56z"
-      />
-      <path
-        fill="#4285F4"
-        d="M23.5 12.27c0-.79-.07-1.56-.2-2.3H12v4.36h6.47c-.28 1.51-1.13 2.79-2.4 3.65l3.68 2.87c2.16-2 3.75-4.99 3.75-8.58z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.17 14.38a7.1 7.1 0 0 1-.37-2.38c0-.83.14-1.63.37-2.38l-3.85-3A11.99 11.99 0 0 0 0 12c0 1.93.46 3.76 1.32 5.38l3.85-3z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.68-2.87c-1.02.69-2.34 1.1-4.27 1.1-3.31 0-6.1-2.24-7.1-5.23l-3.85 3C2.99 21.15 7.03 24 12 24z"
-      />
-    </svg>
+    </AuthShell>
   )
 }
