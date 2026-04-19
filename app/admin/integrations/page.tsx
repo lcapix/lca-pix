@@ -3,34 +3,22 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
-import { AppTopBar } from '@/components/lcapix';
+import {
+  AppTopBar,
+  Breadcrumb,
+  Icon,
+  StatusDot,
+  MiniBar,
+  fmtInt,
+  fmtNum,
+} from '@/components/lcapix';
 import { apiGet } from '@/lib/api-client';
 import { ImportButtons } from '@/components/integrations/import-buttons';
 import { LogViewer } from '@/components/integrations/log-viewer';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Num } from '@/components/ui/num';
-import {
-  FlaskConical,
-  Ruler,
-  Wallet,
-  CheckCircle2,
-  MoreVertical,
-  Database,
-  KeyRound,
-  Activity,
-  ShieldCheck,
-} from 'lucide-react';
+  DEMO_INTEGRATIONS,
+  DEMO_ACTIVITY,
+} from '@/lib/lcapix-demo';
 
 interface Status {
   substances: { total: number; enriched: number };
@@ -38,426 +26,528 @@ interface Status {
   rateCache: Array<{ rate_type: string; cnt: number }>;
 }
 
-// Static visual data for the Operational Connections table.
-const OPERATIONAL_CONNECTIONS = [
-  {
-    name: 'openLCA Professional',
-    version: 'v2.1.0-api',
-    health: 'healthy' as const,
-    latency: '48ms',
-    uptime: '99.98%',
-  },
-  {
-    name: 'PubChem Substance Registry',
-    version: 'REST API V2',
-    health: 'degraded' as const,
-    latency: '1,240ms',
-    uptime: '94.20%',
-  },
-  {
-    name: 'Ecoinvent Data v3.10',
-    version: 'GraphQL Gateway',
-    health: 'healthy' as const,
-    latency: '12ms',
-    uptime: '100%',
-  },
-  {
-    name: 'GaBi Cloud Services',
-    version: 'OAuth2 / WS',
-    health: 'critical' as const,
-    latency: 'TIMEOUT',
-    uptime: '82.11%',
-  },
+type TabId = 'overview' | 'sources' | 'keys' | 'log' | 'schema';
+
+const TABS: ReadonlyArray<{ id: TabId; l: string }> = [
+  { id: 'overview', l: 'Overview' },
+  { id: 'sources', l: 'Data Sources' },
+  { id: 'keys', l: 'API Keys' },
+  { id: 'log', l: 'Activity Log' },
+  { id: 'schema', l: 'Schema' },
 ];
 
-const DATA_SOURCES = [
-  { name: 'openLCA', description: 'LCIA methods & characterization factors', status: 'connected' },
-  { name: 'PubChem', description: 'Substance registry enrichment', status: 'connected' },
-  { name: 'Electricity Maps', description: 'Regional grid carbon intensity', status: 'configured' },
-  { name: 'BLS', description: 'Labor cost indices', status: 'configured' },
-  { name: 'EIA', description: 'Energy cost rates', status: 'configured' },
-  { name: 'Metals-API', description: 'Commodity metals pricing', status: 'idle' },
+const SCHEMA_TABLES = [
+  'substances',
+  'valuation_methods',
+  'characterization_factors',
+  'cost_rates',
 ];
 
-const API_KEYS = [
-  { label: 'openLCA Production', prefix: 'olca_live_', masked: '••••••••••8F2A', scope: 'read/write', created: '2025-11-04' },
-  { label: 'PubChem Public', prefix: 'pub_pk_', masked: '••••••••••9D11', scope: 'read', created: '2025-09-18' },
-  { label: 'Electricity Maps', prefix: 'em_', masked: '••••••••••C47B', scope: 'read', created: '2026-01-22' },
-];
+function KpiCards({ status }: { status: Status }) {
+  const substancesTotal = Number(status.substances.total ?? 0);
+  const substancesEnriched = Number(status.substances.enriched ?? 0);
+  const methodsCount = status.factorsByMethod.length;
+  const rateCacheCount = status.rateCache.reduce(
+    (sum, r) => sum + Number(r.cnt ?? 0),
+    0
+  );
+  const enrichedPct = substancesTotal
+    ? Math.round((substancesEnriched / substancesTotal) * 100)
+    : 0;
+  const failingCount = DEMO_INTEGRATIONS.filter(
+    (i) => i.status === 'error'
+  ).length;
+  const activeCount = DEMO_INTEGRATIONS.length - failingCount;
+  const latestMethod = status.factorsByMethod[0]?.method_name ?? '—';
 
-const HEALTH_DOT: Record<string, string> = {
-  healthy: 'bg-[#008558]',
-  degraded: 'bg-amber-500',
-  critical: 'bg-red-500',
-};
+  const kpis: Array<{
+    l: string;
+    v: string;
+    s: string;
+    pct?: number;
+    status: 'success' | 'warn' | 'error';
+  }> = [
+    {
+      l: 'SUBSTANCES',
+      v: fmtInt(substancesTotal),
+      s: `${fmtInt(substancesEnriched)} enriched`,
+      pct: enrichedPct,
+      status: 'success',
+    },
+    {
+      l: 'METHODOLOGIES',
+      v: fmtInt(methodsCount),
+      s: latestMethod,
+      status: 'success',
+    },
+    {
+      l: 'COST RATES',
+      v: fmtInt(rateCacheCount),
+      s: `${status.rateCache.length} types`,
+      status: 'success',
+    },
+    {
+      l: 'CONNECTIONS',
+      v: `${activeCount} / ${DEMO_INTEGRATIONS.length}`,
+      s: failingCount
+        ? `${failingCount} endpoint${failingCount === 1 ? '' : 's'} failing`
+        : 'all healthy',
+      status: failingCount ? 'warn' : 'success',
+    },
+  ];
 
-const HEALTH_LABEL: Record<string, string> = {
-  healthy: 'Healthy',
-  degraded: 'Degraded',
-  critical: 'Critical',
-};
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 16,
+        marginBottom: 24,
+      }}
+    >
+      {kpis.map((k) => (
+        <div key={k.l} className="card" style={{ padding: 20 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              marginBottom: 10,
+            }}
+          >
+            <div className="eyebrow">{k.l}</div>
+            <div style={{ marginLeft: 'auto' }}>
+              <StatusDot status={k.status} />
+            </div>
+          </div>
+          <div
+            className="mono"
+            style={{
+              fontSize: 28,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              marginBottom: 4,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {k.v}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+            {k.s}
+          </div>
+          {k.pct !== undefined && (
+            <div style={{ marginTop: 10 }}>
+              <MiniBar value={k.pct} height={4} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function OverviewTab({
   status,
   onRefresh,
-  logRefresh,
 }: {
   status: Status;
   onRefresh: () => void;
-  logRefresh: number;
 }) {
-  const substancesTotal = Number(status.substances.total ?? 0);
-  const substancesEnriched = Number(status.substances.enriched ?? 0);
-  const methodsCount = status.factorsByMethod.length;
-  const rateCacheCount = status.rateCache.reduce((sum, r) => sum + Number(r.cnt ?? 0), 0);
-  const latestMethod = status.factorsByMethod[0]?.method_name ?? '—';
-
   return (
-    <div className="space-y-12">
-      {/* KPI Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-[var(--surface-container-low)] border-0 rounded-xl">
-          <CardContent className="p-8 flex flex-col justify-between min-h-[220px]">
-            <div>
-              <div className="flex items-center justify-between mb-8">
-                <FlaskConical className="h-8 w-8 text-[var(--primary)]" />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--outline)]">
-                  Real-time
-                </span>
-              </div>
-              <h3 className="text-sm font-semibold mb-1">Substances</h3>
-              <div className="flex items-baseline gap-2">
-                <Num value={substancesTotal} className="text-4xl font-bold" />
-                <Badge className="font-mono text-xs bg-[var(--on-secondary-container)] text-[var(--secondary-container)]">
-                  LIVE
-                </Badge>
-              </div>
-            </div>
-            <div className="mt-8 pt-6 border-t border-[var(--outline-variant)]/30">
-              <p className="font-mono text-[10px] text-[var(--on-surface-variant)]">
-                ENRICHED: <Num value={substancesEnriched} /> / <Num value={substancesTotal} />
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+    <>
+      <KpiCards status={status} />
 
-        <Card className="bg-[var(--surface-container-low)] border-0 rounded-xl">
-          <CardContent className="p-8 flex flex-col justify-between min-h-[220px]">
-            <div>
-              <div className="flex items-center justify-between mb-8">
-                <Ruler className="h-8 w-8 text-[var(--primary)]" />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--outline)]">
-                  Verified
-                </span>
-              </div>
-              <h3 className="text-sm font-semibold mb-1">Methodologies</h3>
-              <div className="flex items-baseline gap-2">
-                <Num value={methodsCount} className="text-4xl font-bold" />
-                <Badge className="font-mono text-xs bg-[var(--on-primary-fixed-variant)] text-[var(--primary-fixed)]">
-                  IMPORTED
-                </Badge>
-              </div>
-            </div>
-            <div className="mt-8 pt-6 border-t border-[var(--outline-variant)]/30">
-              <p className="font-mono text-[10px] text-[var(--on-surface-variant)] truncate">
-                LATEST: {latestMethod}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--surface-container-low)] border-0 rounded-xl">
-          <CardContent className="p-8 flex flex-col justify-between min-h-[220px]">
-            <div>
-              <div className="flex items-center justify-between mb-8">
-                <Wallet className="h-8 w-8 text-[var(--primary)]" />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--outline)]">
-                  Dynamic
-                </span>
-              </div>
-              <h3 className="text-sm font-semibold mb-1">Cost Rates</h3>
-              <div className="flex items-baseline gap-2">
-                <Num value={rateCacheCount} className="text-4xl font-bold" />
-                <Badge className="font-mono text-xs bg-[var(--secondary-container)] text-[var(--on-secondary-container)]">
-                  CACHED
-                </Badge>
-              </div>
-            </div>
-            <div className="mt-8 pt-6 border-t border-[var(--outline-variant)]/30">
-              <p className="font-mono text-[10px] text-[var(--on-surface-variant)]">
-                ROWS ACROSS {status.rateCache.length} TYPES
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--surface-container-low)] border-0 rounded-xl">
-          <CardContent className="p-8 flex flex-col justify-between min-h-[220px]">
-            <div>
-              <div className="flex items-center justify-between mb-8">
-                <ShieldCheck className="h-8 w-8 text-[var(--primary)]" />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--outline)]">
-                  Audited
-                </span>
-              </div>
-              <h3 className="text-sm font-semibold mb-1">Connections</h3>
-              <div className="flex items-baseline gap-2">
-                <Num value={OPERATIONAL_CONNECTIONS.length} className="text-4xl font-bold" />
-                <Badge className="font-mono text-xs bg-[var(--secondary-container)] text-[var(--on-secondary-container)]">
-                  ACTIVE
-                </Badge>
-              </div>
-            </div>
-            <div className="mt-8 pt-6 border-t border-[var(--outline-variant)]/30">
-              <p className="font-mono text-[10px] text-[var(--on-surface-variant)]">
-                GLOBAL AVERAGE: 0.94% DELTA
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Import Actions */}
-      <div className="space-y-4">
-        <h4 className="font-bold text-xl tracking-tight">Actions</h4>
+      {/* Import Actions (preserved handler) */}
+      <div style={{ marginBottom: 24 }}>
         <ImportButtons onRefresh={onRefresh} />
       </div>
 
-      {/* Operational Connections */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h4 className="font-bold text-xl tracking-tight">Operational Connections</h4>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="font-mono text-xs uppercase bg-[var(--surface-container-high)]"
-            >
-              Filter: Active
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="font-mono text-xs uppercase bg-[var(--surface-container-high)]"
-            >
-              Export CSV
-            </Button>
-          </div>
-        </div>
-
-        <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-x-auto shadow-[0_24px_48px_-12px_rgba(25,28,27,0.04)]">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-[var(--surface-container-low)] hover:bg-[var(--surface-container-low)]">
-                <TableHead className="px-8 py-4 font-mono text-[10px] font-semibold text-[var(--outline)] uppercase tracking-wider">
-                  Service Node
-                </TableHead>
-                <TableHead className="px-8 py-4 font-mono text-[10px] font-semibold text-[var(--outline)] uppercase tracking-wider">
-                  Health
-                </TableHead>
-                <TableHead className="px-8 py-4 font-mono text-[10px] font-semibold text-[var(--outline)] uppercase tracking-wider">
-                  Latency
-                </TableHead>
-                <TableHead className="px-8 py-4 font-mono text-[10px] font-semibold text-[var(--outline)] uppercase tracking-wider">
-                  Uptime
-                </TableHead>
-                <TableHead className="px-8 py-4 font-mono text-[10px] font-semibold text-[var(--outline)] uppercase tracking-wider text-right">
-                  Actions
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {OPERATIONAL_CONNECTIONS.map((svc) => (
-                <TableRow key={svc.name} className="group hover:bg-[var(--surface)]">
-                  <TableCell className="px-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-lg bg-[var(--surface-container-highest)] flex items-center justify-center">
-                        <Database className="h-5 w-5 text-[var(--on-surface-variant)]" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-sm">{svc.name}</div>
-                        <div className="text-[10px] font-mono text-[var(--outline)]">
-                          {svc.version}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-8 py-6">
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${HEALTH_DOT[svc.health]}`} />
-                      <span className="text-sm font-medium">{HEALTH_LABEL[svc.health]}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-8 py-6">
-                    <span
-                      className={`font-mono text-sm ${
-                        svc.health === 'critical' ? 'text-[var(--error)]' : ''
-                      }`}
-                    >
-                      {svc.latency}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-8 py-6">
-                    <span
-                      className={`font-mono text-sm ${
-                        svc.health === 'critical' ? 'text-[var(--error)]' : ''
-                      }`}
-                    >
-                      {svc.uptime}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-8 py-6 text-right">
-                    <button
-                      type="button"
-                      aria-label="More actions"
-                      className="text-[var(--outline)] hover:text-[var(--primary)]"
-                    >
-                      <MoreVertical className="h-4 w-4 inline" />
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Recent activity */}
-      <div className="space-y-4">
-        <h4 className="font-bold text-xl tracking-tight">Recent Activity</h4>
-        <div className="rounded-2xl border border-[var(--outline-variant)]/30 bg-[var(--surface-container-lowest)] overflow-hidden">
-          <LogViewer refreshKey={logRefresh} />
-        </div>
-      </div>
-
-      {/* Systems Harmonized */}
-      <div className="mt-8 flex items-center justify-center p-12 relative overflow-hidden rounded-3xl bg-[var(--surface-container-low)]">
-        <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary-fixed)]/20 to-transparent blur-3xl opacity-30" />
-        <div className="relative z-10 flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg mb-4">
-            <CheckCircle2 className="h-8 w-8 text-[var(--primary)]" />
-          </div>
-          <h5 className="text-xl font-bold mb-2">Systems Harmonized</h5>
-          <p className="text-sm text-[var(--on-surface-variant)] max-w-sm">
-            All global data sources are verified against LCAPIX Botanical Standards. Last audit
-            completed successfully at 04:00 UTC.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DataSourcesTab() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <h4 className="font-bold text-xl tracking-tight mb-1">Data Sources</h4>
-        <p className="text-sm text-[var(--on-surface-variant)]">
-          Integrated environmental and cost data providers.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {DATA_SOURCES.map((src) => (
-          <Card
-            key={src.name}
-            className="bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)]/30 rounded-xl"
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <span style={{ fontSize: 14, fontWeight: 600 }}>
+            Integration status
+          </span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="btn btn-ghost btn-sm"
+            style={{ marginLeft: 'auto' }}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold">{src.name}</CardTitle>
-                <Badge
-                  className={
-                    src.status === 'connected'
-                      ? 'bg-[var(--secondary-container)] text-[var(--on-secondary-container)] font-mono text-[10px] uppercase'
-                      : src.status === 'configured'
-                      ? 'bg-[var(--surface-container-high)] text-[var(--on-surface-variant)] font-mono text-[10px] uppercase'
-                      : 'bg-[var(--surface-container)] text-[var(--outline)] font-mono text-[10px] uppercase'
-                  }
-                >
-                  {src.status}
-                </Badge>
+            <Icon name="refresh" size={13} /> Refresh all
+          </button>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1.5fr 1fr 1fr 1fr 120px',
+            padding: '10px 20px',
+            background: 'var(--surface-overlay)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            fontWeight: 600,
+          }}
+        >
+          <div>Source</div>
+          <div>Status</div>
+          <div>Last run</div>
+          <div>Records</div>
+          <div style={{ textAlign: 'right' }}>Action</div>
+        </div>
+        {DEMO_INTEGRATIONS.map((src) => (
+          <div
+            key={src.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1.5fr 1fr 1fr 1fr 120px',
+              padding: '14px 20px',
+              borderTop: '1px solid var(--border-subtle)',
+              fontSize: 13,
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                {src.name}
               </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-[var(--on-surface-variant)]">{src.description}</p>
-            </CardContent>
-          </Card>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                {src.description}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <StatusDot status={src.status} />
+              <span
+                style={{
+                  color: 'var(--text-secondary)',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {src.status === 'warn'
+                  ? 'degraded'
+                  : src.status === 'success'
+                  ? 'healthy'
+                  : src.status}
+              </span>
+            </div>
+            <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
+              {src.lastRun}
+            </div>
+            <div className="mono" style={{ color: 'var(--text-secondary)' }}>
+              {fmtInt(src.records)}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '4px 10px' }}
+              >
+                {src.status === 'error' ? 'Configure' : 'Run now'}
+              </button>
+            </div>
+          </div>
         ))}
       </div>
-    </div>
+    </>
   );
 }
 
-function ApiKeysTab() {
+function SourcesTab() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h4 className="font-bold text-xl tracking-tight mb-1">API Keys</h4>
-          <p className="text-sm text-[var(--on-surface-variant)]">
-            Credentials configured for external integrations.
-          </p>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 16,
+      }}
+    >
+      {DEMO_INTEGRATIONS.map((src) => (
+        <div key={src.id} className="card" style={{ padding: 20 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 10,
+            }}
+          >
+            <StatusDot status={src.status} />
+            <div style={{ fontSize: 15, fontWeight: 600, flex: 1 }}>
+              {src.name}
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm">
+              <Icon name="settings" size={13} />
+            </button>
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-secondary)',
+              marginBottom: 14,
+            }}
+          >
+            {src.description}
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: 8,
+              fontSize: 12,
+            }}
+          >
+            <div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Rate limit</div>
+              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+                842 / 1000
+              </div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Last sync</div>
+              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+                {src.lastRun}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-tertiary)' }}>TTL</div>
+              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+                24h
+              </div>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Records</div>
+              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+                {fmtInt(src.records)}
+              </div>
+            </div>
+          </div>
         </div>
-        <Button className="veridian-gradient text-white">
-          <KeyRound className="h-4 w-4 mr-2" /> New Key
-        </Button>
-      </div>
-
-      <div className="bg-[var(--surface-container-lowest)] rounded-2xl overflow-x-auto border border-[var(--outline-variant)]/30">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-[var(--surface-container-low)] hover:bg-[var(--surface-container-low)]">
-              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
-                Label
-              </TableHead>
-              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
-                Key
-              </TableHead>
-              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
-                Scope
-              </TableHead>
-              <TableHead className="px-8 py-4 font-mono text-[10px] uppercase tracking-wider text-[var(--outline)]">
-                Created
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {API_KEYS.map((k) => (
-              <TableRow key={k.label} className="hover:bg-[var(--surface)]">
-                <TableCell className="px-8 py-5 font-semibold text-sm">{k.label}</TableCell>
-                <TableCell className="px-8 py-5 font-mono text-sm">
-                  <span className="text-[var(--on-surface-variant)]">{k.prefix}</span>
-                  {k.masked}
-                </TableCell>
-                <TableCell className="px-8 py-5">
-                  <Badge className="bg-[var(--surface-container-high)] text-[var(--on-surface-variant)] font-mono text-[10px] uppercase">
-                    {k.scope}
-                  </Badge>
-                </TableCell>
-                <TableCell className="px-8 py-5 font-mono text-sm text-[var(--on-surface-variant)]">
-                  {k.created}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      ))}
     </div>
   );
 }
 
-function ActivityLogTab({ logRefresh }: { logRefresh: number }) {
+function KeysTab() {
+  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) =>
+    setRevealed((r) => ({ ...r, [id]: !r[id] }));
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h4 className="font-bold text-xl tracking-tight mb-1">Activity Log</h4>
-        <p className="text-sm text-[var(--on-surface-variant)]">
-          Recent integration runs and sync events.
-        </p>
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 2fr 1fr 120px',
+          padding: '10px 20px',
+          background: 'var(--surface-overlay)',
+          fontSize: 10,
+          color: 'var(--text-tertiary)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          fontWeight: 600,
+        }}
+      >
+        <div>Service</div>
+        <div>Key</div>
+        <div>Last used</div>
+        <div style={{ textAlign: 'right' }}>Action</div>
       </div>
-      <div className="rounded-2xl border border-[var(--outline-variant)]/30 bg-[var(--surface-container-lowest)] overflow-hidden">
-        <LogViewer refreshKey={logRefresh} />
+      {DEMO_INTEGRATIONS.filter((i) => i.keyRequired).map((src) => {
+        const isRevealed = !!revealed[src.id];
+        const maskedKey = isRevealed
+          ? `em_live_a93kfx2l8c${src.id.slice(0, 4)}`
+          : `em_•••••••••••••••••••${src.id.slice(0, 4)}`;
+        return (
+          <div
+            key={src.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 2fr 1fr 120px',
+              padding: '14px 20px',
+              borderTop: '1px solid var(--border-subtle)',
+              alignItems: 'center',
+              fontSize: 13,
+            }}
+          >
+            <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+              {src.name}
+            </div>
+            <div
+              className="mono"
+              style={{
+                color: 'var(--text-tertiary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <span>{maskedKey}</span>
+              <button
+                type="button"
+                onClick={() => toggle(src.id)}
+                aria-label={isRevealed ? 'Hide key' : 'Reveal key'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-tertiary)',
+                  padding: 2,
+                  display: 'inline-flex',
+                }}
+              >
+                <Icon name="eye" size={12} />
+              </button>
+            </div>
+            <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
+              {src.lastRun}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <button type="button" className="btn btn-ghost btn-sm">
+                Rotate
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LogTab({ logRefresh }: { logRefresh: number }) {
+  const [filter, setFilter] = useState<'all' | 'success' | 'errors'>('all');
+
+  return (
+    <div className="card" style={{ padding: 0 }}>
+      <div
+        style={{
+          padding: '14px 20px',
+          borderBottom: '1px solid var(--border-subtle)',
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setFilter('all')}
+          className={`chip ${filter === 'all' ? 'chip-active' : ''}`}
+          style={{ cursor: 'pointer', border: 'none' }}
+        >
+          All sources
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('success')}
+          className={`chip ${filter === 'success' ? 'chip-active' : ''}`}
+          style={{ cursor: 'pointer', border: 'none' }}
+        >
+          Success
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilter('errors')}
+          className={`chip ${filter === 'errors' ? 'chip-active' : ''}`}
+          style={{ cursor: 'pointer', border: 'none' }}
+        >
+          Errors
+        </button>
+        <div style={{ flex: 1 }} />
+        <button type="button" className="btn btn-ghost btn-sm">
+          <Icon name="download" size={13} /> CSV
+        </button>
+      </div>
+      {/* Preserved live LogViewer */}
+      <LogViewer refreshKey={logRefresh} />
+    </div>
+  );
+}
+
+function SchemaTab() {
+  return (
+    <div className="card" style={{ padding: 32 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>
+        Data population map
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '200px 1fr 200px',
+          gap: 20,
+          alignItems: 'center',
+        }}
+      >
+        <div
+          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+        >
+          {DEMO_INTEGRATIONS.slice(0, 4).map((s) => (
+            <div
+              key={s.id}
+              style={{
+                padding: 12,
+                background: 'var(--surface-overlay)',
+                borderRadius: 6,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: 13,
+              }}
+            >
+              <StatusDot status={s.status} /> {s.name}
+            </div>
+          ))}
+        </div>
+        <svg viewBox="0 0 200 300" style={{ height: 260, width: '100%' }}>
+          <defs>
+            <marker
+              id="ar"
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto"
+            >
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--brand-primary)" />
+            </marker>
+          </defs>
+          {[0, 1, 2, 3].map((i) => (
+            <path
+              key={i}
+              d={`M 10 ${30 + i * 66} Q 100 ${30 + i * 66} 190 ${20 + (i % 4) * 70}`}
+              stroke="var(--brand-primary)"
+              strokeWidth="1.5"
+              fill="none"
+              opacity="0.6"
+              markerEnd="url(#ar)"
+            />
+          ))}
+        </svg>
+        <div
+          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+        >
+          {SCHEMA_TABLES.map((t) => (
+            <div
+              key={t}
+              className="mono"
+              style={{
+                padding: 12,
+                background: 'var(--surface-sunken)',
+                borderRadius: 6,
+                fontSize: 12,
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              {t}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -468,12 +558,13 @@ export default function IntegrationsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [logRefresh, setLogRefresh] = useState(0);
+  const [tab, setTab] = useState<TabId>('overview');
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGet<any>('/api/integrations/status');
+      const data = await apiGet<Status>('/api/integrations/status');
       setStatus(data);
       setLogRefresh((n) => n + 1);
     } catch (e: any) {
@@ -489,71 +580,179 @@ export default function IntegrationsAdminPage() {
 
   return (
     <AuthGuard>
-      <><AppTopBar current="home" />
-        <div className="p-4 sm:p-6 md:p-8 lg:p-12 max-w-7xl mx-auto">
-          {/* Editorial header */}
-          <div className="mb-10">
-            <h2 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-extrabold tracking-tighter text-[var(--primary)] leading-tight mb-2">
-              Integrations.
-            </h2>
-            <p className="text-[var(--on-surface-variant)] max-w-xl leading-relaxed">
-              Orchestrate the flow of environmental metadata across your LCAPIX infrastructure.
-              Managed endpoints for substances, methodologies, and technical cost rates.
-            </p>
+      <AppTopBar current="home" />
+      <Breadcrumb
+        items={[
+          { label: 'Projects', page: 'home' },
+          { label: 'Admin' },
+          { label: 'Integrations' },
+        ]}
+      />
+
+      <div
+        style={{
+          padding: '24px 32px 80px',
+          maxWidth: 1440,
+          margin: '0 auto',
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 16,
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <h1
+              className="display-md"
+              style={{
+                fontSize: 26,
+                fontWeight: 600,
+                margin: 0,
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Integrations
+            </h1>
+            <div
+              className="body"
+              style={{
+                fontSize: 13,
+                color: 'var(--text-tertiary)',
+                marginTop: 4,
+              }}
+            >
+              Monitor data source health, manage keys, view activity.
+            </div>
           </div>
-
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-transparent border-b border-[var(--outline-variant)]/30 rounded-none h-auto w-full justify-start gap-4 sm:gap-8 p-0 mb-10 overflow-x-auto">
-              <TabsTrigger
-                value="overview"
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[var(--primary)] data-[state=active]:text-[var(--primary)] rounded-none pb-4 font-semibold text-sm text-[var(--outline)]"
-              >
-                Overview
-              </TabsTrigger>
-              <TabsTrigger
-                value="data-sources"
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[var(--primary)] data-[state=active]:text-[var(--primary)] rounded-none pb-4 font-medium text-sm text-[var(--outline)]"
-              >
-                <Database className="h-4 w-4 mr-1" /> Data Sources
-              </TabsTrigger>
-              <TabsTrigger
-                value="api-keys"
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[var(--primary)] data-[state=active]:text-[var(--primary)] rounded-none pb-4 font-medium text-sm text-[var(--outline)]"
-              >
-                <KeyRound className="h-4 w-4 mr-1" /> API Keys
-              </TabsTrigger>
-              <TabsTrigger
-                value="activity"
-                className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[var(--primary)] data-[state=active]:text-[var(--primary)] rounded-none pb-4 font-medium text-sm text-[var(--outline)]"
-              >
-                <Activity className="h-4 w-4 mr-1" /> Activity Log
-              </TabsTrigger>
-            </TabsList>
-
-            {loading && (
-              <div className="text-[var(--on-surface-variant)] py-12 text-center">Loading…</div>
-            )}
-            {error && (
-              <div className="text-[var(--error)] py-4 font-mono text-sm">Error: {error}</div>
-            )}
-
-            <TabsContent value="overview">
-              {status && (
-                <OverviewTab status={status} onRefresh={refresh} logRefresh={logRefresh} />
-              )}
-            </TabsContent>
-            <TabsContent value="data-sources">
-              <DataSourcesTab />
-            </TabsContent>
-            <TabsContent value="api-keys">
-              <ApiKeysTab />
-            </TabsContent>
-            <TabsContent value="activity">
-              <ActivityLogTab logRefresh={logRefresh} />
-            </TabsContent>
-          </Tabs>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={refresh}
+              className="btn btn-ghost btn-sm"
+            >
+              <Icon name="refresh" size={13} /> Refresh
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm">
+              <Icon name="download" size={13} /> Export
+            </button>
+          </div>
         </div>
-      </>
+
+        {/* Tab strip */}
+        <div
+          style={{
+            display: 'flex',
+            gap: 4,
+            marginBottom: 24,
+            borderBottom: '1px solid var(--border-subtle)',
+          }}
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              style={{
+                padding: '10px 16px',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color:
+                  tab === t.id
+                    ? 'var(--text-primary)'
+                    : 'var(--text-tertiary)',
+                fontSize: 13,
+                fontWeight: tab === t.id ? 500 : 400,
+                fontFamily: 'var(--font-ui)',
+                borderBottom:
+                  '2px solid ' +
+                  (tab === t.id ? 'var(--brand-primary)' : 'transparent'),
+                marginBottom: '-1px',
+              }}
+            >
+              {t.l}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div
+            className="body"
+            style={{
+              color: 'var(--text-tertiary)',
+              padding: '48px 0',
+              textAlign: 'center',
+            }}
+          >
+            Loading…
+          </div>
+        )}
+        {error && (
+          <div
+            className="mono label-sm"
+            style={{
+              color: 'var(--signal-error)',
+              padding: '12px 0',
+              fontSize: 13,
+            }}
+          >
+            Error: {error}
+          </div>
+        )}
+
+        {!loading && !error && (
+          <>
+            {tab === 'overview' && status && (
+              <OverviewTab status={status} onRefresh={refresh} />
+            )}
+            {tab === 'sources' && <SourcesTab />}
+            {tab === 'keys' && <KeysTab />}
+            {tab === 'log' && <LogTab logRefresh={logRefresh} />}
+            {tab === 'schema' && <SchemaTab />}
+          </>
+        )}
+
+        {/* Systems Harmonized banner */}
+        <div
+          style={{
+            marginTop: 32,
+            padding: 20,
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 8,
+            background: 'var(--surface-overlay)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <StatusDot status="success" size={10} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              Systems harmonized
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                marginTop: 2,
+              }}
+            >
+              All global data sources verified against LCAPIX standards. Last
+              audit: 04:00 UTC.
+            </div>
+          </div>
+          <div
+            className="mono"
+            style={{ fontSize: 11, color: 'var(--text-tertiary)' }}
+          >
+            {fmtNum(99.94, 2)}% uptime
+          </div>
+        </div>
+      </div>
     </AuthGuard>
   );
 }
