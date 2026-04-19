@@ -426,12 +426,15 @@ export default function CaseViewPage() {
     <div
       className="app-shell"
       style={{
-        // Fill the viewport below the 56px AppTopBar; allow the page
-        // to scroll if content overflows (the right Inspector's cost
-        // fields can push past 100vh on small screens).
-        minHeight: 'calc(100vh - 56px)',
+        // Fix the editor to the viewport below the 56px AppTopBar —
+        // the page itself must NOT scroll. Each pane (left tree, center
+        // canvas, right Inspector) scrolls internally so the bottom
+        // details + right inspector stay reachable regardless of how
+        // tall the process hierarchy gets.
+        height: 'calc(100vh - 56px)',
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
       }}
     >
       <Breadcrumb
@@ -543,7 +546,8 @@ export default function CaseViewPage() {
           flex: 1,
           display: 'grid',
           gridTemplateColumns: '220px minmax(400px, 1fr) 340px',
-          minHeight: 640,
+          minHeight: 0,
+          overflow: 'hidden',
         }}
       >
         {/* Left sidebar */}
@@ -699,7 +703,7 @@ export default function CaseViewPage() {
             flexDirection: 'column',
           }}
         >
-          <div style={{ position: 'relative', flex: 1, overflow: 'auto' }}>
+          <div style={{ position: 'relative', flex: 1, overflow: 'hidden', minHeight: 0 }}>
             <div
               style={{
                 position: 'absolute',
