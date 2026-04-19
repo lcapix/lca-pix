@@ -20,6 +20,36 @@ const NAV = [
 export function ProjectShell({ children, projectName, projectId, activeSection = 'editor' }: ProjectShellProps) {
   return (
     <div className="grid md:grid-cols-[260px_1fr] min-h-[calc(100vh-64px)]">
+      {/* Mobile top rail: horizontal scroll of nav links (below md) */}
+      <div className="md:hidden border-b border-outline-variant/15 bg-surface-container-low">
+        <div className="px-4 pt-4">
+          <div className="font-bold text-base text-primary leading-tight truncate">{projectName}</div>
+          <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-on-surface-variant">
+            Active Case · v4.2
+          </div>
+        </div>
+        <nav className="flex gap-2 overflow-x-auto px-4 py-3">
+          {NAV.map((item) => {
+            const active = item.key === activeSection;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.key}
+                href={item.href(String(projectId))}
+                className={
+                  active
+                    ? 'flex items-center gap-2 px-3 py-1.5 rounded-md veridian-gradient text-on-primary font-medium shadow-sm whitespace-nowrap text-xs'
+                    : 'flex items-center gap-2 px-3 py-1.5 rounded-md border border-outline-variant/30 text-on-surface/80 hover:bg-surface-container transition-colors whitespace-nowrap text-xs'
+                }
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
       <aside className="hidden md:block border-r border-outline-variant/15 bg-surface-container-low">
         <div className="p-6">
           <div className="font-bold text-lg text-primary leading-tight">{projectName}</div>

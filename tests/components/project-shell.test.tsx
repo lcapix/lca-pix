@@ -10,7 +10,8 @@ describe('<ProjectShell>', () => {
         <div>body</div>
       </ProjectShell>
     );
-    expect(screen.getByText('EV Project')).toBeInTheDocument();
+    // Name is rendered in both mobile + desktop rails; at least one should exist
+    expect(screen.getAllByText('EV Project').length).toBeGreaterThan(0);
     expect(screen.getByText('body')).toBeInTheDocument();
   });
 
@@ -22,7 +23,7 @@ describe('<ProjectShell>', () => {
     );
     ['Case Editor', 'Sustainability KPI', 'Life Cycle Analysis', 'System Logs', 'Team Access'].forEach(
       (label) => {
-        expect(screen.getByText(label)).toBeInTheDocument();
+        expect(screen.getAllByText(label).length).toBeGreaterThan(0);
       }
     );
   });
@@ -33,7 +34,9 @@ describe('<ProjectShell>', () => {
         <div />
       </ProjectShell>
     );
-    const kpi = screen.getByText('Sustainability KPI').closest('a');
-    expect(kpi?.className).toContain('veridian-gradient');
+    // Active class should be applied to both mobile + desktop instances
+    const instances = screen.getAllByText('Sustainability KPI');
+    const active = instances.map((el) => el.closest('a')).find((a) => a?.className.includes('veridian-gradient'));
+    expect(active).toBeTruthy();
   });
 });

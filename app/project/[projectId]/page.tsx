@@ -329,7 +329,7 @@ export default function ProjectPage() {
       projectId={projectId}
       activeSection="editor"
     >
-          <div className="max-w-[1200px] mx-auto px-6 md:px-10 py-8">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 py-6 md:py-8">
             {/* Breadcrumb */}
             <nav className="font-mono text-[11px] uppercase tracking-[0.12em] text-on-surface-variant mb-4">
               <Link href="/home" className="hover:text-primary transition-colors">
@@ -342,7 +342,7 @@ export default function ProjectPage() {
             </nav>
 
             {/* Header row */}
-            <div className="flex items-start justify-between gap-6 mb-8">
+            <div className="flex flex-wrap items-start justify-between gap-4 md:gap-6 mb-8">
               <div className="flex-1 min-w-0">
                 <h1 className="text-3xl md:text-4xl font-bold text-on-surface leading-tight">
                   {project.name}
@@ -366,7 +366,7 @@ export default function ProjectPage() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2 flex-shrink-0">
+              <div className="flex flex-wrap gap-2 flex-shrink-0">
                 <Button variant="outline" size="sm" className="h-9">
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
