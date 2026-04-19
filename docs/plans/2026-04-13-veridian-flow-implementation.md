@@ -1308,13 +1308,16 @@ Pull the right inspector. Three tabs: Properties (name, material type, footprint
 
 Commit: `refactor(case): extract ComponentInspector`
 
-### Task 5.5: Rebuild the fullscreen `<ProcessHierarchyModal>`
+### Task 5.5: Rebuild the fullscreen `<ProcessHierarchyModal>` (now with stitch mockup)
+
+**Mockup:** `stitch_lcapix_design_system_prompts/process_hierarchy_fullscreen/` (code.html + screen.png).
+Shows "Hierarchy Visualizer" title, left sidebar with New Assessment CTA + Process Tree/Results/Manage/Library/System nav, central grid canvas with System Root card on top, Cell Synthesis / Enzyme Activation / Thermal Monitoring nodes in a row below (colored left borders: green/blue/amber), Substrate Loading + Buffer Injection children, Tree Topology legend card bottom-left, Export SVG button bottom-right, zoom controls on the right edge.
 
 **Files:** `components/case/process-hierarchy-modal.tsx`
 
-Fix the modal bugs from earlier review: proper backdrop, close X top-right, ESC closes, z-index above everything, no bleed-through.
+Port the mockup layout. Fix the modal bugs from earlier review: proper backdrop, close X top-right, ESC closes, z-index above everything, no bleed-through.
 
-Commit: `refactor(case): ProcessHierarchyModal with fixed z-index + close X`
+Commit: `refactor(case): ProcessHierarchyModal matching Veridian visualizer mockup`
 
 ### Task 5.6: Slim the page down to orchestrator (<500 lines)
 
@@ -1412,7 +1415,8 @@ User "proceed" → Phase 7.
 
 ## Phase 7 — Component Editor Form
 
-No specific stitch mockup. Design consistent with the overall system.
+**Mockup:** `stitch_lcapix_design_system_prompts/component_editor/` (code.html + screen.png).
+Shows "Define Component" title with 3-step card flow: Step 01 Type & Placement (segmented control Elemental/Systemic/Integrated + 2 dropdowns), Step 02 Identity & Metrics (name, description, reference unit), then a bottom row with Structural Drivers list (left) + dark Economic Profile card (right). Sticky bottom action bar: Discard / Save as Draft / Execute Commission.
 
 ### Task 7.1: Port existing form to Veridian tokens
 
@@ -1501,7 +1505,8 @@ Commit after each: `feat(admin): <tab>`
 
 ## Phase 10 — About + Guide
 
-Lower priority. Apply tokens + typography consistency. No major restructuring unless user requests.
+**Guide mockup:** `stitch_lcapix_design_system_prompts/platform_guide/` (code.html + screen.png).
+"Technical Ecosystem Guide" hero, left-sidebar table of contents (Getting Started / Data Model / Glossary), main content card with code snippet in dark card + "The Process Root" illustrated section + glossary entries (Botanical Precision / Veridian Flow / Digital Conservancy) as editorial rows. Apply same tokens + typography consistency to `/about`.
 
 ### Task 10.1: Token pass on `/about` and `/guide`
 

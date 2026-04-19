@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Signup | LCAPIX</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#410007",
+                        "on-tertiary-container": "#fffbff",
+                        "on-secondary-container": "#2e6d5f",
+                        "on-secondary": "#ffffff",
+                        "outline": "#6d7a71",
+                        "on-primary-container": "#f6fff6",
+                        "outline-variant": "#bccabf",
+                        "on-primary-fixed-variant": "#005234",
+                        "on-secondary-fixed-variant": "#065043",
+                        "inverse-on-surface": "#eff1ef",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#bf5152",
+                        "surface-bright": "#f8faf8",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "secondary": "#29695b",
+                        "surface-tint": "#006c46",
+                        "surface-container-low": "#f2f4f2",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "tertiary": "#9f393c",
+                        "inverse-primary": "#5ddda1",
+                        "surface-container": "#eceeec",
+                        "primary-fixed-dim": "#5ddda1",
+                        "on-primary": "#ffffff",
+                        "surface": "#f8faf8",
+                        "secondary-fixed": "#afefdd",
+                        "primary-container": "#008558",
+                        "surface-variant": "#e1e3e1",
+                        "on-tertiary-fixed-variant": "#832429",
+                        "surface-container-high": "#e6e9e7",
+                        "primary": "#006a44",
+                        "on-surface-variant": "#3d4a41",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#ffdad8",
+                        "on-primary-fixed": "#002112",
+                        "on-secondary-fixed": "#00201a",
+                        "primary-fixed": "#7bfabb",
+                        "on-surface": "#191c1b",
+                        "surface-dim": "#d8dad9",
+                        "surface-container-highest": "#e1e3e1",
+                        "background": "#f8faf8",
+                        "inverse-surface": "#2e3130",
+                        "secondary-container": "#acedda",
+                        "on-background": "#191c1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .botanical-shadow {
+            box-shadow: 0px 24px 48px -12px rgba(25, 28, 27, 0.06);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<main class="min-h-screen flex flex-col md:flex-row">
+<!-- Left Side: Signup Form -->
+<section class="flex-1 flex flex-col justify-center px-8 md:px-20 lg:px-32 py-12 bg-surface">
+<div class="max-w-md w-full mx-auto space-y-10">
+<!-- Brand Anchor -->
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-surface text-lg">eco</span>
+</div>
+<span class="font-headline text-2xl font-black tracking-tighter text-primary">LCAPIX</span>
+</div>
+<div class="space-y-2">
+<h1 class="text-4xl font-headline font-extrabold tracking-tight text-on-surface">Get started</h1>
+<p class="text-on-surface-variant font-body">Enter your details to join the Veridian ecosystem.</p>
+</div>
+<form class="space-y-6">
+<div class="space-y-4">
+<div class="relative">
+<label class="block font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-on-surface-variant mb-1 ml-1">Full Name</label>
+<input class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant/40 focus:border-primary focus:ring-0 transition-colors px-4 py-3 text-on-surface placeholder:text-outline" placeholder="Alex Rivera" type="text"/>
+</div>
+<div class="relative">
+<label class="block font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-on-surface-variant mb-1 ml-1">Work Email</label>
+<input class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant/40 focus:border-primary focus:ring-0 transition-colors px-4 py-3 text-on-surface placeholder:text-outline" placeholder="alex@veridian.tech" type="email"/>
+</div>
+<div class="relative">
+<label class="block font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-on-surface-variant mb-1 ml-1">Password</label>
+<input class="w-full bg-surface-container-low border-0 border-b-2 border-outline-variant/40 focus:border-primary focus:ring-0 transition-colors px-4 py-3 text-on-surface placeholder:text-outline" placeholder="••••••••" type="password"/>
+</div>
+</div>
+<button class="w-full h-12 bg-gradient-to-br from-primary to-primary-container text-surface font-semibold rounded-lg botanical-shadow hover:opacity-90 transition-opacity flex items-center justify-center gap-2" type="submit">
+<span>Create Account</span>
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+<div class="relative flex items-center py-2">
+<div class="flex-grow border-t border-outline-variant/20"></div>
+<span class="flex-shrink mx-4 font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-outline">or continue with</span>
+<div class="flex-grow border-t border-outline-variant/20"></div>
+</div>
+<button class="w-full h-12 bg-surface-container-lowest border border-outline-variant/30 text-on-surface font-medium rounded-lg flex items-center justify-center gap-3 hover:bg-surface-container-high transition-colors" type="button">
+<svg class="w-5 h-5" viewbox="0 0 24 24">
+<path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+<path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"></path>
+<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
+</svg>
+<span>Sign up with Google</span>
+</button>
+</form>
+<p class="text-center font-body text-sm text-on-surface-variant">
+                    Already have an account? 
+                    <a class="text-primary font-bold hover:underline" href="#">Sign in</a>
+</p>
+</div>
+</section>
+<!-- Right Side: Editorial Space -->
+<section class="hidden md:flex flex-1 relative overflow-hidden">
+<!-- Background Image & Gradient -->
+<div class="absolute inset-0">
+<img class="w-full h-full object-cover" data-alt="abstract close-up of a vibrant green monstera leaf with intricate patterns of light and shadow and soft sunlight filtering through" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0TCErkmPOJinU8QuRIdcveFNcHIv5JkjDh1cs_sm43jqfUJlsFUIoVV82tjJYSKW_vKDhGe3lXL0K7BNj-gRp4V5mfvrqop45cgWgLSh17yiDepJWrGzMrb5lgFoDITfnBzl01XEd0k33HrAj2zAGNfMPQmnwG5bbYfmOLpj2aF5Ac5hfD3Tk6Wf3nmpRzzPa-_dflv_H99HQsz68waGRMpJhRuUdRQdN7etSVKsgTZTBP2vYDCHth7xULn1N2zgoLiGehHgytqfi"/>
+<div class="absolute inset-0 bg-gradient-to-br from-primary/80 via-primary-container/40 to-transparent mix-blend-multiply"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-on-primary-fixed/60 to-transparent"></div>
+</div>
+<!-- Content Overlay -->
+<div class="relative z-10 w-full flex flex-col justify-end p-20">
+<div class="space-y-8 max-w-xl">
+<!-- Technical Metric Badge -->
+<div class="inline-flex items-center gap-3 px-4 py-2 bg-surface-container-lowest/10 backdrop-blur-md rounded-full border border-surface-container-lowest/20">
+<span class="material-symbols-outlined text-primary-fixed text-sm" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-['IBM_Plex_Mono'] text-[11px] uppercase tracking-[0.2em] text-surface">Technical Efficiency: 98.4%</span>
+</div>
+<!-- The Quote -->
+<blockquote class="space-y-6">
+<p class="text-5xl lg:text-6xl font-headline font-black text-surface leading-[1.1] tracking-tighter">
+                            Sustainable engineering isn't a design choice; it's a <span class="text-primary-fixed italic">mathematical imperative.</span>
+</p>
+<footer class="flex items-center gap-4">
+<div class="h-[1px] w-12 bg-primary-fixed/50"></div>
+<cite class="not-italic font-['IBM_Plex_Mono'] text-sm text-primary-fixed uppercase tracking-wider">Veridian Protocol v.4.0</cite>
+</footer></blockquote>
+</div>
+<!-- Floating Precision Element -->
+<div class="mt-16 glass-panel rounded-2xl p-6 botanical-shadow max-w-xs border border-white/10">
+<div class="flex items-center justify-between mb-4">
+<span class="font-['IBM_Plex_Mono'] text-[10px] uppercase text-on-surface-variant">Real-time Impact</span>
+<span class="material-symbols-outlined text-primary text-xl">query_stats</span>
+</div>
+<div class="space-y-3">
+<div class="flex items-end justify-between">
+<span class="text-3xl font-headline font-bold text-on-surface tracking-tighter">-14.2%</span>
+<span class="text-primary font-bold text-xs mb-1">CO2/kWh</span>
+</div>
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container w-[72%]"></div>
+</div>
+<p class="text-[11px] text-on-surface-variant leading-relaxed">
+                                Our core engine processes <span class="font-bold">2.4M nodes</span> per second to optimize your infrastructure footprint.
+                            </p>
+</div>
+</div>
+</div>
+<!-- Decorative Mesh Overlay -->
+<div class="absolute inset-0 pointer-events-none opacity-10" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 32px 32px;"></div>
+</section>
+</main>
+</body></html>

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Analytics - Veridian Eng Sustainability Suite</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-low": "#f2f4f2",
+                    "on-background": "#191c1b",
+                    "on-tertiary-fixed": "#410007",
+                    "on-surface": "#191c1b",
+                    "on-tertiary-fixed-variant": "#832429",
+                    "inverse-primary": "#5ddda1",
+                    "secondary-fixed": "#afefdd",
+                    "on-secondary-container": "#2e6d5f",
+                    "tertiary-fixed": "#ffdad8",
+                    "on-primary-fixed": "#002112",
+                    "surface-variant": "#e1e3e1",
+                    "on-primary-fixed-variant": "#005234",
+                    "secondary-fixed-dim": "#94d3c1",
+                    "primary-container": "#008558",
+                    "surface-container-high": "#e6e9e7",
+                    "surface-bright": "#f8faf8",
+                    "primary-fixed-dim": "#5ddda1",
+                    "outline": "#6d7a71",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-fixed-variant": "#065043",
+                    "tertiary": "#9f393c",
+                    "surface-tint": "#006c46",
+                    "on-error-container": "#93000a",
+                    "error-container": "#ffdad6",
+                    "primary-fixed": "#7bfabb",
+                    "on-tertiary": "#ffffff",
+                    "surface": "#f8faf8",
+                    "tertiary-container": "#bf5152",
+                    "secondary": "#29695b",
+                    "on-primary-container": "#f6fff6",
+                    "outline-variant": "#bccabf",
+                    "background": "#f8faf8",
+                    "inverse-on-surface": "#eff1ef",
+                    "on-surface-variant": "#3d4a41",
+                    "primary": "#006a44",
+                    "on-primary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "surface-dim": "#d8dad9",
+                    "on-secondary-fixed": "#00201a",
+                    "error": "#ba1a1a",
+                    "tertiary-fixed-dim": "#ffb3b1",
+                    "surface-container-highest": "#e1e3e1",
+                    "secondary-container": "#acedda",
+                    "surface-container": "#eceeec",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#fffbff",
+                    "inverse-surface": "#2e3130"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {},
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"],
+                    "mono": ["IBM Plex Mono"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'IBM Plex Mono', monospace; }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#f2f4f2] dark:bg-slate-900 shadow-[24px_0_48px_-12px_rgba(0,0,0,0.06)] flex flex-col h-full py-8 font-['Inter'] font-medium tracking-tight z-50">
+<div class="px-8 mb-12">
+<h1 class="text-lg font-bold text-[#006a44] tracking-tighter">Veridian Eng</h1>
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant/60 font-mono">Sustainability Suite</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 transition-all duration-200 hover:bg-[#ffffff]/50 dark:hover:bg-slate-800/30 scale-[0.98] active:scale-95" href="#">
+<span class="material-symbols-outlined mr-3">dashboard</span>
+<span>Overview</span>
+</a>
+<a class="flex items-center text-[#006a44] dark:text-[#00a36c] font-bold bg-[#ffffff] dark:bg-slate-800/50 rounded-l-full ml-4 pl-4 py-3 transition-all duration-200" href="#">
+<span class="material-symbols-outlined mr-3">account_tree</span>
+<span>Projects</span>
+</a>
+<a class="flex items-center text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 transition-all duration-200 hover:bg-[#ffffff]/50 dark:hover:bg-slate-800/30 scale-[0.98] active:scale-95" href="#">
+<span class="material-symbols-outlined mr-3">eco</span>
+<span>Lifecycle Analysis</span>
+</a>
+<a class="flex items-center text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 transition-all duration-200 hover:bg-[#ffffff]/50 dark:hover:bg-slate-800/30 scale-[0.98] active:scale-95" href="#">
+<span class="material-symbols-outlined mr-3">analytics</span>
+<span>Impact Reports</span>
+</a>
+<div class="pt-8 mt-8 border-t border-outline-variant/10">
+<a class="flex items-center text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 transition-all duration-200 hover:bg-[#ffffff]/50 dark:hover:bg-slate-800/30 scale-[0.98] active:scale-95" href="#">
+<span class="material-symbols-outlined mr-3">settings</span>
+<span>Settings</span>
+</a>
+</div>
+</nav>
+<div class="px-8 mt-auto flex items-center gap-3">
+<img alt="Organization Logo" class="w-8 h-8 rounded-full bg-surface-container-high" data-alt="clean minimalist logo of a sustainable engineering firm with a stylized green leaf inside a geometric circle" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWc5xyyW70quhUebDiwg1-MFwMGJNOa2gex7iM-AsVnfNKYV8L8BBy4P9CN7OCOvXdqJEb8ue3ARcPwza0bPm8JyF0eTHBXgAW6U4dA_17tlxwBGpVOVTSvPWsc5zn8OovUkN0vYTlO1WI-eNfy3-5CDNeu0PIYML-RWPC8t2kV8HgWJxDolZIXbxnntayua7uMknEp9IpkS4Jhs7kF1rTeJ3cCztEjho3rqZK_VgeN-VM2L_aKrBeJus1VS09k-uVNRG0T_yKVmlt"/>
+<div class="overflow-hidden">
+<p class="text-xs font-bold truncate text-on-surface">Veridian Eng</p>
+<p class="text-[10px] text-on-surface-variant/70 truncate">Admin Account</p>
+</div>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 h-20 z-40 bg-[#f8faf8]/80 dark:bg-slate-950/80 backdrop-blur-xl flex items-center justify-between px-12 h-full">
+<div class="flex items-center gap-8 h-full">
+<h2 class="display-lg font-['Inter'] text-2xl tracking-tighter text-on-surface font-extrabold">Project Detail</h2>
+<nav class="flex gap-6 h-full items-center translate-y-1">
+<a class="text-slate-500 dark:text-slate-400 pb-2 font-['IBM_Plex_Mono'] text-sm hover:text-[#006a44] transition-colors" href="#">Process View</a>
+<a class="text-[#006a44] dark:text-[#00a36c] border-b-2 border-[#006a44] dark:border-[#00a36c] pb-2 font-['IBM_Plex_Mono'] text-sm active:opacity-80 transition-opacity" href="#">Impact Analytics</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-on-surface-variant">
+<button class="material-symbols-outlined hover:text-primary transition-colors">notifications</button>
+<button class="material-symbols-outlined hover:text-primary transition-colors">help_outline</button>
+</div>
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-5 py-2.5 rounded-md text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] active:scale-95 transition-transform">
+                Export Data
+            </button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="ml-64 pt-20 p-12 min-h-screen bg-surface">
+<!-- Header Section with Asymmetric Layout -->
+<div class="grid grid-cols-12 gap-12 items-end mb-16">
+<div class="col-span-8">
+<span class="font-mono text-sm text-primary tracking-wider uppercase mb-2 block">Sustainability Assessment 2024</span>
+<h3 class="text-5xl font-extrabold tracking-tighter text-on-surface mb-4 leading-none">Net-Positive Carbon <br/>Structural Analysis</h3>
+<p class="text-on-surface-variant max-w-xl text-lg leading-relaxed">Detailed environmental impact metrics for Project Veridian Alpha, calculated using ISO 14044 lifecycle standards and cradle-to-gate boundaries.</p>
+</div>
+<div class="col-span-4 flex justify-end">
+<div class="bg-surface-container-low p-8 rounded-2xl w-full">
+<span class="font-mono text-xs text-on-surface-variant mb-1 block">CONFIDENCE SCORE</span>
+<div class="flex items-center gap-2">
+<span class="text-3xl font-mono font-bold text-primary">98.4%</span>
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Total Impact KPI - Featured Glass Card -->
+<div class="col-span-12 lg:col-span-5 relative group">
+<div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary-container/20 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+<div class="relative glass-panel bg-surface-container-lowest p-10 rounded-3xl h-full flex flex-col justify-between">
+<div>
+<div class="flex items-center gap-3 mb-6">
+<div class="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<span class="font-mono text-sm font-semibold text-secondary uppercase tracking-widest">Total Carbon Footprint</span>
+</div>
+<h4 class="text-[7rem] font-extrabold tracking-tighter leading-none text-on-surface font-headline -ml-2">
+                            12.8<span class="text-4xl text-on-surface-variant/40 ml-4">MT</span>
+</h4>
+<div class="mt-8 inline-flex items-center gap-2 px-4 py-2 bg-primary-fixed/20 text-on-primary-fixed-variant rounded-full text-sm font-bold">
+<span class="material-symbols-outlined text-sm">trending_down</span>
+<span>14% Reduction vs. Baseline</span>
+</div>
+</div>
+<div class="mt-12">
+<p class="text-sm text-on-surface-variant font-medium leading-relaxed">Equivalent to avoiding <span class="font-mono font-bold text-on-surface">34,200</span> flight hours or sequestering carbon from <span class="font-mono font-bold text-on-surface">1.2k</span> hectares of old-growth forest.</p>
+</div>
+</div>
+</div>
+<!-- Category Breakdown - Horizontal Bar Chart -->
+<div class="col-span-12 lg:col-span-7 bg-surface-container-low p-10 rounded-3xl">
+<div class="flex justify-between items-center mb-10">
+<h5 class="text-xl font-bold tracking-tight">Environmental Impact Categories</h5>
+<button class="text-primary font-mono text-xs font-bold hover:underline">VIEW FULL REPORT</button>
+</div>
+<div class="space-y-8">
+<!-- Global Warming -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<span class="text-sm font-semibold text-on-surface">Global Warming Potential</span>
+<span class="font-mono text-sm font-bold text-primary">8.4 kg CO₂ eq</span>
+</div>
+<div class="h-3 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full" style="width: 72%"></div>
+</div>
+</div>
+<!-- Ozone Depletion -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<span class="text-sm font-semibold text-on-surface">Ozone Depletion Potential</span>
+<span class="font-mono text-sm font-bold text-primary">0.12 mg CFC-11</span>
+</div>
+<div class="h-3 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full" style="width: 34%"></div>
+</div>
+</div>
+<!-- Acidification -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<span class="text-sm font-semibold text-on-surface">Acidification Potential</span>
+<span class="font-mono text-sm font-bold text-primary">2.1 mol H+ eq</span>
+</div>
+<div class="h-3 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full" style="width: 58%"></div>
+</div>
+</div>
+<!-- Eutrophication -->
+<div class="space-y-3">
+<div class="flex justify-between items-end">
+<span class="text-sm font-semibold text-on-surface">Freshwater Eutrophication</span>
+<span class="font-mono text-sm font-bold text-primary">0.85 kg P eq</span>
+</div>
+<div class="h-3 w-full bg-surface-container-high rounded-full overflow-hidden">
+<div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full" style="width: 45%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Top Contributors - Table/List -->
+<div class="col-span-12 bg-surface-container-lowest p-10 rounded-3xl">
+<div class="mb-10 flex items-center justify-between">
+<div>
+<h5 class="text-2xl font-bold tracking-tight mb-2">Resource Contributors</h5>
+<p class="text-on-surface-variant text-sm">Identifying the highest impact materials and processes in the lifecycle.</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-low px-4 py-2 rounded-full font-mono text-xs font-bold hover:bg-surface-container-high transition-colors">BY MASS</button>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-full font-mono text-xs font-bold">BY IMPACT</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-1">
+<!-- Contributor 1 -->
+<div class="flex items-center py-6 border-b border-outline-variant/10 group hover:bg-surface-container-low/50 px-4 -mx-4 transition-colors">
+<div class="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center mr-6 overflow-hidden">
+<img alt="Structural Steel" class="w-full h-full object-cover" data-alt="industrial close up of heavy structural steel beams stacked in a construction warehouse with dramatic lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgwssKpvD-Q_q6HjgH4ZKbEKPz--ed8DZlG8JzjGNG005ePKNcHXMwJdHq46N7QawKs7gDNMosZ9YAVCqTjz-qODJNDsLgogkLO6UaNc_zd61fYT5dPzK-Lv05P3dlkrCuRYCwLDB_LYG3Xs9lnjA85PIA5vOqLXAY1oEF7m8WGMLgvrJYjXji6J3_VZrS1p2eO2FuX4swo0dvMiD8HMzyzaHIjjCW3oqKbwUG0_0wSQEcsQtlSA5mzxw7ZZjVCT6vI5zzPq5AzAfn"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-2">
+<span class="font-bold text-on-surface uppercase tracking-tighter text-sm">Structural Steel (Recycled)</span>
+<span class="font-mono text-sm font-bold text-primary">42%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full">
+<div class="h-full bg-primary rounded-full" style="width: 42%"></div>
+</div>
+</div>
+</div>
+<!-- Contributor 2 -->
+<div class="flex items-center py-6 border-b border-outline-variant/10 group hover:bg-surface-container-low/50 px-4 -mx-4 transition-colors">
+<div class="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center mr-6 overflow-hidden">
+<img alt="Concrete" class="w-full h-full object-cover" data-alt="texture shot of raw architectural concrete with subtle patterns and industrial aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOQJH-zAQU2Vl5R8jwhe6MhGGXZkKQE3LDCzu9EkGRD9qEgk_XcY943FILlq8PGP7yqzcLa2WzViYqEgrfXdkrgkO7ekvbaNGIuatcP9Mp8iRKYl2tsyTV6xKrIEBlFd4fFqNCwNVaGhPm-v3LfOmXUyLR8dVn5UJ1Ael9SqNUK1yfrQLdb3qchCgqwm-oQEgj_J1yJCHi6kdVHx9_DOJpgSqMX3iIvzi5_twuAKUT_mZwKA-4YG2RxKnWy-Z4WW2WTHx_Za0_gXOF"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-2">
+<span class="font-bold text-on-surface uppercase tracking-tighter text-sm">Low-Carbon Concrete (CEM III)</span>
+<span class="font-mono text-sm font-bold text-primary">28%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full">
+<div class="h-full bg-primary rounded-full" style="width: 28%"></div>
+</div>
+</div>
+</div>
+<!-- Contributor 3 -->
+<div class="flex items-center py-6 border-b border-outline-variant/10 group hover:bg-surface-container-low/50 px-4 -mx-4 transition-colors">
+<div class="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center mr-6 overflow-hidden">
+<img alt="Logistics" class="w-full h-full object-cover" data-alt="modern electric cargo truck driving through a green coastal highway during sunrise" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2S42sd8r-x9pp43rummNCKMnT1T6LbGk8JpkAvozSyN7Awg26-tB9D_zZlBflIu3V2Yz8p0Zn1rSb1Ky-waL4yODJAfEY1Vi8wk_bCHCE8Jazf-Statyv57_T1Hu4ZDeXMvhHaIoRvfVMSS5e1tVlQ67hmW3PEarDgaZonlc4qgHS2hVxAfRzj6tJtvz5dUtPqs-eFBpLsMMYsyl-lN0XnAIGPbJNuXfxNLholVPKgCL9A1WRRRmnpH6MZa8BX2h5QeyQLpqoQQmp"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-2">
+<span class="font-bold text-on-surface uppercase tracking-tighter text-sm">Regional Logistics &amp; Haulage</span>
+<span class="font-mono text-sm font-bold text-primary">15%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full">
+<div class="h-full bg-primary rounded-full" style="width: 15%"></div>
+</div>
+</div>
+</div>
+<!-- Contributor 4 -->
+<div class="flex items-center py-6 border-b border-outline-variant/10 group hover:bg-surface-container-low/50 px-4 -mx-4 transition-colors">
+<div class="w-12 h-12 bg-surface-container-high rounded-xl flex items-center justify-center mr-6 overflow-hidden">
+<img alt="Timber" class="w-full h-full object-cover" data-alt="sustainably sourced light oak wood planks with clean grain lines in a modern workshop" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGVs2W-41bd_mmbNpuvIBDI_IlRXtbMGGE9vzYagKi8X2bkpcWciX6vFFm8Ad8sVBxC3qglyOlT560HwwKuSxBmWWnFODJOdXAJGleP8yAQeo7-zDUnG9VYiDwc8KtmiaeoTBLTbu1uZsQOCW4BojTPb1XqCRt9umTel3FZk0DJ8cerGOI9Fv9ucIQAU3YkoluTn7mY1BO29BduDnJOo9dkTZyOo9qcfyOTrRBroo1qwilS_JJYcKk0HPwyaHiNXJVH_MmDs_Iq027"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-2">
+<span class="font-bold text-on-surface uppercase tracking-tighter text-sm">CLT Wood Panels (Sequestration)</span>
+<span class="font-mono text-sm font-bold text-primary">-5%</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-high rounded-full relative">
+<div class="absolute right-full h-full bg-secondary-container rounded-full" style="width: 15%; right: 100%;"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Insights -->
+<div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+<div class="p-8 bg-surface-container-low rounded-3xl">
+<span class="material-symbols-outlined text-primary mb-4 block">bolt</span>
+<h6 class="font-bold mb-2">Operational Energy</h6>
+<p class="text-sm text-on-surface-variant font-mono">245 kWh/m² per annum predicted across the lifecycle.</p>
+</div>
+<div class="p-8 bg-surface-container-low rounded-3xl">
+<span class="material-symbols-outlined text-primary mb-4 block">water_drop</span>
+<h6 class="font-bold mb-2">Water Scarcity</h6>
+<p class="text-sm text-on-surface-variant font-mono">1.4k m³ total freshwater consumption from production.</p>
+</div>
+<div class="p-8 bg-surface-container-low rounded-3xl">
+<span class="material-symbols-outlined text-primary mb-4 block">recycling</span>
+<h6 class="font-bold mb-2">End of Life Recovery</h6>
+<p class="text-sm text-on-surface-variant font-mono">89.2% recyclable material content identified.</p>
+</div>
+</div>
+</main>
+<!-- Contextual Success Glow (Veridian Light) -->
+<div class="fixed bottom-0 right-0 w-[500px] h-[500px] pointer-events-none opacity-20 -z-10 translate-x-1/2 translate-y-1/2" style="background: radial-gradient(circle, #7bfabb 0%, transparent 70%);"></div>
+</body></html>

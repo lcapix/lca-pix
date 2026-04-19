@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-surface": "#191c1b",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#00201a",
+                        "primary-container": "#008558",
+                        "on-tertiary-container": "#fffbff",
+                        "on-background": "#191c1b",
+                        "surface-variant": "#e1e3e1",
+                        "on-secondary-container": "#2e6d5f",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "secondary-container": "#acedda",
+                        "surface-container-low": "#f2f4f2",
+                        "error-container": "#ffdad6",
+                        "surface-container": "#eceeec",
+                        "surface": "#f8faf8",
+                        "on-primary-container": "#f6fff6",
+                        "inverse-primary": "#5ddda1",
+                        "primary": "#006a44",
+                        "on-secondary-fixed-variant": "#065043",
+                        "surface-container-highest": "#e1e3e1",
+                        "on-tertiary-fixed": "#410007",
+                        "on-error": "#ffffff",
+                        "outline-variant": "#bccabf",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#7bfabb",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "on-surface-variant": "#3d4a41",
+                        "on-tertiary-fixed-variant": "#832429",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f8faf8",
+                        "background": "#f8faf8",
+                        "surface-tint": "#006c46",
+                        "tertiary-fixed": "#ffdad8",
+                        "outline": "#6d7a71",
+                        "primary-fixed-dim": "#5ddda1",
+                        "inverse-surface": "#2e3130",
+                        "inverse-on-surface": "#eff1ef",
+                        "surface-dim": "#d8dad9",
+                        "tertiary": "#9f393c",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed": "#002112",
+                        "on-error-container": "#93000a",
+                        "on-tertiary": "#ffffff",
+                        "secondary": "#29695b",
+                        "surface-container-high": "#e6e9e7",
+                        "secondary-fixed": "#afefdd",
+                        "tertiary-container": "#bf5152",
+                        "on-primary-fixed-variant": "#005234"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["IBM Plex Mono"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+        }
+        .veridian-gradient {
+            background: linear-gradient(135deg, #006a44 0%, #008558 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<div class="flex min-h-screen">
+<!-- SideNavBar from JSON -->
+<aside class="flex-none border-r border-transparent h-screen w-64 flex flex-col sticky top-0 left-0 bg-[#f2f4f2] dark:bg-[#1c211e]">
+<div class="p-8">
+<div class="flex items-center gap-3 mb-10">
+<div class="w-10 h-10 veridian-gradient rounded-lg flex items-center justify-center text-white">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<div>
+<h1 class="font-['IBM_Plex_Mono'] font-bold text-[#006a44] text-lg leading-tight">Project Veridian</h1>
+<p class="text-[10px] font-['IBM_Plex_Mono'] text-outline uppercase tracking-widest">Case v4.2 Active</p>
+</div>
+</div>
+<nav class="space-y-1">
+<div class="text-[#404944] dark:text-[#bfcabf] hover:bg-[#e6e9e7] dark:hover:bg-[#2d3531] cursor-pointer flex items-center gap-3 p-3 mx-0 my-1 rounded-lg hover:translate-x-1 transition-transform duration-200 font-['Inter'] font-medium text-sm">
+<span class="material-symbols-outlined">account_tree</span>
+                        Case Editor
+                    </div>
+<div class="text-[#404944] dark:text-[#bfcabf] hover:bg-[#e6e9e7] dark:hover:bg-[#2d3531] cursor-pointer flex items-center gap-3 p-3 mx-0 my-1 rounded-lg hover:translate-x-1 transition-transform duration-200 font-['Inter'] font-medium text-sm">
+<span class="material-symbols-outlined">analytics</span>
+                        Sustainability KPI
+                    </div>
+<div class="text-[#404944] dark:text-[#bfcabf] hover:bg-[#e6e9e7] dark:hover:bg-[#2d3531] cursor-pointer flex items-center gap-3 p-3 mx-0 my-1 rounded-lg hover:translate-x-1 transition-transform duration-200 font-['Inter'] font-medium text-sm">
+<span class="material-symbols-outlined">eco</span>
+                        Life Cycle Analysis
+                    </div>
+<div class="text-[#404944] dark:text-[#bfcabf] hover:bg-[#e6e9e7] dark:hover:bg-[#2d3531] cursor-pointer flex items-center gap-3 p-3 mx-0 my-1 rounded-lg hover:translate-x-1 transition-transform duration-200 font-['Inter'] font-medium text-sm">
+<span class="material-symbols-outlined">terminal</span>
+                        System Logs
+                    </div>
+<div class="text-[#404944] dark:text-[#bfcabf] hover:bg-[#e6e9e7] dark:hover:bg-[#2d3531] cursor-pointer flex items-center gap-3 p-3 mx-0 my-1 rounded-lg hover:translate-x-1 transition-transform duration-200 font-['Inter'] font-medium text-sm">
+<span class="material-symbols-outlined">group</span>
+                        Team Access
+                    </div>
+</nav>
+</div>
+<div class="mt-auto p-8">
+<button class="w-full veridian-gradient text-white font-medium py-3 rounded-xl shadow-sm hover:opacity-90 transition-opacity mb-6">
+                    New Assessment
+                </button>
+<div class="text-[#404944] dark:text-[#bfcabf] hover:bg-[#e6e9e7] dark:hover:bg-[#2d3531] cursor-pointer flex items-center gap-3 p-3 mx-0 rounded-lg hover:translate-x-1 transition-transform duration-200 font-['Inter'] font-medium text-sm">
+<span class="material-symbols-outlined">menu_book</span>
+                    Documentation
+                </div>
+</div>
+</aside>
+<main class="flex-1 min-w-0 bg-surface">
+<!-- TopAppBar from JSON -->
+<header class="bg-[#f8faf8]/80 dark:bg-[#191c1b]/80 backdrop-blur-xl shadow-[0_24px_48px_-12px_rgba(25,28,27,0.06)] flex justify-between items-center px-8 h-16 w-full sticky top-0 z-50">
+<div class="flex items-center gap-12">
+<div class="text-xl font-bold text-[#006a44] dark:text-[#7bfabb] font-['Inter'] tracking-tight">Veridian Engineering</div>
+<nav class="flex gap-8">
+<a class="text-[#404944] dark:text-[#bfcabf] font-['IBM_Plex_Mono'] text-xs uppercase hover:text-[#008558] transition-colors duration-300" href="#">Projects</a>
+<a class="text-[#404944] dark:text-[#bfcabf] font-['IBM_Plex_Mono'] text-xs uppercase hover:text-[#008558] transition-colors duration-300" href="#">Assessments</a>
+<a class="text-[#006a44] dark:text-[#7bfabb] font-semibold border-b-2 border-[#006a44] font-['IBM_Plex_Mono'] text-xs uppercase" href="#">Integrations</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">notifications</span>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">help</span>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors">settings</span>
+</div>
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant/20">
+<img class="w-full h-full object-cover" data-alt="Professional headshot of a male engineer in a well-lit office environment with soft focus greenery in the background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMOCDfPAyIDRkjwuz8uWyaLiQv1QiGDvHxw_gZT04jHhj9OO3wm-MxB_HRa0ihrAMzB1h76L38DW1F9n93zscj7TiqLtrmyx7A6LHqEFjoEGGdpalL6gWaQ8hd2XBoGNw0r_0Pr0Bc-WJpHfi0QvmFXF6ZTXk6grMoybu7aNl2XX3FJ2CM_m0VnzCix55hzGW9cXmU_rRBcKqLgYFZFCmAk8b_qF02XJuV1TDYn9ooTGVvGOu_3ufAmEXz-Wpmanp2JYkuwnNPu38o"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-12 max-w-7xl mx-auto">
+<!-- Editorial Header -->
+<div class="mb-12">
+<h2 class="text-[3.5rem] font-headline font-extrabold tracking-tighter text-primary leading-tight mb-2">Integrations.</h2>
+<p class="text-on-surface-variant max-w-xl font-body leading-relaxed">
+                        Orchestrate the flow of environmental metadata across your LCAPIX infrastructure. Managed endpoints for substances, methodologies, and technical cost rates.
+                    </p>
+</div>
+<!-- Sub-Navigation (Task Focus) -->
+<div class="flex gap-12 mb-12 border-b border-outline-variant/20">
+<button class="pb-4 border-b-2 border-primary text-primary font-semibold text-sm">Overview</button>
+<button class="pb-4 border-b-2 border-transparent text-outline hover:text-on-surface transition-colors font-medium text-sm">Data Sources</button>
+<button class="pb-4 border-b-2 border-transparent text-outline hover:text-on-surface transition-colors font-medium text-sm">API Keys</button>
+<button class="pb-4 border-b-2 border-transparent text-outline hover:text-on-surface transition-colors font-medium text-sm">Activity Log</button>
+</div>
+<!-- Bento Grid: Status Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+<!-- Substance Status -->
+<div class="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-8">
+<span class="material-symbols-outlined text-primary text-3xl">science</span>
+<span class="font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-outline">Real-time</span>
+</div>
+<h3 class="text-sm font-semibold mb-1">Substances</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">14,802</span>
+<span class="font-['IBM_Plex_Mono'] text-xs text-secondary-container bg-on-secondary-container px-2 py-0.5 rounded-full">LIVE</span>
+</div>
+</div>
+<div class="mt-8 pt-8 border-t border-outline-variant/10">
+<p class="font-['IBM_Plex_Mono'] text-[10px] text-on-surface-variant">SYNCED: 2m ago</p>
+</div>
+</div>
+<!-- Methods Status -->
+<div class="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-8">
+<span class="material-symbols-outlined text-primary text-3xl">architecture</span>
+<span class="font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-outline">Verified</span>
+</div>
+<h3 class="text-sm font-semibold mb-1">Methodologies</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">42</span>
+<span class="font-['IBM_Plex_Mono'] text-xs text-primary-fixed bg-on-primary-fixed-variant px-2 py-0.5 rounded-full">+3 NEW</span>
+</div>
+</div>
+<div class="mt-8 pt-8 border-t border-outline-variant/10">
+<p class="font-['IBM_Plex_Mono'] text-[10px] text-on-surface-variant">LATEST: ReCiPe 2016 v1.1</p>
+</div>
+</div>
+<!-- Cost Rates -->
+<div class="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-8">
+<span class="material-symbols-outlined text-primary text-3xl">payments</span>
+<span class="font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-outline">Dynamic</span>
+</div>
+<h3 class="text-sm font-semibold mb-1">Cost Rates</h3>
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-headline font-bold">$1.2M</span>
+<span class="font-['IBM_Plex_Mono'] text-xs text-on-secondary-container bg-secondary-container px-2 py-0.5 rounded-full">AUDITED</span>
+</div>
+</div>
+<div class="mt-8 pt-8 border-t border-outline-variant/10">
+<p class="font-['IBM_Plex_Mono'] text-[10px] text-on-surface-variant">GLOBAL AVERAGE: 0.94% DELTA</p>
+</div>
+</div>
+</div>
+<!-- Main Content: Integration Health -->
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<h4 class="font-headline font-bold text-xl">Operational Connections</h4>
+<div class="flex gap-2">
+<button class="px-4 py-2 bg-surface-container-high rounded-lg text-xs font-['IBM_Plex_Mono'] font-medium">FILTER: ACTIVE</button>
+<button class="px-4 py-2 bg-surface-container-high rounded-lg text-xs font-['IBM_Plex_Mono'] font-medium">EXPORT CSV</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-[0_24px_48px_-12px_rgba(25,28,27,0.04)]">
+<table class="w-full border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-left">
+<th class="px-8 py-4 font-['IBM_Plex_Mono'] text-[10px] font-semibold text-outline uppercase tracking-wider">Service Node</th>
+<th class="px-8 py-4 font-['IBM_Plex_Mono'] text-[10px] font-semibold text-outline uppercase tracking-wider">Health</th>
+<th class="px-8 py-4 font-['IBM_Plex_Mono'] text-[10px] font-semibold text-outline uppercase tracking-wider">Latency</th>
+<th class="px-8 py-4 font-['IBM_Plex_Mono'] text-[10px] font-semibold text-outline uppercase tracking-wider">Uptime</th>
+<th class="px-8 py-4 font-['IBM_Plex_Mono'] text-[10px] font-semibold text-outline uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- openLCA -->
+<tr class="hover:bg-surface transition-colors group">
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#e1e3e1] flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Abstract geometric minimal icon representing software architecture and data nodes in emerald and gray tones" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAk9Ivz6tJexRCYRRQah8gPEquL-x-QPMl7qp8PmSk1PgUGrMBLynefuHeoWFCGOJKjz09GknOGAvCBF12TrN66u1LPqslFR03yAjbkJeSFdfYzNItR2S7X7zul07pDEER90eArkxOO6xZaQAiGl8LJLr2zb45ujoNwBgk1dbzuLuoY6pq-GSi75Z3CcTiENfOGVzH0bAMz-bhbh8BVOnCaDKJWXmV6RdXLXexiEG733HGnzmjMEIhwCzUF2_q1CTlZdCbu-gWuBvws"/>
+</div>
+<div>
+<div class="font-semibold text-sm">openLCA Professional</div>
+<div class="text-[10px] font-['IBM_Plex_Mono'] text-outline">v2.1.0-api</div>
+</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<div class="h-2 w-2 rounded-full bg-[#008558]"></div>
+<span class="text-sm font-medium">Healthy</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm">48ms</span>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm">99.98%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="material-symbols-outlined text-outline hover:text-primary">more_vert</button>
+</td>
+</tr>
+<!-- PubChem -->
+<tr class="hover:bg-surface transition-colors group">
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#e1e3e1] flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Microscopic crystalline structure with sharp edges and soft light reflecting off surfaces, scientific aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBK5aQjZokYSUjyI9gZHt3rmbJjpbSKL9lVaMgGTPeUcNTz5lxyvkbgfMvbHn4Gwqx7837Dn2tCYfCaOqRVOkJQA0qMkCakBl5aT1quVWQNNh9rLTzbY17z0eR5aUhzOAeJxFSCL97L-orCXThQSZcr1uEu0DRG8BVdEW-_E1DWbF5viHEfsgEaB4CwVKCXBh6pSsDU08ppcCVBg1zfQHzaPuDEA8vgGkKzv18knmZWTlFrrTMw2cCoPel40ODNdTNPx_R2qeCUvcSF"/>
+</div>
+<div>
+<div class="font-semibold text-sm">PubChem Substance Registry</div>
+<div class="text-[10px] font-['IBM_Plex_Mono'] text-outline">REST API V2</div>
+</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<div class="h-2 w-2 rounded-full bg-[#eab308]"></div>
+<span class="text-sm font-medium">Degraded</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm text-tertiary">1,240ms</span>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm">94.20%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="material-symbols-outlined text-outline hover:text-primary">more_vert</button>
+</td>
+</tr>
+<!-- Ecoinvent -->
+<tr class="hover:bg-surface transition-colors group">
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#e1e3e1] flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Aerial view of mist-covered green hills at twilight, moody and atmospheric botanical perspective" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCNJEyigs6MPncrFLjudYEpyg-MJ8CsvXPHckJYQryDVby-o_TzEI0LD1VCR3qONHN2QesTcg-23bY2A5sHZSwlY78HxoqkQ7weHKdSskyXdQNsC9AHJQge_glUvjv7NSIIkSLeXFmNOrDos8c8pnmCXMzyuwZTgPwq2iqwx01WuCqHawVYVUQsUBt4agnIGZIPP3Z5wWZEP1rA5CTS7uZniPgSIAxV5D6PDLULY6DW_SPHddcke1We7TA_s-cc2iBCnZtP_C1brhz"/>
+</div>
+<div>
+<div class="font-semibold text-sm">Ecoinvent Data v3.10</div>
+<div class="text-[10px] font-['IBM_Plex_Mono'] text-outline">GraphQL Gateway</div>
+</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<div class="h-2 w-2 rounded-full bg-[#008558]"></div>
+<span class="text-sm font-medium">Healthy</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm">12ms</span>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm">100%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="material-symbols-outlined text-outline hover:text-primary">more_vert</button>
+</td>
+</tr>
+<!-- GaBi Cloud -->
+<tr class="hover:bg-surface transition-colors group">
+<td class="px-8 py-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-[#e1e3e1] flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Dark aesthetic close-up of computer code and digital matrix on a dark screen with green highlights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0eTU6GF6al21ZKnsPUvn28pY_BVWEGbgqJS5yAnXbN55ZLrQYbBB4HPYVdDeRc44z-8Qh6TohjfHdi-0nx_60xtqsgwhOqGjq-JT4DzBPqdPtPoBLra75SBBRwDEY46DhhAwA5jagfp7lSg8opXn86xILYA7FE1AxSO4dAuU4aQaG8ELep70rsdzU-JcLtMuFLlLtHmYAR_q9I-QSXHCFL7bRUI_xWQHYM3whZfvpvTr6Hap52y5D2a9zscgzb5dfCSxYS53gSap6"/>
+</div>
+<div>
+<div class="font-semibold text-sm">GaBi Cloud Services</div>
+<div class="text-[10px] font-['IBM_Plex_Mono'] text-outline">OAuth2 / WS</div>
+</div>
+</div>
+</td>
+<td class="px-8 py-6">
+<div class="flex items-center gap-2">
+<div class="h-2 w-2 rounded-full bg-[#ef4444]"></div>
+<span class="text-sm font-medium">Critical</span>
+</div>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm text-error">TIMEOUT</span>
+</td>
+<td class="px-8 py-6">
+<span class="font-['IBM_Plex_Mono'] text-sm text-error">82.11%</span>
+</td>
+<td class="px-8 py-6 text-right">
+<button class="material-symbols-outlined text-outline hover:text-primary">more_vert</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Veridian Flow Signature Detail -->
+<div class="mt-16 flex items-center justify-center p-12 relative overflow-hidden rounded-3xl bg-surface-container-low">
+<div class="absolute inset-0 bg-gradient-to-br from-primary-fixed/20 to-transparent blur-3xl opacity-30"></div>
+<div class="relative z-10 flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg mb-4">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<h5 class="text-xl font-headline font-bold mb-2">Systems Harmonized</h5>
+<p class="text-sm text-on-surface-variant max-w-sm">All 14 global data sources are verified against LCAPIX Botanical Standards. Last audit completed successfully at 04:00 UTC.</p>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

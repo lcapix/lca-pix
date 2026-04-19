@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LCAPIX | Precision Botanical Data Systems</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#eff1ef",
+                        "surface-container-highest": "#e1e3e1",
+                        "surface-variant": "#e1e3e1",
+                        "on-tertiary-fixed-variant": "#832429",
+                        "primary-fixed-dim": "#5ddda1",
+                        "tertiary-container": "#bf5152",
+                        "on-secondary-container": "#2e6d5f",
+                        "outline-variant": "#bccabf",
+                        "on-secondary-fixed": "#00201a",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#f8faf8",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "tertiary-fixed": "#ffdad8",
+                        "on-primary-fixed-variant": "#005234",
+                        "on-primary-fixed": "#002112",
+                        "outline": "#6d7a71",
+                        "on-primary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#008558",
+                        "on-primary-container": "#f6fff6",
+                        "on-tertiary-fixed": "#410007",
+                        "surface-container-high": "#e6e9e7",
+                        "on-background": "#191c1b",
+                        "surface-bright": "#f8faf8",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "inverse-primary": "#5ddda1",
+                        "primary-fixed": "#7bfabb",
+                        "primary": "#006a44",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "surface-dim": "#d8dad9",
+                        "secondary-fixed": "#afefdd",
+                        "tertiary": "#9f393c",
+                        "on-secondary-fixed-variant": "#065043",
+                        "surface-container": "#eceeec",
+                        "surface-container-low": "#f2f4f2",
+                        "on-surface": "#191c1b",
+                        "on-surface-variant": "#3d4a41",
+                        "inverse-surface": "#2e3130",
+                        "secondary": "#29695b",
+                        "error": "#ba1a1a",
+                        "secondary-container": "#acedda",
+                        "on-secondary": "#ffffff",
+                        "surface": "#f8faf8",
+                        "on-error": "#ffffff",
+                        "surface-tint": "#006c46",
+                        "on-tertiary-container": "#fffbff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["IBM Plex Mono"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .veridian-gradient {
+            background: linear-gradient(135deg, #006a44 0%, #008558 100%);
+        }
+        .hero-glow {
+            box-shadow: 0 0 80px -10px rgba(93, 221, 161, 0.2);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(24px);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopAppBar -->
+<header class="sticky top-0 w-full z-50 bg-[#f8faf8]/80 backdrop-blur-[24px] shadow-[0_24px_48px_-12px_rgba(25,28,27,0.06)]">
+<nav class="flex justify-between items-center px-12 py-6 w-full max-w-[1440px] mx-auto">
+<div class="text-2xl font-bold tracking-tighter text-[#006a44]">LCAPIX</div>
+<div class="hidden md:flex items-center gap-10 font-['Inter'] tracking-[-0.02em] font-medium">
+<a class="text-[#006a44] font-semibold border-b-2 border-[#006a44] transition-colors duration-300" href="#">Platform</a>
+<a class="text-[#191c1b]/70 hover:text-[#006a44] transition-colors duration-300" href="#">Solutions</a>
+<a class="text-[#191c1b]/70 hover:text-[#006a44] transition-colors duration-300" href="#">Developers</a>
+<a class="text-[#191c1b]/70 hover:text-[#006a44] transition-colors duration-300" href="#">Pricing</a>
+</div>
+<div class="flex items-center gap-6">
+<button class="font-['Inter'] font-medium text-[#191c1b]/70 hover:text-[#006a44] transition-colors">Log In</button>
+<button class="veridian-gradient text-white px-6 py-2.5 rounded-lg font-medium shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] scale-95 active:scale-90 transition-transform">Get Started</button>
+</div>
+</nav>
+</header>
+<main>
+<!-- Hero Section -->
+<section class="relative pt-24 pb-32 overflow-hidden bg-gradient-to-b from-[#f8faf8] via-[#f2f8f5] to-background">
+<div class="max-w-[1440px] mx-auto px-12 grid lg:grid-cols-2 gap-16 items-center">
+<div class="z-10">
+<span class="font-label text-[0.75rem] uppercase tracking-[0.15em] text-primary mb-6 block">Precision Botanical Data</span>
+<h1 class="text-[4.5rem] font-black leading-[1.05] tracking-[-0.04em] text-on-surface mb-8">
+                        Built for sustainability engineers. <br/>
+<span class="text-primary">Not greenwash.</span>
+</h1>
+<p class="text-lg text-on-surface-variant max-w-lg mb-10 leading-relaxed">
+                        The world's first high-fidelity API for botanical carbon sequestration modeling. Real-time data points, zero estimations, absolute precision.
+                    </p>
+<div class="flex items-center gap-4">
+<button class="veridian-gradient text-white px-8 py-4 rounded-lg font-bold text-lg shadow-xl hover:shadow-primary/20 transition-all">
+                            Start Building Now
+                        </button>
+<button class="px-8 py-4 font-label text-sm uppercase tracking-widest text-primary hover:bg-primary-fixed/10 transition-colors rounded-lg">
+                            Read Documentation
+                        </button>
+</div>
+</div>
+<div class="relative">
+<div class="absolute inset-0 bg-primary-fixed opacity-10 blur-[120px] rounded-full translate-x-12 translate-y-12"></div>
+<div class="relative rounded-2xl overflow-hidden shadow-2xl border border-white/20 hero-glow">
+<img alt="Product Dashboard" class="w-full object-cover aspect-[4/3]" data-alt="Modern software dashboard showing complex biological data charts and green botanical 3D models in a dark mode interface with emerald accents" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBp3V-znuLDZezPawAMVfRxtfNinMmOcys6_LcTPPEow4VE9wJR0cmf-B_EZUT4XydjM27CqX8LGsis1OrHHMPhZwGpBIDLMO7QiA3BK2PjeC9M2P9RsdxUlpTYorbtnaGsNBlllTAexegIparFrWNSA7qwB_Xc-pJPRRK3FWYsKpeF40__fPnPn0a8ICoAPzRl7tKkrYel_WK4aPj30ZDbwoXEwSKj1BCq9gdgoG-qdjtoSWSdq3az0PYxAUcwd1P_BJ5rOj0dsiH2"/>
+<div class="absolute inset-0 ring-1 ring-inset ring-primary/20 rounded-2xl"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Comparison Strip -->
+<section class="py-24 bg-surface-container-low">
+<div class="max-w-[1440px] mx-auto px-12">
+<div class="mb-16">
+<h2 class="font-label text-sm text-primary uppercase tracking-[0.2em] mb-4">The LCAPIX Advantage</h2>
+<h3 class="text-3xl font-bold tracking-tight">Same input, three methods</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+<div class="group">
+<div class="text-[5rem] font-label font-bold leading-none mb-4 opacity-20 group-hover:opacity-100 transition-opacity veridian-gradient bg-clip-text text-transparent">01</div>
+<h4 class="text-xl font-bold mb-3">Satellite LiDAR Calibration</h4>
+<p class="text-on-surface-variant leading-relaxed">Cross-referenced orbital data with ground-truth sensors for millimeter canopy accuracy.</p>
+</div>
+<div class="group">
+<div class="text-[5rem] font-label font-bold leading-none mb-4 opacity-20 group-hover:opacity-100 transition-opacity veridian-gradient bg-clip-text text-transparent">02</div>
+<h4 class="text-xl font-bold mb-3">AI Species Identification</h4>
+<p class="text-on-surface-variant leading-relaxed">Proprietary neural networks trained on over 4 million botanical field samples.</p>
+</div>
+<div class="group">
+<div class="text-[5rem] font-label font-bold leading-none mb-4 opacity-20 group-hover:opacity-100 transition-opacity veridian-gradient bg-clip-text text-transparent">03</div>
+<h4 class="text-xl font-bold mb-3">Hyper-Local Soil Analysis</h4>
+<p class="text-on-surface-variant leading-relaxed">Predictive modeling of root-zone carbon capture based on regional mineral compositions.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Feature Grid (Bento Style) -->
+<section class="py-32 bg-surface">
+<div class="max-w-[1440px] mx-auto px-12">
+<div class="grid grid-cols-12 grid-rows-2 gap-6 h-auto md:h-[800px]">
+<!-- Large Feature -->
+<div class="col-span-12 md:col-span-7 row-span-1 md:row-span-2 bg-surface-container-lowest p-12 rounded-xl shadow-sm flex flex-col justify-between border border-outline-variant/10 hover:shadow-md transition-all">
+<div>
+<span class="material-symbols-outlined text-4xl veridian-gradient bg-clip-text text-transparent mb-8" data-icon="energy_savings_leaf" style="font-variation-settings: 'FILL' 1;">energy_savings_leaf</span>
+<h3 class="text-4xl font-bold tracking-tight mb-6">Real-time Botanical Telemetry</h3>
+<p class="text-lg text-on-surface-variant max-w-md mb-8">Deploy sensors that talk directly to our API. Monitor stomatal conductance and sap flow across entire forest blocks in milliseconds.</p>
+</div>
+<div class="bg-surface-container-high rounded-lg p-6 font-label text-sm overflow-hidden">
+<div class="flex gap-4 items-center border-b border-outline-variant/20 pb-4 mb-4">
+<span class="text-primary">GET</span>
+<span class="text-on-surface/60">/v1/telemetry/forest_alpha/realtime</span>
+</div>
+<div class="text-on-surface/80 space-y-1">
+<div>{</div>
+<div class="pl-4">"carbon_sequestration_rate": "12.4kg/h",</div>
+<div class="pl-4">"health_index": 0.98,</div>
+<div class="pl-4">"anomalies": null</div>
+<div>}</div>
+</div>
+</div>
+</div>
+<!-- Small Features -->
+<div class="col-span-12 md:col-span-5 bg-surface-container-low p-10 rounded-xl hover:bg-surface-container-lowest transition-colors border border-outline-variant/5">
+<span class="material-symbols-outlined text-3xl text-primary mb-6" data-icon="query_stats">query_stats</span>
+<h4 class="text-xl font-bold mb-4">Predictive Growth Cycles</h4>
+<p class="text-on-surface-variant">Forecast biomass accumulation over 5, 10, and 50-year horizons with 99.2% confidence intervals.</p>
+</div>
+<div class="col-span-12 md:col-span-5 bg-surface-container-low p-10 rounded-xl hover:bg-surface-container-lowest transition-colors border border-outline-variant/5">
+<span class="material-symbols-outlined text-3xl text-primary mb-6" data-icon="security">security</span>
+<h4 class="text-xl font-bold mb-4">Audit-Ready Compliance</h4>
+<p class="text-on-surface-variant">Every data point is cryptographically hashed, ensuring an immutable chain of custody for carbon credits.</p>
+</div>
+<div class="col-span-12 md:col-span-4 bg-surface-container-low p-8 rounded-xl hover:bg-surface-container-lowest transition-colors border border-outline-variant/5">
+<span class="material-symbols-outlined text-2xl text-primary mb-4" data-icon="api">api</span>
+<h5 class="font-bold mb-2">SDK Support</h5>
+<p class="text-sm text-on-surface-variant">Native libraries for Python, Rust, and TypeScript.</p>
+</div>
+<div class="col-span-12 md:col-span-4 bg-surface-container-low p-8 rounded-xl hover:bg-surface-container-lowest transition-colors border border-outline-variant/5">
+<span class="material-symbols-outlined text-2xl text-primary mb-4" data-icon="hub">hub</span>
+<h5 class="font-bold mb-2">Multi-Region Sync</h5>
+<p class="text-sm text-on-surface-variant">Global edge nodes for ultra-low latency ingest.</p>
+</div>
+<div class="col-span-12 md:col-span-4 bg-surface-container-low p-8 rounded-xl hover:bg-surface-container-lowest transition-colors border border-outline-variant/5">
+<span class="material-symbols-outlined text-2xl text-primary mb-4" data-icon="biotech">biotech</span>
+<h5 class="font-bold mb-2">Genomic Metadata</h5>
+<p class="text-sm text-on-surface-variant">Correlate DNA samples with environmental growth rates.</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Final CTA / Veridian Light Success State simulation -->
+<section class="py-32 relative overflow-hidden bg-on-surface">
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-primary-fixed/20 blur-[160px]"></div>
+<div class="max-w-[1440px] mx-auto px-12 relative z-10 text-center">
+<h2 class="text-5xl font-black text-white mb-8 tracking-tight">Ready to build the future of <br/><span class="veridian-gradient bg-clip-text text-transparent">accountable nature?</span></h2>
+<div class="flex flex-col md:flex-row justify-center gap-6 items-center">
+<button class="veridian-gradient text-white px-10 py-5 rounded-lg font-bold text-xl scale-95 active:scale-90 transition-transform">Get Your API Key</button>
+<button class="text-white font-label uppercase tracking-widest text-sm hover:text-primary transition-colors">Talk to an Engineer</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full pt-24 pb-12 bg-[#f2f4f2]">
+<div class="grid grid-cols-2 md:grid-cols-4 gap-8 px-12 max-w-[1440px] mx-auto">
+<div class="col-span-2 md:col-span-1">
+<div class="text-xl font-black text-[#006a44] mb-6">LCAPIX</div>
+<p class="font-['IBM_Plex_Mono'] text-[0.75rem] uppercase tracking-[0.1em] text-[#191c1b]/50 max-w-[200px]">
+                    Precision Botanical Data Systems.
+                </p>
+</div>
+<div>
+<h5 class="font-bold mb-6 text-sm">Product</h5>
+<ul class="space-y-4 font-['IBM_Plex_Mono'] text-[0.75rem] uppercase tracking-[0.1em] text-[#191c1b]/50">
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">Documentation</a></li>
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">API Reference</a></li>
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">Status</a></li>
+</ul>
+</div>
+<div>
+<h5 class="font-bold mb-6 text-sm">Company</h5>
+<ul class="space-y-4 font-['IBM_Plex_Mono'] text-[0.75rem] uppercase tracking-[0.1em] text-[#191c1b]/50">
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">Privacy</a></li>
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">Terms</a></li>
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">Contact</a></li>
+</ul>
+</div>
+<div>
+<h5 class="font-bold mb-6 text-sm">Connect</h5>
+<ul class="space-y-4 font-['IBM_Plex_Mono'] text-[0.75rem] uppercase tracking-[0.1em] text-[#191c1b]/50">
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">Twitter/X</a></li>
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">LinkedIn</a></li>
+<li><a class="hover:translate-x-1 hover:text-[#006a44] transition-all inline-block" href="#">GitHub</a></li>
+</ul>
+</div>
+</div>
+<div class="max-w-[1440px] mx-auto px-12 mt-24 pt-8 border-t border-outline-variant/20 flex justify-between items-center">
+<div class="font-['IBM_Plex_Mono'] text-[0.75rem] uppercase tracking-[0.1em] text-[#191c1b]/50">
+                © 2024 LCAPIX.
+            </div>
+<div class="flex gap-8">
+<span class="font-['IBM_Plex_Mono'] text-[0.7rem] text-primary bg-primary/5 px-2 py-1 rounded">SYSTEMS_NOMINAL_0.8.2</span>
+</div>
+</div>
+</footer>
+</body></html>

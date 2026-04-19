@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Project Detail - Veridian Engineering</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#f2f4f2",
+                        "on-background": "#191c1b",
+                        "on-tertiary-fixed": "#410007",
+                        "on-surface": "#191c1b",
+                        "on-tertiary-fixed-variant": "#832429",
+                        "inverse-primary": "#5ddda1",
+                        "secondary-fixed": "#afefdd",
+                        "on-secondary-container": "#2e6d5f",
+                        "tertiary-fixed": "#ffdad8",
+                        "on-primary-fixed": "#002112",
+                        "surface-variant": "#e1e3e1",
+                        "on-primary-fixed-variant": "#005234",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "primary-container": "#008558",
+                        "surface-container-high": "#e6e9e7",
+                        "surface-bright": "#f8faf8",
+                        "primary-fixed-dim": "#5ddda1",
+                        "outline": "#6d7a71",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed-variant": "#065043",
+                        "tertiary": "#9f393c",
+                        "surface-tint": "#006c46",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "primary-fixed": "#7bfabb",
+                        "on-tertiary": "#ffffff",
+                        "surface": "#f8faf8",
+                        "tertiary-container": "#bf5152",
+                        "secondary": "#29695b",
+                        "on-primary-container": "#f6fff6",
+                        "outline-variant": "#bccabf",
+                        "background": "#f8faf8",
+                        "inverse-on-surface": "#eff1ef",
+                        "on-surface-variant": "#3d4a41",
+                        "primary": "#006a44",
+                        "on-primary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "surface-dim": "#d8dad9",
+                        "on-secondary-fixed": "#00201a",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "surface-container-highest": "#e1e3e1",
+                        "secondary-container": "#acedda",
+                        "surface-container": "#eceeec",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#fffbff",
+                        "inverse-surface": "#2e3130"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["IBM Plex Mono"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .leaf-gradient {
+            background: linear-gradient(135deg, #006a44 0%, #008558 100%);
+        }
+        .veridian-glow {
+            background: radial-gradient(circle at center, rgba(123, 250, 187, 0.15) 0%, transparent 70%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-['Inter'] selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#f2f4f2] dark:bg-slate-900 shadow-[24px_0_48px_-12px_rgba(0,0,0,0.06)] flex flex-col py-8 z-50">
+<div class="px-8 mb-12">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" data-icon="eco">eco</span>
+</div>
+<div>
+<h1 class="text-lg font-bold text-[#006a44] tracking-tighter">Veridian Eng</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Sustainability Suite</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 hover:bg-[#ffffff]/50 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="dashboard">dashboard</span>
+<span class="font-medium">Overview</span>
+</a>
+<a class="flex items-center gap-3 text-[#006a44] dark:text-[#00a36c] font-bold bg-[#ffffff] dark:bg-slate-800/50 rounded-l-full ml-4 pl-4 py-3 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="account_tree">account_tree</span>
+<span class="font-medium">Projects</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 hover:bg-[#ffffff]/50 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="eco">eco</span>
+<span class="font-medium">Lifecycle Analysis</span>
+</a>
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-4 pl-4 py-3 hover:bg-[#ffffff]/50 transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="analytics">analytics</span>
+<span class="font-medium">Impact Reports</span>
+</a>
+</nav>
+<div class="mt-auto px-4">
+<a class="flex items-center gap-3 text-slate-600 dark:text-slate-400 hover:text-[#006a44] ml-0 pl-4 py-3 hover:bg-[#ffffff]/50 rounded-lg transition-all duration-200 group" href="#">
+<span class="material-symbols-outlined text-xl" data-icon="settings">settings</span>
+<span class="font-medium">Settings</span>
+</a>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 h-20 bg-[#f8faf8]/80 backdrop-blur-xl z-40 flex items-center justify-between px-12">
+<div class="flex items-center gap-8">
+<h2 class="display-lg font-['Inter'] text-2xl tracking-tighter font-bold text-on-surface">Project Detail</h2>
+<nav class="flex gap-6">
+<a class="text-slate-500 pb-2 font-['IBM_Plex_Mono'] text-sm hover:text-[#006a44] transition-colors" href="#">Process View</a>
+<a class="text-slate-500 pb-2 font-['IBM_Plex_Mono'] text-sm hover:text-[#006a44] transition-colors" href="#">Impact Analytics</a>
+<a class="text-[#006a44] border-b-2 border-[#006a44] pb-2 font-['IBM_Plex_Mono'] text-sm" href="#">Hierarchy</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="bg-surface-container-low border-none border-b border-outline-variant/40 focus:ring-0 focus:border-primary transition-all rounded-md pl-10 pr-4 py-2 text-sm font-['IBM_Plex_Mono'] w-64" placeholder="Global Search..." type="text"/>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-outline hover:text-primary transition-colors" data-icon="notifications">notifications</button>
+<button class="material-symbols-outlined text-outline hover:text-primary transition-colors" data-icon="help_outline">help_outline</button>
+<button class="leaf-gradient text-on-primary px-5 py-2 rounded-md font-['IBM_Plex_Mono'] text-xs font-bold shadow-sm active:scale-95 transition-transform">Export Data</button>
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border-2 border-surface">
+<img alt="User Profile" data-alt="professional portrait of a sustainability engineer in a clean modern office with soft natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsG-wlyj8JeJjIikr1CjZ0fqQ-WyBBXqAqvw0dHcpVrrMhpWSWN1NqBM4Ki7KAVUZzi_OdAa_OPladH9xmhbbKaAVVrQd8G5TiNxCptl8jhqYKVVU2jCIqEiEJRF38RlpsNWgLF6ilM6SXYAEQ5m7GbtZ3SqQk3QbbsUrB9hUZ43ZLsUrl3srsX8RQzkDggnE0i5i6wBn52iMOucDtIc-63ItmdnumOAqhrgckicuK9wL4RuwQGXdK97vXbdLjDFe5u0zwXCwkcb9v"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="ml-64 pt-32 pb-20 px-12 min-h-screen flex gap-12">
+<!-- Editable Hierarchy Tree -->
+<section class="flex-1">
+<header class="mb-12 flex justify-between items-end">
+<div>
+<span class="font-['IBM_Plex_Mono'] text-primary text-xs font-bold tracking-widest uppercase">Structural View</span>
+<h3 class="text-4xl font-extrabold tracking-tighter mt-2 text-on-surface">System Architecture</h3>
+</div>
+<div class="flex gap-2">
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors text-outline">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+</button>
+<button class="p-2 rounded-full hover:bg-surface-container-high transition-colors text-outline">
+<span class="material-symbols-outlined" data-icon="view_list">view_list</span>
+</button>
+</div>
+</header>
+<div class="space-y-4">
+<!-- Root Node -->
+<div class="relative group">
+<div class="leaf-gradient p-6 rounded-xl flex items-center justify-between shadow-lg cursor-pointer group-hover:scale-[1.01] transition-all">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="hub">hub</span>
+<div>
+<p class="font-['IBM_Plex_Mono'] text-[10px] text-primary-fixed/80 uppercase font-bold">Project Root</p>
+<h4 class="text-white text-xl font-bold tracking-tight">Nexus One: Bio-Synthetic Integration</h4>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<span class="bg-primary-container/40 px-3 py-1 rounded-full text-[10px] font-['IBM_Plex_Mono'] text-white">ACTIVE</span>
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+<span class="material-symbols-outlined text-white" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+<div class="h-12 w-px bg-outline-variant/30 ml-12"></div>
+</div>
+<!-- Children Container -->
+<div class="ml-12 space-y-6">
+<!-- Branch 1 -->
+<div class="relative">
+<div class="absolute -left-12 top-6 h-px w-12 bg-outline-variant/30"></div>
+<div class="bg-surface-container-low hover:bg-surface-container-lowest hover:shadow-xl hover:shadow-primary/5 p-5 rounded-xl flex items-center justify-between border-l-4 border-primary transition-all cursor-pointer group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="energy_savings_leaf">energy_savings_leaf</span>
+</div>
+<div>
+<p class="font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase">Sub-System 01</p>
+<h4 class="text-on-surface font-bold text-lg">Solar Catchment Array</h4>
+</div>
+</div>
+<div class="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="font-['IBM_Plex_Mono'] text-xs text-primary font-bold">98.2% Eff</span>
+<button class="w-8 h-8 rounded-full hover:bg-primary/10 flex items-center justify-center text-outline hover:text-primary transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+<div class="h-8 w-px bg-outline-variant/30 ml-8"></div>
+<!-- Grandchild -->
+<div class="ml-8 relative">
+<div class="absolute -left-8 top-5 h-px w-8 bg-outline-variant/30"></div>
+<div class="bg-white/40 hover:bg-white p-4 rounded-lg flex items-center justify-between border-l-2 border-outline-variant/40 transition-all cursor-pointer group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-outline text-lg" data-icon="sensors">sensors</span>
+<span class="text-sm font-medium text-on-surface-variant">Photo-Voltaic Sensors</span>
+</div>
+<button class="opacity-0 group-hover:opacity-100 transition-opacity material-symbols-outlined text-sm text-outline" data-icon="more_vert">more_vert</button>
+</div>
+</div>
+</div>
+<!-- Branch 2 -->
+<div class="relative">
+<div class="absolute -left-12 top-6 h-px w-12 bg-outline-variant/30"></div>
+<div class="bg-surface-container-low hover:bg-surface-container-lowest hover:shadow-xl hover:shadow-primary/5 p-5 rounded-xl flex items-center justify-between border-l-4 border-secondary transition-all cursor-pointer group">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="water_drop">water_drop</span>
+</div>
+<div>
+<p class="font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase">Sub-System 02</p>
+<h4 class="text-on-surface font-bold text-lg">Hydro-Filtration Unit</h4>
+</div>
+</div>
+<div class="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="font-['IBM_Plex_Mono'] text-xs text-secondary font-bold">Stable</span>
+<button class="w-8 h-8 rounded-full hover:bg-secondary/10 flex items-center justify-center text-outline hover:text-secondary transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="edit">edit</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Branch 3: Add New Action -->
+<div class="relative">
+<div class="absolute -left-12 top-6 h-px w-12 bg-outline-variant/30"></div>
+<button class="w-full bg-white border-2 border-dashed border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5 p-5 rounded-xl flex items-center justify-center gap-3 transition-all text-outline hover:text-primary">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+<span class="font-['IBM_Plex_Mono'] text-xs font-bold uppercase tracking-widest">Append New Hierarchy Node</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Side: Detail Drawer / Contextual Editor -->
+<aside class="w-96">
+<div class="sticky top-32 space-y-6">
+<!-- Image Focus -->
+<div class="rounded-2xl overflow-hidden shadow-2xl relative h-64 bg-slate-200">
+<img alt="Node Context" class="w-full h-full object-cover" data-alt="close up of a technical mechanical joint integrated with lush living moss and plant matter in a high tech greenhouse" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCj62W3210ONmw2DhHnE4JLINpyOGHA-oJirHcWivHMqu4s_nbRWoUTRmRgWIp9pew9QdIpf-gnY1ReaqpeEGG8KTfPeL0UTTMXfw7b3vYv9nw5canJH_GOzasgthExBHnRn0N0DhpR5J3tsd3tFZDvIMoWwp-rWv9ZANcJ2EoWEqQhzNMxdni0W4BQZdmlA755qAgNx5itUF6R81vqtjanSn6RjhAroIxiJUlmDPZBYu445HCykxnKZ1eHVnVDjlj_bbw4gFjxJeg5"/>
+<div class="absolute inset-0 bg-gradient-to-t from-on-background/80 to-transparent flex items-end p-6">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-xl backdrop-blur-md bg-white/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-white" data-icon="biotech">biotech</span>
+</div>
+<div>
+<h5 class="text-white font-bold leading-tight">Nexus One Detail</h5>
+<p class="text-white/60 text-[10px] font-['IBM_Plex_Mono'] uppercase tracking-widest">Root Configuration</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Properties Panel -->
+<div class="bg-surface-container-lowest p-8 rounded-2xl shadow-[0_24px_48px_-12px_rgba(0,0,0,0.06)] veridian-glow border-t border-outline-variant/10">
+<div class="flex justify-between items-center mb-8">
+<h4 class="font-['IBM_Plex_Mono'] font-bold text-sm text-primary uppercase">Node Properties</h4>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-on-surface" data-icon="close">close</span>
+</div>
+<form class="space-y-6">
+<div>
+<label class="block font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase mb-2">Display Name</label>
+<input class="w-full bg-surface-container-low border-none border-b border-outline-variant/40 focus:border-primary focus:ring-0 font-['Inter'] font-semibold py-2" type="text" value="Nexus One: Bio-Synthetic Integration"/>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<label class="block font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase mb-2">Impact Class</label>
+<select class="w-full bg-surface-container-low border-none border-b border-outline-variant/40 focus:border-primary focus:ring-0 font-['Inter'] text-sm">
+<option>Priority Alpha</option>
+<option>Beta Secondary</option>
+<option>Gamma Logic</option>
+</select>
+</div>
+<div>
+<label class="block font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase mb-2">Health Index</label>
+<div class="h-10 flex items-center px-3 bg-surface-container-low border-b border-outline-variant/40">
+<span class="font-['IBM_Plex_Mono'] text-sm font-bold text-[#006a44]">0.98</span>
+<span class="material-symbols-outlined text-sm ml-auto text-primary" data-icon="trending_up">trending_up</span>
+</div>
+</div>
+</div>
+<div>
+<label class="block font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase mb-2">Documentation Tags</label>
+<div class="flex flex-wrap gap-2">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight flex items-center gap-1">
+                                    SUSTAINABLE <span class="material-symbols-outlined text-[12px]" data-icon="close">close</span>
+</span>
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight flex items-center gap-1">
+                                    NET-ZERO <span class="material-symbols-outlined text-[12px]" data-icon="close">close</span>
+</span>
+<button class="w-6 h-6 rounded-full border border-outline-variant flex items-center justify-center text-outline hover:border-primary hover:text-primary">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+</button>
+</div>
+</div>
+<div class="pt-6 border-t border-outline-variant/10 flex gap-3">
+<button class="flex-1 leaf-gradient text-white py-3 rounded-md font-['IBM_Plex_Mono'] text-xs font-bold active:scale-95 transition-transform">Update Node</button>
+<button class="px-4 py-3 rounded-md bg-surface-container-high text-on-surface-variant font-['IBM_Plex_Mono'] text-xs font-bold hover:bg-surface-container-highest transition-colors">Discard</button>
+</div>
+</form>
+</div>
+<!-- Technical Legend -->
+<div class="p-6 rounded-2xl bg-surface-container-low/50">
+<h6 class="font-['IBM_Plex_Mono'] text-[10px] text-outline uppercase font-bold mb-4">Integrity Monitoring</h6>
+<div class="flex items-center gap-2 mb-3">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant">Synchronized Nodes (14)</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-secondary"></div>
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant">Processing Queue (2)</span>
+</div>
+</div>
+</div>
+</aside>
+</main>
+</body></html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LCAPIX Documentation | Botanical Precision</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#f8faf8",
+                        "on-primary-fixed-variant": "#005234",
+                        "on-primary-fixed": "#002112",
+                        "primary-fixed": "#7bfabb",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-container": "#f6fff6",
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed": "#00201a",
+                        "secondary": "#29695b",
+                        "tertiary-container": "#bf5152",
+                        "surface-dim": "#d8dad9",
+                        "on-secondary-fixed-variant": "#065043",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "inverse-surface": "#2e3130",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-container": "#fffbff",
+                        "error": "#ba1a1a",
+                        "tertiary": "#9f393c",
+                        "on-surface": "#191c1b",
+                        "surface-container-highest": "#e1e3e1",
+                        "primary": "#006a44",
+                        "inverse-on-surface": "#eff1ef",
+                        "surface": "#f8faf8",
+                        "surface-bright": "#f8faf8",
+                        "surface-container-low": "#f2f4f2",
+                        "on-secondary-container": "#2e6d5f",
+                        "surface-container-high": "#e6e9e7",
+                        "on-background": "#191c1b",
+                        "outline-variant": "#bccabf",
+                        "on-tertiary-fixed-variant": "#832429",
+                        "on-error": "#ffffff",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "primary-container": "#008558",
+                        "surface-variant": "#e1e3e1",
+                        "surface-container": "#eceeec",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed": "#afefdd",
+                        "on-surface-variant": "#3d4a41",
+                        "primary-fixed-dim": "#5ddda1",
+                        "tertiary-fixed": "#ffdad8",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#410007",
+                        "inverse-primary": "#5ddda1",
+                        "surface-tint": "#006c46",
+                        "secondary-container": "#acedda",
+                        "outline": "#6d7a71"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["IBM Plex Mono"]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .prose-mono { font-family: 'IBM Plex Mono', monospace; }
+        .veridian-glow {
+            background: radial-gradient(circle at center, rgba(123, 250, 187, 0.15) 0%, transparent 70%);
+        }
+        .code-block {
+            background: #191c1b;
+            color: #7bfabb;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface">
+<!-- TopAppBar -->
+<header class="bg-[#f8faf8]/80 dark:bg-emerald-950/80 backdrop-blur-xl docked full-width top-0 z-50 shadow-[0_24px_48px_-12px_rgba(25,28,27,0.06)] fixed w-full">
+<div class="flex justify-between items-center px-8 py-4 w-full">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-[#006a44] dark:text-[#00a36c] tracking-tighter">LCAPIX</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="font-['Inter'] font-semibold tracking-tight text-[#191c1b] dark:text-[#f8faf8] opacity-70 hover:opacity-100 hover:text-[#006a44] transition-all" href="#">Hierarchy</a>
+<a class="font-['Inter'] font-semibold tracking-tight text-[#191c1b] dark:text-[#f8faf8] opacity-70 hover:opacity-100 hover:text-[#006a44] transition-all" href="#">Assessments</a>
+<a class="font-['Inter'] font-semibold tracking-tight text-[#191c1b] dark:text-[#f8faf8] opacity-70 hover:opacity-100 hover:text-[#006a44] transition-all" href="#">Admin</a>
+<a class="font-['Inter'] font-semibold tracking-tight text-[#006a44] dark:text-[#00a36c] border-b-2 border-[#006a44] dark:border-[#00a36c] pb-1" href="#">Docs</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="material-symbols-outlined text-on-surface opacity-70 hover:opacity-100 transition-opacity">notifications</button>
+<button class="material-symbols-outlined text-on-surface opacity-70 hover:opacity-100 transition-opacity">settings</button>
+<img alt="Administrator Profile" class="w-8 h-8 rounded-full border border-outline-variant/15" data-alt="Close-up portrait of a professional male administrator in a brightly lit modern office setting, soft background bokeh" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfbGMXc81IFbd6ARcln3YbcGJKpENtz26Ri5ytne0mQIYDrY3tnQeMqI49xbSzlZV5Ulz99QzKymbIZ-9ILeJ0cWo0L21wqDK2Dwqi59hxN19jfUVI3bnn4bYrGcZU04d8PThH2tMcke0zf8s8B7TWWD_wD8H2vYAsNRM6buxHuDEQDoaTrgop3FMf44JmoTg8k-xxKsRdK-c9NFL5hBrQDs3tW1zViY4PqKY1Q7lfPxmujewVKpNpFlN0bziaw3QblVHjCtYxx9oJ"/>
+</div>
+</div>
+</header>
+<div class="flex pt-20">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 flex-col fixed left-0 top-0 pt-20 bg-[#f2f4f2] dark:bg-[#191c1b] border-r border-transparent hidden md:flex">
+<div class="px-6 py-8 flex-1 overflow-y-auto">
+<div class="mb-8">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-sm" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<div>
+<h3 class="font-['Inter'] font-bold text-[#006a44] text-sm">LCAPIX System</h3>
+<p class="font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest text-on-surface-variant opacity-60">Process Management v2.4</p>
+</div>
+</div>
+</div>
+<nav class="space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest text-[#191c1b] dark:text-[#bccabf] opacity-60 hover:bg-white/50 dark:hover:bg-emerald-800/20 hover:opacity-100 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-sm">account_tree</span> Process Tree
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest text-[#191c1b] dark:text-[#bccabf] opacity-60 hover:bg-white/50 dark:hover:bg-emerald-800/20 hover:opacity-100 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-sm">analytics</span> Results
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest text-[#191c1b] dark:text-[#bccabf] opacity-60 hover:bg-white/50 dark:hover:bg-emerald-800/20 hover:opacity-100 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-sm">admin_panel_settings</span> Manage
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white dark:bg-emerald-900/30 text-[#006a44] dark:text-[#00a36c] font-bold shadow-sm font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm">description</span> Library
+                    </a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest text-[#191c1b] dark:text-[#bccabf] opacity-60 hover:bg-white/50 dark:hover:bg-emerald-800/20 hover:opacity-100 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-sm">terminal</span> System
+                    </a>
+</nav>
+<div class="mt-12 pt-8 border-t border-outline-variant/15">
+<p class="font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest opacity-40 mb-4 px-3">Documentation</p>
+<a class="flex items-center gap-3 px-3 py-2 font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest text-[#006a44] font-bold" href="#">Introduction</a>
+<a class="flex items-center gap-3 px-3 py-2 font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity" href="#getting-started">Getting Started</a>
+<a class="flex items-center gap-3 px-3 py-2 font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity" href="#data-model">Data Model</a>
+<a class="flex items-center gap-3 px-3 py-2 font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity" href="#glossary">Glossary</a>
+</div>
+</div>
+<div class="p-6 bg-surface-container-low mt-auto">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-white py-3 rounded-md font-semibold text-sm shadow-sm flex items-center justify-center gap-2 hover:opacity-90 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined text-sm">add</span> New Assessment
+                </button>
+<div class="flex flex-col mt-4 gap-2">
+<a class="flex items-center gap-2 font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest opacity-60 hover:opacity-100" href="#"><span class="material-symbols-outlined text-xs">help</span> Support</a>
+<a class="flex items-center gap-2 font-['IBM_Plex_Mono'] text-[10px] uppercase tracking-widest opacity-60 hover:opacity-100" href="#"><span class="material-symbols-outlined text-xs">inventory_2</span> Archive</a>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 bg-surface min-h-screen">
+<div class="max-w-5xl mx-auto px-8 md:px-16 py-16">
+<!-- Hero Section -->
+<section class="mb-24 relative">
+<div class="absolute -top-16 -left-16 w-64 h-64 veridian-glow pointer-events-none"></div>
+<div class="flex items-baseline gap-4 mb-4">
+<span class="font-mono text-primary text-sm font-bold tracking-widest">v2.4.0</span>
+<div class="h-px bg-outline-variant/30 flex-1"></div>
+</div>
+<h1 class="text-[3.5rem] font-black tracking-tight leading-tight mb-6 text-on-surface">
+                        Technical <span class="text-primary">Ecosystem</span> Guide
+                    </h1>
+<p class="text-lg text-on-surface-variant max-w-2xl leading-relaxed">
+                        Welcome to the LCAPIX documentation. This comprehensive guide details the mechanical rigors of our process management engine and the lush organic complexity of our data structures.
+                    </p>
+</section>
+<!-- Bento Grid Sections -->
+<div class="grid grid-cols-12 gap-8 mb-24">
+<div class="col-span-12 md:col-span-8 bg-surface-container-lowest p-10 rounded-xl shadow-[0_24px_48px_-12px_rgba(25,28,27,0.06)] border border-outline-variant/5" id="getting-started">
+<div class="flex items-center gap-3 mb-8">
+<span class="material-symbols-outlined text-primary text-3xl">rocket_launch</span>
+<h2 class="text-2xl font-bold tracking-tight">Getting Started</h2>
+</div>
+<div class="space-y-6 text-on-surface-variant leading-relaxed">
+<p>To begin integrating LCAPIX into your workflow, you must first initialize the terminal environment. Our system is built on a "living data" principle, where every assessment branch influences the global state of your process tree.</p>
+<div class="code-block">
+<span class="opacity-40 select-none">1 </span><span class="text-white">npm install</span> @lcapix/core-engine<br/>
+<span class="opacity-40 select-none">2 </span><span class="text-white">import</span> { Terminal } from <span class="text-secondary-fixed-dim">'@lcapix/system'</span>;<br/>
+<span class="opacity-40 select-none">3 </span><br/>
+<span class="opacity-40 select-none">4 </span><span class="text-primary-fixed">const</span> sys = <span class="text-white">new</span> Terminal({<br/>
+<span class="opacity-40 select-none">5 </span>  root: <span class="text-secondary-fixed-dim">'veridian-flow-01'</span>,<br/>
+<span class="opacity-40 select-none">6 </span>  precisionMode: <span class="text-secondary-fixed-dim">true</span><br/>
+<span class="opacity-40 select-none">7 </span>});
+                            </div>
+<p>Once initialized, the <code>Terminal</code> instance provides direct access to the botanical data layers, allowing for precise tracking of organizational metadata.</p>
+</div>
+</div>
+<div class="col-span-12 md:col-span-4 space-y-8">
+<div class="bg-surface-container-low p-8 rounded-xl border border-outline-variant/10">
+<h3 class="font-mono text-[10px] uppercase tracking-[0.2em] mb-4 text-primary font-bold">Quick Links</h3>
+<ul class="space-y-3 font-semibold text-sm">
+<li><a class="hover:text-primary transition-colors flex items-center justify-between" href="#">API Reference <span class="material-symbols-outlined text-xs">arrow_forward</span></a></li>
+<li><a class="hover:text-primary transition-colors flex items-center justify-between" href="#">CLI Commands <span class="material-symbols-outlined text-xs">arrow_forward</span></a></li>
+<li><a class="hover:text-primary transition-colors flex items-center justify-between" href="#">Security Policy <span class="material-symbols-outlined text-xs">arrow_forward</span></a></li>
+<li><a class="hover:text-primary transition-colors flex items-center justify-between" href="#">Migration Guide <span class="material-symbols-outlined text-xs">arrow_forward</span></a></li>
+</ul>
+</div>
+<div class="bg-primary text-white p-8 rounded-xl relative overflow-hidden group">
+<div class="absolute inset-0 bg-gradient-to-br from-primary to-primary-container opacity-90 transition-opacity group-hover:opacity-100"></div>
+<div class="relative z-10">
+<h3 class="text-xl font-bold mb-2">Need help?</h3>
+<p class="text-xs opacity-80 mb-6 font-mono">Our botanical support team is available 24/7 for technical precision.</p>
+<button class="bg-white text-primary px-4 py-2 rounded font-bold text-xs uppercase tracking-widest">Open Ticket</button>
+</div>
+<span class="material-symbols-outlined absolute -bottom-4 -right-4 text-white/10 text-[120px] pointer-events-none" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+</div>
+</div>
+<!-- Data Model Section -->
+<section class="mb-24" id="data-model">
+<div class="flex items-center gap-4 mb-12">
+<h2 class="text-3xl font-bold tracking-tighter">Data Model Explained</h2>
+<div class="h-px bg-outline-variant/30 flex-1"></div>
+<span class="font-mono text-xs opacity-50 uppercase">Sec. 02</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+<div class="order-2 md:order-1">
+<img alt="Abstract visualization of a green tree system with data points" class="rounded-2xl shadow-2xl grayscale hover:grayscale-0 transition-all duration-700" data-alt="Digital art showing a complex tree root system made of glowing green fiber optic lines against a dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMHruKru9eKYvlsyCPsAkZpqoTmi2c-CTd3LE4O_nIZg5ttaq1aKXqXzsxImciiRRTJPI4pW-YB088QtNSsjpUqBmX1qC772yvs9_aEcyifeH0PEYBk-Dr4NMsLCNRXNWPREPaT5m7Fk2BfpB5PoXtI4k_mrjmKiYd8aifz58nQb6aRRmOvEJErmj-l7mdhbwxEhKNlKptm4GpKQtYKsu-7gHxgJi9H1piJUNNL_RcOCLXGgVSJ4-XeP5qZ_akCX8ceIYp70spVQKn"/>
+</div>
+<div class="order-1 md:order-2 space-y-6">
+<h3 class="text-xl font-bold text-primary">The Process Root</h3>
+<p class="text-on-surface-variant leading-relaxed">
+                                At the core of the LCAPIX ecosystem is the <code>RootNode</code>. Unlike traditional flat hierarchies, LCAPIX utilizes a recursive branching algorithm that simulates natural growth patterns. Each node in your process tree inherits properties from its parent while maintaining its own distinct metadata signature.
+                            </p>
+<div class="bg-surface-container-high/50 p-6 rounded-lg border-l-4 border-primary">
+<p class="font-mono text-xs text-on-surface-variant italic leading-relaxed">
+                                    "Data density in the RootNode is managed via a Veridian Light compression layer, ensuring that even systems with millions of branches maintain sub-millisecond query performance."
+                                </p>
+</div>
+<button class="flex items-center gap-2 font-mono text-xs text-primary font-bold hover:underline">
+                                VIEW SCHEMA SPECS <span class="material-symbols-outlined text-sm">open_in_new</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Glossary Section -->
+<section id="glossary">
+<div class="flex items-center gap-4 mb-12">
+<h2 class="text-3xl font-bold tracking-tighter">Glossary</h2>
+<div class="h-px bg-outline-variant/30 flex-1"></div>
+<span class="font-mono text-xs opacity-50 uppercase">Sec. 03</span>
+</div>
+<div class="space-y-0 border-t border-outline-variant/15">
+<div class="py-10 flex flex-col md:flex-row gap-8 items-start hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-xl group">
+<div class="md:w-1/3">
+<span class="font-mono text-xs text-primary font-bold tracking-[0.2em] block mb-2">TERM_01</span>
+<h4 class="text-xl font-bold group-hover:text-primary transition-colors">Botanical Precision</h4>
+</div>
+<div class="md:w-2/3">
+<p class="text-on-surface-variant leading-relaxed">
+                                    The core design philosophy of LCAPIX. It refers to the intersection of highly accurate data analytics and the intuitive flow of organic systems.
+                                </p>
+</div>
+</div>
+<div class="py-10 flex flex-col md:flex-row gap-8 items-start hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-xl border-t border-outline-variant/15 group">
+<div class="md:w-1/3">
+<span class="font-mono text-xs text-primary font-bold tracking-[0.2em] block mb-2">TERM_02</span>
+<h4 class="text-xl font-bold group-hover:text-primary transition-colors">Veridian Flow</h4>
+</div>
+<div class="md:w-2/3">
+<p class="text-on-surface-variant leading-relaxed">
+                                    A proprietary UX methodology that prioritizes information hierarchy through tonal shifts and light-simulated depth rather than rigid structural boundaries.
+                                </p>
+</div>
+</div>
+<div class="py-10 flex flex-col md:flex-row gap-8 items-start hover:bg-surface-container-low transition-colors px-4 -mx-4 rounded-xl border-t border-outline-variant/15 group">
+<div class="md:w-1/3">
+<span class="font-mono text-xs text-primary font-bold tracking-[0.2em] block mb-2">TERM_03</span>
+<h4 class="text-xl font-bold group-hover:text-primary transition-colors">Digital Conservatory</h4>
+</div>
+<div class="md:w-2/3">
+<p class="text-on-surface-variant leading-relaxed">
+                                    The secure cloud-native environment where LCAPIX process trees are hosted, monitored, and optimized for maximum ecosystem health.
+                                </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Footer Gradient Detail -->
+<footer class="mt-32 pt-16 border-t border-outline-variant/15 flex flex-col md:flex-row justify-between items-center gap-8 opacity-60">
+<div class="flex items-center gap-4">
+<span class="text-xl font-black text-primary tracking-tighter">LCAPIX</span>
+<p class="font-mono text-[10px] uppercase tracking-widest">© 2024 SYSTEM ARCHITECTURE GROUP</p>
+</div>
+<div class="flex gap-8">
+<a class="font-mono text-[10px] uppercase tracking-widest hover:text-primary transition-colors" href="#">Documentation Status</a>
+<a class="font-mono text-[10px] uppercase tracking-widest hover:text-primary transition-colors" href="#">Privacy Console</a>
+<a class="font-mono text-[10px] uppercase tracking-widest hover:text-primary transition-colors" href="#">System Health</a>
+</div>
+</footer>
+</div>
+</main>
+</div>
+<!-- Mobile Navigation (BottomNavBar suppression based on task focus, but adding for platform parity if needed) -->
+<div class="md:hidden fixed bottom-0 left-0 right-0 bg-surface-container-lowest/80 backdrop-blur-lg px-6 py-4 flex justify-between items-center z-50 border-t border-outline-variant/15">
+<button class="material-symbols-outlined text-primary">menu</button>
+<button class="material-symbols-outlined text-on-surface opacity-60">search</button>
+<button class="material-symbols-outlined text-on-surface opacity-60">bookmark</button>
+<button class="material-symbols-outlined text-on-surface opacity-60">person</button>
+</div>
+</body></html>

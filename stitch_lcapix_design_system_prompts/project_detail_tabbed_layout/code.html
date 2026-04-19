@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Veridian Engineering | Project Detail</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#832429",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#afefdd",
+                        "inverse-on-surface": "#eff1ef",
+                        "on-tertiary-container": "#fffbff",
+                        "inverse-surface": "#2e3130",
+                        "on-background": "#191c1b",
+                        "on-surface-variant": "#3d4a41",
+                        "on-primary-fixed-variant": "#005234",
+                        "surface-bright": "#f8faf8",
+                        "secondary-container": "#acedda",
+                        "secondary": "#29695b",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed-variant": "#065043",
+                        "surface-container-high": "#e6e9e7",
+                        "on-surface": "#191c1b",
+                        "tertiary-fixed": "#ffdad8",
+                        "inverse-primary": "#5ddda1",
+                        "primary": "#006a44",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f2f4f2",
+                        "surface-variant": "#e1e3e1",
+                        "on-secondary-fixed": "#00201a",
+                        "on-secondary-container": "#2e6d5f",
+                        "on-primary-container": "#f6fff6",
+                        "primary-fixed": "#7bfabb",
+                        "on-tertiary": "#ffffff",
+                        "tertiary": "#9f393c",
+                        "on-error-container": "#93000a",
+                        "on-primary": "#ffffff",
+                        "surface": "#f8faf8",
+                        "surface-container": "#eceeec",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "surface-dim": "#d8dad9",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "surface-container-highest": "#e1e3e1",
+                        "primary-fixed-dim": "#5ddda1",
+                        "outline-variant": "#bccabf",
+                        "on-tertiary-fixed": "#410007",
+                        "outline": "#6d7a71",
+                        "surface-tint": "#006c46",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#bf5152",
+                        "primary-container": "#008558",
+                        "on-primary-fixed": "#002112",
+                        "background": "#f8faf8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["IBM Plex Mono"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8faf8; color: #191c1b; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+        .veridian-gradient { background: linear-gradient(135deg, #006a44 0%, #008558 100%); }
+        .veridian-glow { background: radial-gradient(circle, rgba(123, 250, 187, 0.2) 0%, rgba(123, 250, 187, 0) 70%); }
+        .glass-panel { backdrop-filter: blur(24px); background-color: rgba(255, 255, 255, 0.8); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-surface selection:bg-primary-fixed">
+<!-- Top Navigation -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-[#f8faf8]/80 backdrop-blur-xl shadow-[0_24px_48px_-12px_rgba(25,28,27,0.06)]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black text-[#006a44] tracking-tighter">Veridian Engineering</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#191c1b] opacity-70 font-['Inter'] tracking-tighter font-semibold hover:bg-[#e6e9e7] transition-colors duration-200" href="#">Dashboard</a>
+<a class="text-[#006a44] font-bold border-b-2 border-[#006a44] pb-1 font-['Inter'] tracking-tighter" href="#">Projects</a>
+<a class="text-[#191c1b] opacity-70 font-['Inter'] tracking-tighter font-semibold hover:bg-[#e6e9e7] transition-colors duration-200" href="#">Inventory</a>
+<a class="text-[#191c1b] opacity-70 font-['Inter'] tracking-tighter font-semibold hover:bg-[#e6e9e7] transition-colors duration-200" href="#">Analysis</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="bg-[#006a44] text-white px-4 py-1.5 rounded-md text-sm font-semibold scale-95 active:opacity-80 transition-all">New Assessment</button>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">settings</span>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant/20">
+<img alt="User profile" data-alt="Close-up professional headshot of a senior engineer with a neutral expression and soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNBP82j0hqfGuxDuFGWQuhB2zHTGx-HOgmi89dln22ByTSu3IHYtGGDhKeaUS13sDpV5wCemal6snKwmpQQmez1TGFNYE9S_aSyFW3XhpbcpZJW5cvLDywITBP0VGrdIruWE73Doz1vICrvGi4SBHGqVFfYDy_DX2bvxzWNMMD86LTWv3urfD0sfWIXJSaWGreiAVI1woIpKXn9ttTJXoz0pWWCq27WTI-J8z7Xm1_n_TVobDo98TOpVhT9UWGBJEVqd2TEaKHE70U"/>
+</div>
+</div>
+</header>
+<!-- Side Navigation -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-[#f2f4f2] flex flex-col py-6 z-40 border-r border-transparent">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-white">factory</span>
+</div>
+<div>
+<h3 class="text-[10px] font-bold tracking-[0.2em] uppercase text-primary font-['IBM_Plex_Mono']">Project Veridian</h3>
+<p class="text-[10px] text-on-surface-variant opacity-60 font-['IBM_Plex_Mono']">Precision Phase II</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="bg-gradient-to-br from-[#006a44] to-[#008558] text-white rounded-md mx-2 px-4 py-3 shadow-lg shadow-emerald-900/20 flex items-center gap-3 font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest translate-x-1 duration-300" href="#">
+<span class="material-symbols-outlined text-sm">account_tree</span> Hierarchy
+            </a>
+<a class="text-[#191c1b] flex items-center gap-3 px-6 py-3 opacity-60 hover:bg-[#ffffff] hover:opacity-100 transition-all font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm">analytics</span> Impact
+            </a>
+<a class="text-[#191c1b] flex items-center gap-3 px-6 py-3 opacity-60 hover:bg-[#ffffff] hover:opacity-100 transition-all font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm">query_stats</span> Metrics
+            </a>
+<a class="text-[#191c1b] flex items-center gap-3 px-6 py-3 opacity-60 hover:bg-[#ffffff] hover:opacity-100 transition-all font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm">lan</span> Supply Chain
+            </a>
+<a class="text-[#191c1b] flex items-center gap-3 px-6 py-3 opacity-60 hover:bg-[#ffffff] hover:opacity-100 transition-all font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm">history</span> Archive
+            </a>
+</nav>
+<div class="px-4 mt-auto">
+<button class="w-full veridian-gradient text-white py-3 rounded-md text-[10px] font-bold tracking-widest font-['IBM_Plex_Mono'] uppercase shadow-xl shadow-primary/10">
+                Export Report
+            </button>
+<div class="mt-4 border-t border-outline-variant/10 pt-4">
+<a class="text-[#191c1b] flex items-center gap-3 px-2 py-2 opacity-60 hover:opacity-100 transition-all font-['IBM_Plex_Mono'] text-xs uppercase tracking-widest" href="#">
+<span class="material-symbols-outlined text-sm">help_outline</span> Help Center
+                </a>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-16 p-12 min-h-screen">
+<!-- Header & Breadcrumbs -->
+<header class="mb-12">
+<nav class="flex items-center gap-2 mb-4 text-[11px] font-['IBM_Plex_Mono'] text-on-surface-variant uppercase tracking-widest opacity-60">
+<span>Projects</span>
+<span class="material-symbols-outlined text-[12px]">chevron_right</span>
+<span>Manufacturing</span>
+<span class="material-symbols-outlined text-[12px]">chevron_right</span>
+<span class="text-primary font-bold">Detail View</span>
+</nav>
+<div class="flex justify-between items-end">
+<div>
+<h1 class="text-6xl font-black tracking-tighter text-on-surface mb-2">Electric Vehicle Manufacturing</h1>
+<p class="text-on-surface-variant opacity-60 max-w-xl">Deep-dive structural analysis of the Phase II assembly line efficiency and ecological impact metrics across regional hubs.</p>
+</div>
+<div class="flex gap-3 pb-2">
+<button class="px-5 py-2.5 rounded-lg border border-outline-variant/20 hover:bg-surface-container-low transition-colors font-semibold text-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">share</span> Share
+                    </button>
+<button class="px-5 py-2.5 rounded-lg bg-surface-container-high hover:bg-surface-variant transition-colors font-semibold text-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">edit</span> Edit Project
+                    </button>
+</div>
+</div>
+</header>
+<!-- Case Switcher (Pill List) -->
+<section class="mb-10 flex items-center gap-4">
+<div class="bg-surface-container-low p-1.5 rounded-full flex gap-1">
+<button class="bg-white px-6 py-2 rounded-full text-xs font-bold font-['IBM_Plex_Mono'] uppercase tracking-widest text-primary shadow-sm">Baseline Scenario</button>
+<button class="px-6 py-2 rounded-full text-xs font-bold font-['IBM_Plex_Mono'] uppercase tracking-widest text-on-surface-variant opacity-50 hover:opacity-100 transition-opacity">Renewable Scenario</button>
+<button class="px-6 py-2 rounded-full text-xs font-bold font-['IBM_Plex_Mono'] uppercase tracking-widest text-on-surface-variant opacity-50 hover:opacity-100 transition-opacity">Expansion Case A</button>
+</div>
+<button class="w-8 h-8 rounded-full border border-outline-variant/20 flex items-center justify-center hover:bg-white">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</section>
+<!-- Tabbed Interface -->
+<section class="mb-8">
+<div class="flex gap-12 border-b border-outline-variant/10">
+<button class="pb-4 border-b-2 border-primary text-primary font-bold text-sm tracking-tight flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">account_tree</span>
+                    Hierarchy
+                </button>
+<button class="pb-4 border-b-2 border-transparent text-on-surface-variant/50 font-semibold text-sm tracking-tight hover:text-on-surface transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">analytics</span>
+                    Analytics
+                </button>
+</div>
+</section>
+<!-- ACTIVE TAB: Hierarchy -->
+<div class="space-y-6" id="hierarchy-tab">
+<!-- Process Hierarchy Tree -->
+<div class="bg-surface-container-lowest rounded-xl p-8 border border-outline-variant/5 shadow-[0_24px_48px_-12px_rgba(25,28,27,0.04)]">
+<!-- Tree Legend Header -->
+<div class="flex justify-between items-center mb-12 px-4">
+<div class="flex gap-12">
+<div class="flex flex-col">
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/40 uppercase tracking-widest">Level 01</span>
+<span class="text-sm font-bold">Product</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/40 uppercase tracking-widest">Level 02</span>
+<span class="text-sm font-bold">Major Assembly</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/40 uppercase tracking-widest">Level 03</span>
+<span class="text-sm font-bold">Sub-Process</span>
+</div>
+<div class="flex flex-col">
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/40 uppercase tracking-widest">Level 04</span>
+<span class="text-sm font-bold">Elemental Task</span>
+</div>
+</div>
+<div class="flex items-center gap-2 text-[10px] font-['IBM_Plex_Mono'] text-primary font-bold uppercase tracking-widest">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+                        Active Stream
+                    </div>
+</div>
+<!-- Tree Structure -->
+<div class="relative">
+<!-- Vertical Connector Path -->
+<div class="absolute left-[39px] top-12 bottom-12 w-[1px] bg-outline-variant/20"></div>
+<!-- Level 01: Product -->
+<div class="flex items-center gap-6 mb-16 relative">
+<div class="w-20 h-20 rounded-2xl veridian-gradient flex items-center justify-center text-white shadow-xl shadow-emerald-900/20 z-10">
+<span class="material-symbols-outlined text-3xl">directions_car</span>
+</div>
+<div>
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-primary font-bold">ROOT_NODE_01</span>
+<h4 class="text-2xl font-bold tracking-tight">EV-X Chassis Alpha</h4>
+</div>
+</div>
+<!-- Level 02: Major Assemblies -->
+<div class="ml-10 space-y-20 relative">
+<!-- Row 1: Powertrain -->
+<div class="relative flex items-start gap-12">
+<!-- Connector -->
+<div class="absolute -left-[1px] top-6 w-12 h-[1px] bg-outline-variant/20"></div>
+<div class="bg-surface-container-low p-6 rounded-xl w-64 border border-outline-variant/10">
+<div class="flex items-center justify-between mb-4">
+<span class="material-symbols-outlined text-primary">bolt</span>
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/60">02.1</span>
+</div>
+<h5 class="font-bold text-sm mb-1 uppercase tracking-tight">Powertrain Assembly</h5>
+<p class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/60">Efficiency: 94.2%</p>
+</div>
+<!-- Level 03 Sub-processes -->
+<div class="flex flex-col gap-6">
+<div class="flex items-center gap-4 group">
+<div class="w-10 h-10 rounded-full border border-primary/30 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+<span class="material-symbols-outlined text-sm">settings_input_component</span>
+</div>
+<div>
+<p class="text-xs font-bold uppercase tracking-wide">Motor Winding</p>
+<p class="text-[10px] font-['IBM_Plex_Mono'] text-primary">OP_CODE: 4402</p>
+</div>
+<!-- Level 04: Elemental Tasks -->
+<div class="ml-8 flex gap-3">
+<div class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-[9px] font-['IBM_Plex_Mono']">Coil Placement</div>
+<div class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-[9px] font-['IBM_Plex_Mono']">Resin Dip</div>
+</div>
+</div>
+<div class="flex items-center gap-4 group">
+<div class="w-10 h-10 rounded-full border border-outline-variant/20 flex items-center justify-center text-on-surface-variant group-hover:bg-surface-variant transition-all">
+<span class="material-symbols-outlined text-sm">battery_charging_full</span>
+</div>
+<div>
+<p class="text-xs font-bold uppercase tracking-wide">Battery Pack Integration</p>
+<p class="text-[10px] font-['IBM_Plex_Mono'] opacity-40">OP_CODE: 4408</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Row 2: Structural Shell -->
+<div class="relative flex items-start gap-12">
+<!-- Connector -->
+<div class="absolute -left-[1px] top-6 w-12 h-[1px] bg-outline-variant/20"></div>
+<div class="bg-surface-container-low p-6 rounded-xl w-64 border border-outline-variant/10">
+<div class="flex items-center justify-between mb-4">
+<span class="material-symbols-outlined text-primary">architecture</span>
+<span class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/60">02.2</span>
+</div>
+<h5 class="font-bold text-sm mb-1 uppercase tracking-tight">Structural Shell</h5>
+<p class="text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/60">Efficiency: 88.5%</p>
+</div>
+<div class="flex flex-col gap-6">
+<div class="flex items-center gap-4 opacity-40">
+<div class="w-10 h-10 rounded-full border border-outline-variant/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-sm">precision_manufacturing</span>
+</div>
+<div>
+<p class="text-xs font-bold uppercase tracking-wide">Robotic Welding</p>
+<p class="text-[10px] font-['IBM_Plex_Mono']">OP_CODE: 2210</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Contextual Stats Grid -->
+<div class="grid grid-cols-4 gap-6">
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] font-['IBM_Plex_Mono'] uppercase tracking-[0.2em] text-on-surface-variant opacity-50 mb-2">Total Nodes</p>
+<p class="text-3xl font-black font-['IBM_Plex_Mono']">142</p>
+<div class="mt-4 flex items-center gap-1 text-[10px] font-['IBM_Plex_Mono'] text-primary">
+<span class="material-symbols-outlined text-[12px]">trending_up</span>
+                        +12% vs Baseline
+                    </div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] font-['IBM_Plex_Mono'] uppercase tracking-[0.2em] text-on-surface-variant opacity-50 mb-2">Cycle Time</p>
+<p class="text-3xl font-black font-['IBM_Plex_Mono']">48.2m</p>
+<div class="mt-4 flex items-center gap-1 text-[10px] font-['IBM_Plex_Mono'] text-on-surface-variant/60">
+<span class="material-symbols-outlined text-[12px]">timer</span>
+                        Optimized Level 03
+                    </div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-outline-variant/5">
+<p class="text-[10px] font-['IBM_Plex_Mono'] uppercase tracking-[0.2em] text-on-surface-variant opacity-50 mb-2">Risk Index</p>
+<p class="text-3xl font-black font-['IBM_Plex_Mono'] text-error">0.14</p>
+<div class="mt-4 flex items-center gap-1 text-[10px] font-['IBM_Plex_Mono'] text-on-error-container">
+<span class="material-symbols-outlined text-[12px]">warning</span>
+                        Supply Chain Fragility
+                    </div>
+</div>
+<div class="bg-primary/5 p-6 rounded-xl border border-primary/10 relative overflow-hidden">
+<div class="veridian-glow absolute -right-10 -top-10 w-32 h-32 opacity-40"></div>
+<p class="text-[10px] font-['IBM_Plex_Mono'] uppercase tracking-[0.2em] text-primary mb-2">Ecology Score</p>
+<p class="text-3xl font-black font-['IBM_Plex_Mono'] text-primary">A+</p>
+<div class="mt-4 flex items-center gap-1 text-[10px] font-['IBM_Plex_Mono'] text-primary">
+<span class="material-symbols-outlined text-[12px]">eco</span>
+                        98% Recyclable
+                    </div>
+</div>
+</div>
+</div>
+<!-- HIDDEN TAB CONTENT: Analytics (Structure present) -->
+<div class="hidden opacity-0" id="analytics-tab">
+<!-- This section is hidden by default but prepared for state changes -->
+<div class="grid grid-cols-2 gap-8">
+<div class="h-64 bg-surface-container-low rounded-xl"></div>
+<div class="h-64 bg-surface-container-low rounded-xl"></div>
+</div>
+</div>
+</main>
+<!-- Floating Legend (Glassmorphism) -->
+<div class="fixed bottom-12 right-12 glass-panel p-6 rounded-2xl shadow-[0_24px_48px_-12px_rgba(25,28,27,0.1)] border border-white/40 max-w-xs z-50">
+<div class="flex items-center justify-between mb-4">
+<h4 class="text-[10px] font-bold font-['IBM_Plex_Mono'] uppercase tracking-[0.2em]">Live Telemetry</h4>
+<span class="flex h-2 w-2 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+</span>
+</div>
+<p class="text-xs text-on-surface-variant opacity-80 mb-4 italic">Tracking real-time throughput from the Stuttgart Phase II plant.</p>
+<div class="space-y-3">
+<div class="flex justify-between items-center text-[11px]">
+<span class="opacity-60 uppercase font-['IBM_Plex_Mono']">Current Output</span>
+<span class="font-bold font-['IBM_Plex_Mono']">842 Units/h</span>
+</div>
+<div class="w-full bg-outline-variant/10 h-1.5 rounded-full overflow-hidden">
+<div class="veridian-gradient h-full w-[84%]"></div>
+</div>
+</div>
+</div>
+</body></html>

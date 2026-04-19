@@ -1,0 +1,310 @@
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&amp;family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#410007",
+                        "on-tertiary-container": "#fffbff",
+                        "on-secondary-container": "#2e6d5f",
+                        "on-secondary": "#ffffff",
+                        "outline": "#6d7a71",
+                        "on-primary-container": "#f6fff6",
+                        "outline-variant": "#bccabf",
+                        "on-primary-fixed-variant": "#005234",
+                        "on-secondary-fixed-variant": "#065043",
+                        "inverse-on-surface": "#eff1ef",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#bf5152",
+                        "surface-bright": "#f8faf8",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "secondary": "#29695b",
+                        "surface-tint": "#006c46",
+                        "surface-container-low": "#f2f4f2",
+                        "tertiary-fixed-dim": "#ffb3b1",
+                        "secondary-fixed-dim": "#94d3c1",
+                        "tertiary": "#9f393c",
+                        "inverse-primary": "#5ddda1",
+                        "surface-container": "#eceeec",
+                        "primary-fixed-dim": "#5ddda1",
+                        "on-primary": "#ffffff",
+                        "surface": "#f8faf8",
+                        "secondary-fixed": "#afefdd",
+                        "primary-container": "#008558",
+                        "surface-variant": "#e1e3e1",
+                        "on-tertiary-fixed-variant": "#832429",
+                        "surface-container-high": "#e6e9e7",
+                        "primary": "#006a44",
+                        "on-surface-variant": "#3d4a41",
+                        "surface-container-lowest": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#ffdad8",
+                        "on-primary-fixed": "#002112",
+                        "on-secondary-fixed": "#00201a",
+                        "primary-fixed": "#7bfabb",
+                        "on-surface": "#191c1b",
+                        "surface-dim": "#d8dad9",
+                        "surface-container-highest": "#e1e3e1",
+                        "background": "#f8faf8",
+                        "inverse-surface": "#2e3130",
+                        "secondary-container": "#acedda",
+                        "on-background": "#191c1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["IBM Plex Mono"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'IBM Plex Mono', monospace; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .veridian-gradient {
+            background: linear-gradient(135deg, #006a44 0%, #008558 100%);
+        }
+        .veridian-glow {
+            background: radial-gradient(circle, rgba(123, 250, 187, 0.15) 0%, rgba(248, 250, 248, 0) 70%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-[#f8faf8]/80 backdrop-blur-xl docked full-width top-0 sticky z-50 shadow-[0px_24px_48px_-12px_rgba(25,28,27,0.06)]">
+<div class="flex justify-between items-center w-full px-8 h-16 max-w-[1920px] mx-auto">
+<div class="flex items-center gap-8">
+<span class="font-['Inter'] text-xl font-bold tracking-tighter text-[#006a44]">LCAPIX</span>
+<nav class="hidden md:flex gap-6">
+<a class="text-[#006a44] border-b-2 border-[#006a44] pb-1 font-['Inter'] tracking-tight font-semibold text-sm cursor-pointer active:opacity-70 transition-colors duration-200" href="#">Dashboard</a>
+<a class="text-[#404944] font-medium font-['Inter'] tracking-tight text-sm cursor-pointer active:opacity-70 hover:text-[#006a44] transition-colors duration-200" href="#">Inventory</a>
+<a class="text-[#404944] font-medium font-['Inter'] tracking-tight text-sm cursor-pointer active:opacity-70 hover:text-[#006a44] transition-colors duration-200" href="#">Emissions</a>
+<a class="text-[#404944] font-medium font-['Inter'] tracking-tight text-sm cursor-pointer active:opacity-70 hover:text-[#006a44] transition-colors duration-200" href="#">Reports</a>
+<a class="text-[#404944] font-medium font-['Inter'] tracking-tight text-sm cursor-pointer active:opacity-70 hover:text-[#006a44] transition-colors duration-200" href="#">Supply Chain</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative flex items-center bg-surface-container-low px-4 py-1.5 rounded-full">
+<span class="material-symbols-outlined text-outline text-sm mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-48 font-label" placeholder="Search systems..." type="text"/>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant p-2 hover:bg-surface-container-high rounded-full transition-colors cursor-pointer">notifications</button>
+<button class="material-symbols-outlined text-on-surface-variant p-2 hover:bg-surface-container-high rounded-full transition-colors cursor-pointer">settings</button>
+<div class="h-8 w-8 rounded-full overflow-hidden ml-2 bg-surface-container-high">
+<img alt="User profile" data-alt="professional portrait of a sustainability officer in a bright modern office setting with natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUNU72V5wS4Mp3a-sIQb3rSjEz_XdgbPi1NtunC0teqZuERmonyp2ysg2_WqFBQlRyroiKv3CAQF2EGtpT78rdXaNjcGhe0AO_9cchx40NjdxN2mmySU7tReU0UmtrANZKjAjGun8De3AjtfOxMbFSFK6UtC_hm55bhDHQE0VA92SQwFMw9uL34_kCz3V-zZLGuBnXpkOQYefoZIqgPsc4l1-W9hC8Kx8drwyzdT12U-KISptaYgsujkxZBv9uTvVgvkw1eU-TGi8F"/>
+</div>
+</div>
+</div>
+</header>
+<main class="max-w-[1920px] mx-auto px-8 py-10 flex gap-8">
+<!-- Left Column: Main Dashboard Content -->
+<div class="flex-1 space-y-12">
+<!-- Hero Section -->
+<section class="relative">
+<h1 class="font-headline font-extrabold text-5xl tracking-tighter text-on-surface mb-2">Systems Overview</h1>
+<p class="font-label text-on-surface-variant text-lg">Botanical precision in environmental asset management.</p>
+<div class="absolute -top-10 -left-10 w-64 h-64 veridian-glow -z-10 rounded-full opacity-50"></div>
+</section>
+<!-- KPI Row -->
+<section class="grid grid-cols-1 md:grid-cols-4 gap-6">
+<!-- Projects -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/15 hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="mono text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">Active Projects</span>
+<span class="material-symbols-outlined text-primary">account_tree</span>
+</div>
+<div class="mono text-4xl font-bold text-on-surface">24</div>
+<div class="mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-xs" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span class="mono text-[11px] text-primary">+12% vs LY</span>
+</div>
+</div>
+<!-- Assessments -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/15 hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="mono text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">Assessments</span>
+<span class="material-symbols-outlined text-primary">analytics</span>
+</div>
+<div class="mono text-4xl font-bold text-on-surface">158</div>
+<div class="mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-on-surface-variant text-xs">horizontal_rule</span>
+<span class="mono text-[11px] text-on-surface-variant">Stable month</span>
+</div>
+</div>
+<!-- Factors -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/15 hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="mono text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">Factors Logged</span>
+<span class="material-symbols-outlined text-primary">biotech</span>
+</div>
+<div class="mono text-4xl font-bold text-on-surface">1,042</div>
+<div class="mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-xs" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+<span class="mono text-[11px] text-primary">Data enriched</span>
+</div>
+</div>
+<!-- Components -->
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/15 hover:shadow-lg transition-shadow">
+<div class="flex justify-between items-start mb-4">
+<span class="mono text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">Components</span>
+<span class="material-symbols-outlined text-primary">view_quilt</span>
+</div>
+<div class="mono text-4xl font-bold text-on-surface">42</div>
+<div class="mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-error text-xs">priority_high</span>
+<span class="mono text-[11px] text-error">2 need review</span>
+</div>
+</div>
+</section>
+<!-- Project Grid -->
+<section>
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline font-bold text-2xl text-on-surface tracking-tight">Active Portfolio</h2>
+<p class="font-label text-on-surface-variant text-sm">Strategic environmental initiatives currently in deployment.</p>
+</div>
+<button class="veridian-gradient text-white px-6 py-2.5 rounded-lg flex items-center gap-2 font-headline font-semibold text-sm shadow-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">add</span>
+                        New Project
+                    </button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Project Card 1 -->
+<div class="group bg-surface-container-low rounded-xl overflow-hidden flex flex-col md:flex-row transition-all hover:translate-y-[-4px]">
+<div class="w-full md:w-1/3 h-48 md:h-auto relative overflow-hidden">
+<img alt="Solar grid project" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="wide shot of a vast solar farm in a lush green valley during a clear bright day with sharp focus" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9CZ99jiaheCcAboNzqbLA_824YQxF1Jx5e0rqnsj7vfmXbXgvGf5xew3uiQKkSppHwmuAlG4u71TTyxhdTk7-1TnLEEs_L6pX1QpQPQEUpVKkcf5Y2sOGGj0o-sv-NrhB0ku6toDNXGJRv3Xui-Gc3zRhGwf1-MhrkAevncQPbU6ewOyoczqn7X1O20f7zVK49r4ssBG3Ilwsy_kNv-htL2uSsc4loWWivyd9DPq8vQjmK1ROjDFDrb-69Uam8YkoZhzkf69kgvzD"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div class="flex-1 p-6 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline font-bold text-xl text-on-surface">Solar Grid Delta</h3>
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full mono text-[10px] font-bold">STABLE</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-6">Phase 2 integration of renewable storage arrays for metropolitan grid relief.</p>
+</div>
+<div class="flex items-center gap-6">
+<div>
+<div class="mono text-[10px] text-outline uppercase tracking-wider mb-1">Efficiency</div>
+<div class="mono font-bold text-primary">94.2%</div>
+</div>
+<div>
+<div class="mono text-[10px] text-outline uppercase tracking-wider mb-1">Impact</div>
+<div class="mono font-bold text-primary">A+</div>
+</div>
+<div class="ml-auto">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">arrow_forward</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 2 -->
+<div class="group bg-surface-container-low rounded-xl overflow-hidden flex flex-col md:flex-row transition-all hover:translate-y-[-4px]">
+<div class="w-full md:w-1/3 h-48 md:h-auto relative overflow-hidden">
+<img alt="Urban Mobility" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="modern eco-friendly city street with green infrastructure, bicycle lanes, and glass buildings at dusk" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAatFnz98KUxzl3spguIslwtgnF3grbF7BlvcmD-ERdNxZ_75qkYgQsSHJ4pISwcwOo_yFL_nxoU5tqxJp9z-ye9KxmvRdPnXRasOVxSFR2eA7dJ_DtitrtRX0CKb55tQCE2i_nGgpOi7aGEWmDb5ripC0PaxPIO7lAMbPLRFoUchCW0K7pvMeMJfyj1-J68GdfzVjp1ZuN5LcXSMRzCUf4WuneGMowCIufo_le5jFLWeWzekhmfE-WKPRy4xVm3qZkvNI-c9c3vxSX"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div class="flex-1 p-6 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline font-bold text-xl text-on-surface">Urban Mobility V2</h3>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed-variant px-3 py-1 rounded-full mono text-[10px] font-bold">ANALYSIS</span>
+</div>
+<p class="text-sm text-on-surface-variant mb-6">Carbon-neutral transit infrastructure mapping for the greater metropolitan district.</p>
+</div>
+<div class="flex items-center gap-6">
+<div>
+<div class="mono text-[10px] text-outline uppercase tracking-wider mb-1">Coverage</div>
+<div class="mono font-bold text-primary">82.1%</div>
+</div>
+<div>
+<div class="mono text-[10px] text-outline uppercase tracking-wider mb-1">Offset</div>
+<div class="mono font-bold text-primary">B</div>
+</div>
+<div class="ml-auto">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">arrow_forward</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Sidebar: Recent Activity -->
+<aside class="w-80 bg-surface-container-lowest p-8 rounded-2xl hidden xl:block shadow-[0px_24px_48px_-12px_rgba(25,28,27,0.04)] border border-outline-variant/10 self-start sticky top-24">
+<h2 class="font-headline font-bold text-xl text-on-surface mb-8">Activity Feed</h2>
+<div class="space-y-8">
+<!-- Activity Item 1 -->
+<div class="relative pl-6 before:absolute before:left-0 before:top-2 before:bottom-[-2rem] before:w-px before:bg-outline-variant/30 last:before:hidden">
+<div class="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary ring-4 ring-primary-fixed/20"></div>
+<div class="mono text-[10px] text-outline mb-1 uppercase tracking-widest">Just Now</div>
+<div class="text-sm font-semibold text-on-surface mb-1">Factor recalibrated</div>
+<p class="text-xs text-on-surface-variant">Grid sensor 'S-401' adjusted by 0.4% efficiency.</p>
+</div>
+<!-- Activity Item 2 -->
+<div class="relative pl-6 before:absolute before:left-0 before:top-2 before:bottom-[-2rem] before:w-px before:bg-outline-variant/30 last:before:hidden">
+<div class="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-outline-variant"></div>
+<div class="mono text-[10px] text-outline mb-1 uppercase tracking-widest">2h ago</div>
+<div class="text-sm font-semibold text-on-surface mb-1">Assessment Finalized</div>
+<p class="text-xs text-on-surface-variant">Urban Mobility Phase 1 report exported to PDF.</p>
+</div>
+<!-- Activity Item 3 -->
+<div class="relative pl-6 before:absolute before:left-0 before:top-2 before:bottom-[-2rem] before:w-px before:bg-outline-variant/30 last:before:hidden">
+<div class="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-error"></div>
+<div class="mono text-[10px] text-outline mb-1 uppercase tracking-widest">5h ago</div>
+<div class="text-sm font-semibold text-on-surface mb-1">System Alert</div>
+<p class="text-xs text-on-surface-variant">Maintenance required on Solar Array Unit 7.</p>
+</div>
+</div>
+<div class="mt-12 p-6 bg-surface-container rounded-xl">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">eco</span>
+<span class="font-headline font-bold text-sm">Sustainability Lab</span>
+</div>
+<p class="text-xs text-on-surface-variant mb-4 leading-relaxed">System performance is optimal. Veridian levels at 98% nominal.</p>
+<button class="w-full bg-primary-container text-on-primary-container py-2 rounded-lg mono text-[10px] font-bold uppercase tracking-widest hover:opacity-90 transition-opacity">
+                    Generate ESG Report
+                </button>
+</div>
+</aside>
+</main>
+<!-- Bottom Nav for Mobile -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur-md flex justify-around items-center py-4 px-6 border-t border-outline-variant/20 z-50">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-[10px] mono">Home</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="text-[10px] mono">Asset</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] mono">Data</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">account_circle</span>
+<span class="text-[10px] mono">Me</span>
+</button>
+</nav>
+</body></html>
