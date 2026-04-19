@@ -1,183 +1,201 @@
-import { AppTopBar } from "@/components/lcapix"
-import { AuthGuard } from "@/components/auth-guard"
-import { Leaf, Target, Users, Zap } from "lucide-react"
+// app/about/page.tsx
+'use client';
+
+import { AuthGuard } from '@/components/auth-guard';
+import { AppTopBar, Icon, StatusDot } from '@/components/lcapix';
+import { DEMO_METHODS, DEMO_INTEGRATIONS } from '@/lib/lcapix-demo';
+
+interface PhaseDef {
+  readonly id: string;
+  readonly label: string;
+  readonly short: string;
+  readonly color: string;
+}
+
+const LCA_PHASES: readonly PhaseDef[] = [
+  { id: 'goal', label: 'Goal', short: 'G', color: 'var(--brand-primary)' },
+  { id: 'inventory', label: 'Inventory', short: 'I', color: 'var(--chart-2)' },
+  { id: 'impact', label: 'Impact', short: 'M', color: 'var(--text-secondary)' },
+  { id: 'interpretation', label: 'Interpretation', short: 'N', color: 'var(--text-tertiary)' },
+  { id: 'report', label: 'Report', short: 'R', color: 'var(--chart-5)' },
+];
+
+const SOURCE_IDS = ['openlca', 'pubchem', 'bls', 'eia'] as const;
 
 export default function AboutPage() {
-  const features = [
-    "Hierarchical Component Structure",
-    "Base vs Comparative Analysis",
-    "Cost Tracking",
-    "Driver Category Management",
-    "Real-time Collaboration",
-  ]
-
-  const audiences = [
-    {
-      name: "Sustainability Teams",
-      copy: "Track and analyze environmental impact across product lifecycles.",
-    },
-    {
-      name: "Product Managers",
-      copy: "Make informed decisions about product design and materials.",
-    },
-    {
-      name: "Consultants",
-      copy: "Deliver comprehensive LCA reports to clients efficiently.",
-    },
-  ]
-
-  const capabilities = [
-    {
-      title: "Project Organization",
-      copy: "Organize your LCA work into projects with multiple comparison cases.",
-    },
-    {
-      title: "Hierarchical Components",
-      copy: "Build detailed process hierarchies from machine lines to elemental tasks.",
-    },
-    {
-      title: "Cost Analysis",
-      copy: "Track operational and capital costs across all components.",
-    },
-    {
-      title: "Driver Management",
-      copy: "Categorize and manage environmental drivers across energy, material, labor, and transport.",
-    },
-  ]
+  const sources = SOURCE_IDS
+    .map((id) => DEMO_INTEGRATIONS.find((i) => i.id === id))
+    .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
   return (
     <AuthGuard>
-      <><AppTopBar current="home" />
-        <div className="bg-surface min-h-screen">
-          <div className="max-w-5xl mx-auto px-8 md:px-16 py-16">
-            {/* Hero */}
-            <section className="mb-24 relative">
-              <div
-                className="absolute -top-16 -left-16 w-64 h-64 pointer-events-none"
-                style={{
-                  background:
-                    "radial-gradient(circle at center, rgba(123, 250, 187, 0.15) 0%, transparent 70%)",
-                }}
-              />
-              <div className="flex items-baseline gap-4 mb-6">
-                <span className="font-mono text-xs font-bold tracking-widest text-primary uppercase">
-                  About / LCAPIX
-                </span>
-                <div className="h-px bg-outline-variant/30 flex-1" />
-              </div>
-              <div className="flex items-start gap-5">
-                <div className="w-12 h-12 rounded-xl veridian-gradient flex items-center justify-center shadow-botanical shrink-0">
-                  <Leaf className="h-6 w-6 text-white" />
-                </div>
-                <div className="max-w-[720px]">
-                  <h1
-                    className="text-5xl md:text-[3.5rem] font-black leading-[1.05] mb-6 text-on-surface"
-                    style={{ letterSpacing: "-0.02em" }}
-                  >
-                    Professional <span className="text-primary">Life Cycle</span> Assessment,
-                    reimagined.
-                  </h1>
-                  <p className="text-lg text-on-surface-variant leading-relaxed">
-                    Professional Life Cycle Assessment platform for sustainable decision making.
-                  </p>
-                </div>
-              </div>
-            </section>
+      <div className="app-shell">
+        <AppTopBar current="home" />
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 24px 80px' }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>ABOUT LCAPIX</div>
+          <h1
+            className="display display-lg"
+            style={{ margin: 0, marginBottom: 24, color: 'var(--text-primary)' }}
+          >
+            What is LCAPIX?
+          </h1>
+          <div
+            className="body"
+            style={{
+              fontSize: 16,
+              color: 'var(--text-secondary)',
+              lineHeight: 1.75,
+              marginBottom: 40,
+            }}
+          >
+            <p style={{ margin: 0, marginBottom: 16 }}>
+              LCAPIX is a Life Cycle Assessment platform built for practicing sustainability
+              engineers. We pair the rigor of ISO 14040/14044 with the ergonomics of a modern
+              web tool.
+            </p>
+            <p style={{ margin: 0 }}>
+              Where existing tools treat cost and environmental impact as separate analyses, we
+              unify them — so an engineer can answer the question that actually lands a project:
+              {' '}“for how much more, and how much less carbon?”
+            </p>
+          </div>
 
-            {/* Mission + Features */}
-            <section className="grid grid-cols-12 gap-8 mb-24">
-              <div className="col-span-12 md:col-span-7 bg-surface-container-lowest p-10 rounded-xl shadow-botanical">
-                <div className="flex items-center gap-3 mb-6">
-                  <Target className="h-7 w-7 text-primary" />
-                  <h2 className="text-2xl font-bold tracking-tight">Our Mission</h2>
-                </div>
-                <p className="text-on-surface-variant leading-relaxed max-w-[60ch]">
-                  To democratize Life Cycle Assessment by providing intuitive, powerful tools that
-                  enable organizations to make data-driven sustainable decisions and reduce their
-                  environmental impact.
-                </p>
-              </div>
-              <div className="col-span-12 md:col-span-5 bg-surface-container-low p-10 rounded-xl">
-                <div className="flex items-center gap-3 mb-6">
-                  <Zap className="h-6 w-6 text-primary" />
-                  <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-primary font-bold">
-                    Key Features
-                  </h3>
-                </div>
-                <ul className="space-y-3">
-                  {features.map((f) => (
-                    <li
-                      key={f}
-                      className="flex items-center gap-3 px-4 py-3 rounded-full bg-surface-container-lowest"
+          <h2 className="headline" style={{ margin: 0, marginBottom: 16 }}>
+            The methodology
+          </h2>
+          <div className="card-section" style={{ marginBottom: 40 }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                marginBottom: 16,
+                flexWrap: 'wrap',
+                alignItems: 'stretch',
+              }}
+            >
+              {LCA_PHASES.map((h, i) => (
+                <div
+                  key={h.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 4,
+                      background: 'var(--surface-overlay)',
+                      border: '1px solid var(--border-subtle)',
+                      borderLeft: '3px solid ' + h.color,
+                    }}
+                  >
+                    <div
+                      className="mono"
+                      style={{
+                        fontSize: 10,
+                        color: h.color,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.1em',
+                        fontWeight: 600,
+                      }}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full veridian-gradient" />
-                      <span className="text-sm font-medium">{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-
-            {/* Who We Serve */}
-            <section className="mb-24">
-              <div className="flex items-center gap-4 mb-12">
-                <Users className="h-7 w-7 text-primary" />
-                <h2 className="text-3xl font-bold tracking-tighter">Who We Serve</h2>
-                <div className="h-px bg-outline-variant/30 flex-1" />
-                <span className="font-mono text-xs opacity-50 uppercase">Sec. 01</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {audiences.map((a) => (
-                  <div
-                    key={a.name}
-                    className="p-8 rounded-xl bg-surface-container-lowest shadow-botanical transition-colors hover:veridian-gradient-soft"
-                  >
-                    <span className="font-mono text-[10px] text-primary font-bold tracking-[0.2em] uppercase block mb-3">
-                      Audience
+                      {h.short}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                      {h.label}
+                    </div>
+                  </div>
+                  {i < LCA_PHASES.length - 1 && (
+                    <span style={{ color: 'var(--text-tertiary)' }}>
+                      <Icon name="arrow-right" size={14} />
                     </span>
-                    <h3 className="text-xl font-bold mb-3">{a.name}</h3>
-                    <p className="text-sm text-on-surface-variant leading-relaxed">{a.copy}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="body" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              Every assessment follows the ISO 14040/14044 four-phase sequence, extended with a
+              Report stage. Goal &amp; scope frames the question; Inventory collects flows;
+              Impact assessment weights them; Interpretation checks sensitivity; Report
+              communicates the verdict.
+            </div>
+          </div>
 
-            {/* Platform Capabilities */}
-            <section className="mb-24">
-              <div className="flex items-center gap-4 mb-12">
-                <h2 className="text-3xl font-bold tracking-tighter">Platform Capabilities</h2>
-                <div className="h-px bg-outline-variant/30 flex-1" />
-                <span className="font-mono text-xs opacity-50 uppercase">Sec. 02</span>
+          <h2 className="headline" style={{ margin: 0, marginBottom: 16 }}>
+            Methods we support
+          </h2>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 12,
+              marginBottom: 40,
+            }}
+          >
+            {DEMO_METHODS.map((m) => (
+              <div key={m.id} className="card" style={{ padding: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
+                <div
+                  style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}
+                >
+                  {m.note}
+                </div>
               </div>
-              <p className="text-on-surface-variant leading-relaxed max-w-[720px] mb-10">
-                Comprehensive LCA management from project creation to assessment.
-              </p>
-              <div className="space-y-0">
-                {capabilities.map((c, idx) => (
-                  <div
-                    key={c.title}
-                    className={`py-8 flex flex-col md:flex-row gap-8 items-start px-4 -mx-4 rounded-xl group transition-colors hover:veridian-gradient-soft ${
-                      idx === 0 ? "" : ""
-                    }`}
+            ))}
+          </div>
+
+          <h2 className="headline" style={{ margin: 0, marginBottom: 16 }}>
+            Built on
+          </h2>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 12,
+              marginBottom: 40,
+            }}
+          >
+            {sources.map((s) => (
+              <div key={s.id} className="card" style={{ padding: 14 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 6,
+                  }}
+                >
+                  <StatusDot status={s.status} />
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                    }}
                   >
-                    <div className="md:w-1/3">
-                      <span className="font-mono text-xs text-primary font-bold tracking-[0.2em] block mb-2">
-                        CAP_0{idx + 1}
-                      </span>
-                      <h4 className="text-xl font-bold group-hover:text-primary transition-colors">
-                        {c.title}
-                      </h4>
-                    </div>
-                    <div className="md:w-2/3">
-                      <p className="text-on-surface-variant leading-relaxed">{c.copy}</p>
-                    </div>
-                  </div>
-                ))}
+                    {s.name}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                  {s.description}
+                </div>
               </div>
-            </section>
+            ))}
+          </div>
+
+          <div
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: 'var(--text-tertiary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              borderTop: '1px solid var(--border-subtle)',
+              paddingTop: 20,
+            }}
+          >
+            LCAPIX · ISO 14040/14044 · v1.0
           </div>
         </div>
-      </>
+      </div>
     </AuthGuard>
-  )
+  );
 }
