@@ -100,7 +100,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, assessments: assessmentsWithResults });
   } catch (error: any) {
-    if (error.message === 'Unauthorized') {
+    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get assessments error:', error);
@@ -246,7 +246,7 @@ export async function POST(
     }, { status: 201 });
 
   } catch (error: any) {
-    if (error.message === 'Unauthorized') {
+    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Run assessment error:', error);

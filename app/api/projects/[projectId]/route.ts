@@ -43,7 +43,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, project: { ...project, members } });
   } catch (error: any) {
-    if (error.message === 'Unauthorized') {
+    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get project error:', error);
@@ -86,7 +86,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, project: updatedProject });
   } catch (error: any) {
-    if (error.message === 'Unauthorized') {
+    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update project error:', error);
@@ -113,7 +113,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Project deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized') {
+    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete project error:', error);
