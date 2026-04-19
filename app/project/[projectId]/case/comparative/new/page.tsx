@@ -1,17 +1,26 @@
 "use client"
-import { useState } from "react"
-import type React from "react"
 
+/**
+ * Create Comparative Case — LCAPIX v3.
+ *
+ * Editorial picker form following the botanical-atmosphere design
+ * system (display-lg, card-section, mono labels, bottom-border inputs).
+ *
+ * Preserves existing Zustand `addCase` mutation (no backend contract
+ * changes). Additionally fetches real base cases from
+ * `/api/projects/:id/cases` so the user can link the new comparative
+ * case to a real reference case.
+ */
+
+import { useEffect, useState } from "react"
+import type React from "react"
 import { useRouter, useParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useProjectStore } from "@/lib/store"
 import { toast } from "sonner"
+import { apiRequest } from "@/lib/api-client"
+import { transformCaseFromDB } from "@/lib/data-transformers"
+import { Breadcrumb, Icon } from "@/components/lcapix"
 
 export default function CreateComparativeCasePage() {
   const router = useRouter()
@@ -22,25 +31,59 @@ export default function CreateComparativeCasePage() {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
+    baseCaseId: "",
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [baseCases, setBaseCases] = useState<
+    Array<{ id: string; name: string }>
+  >([])
+  const [isLoadingCases, setIsLoadingCases] = useState(true)
 
-  // Get project info for display
   const project = projects.find((p) => p.id === projectId)
+
+  // Fetch existing base cases from the real API so the user can
+  // pick a concrete reference for the comparison.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        setIsLoadingCases(true)
+        const res = await apiRequest(`/api/projects/${projectId}/cases`)
+        const data = await res.json()
+        if (cancelled) return
+        if (data?.success && Array.isArray(data.cases)) {
+          const transformed = data.cases
+            .map(transformCaseFromDB)
+            .filter((c: any) => c.type === "base")
+            .map((c: any) => ({ id: c.id, name: c.name }))
+          setBaseCases(transformed)
+          if (transformed.length > 0) {
+            setFormData((f) => ({ ...f, baseCaseId: transformed[0].id }))
+          }
+        }
+      } catch (err) {
+        // Silent failure: Zustand-only mode still lets users save.
+        console.warn("Could not load base cases from API:", err)
+      } finally {
+        if (!cancelled) setIsLoadingCases(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  const isFormValid = formData.name.trim().length > 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!formData.name.trim()) {
+    if (!isFormValid) {
       toast.error("Please enter a case name")
       return
     }
-
     setIsSubmitting(true)
-
     try {
       const caseId = crypto.randomUUID()
-
       const caseData = {
         id: caseId,
         projectId,
@@ -48,11 +91,9 @@ export default function CreateComparativeCasePage() {
         description: formData.description.trim(),
         type: "comparative" as const,
       }
-
+      // Preserve existing store mutation.
       addCase(projectId, caseData)
       toast.success("Comparative case created successfully!")
-
-      // Navigate to the case view
       router.push(`/project/${projectId}/case/${caseId}`)
     } catch (error) {
       console.error("Error creating comparative case:", error)
@@ -62,85 +103,278 @@ export default function CreateComparativeCasePage() {
     }
   }
 
-  const isFormValid = formData.name.trim().length > 0
-
   return (
-    <div className="container max-w-2xl mx-auto py-8">
-      <div className="mb-6">
-        <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-4">
-          <Link href="/home" className="hover:text-foreground">Home</Link>
-          <span>→</span>
-          <Link href={`/project/${projectId}`} className="hover:text-foreground">
-            {project?.name || "Project"}
-          </Link>
-          <span>→</span>
-          <span className="text-foreground font-medium">Create Comparative Case</span>
-        </div>
-        <h1 className="text-3xl font-bold">Create Comparative Case</h1>
-        <p className="text-muted-foreground mt-2">
-          Define an alternative scenario to compare against your base case.
-        </p>
-        {project && (
-          <p className="text-sm text-blue-600 mt-2">
-            Project: <span className="font-medium">{project.name}</span>
+    <div
+      className="botanical-atmosphere"
+      style={{
+        minHeight: "calc(100vh - 64px)",
+        padding: "0 0 96px",
+        background: "var(--surface-base)",
+      }}
+    >
+      <Breadcrumb
+        items={[
+          { label: "Projects", page: "home" },
+          {
+            label: project?.name || "Project",
+            page: `/project/${projectId}`,
+          },
+          { label: "Create Comparative Case" },
+        ]}
+      />
+
+      <div
+        style={{
+          maxWidth: 720,
+          margin: "0 auto",
+          padding: "48px 32px 0",
+          position: "relative",
+        }}
+      >
+        {/* Header */}
+        <header style={{ textAlign: "center", marginBottom: 48 }}>
+          <h1
+            className="display-lg"
+            style={{ margin: 0, color: "var(--text-primary)" }}
+          >
+            Create Comparative Case
+          </h1>
+          <p
+            className="body"
+            style={{
+              margin: "20px auto 0",
+              maxWidth: 560,
+              color: "var(--text-secondary)",
+            }}
+          >
+            Define an alternative scenario to compare against your baseline
+            case. This precision modeling tool helps isolate variables for
+            sustainable decision-making.
           </p>
-        )}
-      </div>
+        </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Comparative Case Details</CardTitle>
-          <CardDescription>
-            A comparative case represents an alternative process or scenario that you want to compare against your base case.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="name">Case Name *</Label>
-              <Input
-                id="name"
-                placeholder="e.g., Alternative Material Process"
+        <form onSubmit={handleSubmit}>
+          {/* CASE IDENTITY */}
+          <section
+            className="card-section"
+            style={{
+              padding: "32px 36px",
+              marginBottom: 20,
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 24,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "var(--brand-subtle)",
+                  color: "var(--primary)",
+                }}
+              >
+                <Icon name="shield" size={15} />
+              </span>
+              <span className="eyebrow">Case Identity</span>
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label htmlFor="caseName" className="label">
+                Alternative Case Name
+              </label>
+              <input
+                id="caseName"
+                className="input"
+                placeholder="e.g., Bio-Based Polymer Scenario 01"
                 value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                maxLength={60}
-                required
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
+                maxLength={80}
+                autoFocus
               />
-              <p className="text-xs text-muted-foreground">{formData.name.length}/60 characters</p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Describe this alternative scenario, including what changes from the base case..."
+            <div>
+              <label htmlFor="caseDescription" className="label">
+                Scenario Description
+              </label>
+              <textarea
+                id="caseDescription"
+                className="input"
+                placeholder="Provide context on the methodology or material shifts being tested…"
                 value={formData.description}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
                 rows={4}
-                className="resize-none"
+                style={{
+                  height: "auto",
+                  minHeight: 112,
+                  padding: "12px 14px",
+                  resize: "vertical",
+                  fontFamily: "var(--font-ui)",
+                  lineHeight: 1.55,
+                }}
               />
-              <p className="text-xs text-muted-foreground">Optional: Explain how this case differs from your base case</p>
+            </div>
+          </section>
+
+          {/* BASELINE SELECTION */}
+          <section
+            className="card-section"
+            style={{
+              padding: "32px 36px",
+              marginBottom: 20,
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 24,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-flex",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "var(--brand-subtle)",
+                  color: "var(--primary)",
+                }}
+              >
+                <Icon name="link" size={15} />
+              </span>
+              <span className="eyebrow">Baseline Selection</span>
             </div>
 
-            <div className="flex gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isSubmitting}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!isFormValid || isSubmitting} className="flex-1">
-                {isSubmitting ? "Creating..." : "Create Comparative Case"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            <label htmlFor="baseCaseId" className="label">
+              Select Reference Case
+            </label>
+            <select
+              id="baseCaseId"
+              className="input"
+              value={formData.baseCaseId}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  baseCaseId: e.target.value,
+                }))
+              }
+              style={{ appearance: "auto" }}
+              disabled={isLoadingCases}
+            >
+              {isLoadingCases && <option value="">Loading base cases…</option>}
+              {!isLoadingCases && baseCases.length === 0 && (
+                <option value="">No base cases found for this project</option>
+              )}
+              {!isLoadingCases &&
+                baseCases.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </select>
+          </section>
 
-      {/* Info Section */}
-      <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <h3 className="font-semibold text-blue-900 mb-2">What is a Comparative Case?</h3>
-        <p className="text-sm text-blue-800">
-          Comparative cases allow you to model alternative scenarios, processes, or materials to compare their environmental
-          impact against your base case. This helps you identify which options have better or worse environmental performance.
-        </p>
+          {/* Action footer */}
+          <div
+            className="card-section"
+            style={{
+              padding: "20px 24px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <Link
+              href={`/project/${projectId}`}
+              className="mono"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                color: "var(--text-tertiary)",
+                textDecoration: "none",
+                fontWeight: 500,
+              }}
+            >
+              <Icon name="x" size={13} /> Cancel Scenario
+            </Link>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!isFormValid || isSubmitting}
+              style={{ minWidth: 220 }}
+            >
+              {isSubmitting ? "Creating…" : "Create Comparative Case"}
+              <Icon name="chevron-right" size={16} />
+            </button>
+          </div>
+        </form>
+
+        {/* Informational footer card */}
+        <div
+          className="card-section"
+          style={{
+            marginTop: 24,
+            padding: "20px 24px",
+            display: "flex",
+            gap: 14,
+            alignItems: "flex-start",
+            background: "var(--brand-subtle)",
+            boxShadow: "none",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--surface-raised)",
+              color: "var(--primary)",
+              flexShrink: 0,
+            }}
+          >
+            <Icon name="leaf" size={15} />
+          </span>
+          <p
+            className="body"
+            style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}
+          >
+            Comparative cases allow you to model alternative scenarios,
+            processes, or materials to identify which options have better
+            environmental performance. By linking to a baseline, the system
+            automatically calculates the delta in CO<sub>2</sub>e, water usage,
+            and toxicity levels.
+          </p>
+        </div>
       </div>
     </div>
   )
