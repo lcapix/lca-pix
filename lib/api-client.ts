@@ -61,9 +61,13 @@ export async function apiRequest(
 
   // Make the request — wrap to coerce network-level aborts (caused by
   // window.location.href navigation) into our standard auth error.
+  // cache: 'no-store' defends against browsers that have stale 308
+  // redirects cached from a previous server config (e.g. if the app
+  // ever ran with trailingSlash: true, the browser may infinite-loop
+  // on /api/projects → /api/projects/ → /api/projects).
   let response: Response
   try {
-    response = await fetch(url, { ...fetchOptions, headers })
+    response = await fetch(url, { cache: 'no-store', ...fetchOptions, headers })
   } catch (err) {
     if (redirectingForAuth) {
       // fetch was aborted by our own navigation — silent.
