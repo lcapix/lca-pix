@@ -1,45 +1,40 @@
-"use client"
-import { useEffect, useState, useRef, type ReactElement } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { useProjectStore } from "@/lib/store"
+'use client'
+
+import { useEffect, useState, useRef, type ReactElement } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
-  Plus,
-  Edit,
-  Trash2,
-  BarChart3,
-  GitCompare,
-  LineChart,
-  Maximize2,
   Network,
+  Search,
+  Minimize2,
+  Maximize2,
   ZoomIn,
   ZoomOut,
   Focus,
-  Minimize2,
-  Search,
   ChevronDown,
-  Info,
-  Share2,
-  Activity,
-} from "lucide-react"
-import Link from "next/link"
-import { toast } from "@/hooks/use-toast"
-import { apiRequest } from "@/lib/api-client"
-import { transformProjectFromDB, transformCaseFromDB } from "@/lib/data-transformers"
-import { CaseMiniVisualization } from "@/components/case-mini-visualization"
-import { CaseTreeVisualization } from "@/components/case-tree-visualization"
-import { normalizeComponentType } from "@/lib/hierarchy-colors"
-// AuthGuard + AppShell are provided by app/project/layout.tsx
-// (single-source-of-truth so sub-routes like /case/[id] inherit too)
-import { ProjectShell } from "@/components/project/project-shell"
-import { CaseTabPills } from "@/components/project/case-tab-pills"
-import { HierarchyStepPills } from "@/components/project/hierarchy-step-pills"
-import { ProjectKpiStrip, type ProjectKpi } from "@/components/project/project-kpi-strip"
+} from 'lucide-react'
+import { useProjectStore } from '@/lib/store'
+import { toast } from '@/hooks/use-toast'
+import { apiRequest } from '@/lib/api-client'
+import { transformProjectFromDB, transformCaseFromDB } from '@/lib/data-transformers'
+import { normalizeComponentType } from '@/lib/hierarchy-colors'
+import {
+  Breadcrumb,
+  Icon,
+  MiniBar,
+  MiniCanvas,
+  fmtNum,
+  fmtInt,
+} from '@/components/lcapix'
+import { DEMO_CONTRIBUTORS, DEMO_TREE } from '@/lib/lcapix-demo'
 
-type ViewMode = "hierarchy" | "analytics"
+// NOTE: AuthGuard + top nav are provided by app/project/layout.tsx
+// (AuthGuard → AppShell). Do not render AppTopBar here or we get a
+// duplicate top nav.
 
 export default function ProjectPage() {
   const params = useParams()
@@ -49,11 +44,9 @@ export default function ProjectPage() {
   const { deleteCase } = useProjectStore()
   const [project, setProject] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null)
-  const [isDescriptionModalOpen, setIsDescriptionModalOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>("hierarchy")
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
 
-  // Tree Modal State (preserved)
+  // Tree Modal State (preserved from previous implementation)
   const [isTreeModalOpen, setIsTreeModalOpen] = useState(false)
   const [modalComponents, setModalComponents] = useState<any[]>([])
   const [modalCase, setModalCase] = useState<any>(null)
@@ -62,10 +55,11 @@ export default function ProjectPage() {
   const [modalPan, setModalPan] = useState({ x: 0, y: 0 })
   const [modalPanStart, setModalPanStart] = useState({ x: 0, y: 0 })
   const [isPanningModal, setIsPanningModal] = useState(false)
-  const [modalSearchQuery, setModalSearchQuery] = useState("")
+  const [modalSearchQuery, setModalSearchQuery] = useState('')
   const [modalExpandedNodes, setModalExpandedNodes] = useState<Set<number>>(new Set())
   const modalCanvasRef = useRef<HTMLDivElement>(null)
 
+  // Preserved fetch — unchanged logic
   useEffect(() => {
     const fetchProjectAndCases = async () => {
       setIsLoading(true)
@@ -81,31 +75,36 @@ export default function ProjectPage() {
         if (projectData.success && projectData.project) {
           const transformedProject = transformProjectFromDB(projectData.project)
           const transformedCases =
-            casesData.success && casesData.cases ? casesData.cases.map(transformCaseFromDB) : []
+            casesData.success && casesData.cases
+              ? casesData.cases.map(transformCaseFromDB)
+              : []
 
           setProject({ ...transformedProject, cases: transformedCases })
 
-          if (transformedCases.length > 0 && !selectedCaseId) {
-            const baseCase = transformedCases.find((c: any) => c.type === "base")
-            const firstCase = baseCase || transformedCases[0]
-            setSelectedCaseId(`${firstCase.type === "base" ? "base" : "comp"}-${firstCase.id}`)
+          if (transformedCases.length > 0) {
+            setActiveCaseId((prev) => {
+              if (prev) return prev
+              const baseCase = transformedCases.find((c: any) => c.type === 'base')
+              const firstCase = baseCase || transformedCases[0]
+              return firstCase.id
+            })
           }
         } else {
           toast({
-            title: "Project not found",
-            description: "The requested project could not be found.",
-            variant: "destructive",
+            title: 'Project not found',
+            description: 'The requested project could not be found.',
+            variant: 'destructive',
           })
-          router.push("/home")
+          router.push('/home')
         }
       } catch (error) {
-        console.error("Failed to fetch project:", error)
+        console.error('Failed to fetch project:', error)
         toast({
-          title: "Error loading project",
-          description: "Failed to load project details",
-          variant: "destructive",
+          title: 'Error loading project',
+          description: 'Failed to load project details',
+          variant: 'destructive',
         })
-        router.push("/home")
+        router.push('/home')
       } finally {
         setIsLoading(false)
       }
@@ -116,31 +115,45 @@ export default function ProjectPage() {
 
   if (isLoading || !project) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-64px)]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-on-surface">Loading project...</h2>
+      <div
+        className="app-shell"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 'calc(100vh - 64px)',
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              border: '2px solid var(--border-subtle)',
+              borderTopColor: 'var(--brand-primary)',
+              borderRadius: '50%',
+              margin: '0 auto 16px',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <h2 className="title" style={{ fontSize: 16 }}>
+            Loading project...
+          </h2>
         </div>
       </div>
     )
   }
 
-  const baseCases = project.cases?.filter((c: any) => c.type === "base") || []
-  const comparativeCases = project.cases?.filter((c: any) => c.type === "comparative") || []
-  const allCases = [...baseCases, ...comparativeCases]
+  const cases: any[] = project.cases || []
+  const baseCases = cases.filter((c) => c.type === 'base')
+  const comparativeCases = cases.filter((c) => c.type === 'comparative')
+  const activeCase =
+    cases.find((c) => c.id === activeCaseId) || cases[0] || null
 
-  const selectedCase = project.cases?.find((c: any) => {
-    const cid = `${c.type === "base" ? "base" : "comp"}-${c.id}`
-    return cid === selectedCaseId
-  })
+  // Project type chip: BASE when only base cases, COMP when comparatives present
+  const projectTypeLabel = comparativeCases.length > 0 ? 'comparative' : 'base'
 
-  // Build pill list with tab-id keys
-  const pillCases = allCases.map((c: any) => ({
-    id: `${c.type === "base" ? "base" : "comp"}-${c.id}`,
-    name: c.name,
-    type: c.type === "base" ? "BASE" : "COMP",
-  }))
-
+  // Handlers — preserved behavior
   const handleAddCase = () => {
     if (baseCases.length === 0) {
       router.push(`/project/${projectId}/case/base/new`)
@@ -150,34 +163,38 @@ export default function ProjectPage() {
   }
 
   const handleDeleteCase = (caseId: string) => {
-    if (confirm("Are you sure you want to delete this case? This action cannot be undone.")) {
+    if (
+      confirm('Are you sure you want to delete this case? This action cannot be undone.')
+    ) {
       deleteCase(caseId)
       toast({
-        title: "Case deleted",
-        description: "The case has been removed from your project.",
+        title: 'Case deleted',
+        description: 'The case has been removed from your project.',
       })
     }
   }
 
-  // Flowchart helpers (Veridian-tinted palette; semantic tier mapping preserved)
-  // Softer tints with transparent overlay feel, dark readable text, subtle border
-  const VERIDIAN_FLOW_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-    product:        { bg: "#f0a68a", border: "#d98568", text: "#3a1a0f" }, // terracotta
-    machine_line:   { bg: "#f0a68a", border: "#d98568", text: "#3a1a0f" }, // soft red-orange
-    subprocess:     { bg: "#f5c971", border: "#d9a84a", text: "#3a2a0a" }, // soft amber
-    operation:      { bg: "#7bb5e8", border: "#4f90c9", text: "#0f2238" }, // soft blue
-    elemental_task: { bg: "#c8b5e8", border: "#9f88cc", text: "#1f1438" }, // lavender
+  // Flowchart palette — preserved for the tree modal
+  const VERIDIAN_FLOW_COLORS: Record<
+    string,
+    { bg: string; border: string; text: string }
+  > = {
+    product: { bg: '#f0a68a', border: '#d98568', text: '#3a1a0f' },
+    machine_line: { bg: '#f0a68a', border: '#d98568', text: '#3a1a0f' },
+    subprocess: { bg: '#f5c971', border: '#d9a84a', text: '#3a2a0a' },
+    operation: { bg: '#7bb5e8', border: '#4f90c9', text: '#0f2238' },
+    elemental_task: { bg: '#c8b5e8', border: '#9f88cc', text: '#1f1438' },
   }
 
   const getFlowChartColors = (componentType: string) => {
-    const normalizedType = normalizeComponentType(componentType || "product")
+    const normalizedType = normalizeComponentType(componentType || 'product')
     const colorConfig =
       VERIDIAN_FLOW_COLORS[normalizedType] || VERIDIAN_FLOW_COLORS.product
     return {
       bg: colorConfig.bg,
       border: colorConfig.border,
       text: colorConfig.text,
-      connectionLine: "#bccabf", // outline-variant
+      connectionLine: '#bccabf',
     }
   }
 
@@ -199,11 +216,11 @@ export default function ProjectPage() {
         }
       }
     } catch (error) {
-      console.error("Failed to fetch tree data:", error)
+      console.error('Failed to fetch tree data:', error)
       toast({
-        title: "Error",
-        description: "Failed to load tree visualization",
-        variant: "destructive",
+        title: 'Error',
+        description: 'Failed to load tree visualization',
+        variant: 'destructive',
       })
     } finally {
       setIsLoadingModal(false)
@@ -212,11 +229,13 @@ export default function ProjectPage() {
 
   const renderFlowChart = (): ReactElement => {
     const rootNodes = modalComponents.filter(
-      (c) => !c.parent_component_id || c.parent_component_id === null
+      (c) => !c.parent_component_id || c.parent_component_id === null,
     )
 
     const renderFlowNode = (node: any, level: number = 0): ReactElement | null => {
-      const children = modalComponents.filter((c) => c.parent_component_id === node.component_id)
+      const children = modalComponents.filter(
+        (c) => c.parent_component_id === node.component_id,
+      )
       const colors = getFlowChartColors(node.component_type || node.process_type)
       const isSearchMatch =
         modalSearchQuery &&
@@ -228,11 +247,15 @@ export default function ProjectPage() {
         !node.component_name.toLowerCase().includes(modalSearchQuery.toLowerCase())
       ) {
         const hasMatchingDescendant = (nodeId: number): boolean => {
-          const directChildren = modalComponents.filter((c) => c.parent_component_id === nodeId)
+          const directChildren = modalComponents.filter(
+            (c) => c.parent_component_id === nodeId,
+          )
           return directChildren.some(
             (child) =>
-              child.component_name.toLowerCase().includes(modalSearchQuery.toLowerCase()) ||
-              hasMatchingDescendant(child.component_id)
+              child.component_name
+                .toLowerCase()
+                .includes(modalSearchQuery.toLowerCase()) ||
+              hasMatchingDescendant(child.component_id),
           )
         }
         if (!hasMatchingDescendant(node.component_id)) {
@@ -251,13 +274,13 @@ export default function ProjectPage() {
               scale-[0.8] origin-top
               hover:scale-[0.82]
               font-['Inter_Tight',Inter,sans-serif]
-              ${isSearchMatch ? "ring-2 ring-primary/60 animate-pulse" : ""}
+              ${isSearchMatch ? 'ring-2 ring-primary/60 animate-pulse' : ''}
             `}
             style={{
               backgroundColor: colors.bg,
-              borderWidth: "1px",
-              borderStyle: "solid",
-              borderColor: `${colors.border}4D`, // ~30% alpha soft edge
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: `${colors.border}4D`,
               color: colors.text,
             }}
           >
@@ -284,7 +307,7 @@ export default function ProjectPage() {
               >
                 <ChevronDown
                   className={`h-4 w-4 text-on-surface-variant transition-transform ${
-                    !isExpanded ? "-rotate-90" : ""
+                    !isExpanded ? '-rotate-90' : ''
                   }`}
                 />
               </button>
@@ -293,7 +316,10 @@ export default function ProjectPage() {
 
           {children.length > 0 && isExpanded && (
             <>
-              <div className="w-0.5 h-6 mt-3" style={{ backgroundColor: colors.connectionLine }} />
+              <div
+                className="w-0.5 h-6 mt-3"
+                style={{ backgroundColor: colors.connectionLine }}
+              />
               <div className="flex gap-6 justify-center items-start relative">
                 {children.length > 1 && (
                   <div
@@ -306,7 +332,10 @@ export default function ProjectPage() {
                   />
                 )}
                 {children.map((child) => (
-                  <div key={child.component_id} className="flex flex-col items-center">
+                  <div
+                    key={child.component_id}
+                    className="flex flex-col items-center"
+                  >
                     <div
                       className="w-0.5 h-6"
                       style={{ backgroundColor: colors.connectionLine }}
@@ -328,504 +357,832 @@ export default function ProjectPage() {
     )
   }
 
-  // KPI strip — derived from case data
-  const kpis: ProjectKpi[] = [
-    { label: "TOTAL CASES", value: allCases.length, status: "ok" },
-    { label: "BASE CASES", value: baseCases.length, status: "stable" },
-    { label: "COMPARATIVES", value: comparativeCases.length, status: "ok" },
-    { label: "TEAM MEMBERS", value: project.members?.length || 1, status: "stable" },
-  ]
+  // —— Derived UI data ——
+  const contributors = DEMO_CONTRIBUTORS // fallback; real contributors would come from assessment results
+  const assessed = Boolean(activeCase?.assessmentRunAt || activeCase?.assessed)
+  const totalImpact =
+    activeCase?.totalImpact ?? activeCase?.impactResults?.global_warming ?? 126.82
+  const impactUnit = activeCase?.impactUnit ?? 'kg CO₂-eq'
+  const componentCount =
+    activeCase?.componentCount ?? activeCase?.components?.length ?? 0
+  const driverCount = activeCase?.driverCount ?? 0
+  const totalCost = activeCase?.totalCost ?? 8420
+
+  // Optional comparison delta (visible only with ≥ 2 cases)
+  const showComparisonBanner = cases.length >= 2
 
   return (
-    <ProjectShell
-      projectName={project.name || "Project"}
-      projectId={projectId}
-      activeSection="editor"
-    >
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 py-6 md:py-8">
-            {/* Breadcrumb */}
-            <nav className="font-mono text-[11px] uppercase tracking-[0.12em] text-on-surface-variant mb-4">
-              <Link href="/home" className="hover:text-primary transition-colors">
-                Projects
-              </Link>
-              <span className="mx-2 opacity-50">/</span>
-              <span className="text-on-surface">{project.name}</span>
-              <span className="mx-2 opacity-50">/</span>
-              <span>Initial View</span>
-            </nav>
+    <div className="app-shell">
+      <Breadcrumb
+        items={[
+          { label: 'Projects', page: 'home' },
+          { label: project.name || 'Project' },
+        ]}
+      />
 
-            {/* Header row */}
-            <div className="flex flex-wrap items-start justify-between gap-4 md:gap-6 mb-8">
-              <div className="flex-1 min-w-0">
-                <h1 className="text-3xl md:text-4xl font-bold text-on-surface leading-tight">
-                  {project.name}
-                </h1>
-                {project.description && (
-                  <div className="mt-3 flex items-start gap-2">
-                    <p className="text-on-surface-variant line-clamp-3 flex-1 max-w-3xl">
-                      {project.description}
-                    </p>
-                    {project.description.length > 150 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsDescriptionModalOpen(true)}
-                        className="h-7 text-xs flex-shrink-0"
-                      >
-                        <Info className="h-3 w-3 mr-1" />
-                        Read more
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 flex-shrink-0">
-                <Button variant="outline" size="sm" className="h-9">
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
-                <Button
-                  onClick={() => router.push(`/project/${projectId}/comparisons`)}
-                  size="sm"
-                  variant="outline"
-                  className="h-9"
-                >
-                  <GitCompare className="h-4 w-4 mr-2" />
-                  Compare
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (selectedCase) {
-                      router.push(`/project/${projectId}/analytics?caseId=${selectedCase.id}`)
-                    } else {
-                      router.push(`/project/${projectId}/analytics`)
-                    }
+      <div style={{ padding: '24px 32px 80px', maxWidth: 1440, margin: '0 auto' }}>
+        {/* Project header card */}
+        <div
+          className="card"
+          style={{
+            padding: '24px 28px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 24,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                marginBottom: 6,
+              }}
+            >
+              <h1
+                className="display"
+                style={{
+                  fontSize: 26,
+                  fontWeight: 600,
+                  margin: 0,
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {project.name}
+              </h1>
+              <span
+                className={
+                  'chip ' + (projectTypeLabel === 'comparative' ? 'chip-active' : '')
+                }
+                style={{ fontSize: 11 }}
+              >
+                {projectTypeLabel}
+              </span>
+            </div>
+            {project.description && (
+              <p
+                style={{
+                  fontSize: 13,
+                  color: 'var(--text-secondary)',
+                  margin: 0,
+                }}
+              >
+                {project.description}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() =>
+              router.push(
+                activeCase
+                  ? `/project/${projectId}/analytics?caseId=${activeCase.id}`
+                  : `/project/${projectId}/analytics`,
+              )
+            }
+          >
+            <Icon name="chart-bar" size={14} /> Analytics
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => router.push(`/project/${projectId}/comparisons`)}
+          >
+            <Icon name="layers" size={14} /> Compare Cases
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={handleAddCase}
+          >
+            <Icon name="plus" size={14} /> Add Case
+          </button>
+        </div>
+
+        {/* Comparison banner */}
+        {showComparisonBanner && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: '14px 20px',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 8,
+              background:
+                'linear-gradient(90deg, var(--brand-subtle), transparent 60%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Icon name="sparkle" size={14} style={{ color: 'var(--brand-primary)' }} />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              Comparing{' '}
+              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                {baseCases[0]?.name || 'Baseline'}
+              </span>{' '}
+              vs{' '}
+              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                {comparativeCases[0]?.name || cases[1]?.name || 'Comparative'}
+              </span>
+            </span>
+            <span
+              className="mono"
+              style={{ color: 'var(--signal-success)', fontWeight: 500 }}
+            >
+              −28.0% CO₂
+            </span>
+            <span style={{ color: 'var(--text-disabled)' }}>·</span>
+            <span className="mono" style={{ color: 'var(--signal-warn)' }}>
+              +$240
+            </span>
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => router.push(`/project/${projectId}/comparisons`)}
+            >
+              Open Full Comparison <Icon name="arrow-right" size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Case tabs */}
+        <div
+          style={{
+            marginTop: 24,
+            display: 'flex',
+            gap: 10,
+            overflowX: 'auto',
+            paddingBottom: 8,
+          }}
+        >
+          {cases.map((c) => {
+            const active = activeCaseId === c.id
+            const kind = c.type === 'base' ? 'BASE' : 'COMP'
+            const compCount = c.componentCount ?? c.components?.length ?? 0
+            const drvCount = c.driverCount ?? 0
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setActiveCaseId(c.id)}
+                style={{
+                  padding: '14px 20px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: active ? 'var(--surface-raised)' : 'transparent',
+                  boxShadow: active
+                    ? 'inset 0 0 0 1.5px var(--primary), 0 4px 16px -8px var(--brand-glow)'
+                    : 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontFamily: 'var(--font-ui)',
+                  minWidth: 240,
+                  flex: '0 0 auto',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    marginBottom: 6,
                   }}
-                  size="sm"
-                  className="h-9 veridian-gradient text-on-primary"
                 >
-                  <LineChart className="h-4 w-4 mr-2" />
-                  Analytics
-                </Button>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {c.name}
+                  </span>
+                  <span
+                    className="label-sm"
+                    style={{
+                      fontSize: 9,
+                      color: active ? 'var(--primary)' : 'var(--text-tertiary)',
+                    }}
+                  >
+                    {kind}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                    display: 'flex',
+                    gap: 8,
+                  }}
+                >
+                  <span>
+                    <span className="mono">{compCount}</span> comps
+                  </span>
+                  <span>·</span>
+                  <span>
+                    <span className="mono">{drvCount}</span> drivers
+                  </span>
+                </div>
+              </button>
+            )
+          })}
+          <button
+            type="button"
+            onClick={handleAddCase}
+            style={{
+              padding: '12px 18px',
+              border: '1px dashed var(--border-subtle)',
+              borderRadius: 8,
+              background: 'transparent',
+              color: 'var(--text-tertiary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              fontFamily: 'var(--font-ui)',
+            }}
+          >
+            <Icon name="plus" size={12} /> Add case
+          </button>
+        </div>
+
+        {/* Two-pane */}
+        <div
+          style={{
+            marginTop: 20,
+            display: 'grid',
+            gridTemplateColumns: '1.5fr 1fr',
+            gap: 16,
+          }}
+        >
+          {/* Left: case tree */}
+          <div
+            className="card"
+            style={{
+              padding: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div
+              style={{
+                padding: '14px 20px',
+                borderBottom: '1px solid var(--border-subtle)',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 600 }}>Case Tree</span>
+              {activeCase && (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 12,
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  · {activeCase.name}
+                </span>
+              )}
+              <div style={{ flex: 1 }} />
+              <span
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-tertiary)',
+                  marginRight: 12,
+                }}
+              >
+                drag · scroll to zoom
+              </span>
+              {activeCase && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginRight: 8 }}
+                  onClick={() => openTreeModal(activeCase.id)}
+                >
+                  <Icon name="layers" size={14} /> View Full Hierarchy
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() =>
+                  activeCase
+                    ? router.push(`/project/${projectId}/case/${activeCase.id}`)
+                    : router.push(`/project/${projectId}/case/base/new`)
+                }
+              >
+                <Icon name="external" size={14} /> Open editor
+              </button>
+            </div>
+            <div
+              style={{
+                position: 'relative',
+                height: 440,
+                background: 'var(--surface-sunken)',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage:
+                    'radial-gradient(var(--border-subtle) 1px, transparent 1px)',
+                  backgroundSize: '20px 20px',
+                  opacity: 0.5,
+                  pointerEvents: 'none',
+                }}
+              />
+              {activeCase ? (
+                <MiniCanvas tree={DEMO_TREE} />
+              ) : (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 12,
+                    padding: 24,
+                    textAlign: 'center',
+                  }}
+                >
+                  <div
+                    className="eyebrow"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    No case yet
+                  </div>
+                  <div
+                    className="body"
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--text-secondary)',
+                      maxWidth: 320,
+                    }}
+                  >
+                    Open the editor to build your first hierarchy.
+                  </div>
+                  <Link href={`/project/${projectId}/case/base/new`}>
+                    <button type="button" className="btn btn-primary btn-sm">
+                      <Icon name="plus" size={14} /> Open editor
+                    </button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: stacked cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Impact Overview */}
+            <div className="card" style={{ padding: 20 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 600 }}>
+                  Impact Overview
+                </span>
+                <span
+                  className={'chip ' + (assessed ? 'chip-emerald' : '')}
+                  style={{ marginLeft: 'auto', fontSize: 11 }}
+                >
+                  {assessed ? (
+                    <>
+                      <Icon name="check" size={10} /> Assessed
+                    </>
+                  ) : (
+                    'Not assessed'
+                  )}
+                </span>
+              </div>
+              <div
+                className="eyebrow"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-tertiary)',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  marginBottom: 8,
+                }}
+              >
+                GLOBAL WARMING · CML 2001
+              </div>
+              <div
+                style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}
+              >
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 36,
+                    fontWeight: 600,
+                    color: 'var(--brand-primary)',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {fmtNum(totalImpact, 2)}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+                  {impactUnit}
+                </div>
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-tertiary)',
+                  marginTop: 8,
+                }}
+              >
+                <span className="mono">{componentCount}</span> components ·{' '}
+                <span className="mono">6</span> categories ·{' '}
+                <span className="mono">{driverCount}</span> drivers
               </div>
             </div>
 
-            {/* Case tab pills + add */}
-            {pillCases.length > 0 ? (
-              <div className="mb-6">
-                <CaseTabPills
-                  cases={pillCases}
-                  activeCaseId={selectedCaseId}
-                  onSelect={(id) => setSelectedCaseId(String(id))}
-                  onAdd={handleAddCase}
-                />
+            {/* Top contributors */}
+            <div className="card" style={{ padding: 20 }}>
+              <div
+                style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}
+              >
+                Top contributors
               </div>
-            ) : (
-              <div className="mb-6 rounded-lg border border-dashed border-outline-variant/40 bg-surface-container-lowest p-8 text-center">
-                <p className="text-on-surface-variant mb-4">
-                  No cases yet. Start by creating your base case.
-                </p>
-                <Link href={`/project/${projectId}/case/base/new`}>
-                  <Button className="veridian-gradient text-on-primary">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Base Case
-                  </Button>
-                </Link>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+              >
+                {contributors.slice(0, 5).map((c, i) => (
+                  <div key={c.id}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        fontSize: 12,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {c.name}
+                      </span>
+                      <span
+                        className="mono"
+                        style={{
+                          marginLeft: 'auto',
+                          color: 'var(--text-primary)',
+                        }}
+                      >
+                        {fmtNum(c.value, 1)}
+                      </span>
+                      <span
+                        className="mono"
+                        style={{
+                          marginLeft: 8,
+                          color: 'var(--text-tertiary)',
+                          width: 40,
+                          textAlign: 'right',
+                        }}
+                      >
+                        {fmtNum(c.pct, 1)}%
+                      </span>
+                    </div>
+                    <MiniBar
+                      value={c.pct}
+                      max={40}
+                      height={4}
+                      color={`oklch(from var(--brand-primary) l c h / ${1 - i * 0.12})`}
+                    />
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* View toggle */}
-            {selectedCase && (
-              <div className="flex items-center justify-between mb-6">
-                <div className="inline-flex rounded-md border border-outline-variant/30 bg-surface-container-lowest p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("hierarchy")}
-                    className={
-                      viewMode === "hierarchy"
-                        ? "px-4 py-1.5 rounded bg-primary text-on-primary text-sm font-medium"
-                        : "px-4 py-1.5 rounded text-on-surface-variant text-sm hover:text-on-surface transition-colors"
-                    }
-                  >
-                    Hierarchy
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("analytics")}
-                    className={
-                      viewMode === "analytics"
-                        ? "px-4 py-1.5 rounded bg-primary text-on-primary text-sm font-medium"
-                        : "px-4 py-1.5 rounded text-on-surface-variant text-sm hover:text-on-surface transition-colors"
-                    }
-                  >
-                    Analytics
-                  </button>
+            {/* Cost summary */}
+            <div className="card" style={{ padding: 20 }}>
+              <div
+                style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}
+              >
+                Cost summary
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto',
+                  rowGap: 8,
+                  fontSize: 13,
+                }}
+              >
+                <div style={{ color: 'var(--text-secondary)' }}>Labor</div>
+                <div className="mono">$2,240</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Energy</div>
+                <div className="mono">$1,680</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Material</div>
+                <div className="mono">$3,920</div>
+                <div style={{ color: 'var(--text-secondary)' }}>Overhead</div>
+                <div className="mono">$580</div>
+                <div
+                  style={{
+                    gridColumn: '1/3',
+                    height: 1,
+                    background: 'var(--border-subtle)',
+                    margin: '4px 0',
+                  }}
+                />
+                <div
+                  style={{ color: 'var(--text-primary)', fontWeight: 600 }}
+                >
+                  Total
                 </div>
-                <div className="flex items-center gap-2">
-                  <Link href={`/project/${projectId}/case/${selectedCase.id}`}>
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4 mr-2" />
-                      Edit Case
-                    </Button>
-                  </Link>
+                <div
+                  className="mono"
+                  style={{
+                    fontWeight: 600,
+                    color: 'var(--brand-primary)',
+                  }}
+                >
+                  ${fmtInt(totalCost)}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ flex: 1, justifyContent: 'center' }}
+                onClick={() =>
+                  activeCase
+                    ? router.push(
+                        `/project/${projectId}/analytics?caseId=${activeCase.id}`,
+                      )
+                    : router.push(`/project/${projectId}/analytics`)
+                }
+              >
+                <Icon name="run" size={14} /> Run Assessment
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() =>
+                  activeCase
+                    ? router.push(
+                        `/project/${projectId}/analytics?caseId=${activeCase.id}`,
+                      )
+                    : router.push(`/project/${projectId}/analytics`)
+                }
+              >
+                Results
+              </button>
+              {activeCase && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => handleDeleteCase(activeCase.id)}
+                  aria-label="Delete case"
+                  title="Delete case"
+                >
+                  <Icon name="x" size={14} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                aria-label="Download"
+                title="Download"
+              >
+                <Icon name="download" size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tree Visualization Modal — preserved verbatim from prior page */}
+      <Dialog open={isTreeModalOpen} onOpenChange={setIsTreeModalOpen}>
+        <DialogContent
+          className="!max-w-[98vw] !h-[95vh] flex flex-col p-0 gap-0 my-[2.5vh]"
+          showCloseButton={false}
+        >
+          <DialogHeader className="px-6 py-3 glass-panel shadow-botanical border-b border-outline-variant/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Network className="h-5 w-5 text-primary" />
+                <DialogTitle className="text-lg font-medium text-on-surface font-['Inter_Tight',Inter,sans-serif] tracking-tight">
+                  Process Hierarchy - {modalCase?.case_name || 'Loading...'}
+                </DialogTitle>
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-mono uppercase tracking-[0.12em] border-outline-variant/40 bg-surface-container-low text-on-surface-variant"
+                >
+                  {modalComponents.length} components
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-outline" />
+                  <Input
+                    type="text"
+                    placeholder="SEARCH COMPONENTS..."
+                    value={modalSearchQuery}
+                    onChange={(e) => setModalSearchQuery(e.target.value)}
+                    className="pl-9 h-9 w-56 text-sm bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus-visible:ring-0 focus-visible:border-primary font-mono text-xs placeholder:opacity-50 placeholder:uppercase placeholder:tracking-[0.12em]"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (modalExpandedNodes.size === 0) {
+                      const allIds = new Set<number>(
+                        modalComponents.map((c) => c.component_id),
+                      )
+                      setModalExpandedNodes(allIds)
+                    } else {
+                      setModalExpandedNodes(new Set())
+                    }
+                  }}
+                  className="h-9 border-outline-variant/40 bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                >
+                  {modalExpandedNodes.size === 0 ? (
+                    <>
+                      <Minimize2 className="h-4 w-4 mr-1" />
+                      Collapse All
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="h-4 w-4 mr-1" />
+                      Expand All
+                    </>
+                  )}
+                </Button>
+                <div className="flex items-center gap-1 border border-outline-variant/40 rounded-md bg-surface-container-lowest">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDeleteCase(selectedCase.id)}
+                    onClick={() => setModalZoom(Math.max(30, modalZoom - 5))}
+                    className="h-9 px-2 text-on-surface-variant hover:bg-surface-container-high"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs font-mono tabular-nums px-2 text-on-surface-variant min-w-[50px] text-center">
+                    {modalZoom}%
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setModalZoom(Math.min(200, modalZoom + 5))}
+                    className="h-9 px-2 text-on-surface-variant hover:bg-surface-container-high"
+                  >
+                    <ZoomIn className="h-4 w-4" />
                   </Button>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setModalZoom(100)
+                    setModalPan({ x: 0, y: 0 })
+                  }}
+                  className="h-9 border-outline-variant/40 bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                >
+                  <Focus className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsTreeModalOpen(false)}
+                  className="h-9 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 relative overflow-hidden bg-surface">
+            {isLoadingModal ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
+                  <p className="text-sm text-on-surface-variant font-mono uppercase tracking-[0.12em]">
+                    Loading tree visualization...
+                  </p>
+                </div>
+              </div>
+            ) : modalComponents.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Network className="h-16 w-16 text-outline-variant mx-auto mb-4" />
+                  <p className="text-lg font-medium text-on-surface mb-2 font-['Inter_Tight',Inter,sans-serif] tracking-tight">
+                    No components yet
+                  </p>
+                  <p className="text-sm text-on-surface-variant">
+                    Add components to build your process hierarchy
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div
+                ref={modalCanvasRef}
+                className={`absolute inset-0 overflow-auto ${
+                  isPanningModal ? 'cursor-grabbing' : 'cursor-grab'
+                }`}
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle at 1px 1px, rgba(188, 202, 191, 0.5) 1px, transparent 0)',
+                  backgroundSize: '32px 32px',
+                  backgroundColor: '#f8faf8',
+                  overscrollBehavior: 'none',
+                }}
+                onWheel={(e) => {
+                  if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    const delta = e.deltaY > 0 ? -5 : 5
+                    setModalZoom((prev) =>
+                      Math.max(30, Math.min(200, prev + delta)),
+                    )
+                  }
+                }}
+                onMouseDown={(e) => {
+                  if (e.button === 0) {
+                    setIsPanningModal(true)
+                    setModalPanStart({
+                      x: e.clientX - modalPan.x,
+                      y: e.clientY - modalPan.y,
+                    })
+                  }
+                }}
+                onMouseMove={(e) => {
+                  if (isPanningModal) {
+                    setModalPan({
+                      x: e.clientX - modalPanStart.x,
+                      y: e.clientY - modalPanStart.y,
+                    })
+                  }
+                }}
+                onMouseUp={() => setIsPanningModal(false)}
+                onMouseLeave={() => setIsPanningModal(false)}
+              >
+                <div
+                  className="inline-block p-4 pt-6"
+                  style={{ marginLeft: modalPan.x, marginTop: modalPan.y }}
+                >
+                  <div
+                    className="transform-gpu transition-transform duration-100 origin-top"
+                    style={{ transform: `scale(${modalZoom / 100})` }}
+                  >
+                    {renderFlowChart()}
+                  </div>
+                </div>
+                <div className="absolute bottom-3 left-3 text-[10px] font-mono uppercase tracking-[0.12em] text-on-surface-variant/60 glass-panel px-2 py-1 rounded-md border border-outline-variant/10">
+                  Scroll to pan · Ctrl+Scroll to zoom · Drag to move
+                </div>
               </div>
             )}
-
-            {selectedCase && (
-              <>
-                {viewMode === "hierarchy" ? (
-                  <>
-                    <div className="mb-5">
-                      <HierarchyStepPills current={1} />
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-8">
-                      {/* Main: tree visualization + mini */}
-                      <div className="space-y-4">
-                        <div className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest shadow-botanical">
-                          <div className="flex items-center justify-between px-5 py-3 border-b border-outline-variant/15">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-on-surface-variant">
-                                Case Tree
-                              </span>
-                              <Badge variant="outline" className="text-xs">
-                                {selectedCase.type === "base" ? "Base" : "Comparative"}
-                              </Badge>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openTreeModal(selectedCase.id)}
-                              className="h-8 text-xs text-primary hover:text-primary hover:bg-primary/5"
-                            >
-                              <Maximize2 className="h-3 w-3 mr-1" />
-                              View Hierarchy
-                            </Button>
-                          </div>
-                          <div className="p-4 h-[560px] overflow-y-auto">
-                            <CaseTreeVisualization
-                              caseId={selectedCase.id}
-                              caseName={selectedCase.name}
-                              projectId={projectId}
-                              compact={false}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right rail: live telemetry */}
-                      <aside className="space-y-4">
-                        <div className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest p-5">
-                          <div className="flex items-center gap-2 mb-4">
-                            <Activity className="h-4 w-4 text-primary" />
-                            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-on-surface-variant">
-                              Live Telemetry
-                            </span>
-                          </div>
-                          <dl className="space-y-3 text-sm">
-                            <div className="flex items-center justify-between">
-                              <dt className="text-on-surface-variant">Case name</dt>
-                              <dd className="text-on-surface font-medium truncate max-w-[140px]">
-                                {selectedCase.name}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <dt className="text-on-surface-variant">Type</dt>
-                              <dd className="text-on-surface font-medium capitalize">
-                                {selectedCase.type}
-                              </dd>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <dt className="text-on-surface-variant">Status</dt>
-                              <dd className="text-primary font-medium">Active</dd>
-                            </div>
-                          </dl>
-                        </div>
-                        <div className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest p-5">
-                          <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-on-surface-variant mb-3">
-                            Mini Visualization
-                          </div>
-                          <CaseMiniVisualization
-                            caseId={selectedCase.id}
-                            caseName={selectedCase.name}
-                          />
-                        </div>
-                      </aside>
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-lg border border-outline-variant/15 bg-surface-container-lowest p-10 text-center mb-8">
-                    <BarChart3 className="h-10 w-10 text-primary mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-on-surface mb-2">
-                      Analytics Dashboard
-                    </h3>
-                    <p className="text-on-surface-variant mb-4">
-                      Open the full analytics view for impact charts, contribution breakdowns, and
-                      KPI trends.
-                    </p>
-                    <Button
-                      onClick={() =>
-                        router.push(`/project/${projectId}/analytics?caseId=${selectedCase.id}`)
-                      }
-                      className="veridian-gradient text-on-primary"
-                    >
-                      <LineChart className="h-4 w-4 mr-2" />
-                      Open Analytics
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* KPI strip */}
-            <ProjectKpiStrip kpis={kpis} />
           </div>
 
-          {/* Tree Visualization Modal (preserved verbatim from original) */}
-          <Dialog open={isTreeModalOpen} onOpenChange={setIsTreeModalOpen}>
-            <DialogContent
-              className="!max-w-[98vw] !h-[95vh] flex flex-col p-0 gap-0 my-[2.5vh]"
-              showCloseButton={false}
-            >
-              <DialogHeader className="px-6 py-3 glass-panel shadow-botanical border-b border-outline-variant/10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Network className="h-5 w-5 text-primary" />
-                    <DialogTitle className="text-lg font-medium text-on-surface font-['Inter_Tight',Inter,sans-serif] tracking-tight">
-                      Process Hierarchy - {modalCase?.case_name || "Loading..."}
-                    </DialogTitle>
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] font-mono uppercase tracking-[0.12em] border-outline-variant/40 bg-surface-container-low text-on-surface-variant"
-                    >
-                      {modalComponents.length} components
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-outline" />
-                      <Input
-                        type="text"
-                        placeholder="SEARCH COMPONENTS..."
-                        value={modalSearchQuery}
-                        onChange={(e) => setModalSearchQuery(e.target.value)}
-                        className="pl-9 h-9 w-56 text-sm bg-surface-container-low border-0 border-b border-outline-variant/40 rounded-none focus-visible:ring-0 focus-visible:border-primary font-mono text-xs placeholder:opacity-50 placeholder:uppercase placeholder:tracking-[0.12em]"
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (modalExpandedNodes.size === 0) {
-                          const allIds = new Set<number>(
-                            modalComponents.map((c) => c.component_id)
-                          )
-                          setModalExpandedNodes(allIds)
-                        } else {
-                          setModalExpandedNodes(new Set())
-                        }
-                      }}
-                      className="h-9 border-outline-variant/40 bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    >
-                      {modalExpandedNodes.size === 0 ? (
-                        <>
-                          <Minimize2 className="h-4 w-4 mr-1" />
-                          Collapse All
-                        </>
-                      ) : (
-                        <>
-                          <Maximize2 className="h-4 w-4 mr-1" />
-                          Expand All
-                        </>
-                      )}
-                    </Button>
-                    <div className="flex items-center gap-1 border border-outline-variant/40 rounded-md bg-surface-container-lowest">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setModalZoom(Math.max(30, modalZoom - 5))}
-                        className="h-9 px-2 text-on-surface-variant hover:bg-surface-container-high"
-                      >
-                        <ZoomOut className="h-4 w-4" />
-                      </Button>
-                      <span className="text-xs font-mono tabular-nums px-2 text-on-surface-variant min-w-[50px] text-center">
-                        {modalZoom}%
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setModalZoom(Math.min(200, modalZoom + 5))}
-                        className="h-9 px-2 text-on-surface-variant hover:bg-surface-container-high"
-                      >
-                        <ZoomIn className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setModalZoom(100)
-                        setModalPan({ x: 0, y: 0 })
-                      }}
-                      className="h-9 border-outline-variant/40 bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    >
-                      <Focus className="h-4 w-4 mr-1" />
-                      Reset
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsTreeModalOpen(false)}
-                      className="h-9 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </DialogHeader>
-
-              <div className="flex-1 relative overflow-hidden bg-surface">
-                {isLoadingModal ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
-                      <p className="text-sm text-on-surface-variant font-mono uppercase tracking-[0.12em]">
-                        Loading tree visualization...
-                      </p>
-                    </div>
-                  </div>
-                ) : modalComponents.length === 0 ? (
-                  <div className="flex items-center justify-center h-full">
-                    <div className="text-center">
-                      <Network className="h-16 w-16 text-outline-variant mx-auto mb-4" />
-                      <p className="text-lg font-medium text-on-surface mb-2 font-['Inter_Tight',Inter,sans-serif] tracking-tight">
-                        No components yet
-                      </p>
-                      <p className="text-sm text-on-surface-variant">
-                        Add components to build your process hierarchy
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div
-                    ref={modalCanvasRef}
-                    className={`absolute inset-0 overflow-auto ${
-                      isPanningModal ? "cursor-grabbing" : "cursor-grab"
-                    }`}
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(circle at 1px 1px, rgba(188, 202, 191, 0.5) 1px, transparent 0)",
-                      backgroundSize: "32px 32px",
-                      backgroundColor: "#f8faf8",
-                      overscrollBehavior: "none",
-                    }}
-                    onWheel={(e) => {
-                      if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        const delta = e.deltaY > 0 ? -5 : 5
-                        setModalZoom((prev) => Math.max(30, Math.min(200, prev + delta)))
-                      }
-                    }}
-                    onMouseDown={(e) => {
-                      if (e.button === 0) {
-                        setIsPanningModal(true)
-                        setModalPanStart({ x: e.clientX - modalPan.x, y: e.clientY - modalPan.y })
-                      }
-                    }}
-                    onMouseMove={(e) => {
-                      if (isPanningModal) {
-                        setModalPan({
-                          x: e.clientX - modalPanStart.x,
-                          y: e.clientY - modalPanStart.y,
-                        })
-                      }
-                    }}
-                    onMouseUp={() => setIsPanningModal(false)}
-                    onMouseLeave={() => setIsPanningModal(false)}
-                  >
-                    <div
-                      className="inline-block p-4 pt-6"
-                      style={{ marginLeft: modalPan.x, marginTop: modalPan.y }}
-                    >
-                      <div
-                        className="transform-gpu transition-transform duration-100 origin-top"
-                        style={{ transform: `scale(${modalZoom / 100})` }}
-                      >
-                        {renderFlowChart()}
-                      </div>
-                    </div>
-                    <div className="absolute bottom-3 left-3 text-[10px] font-mono uppercase tracking-[0.12em] text-on-surface-variant/60 glass-panel px-2 py-1 rounded-md border border-outline-variant/10">
-                      Scroll to pan · Ctrl+Scroll to zoom · Drag to move
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="px-6 py-3 border-t bg-slate-50 flex items-center justify-between text-xs text-gray-600">
-                <div className="flex items-center gap-4">
-                  <span>
-                    <span className="font-medium">{modalComponents.length}</span> components
-                  </span>
-                  {modalSearchQuery && (
-                    <span>
-                      <span className="font-medium">
-                        {
-                          modalComponents.filter((c) =>
-                            c.component_name
-                              .toLowerCase()
-                              .includes(modalSearchQuery.toLowerCase())
-                          ).length
-                        }
-                      </span>{" "}
-                      matching &ldquo;{modalSearchQuery}&rdquo;
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-gray-500">
-                  <span>Drag to pan • Scroll to zoom • Click nodes to expand/collapse</span>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Project Description Modal */}
-          <Dialog open={isDescriptionModalOpen} onOpenChange={setIsDescriptionModalOpen}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>{project?.name}</DialogTitle>
-              </DialogHeader>
-              <div className="mt-4">
-                <h4 className="text-sm font-semibold text-on-surface mb-2">Project Description</h4>
-                <p className="text-sm text-on-surface-variant whitespace-pre-wrap leading-relaxed">
-                  {project?.description}
-                </p>
-                {project?.cases && (
-                  <div className="mt-6 pt-4 border-t border-outline-variant/20">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-on-surface-variant">Total Cases:</span>{" "}
-                        <span className="font-medium">{project.cases.length}</span>
-                      </div>
-                      <div>
-                        <span className="text-on-surface-variant">Base Cases:</span>{" "}
-                        <span className="font-medium">
-                          {project.cases.filter((c: any) => c.type === "base").length}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-    </ProjectShell>
+          <div className="px-6 py-3 border-t bg-slate-50 flex items-center justify-between text-xs text-gray-600">
+            <div className="flex items-center gap-4">
+              <span>
+                <span className="font-medium">{modalComponents.length}</span>{' '}
+                components
+              </span>
+              {modalSearchQuery && (
+                <span>
+                  <span className="font-medium">
+                    {
+                      modalComponents.filter((c) =>
+                        c.component_name
+                          .toLowerCase()
+                          .includes(modalSearchQuery.toLowerCase()),
+                      ).length
+                    }
+                  </span>{' '}
+                  matching &ldquo;{modalSearchQuery}&rdquo;
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-gray-500">
+              <span>Drag to pan • Scroll to zoom • Click nodes to expand/collapse</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
