@@ -22,3 +22,6 @@ export type { AppTopBarProps } from './app-top-bar'
 
 export { Breadcrumb } from './breadcrumb'
 export type { BreadcrumbProps, BreadcrumbItem } from './breadcrumb'
+
+export { MiniCanvas } from './project/mini-canvas'
+export type { MiniCanvasProps } from './project/mini-canvas'
