@@ -1,29 +1,25 @@
 'use client';
 
 /**
- * <ComponentForm> — Veridian Flow redesign of the component-creation form.
+ * <ComponentForm> — LCAPIX editorial redesign (Phase LH).
  *
- * Drives both the "new" page and the "edit" page. The state model, handler
+ * Drives both the "new" and "edit" component pages. The state model, handler
  * shape, validation rules, and store-mutation contract are preserved from the
- * original `app/project/[projectId]/case/[caseId]/component/new/page.tsx`
- * implementation. ONLY the visual layer (tokens, typography, layout) is new.
+ * prior Veridian implementation and from the original route handlers. ONLY
+ * the visual wrapper has changed — no API routes, store actions, field names,
+ * or onSubmit signature have been altered.
+ *
+ * Visual reference: LCAPIX/pages-misc.jsx → function ComponentFormPage().
+ * Uses the design-system CSS at app/lcapix.css (.card, .input, .label,
+ * .btn, .chip, .eyebrow, .display-md, .title, .body, .mono, .glass).
+ *
+ * NOTE: <AuthGuard> and <AppTopBar> are provided by app/project/layout.tsx;
+ * this component only renders the Breadcrumb + page body + sticky action bar.
  */
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { ChevronRight, AlertCircle, CheckCircle2, Layers, Fingerprint, Coins, Settings2, ChevronDown } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
 
 import { useProjectStore, type ComponentNode } from '@/lib/store';
@@ -35,6 +31,8 @@ import {
   validateParentChild,
   buildBreadcrumbPath,
 } from '@/lib/hierarchy';
+
+import { Breadcrumb, Icon } from '@/components/lcapix';
 
 import {
   TypeSegmentedControl,
@@ -101,51 +99,6 @@ const DRIVERS_BY_CATEGORY: Record<string, string[]> = {
   'Chemical Process':      ['Solvent Usage (L)', 'Catalyst Usage (kg)', 'Chemical Reaction (mol)'],
   'Manufacturing Process': ['Machine Hours (h)', 'Labor Hours (h)', 'Production Rate (units/h)'],
 };
-
-/* ------------------------------------------------------------------ */
-/* Small presentational helpers                                        */
-/* ------------------------------------------------------------------ */
-
-function SectionCard({
-  step, title, icon, tone = 'lowest', children,
-}: {
-  step: string;
-  title: string;
-  icon: React.ReactNode;
-  tone?: 'lowest' | 'low';
-  children: React.ReactNode;
-}) {
-  const bg = tone === 'lowest' ? 'bg-surface-container-lowest' : 'bg-surface-container-low';
-  return (
-    <section className={`${bg} p-8 md:p-10 rounded-xl shadow-botanical`}>
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary mb-1">{step}</h2>
-          <h3 className="text-2xl font-bold tracking-tight text-on-surface">{title}</h3>
-        </div>
-        <span className="text-primary/70 bg-primary-fixed/20 p-3 rounded-lg">{icon}</span>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
-  return (
-    <label className="font-mono text-[10px] uppercase tracking-[0.2em] text-outline block">
-      {children}
-      {required && <span className="text-error ml-1">*</span>}
-    </label>
-  );
-}
-
-function SectionPill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary bg-primary-fixed/30 px-2 py-1 rounded-sm">
-      {children}
-    </span>
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Main form                                                           */
@@ -280,15 +233,12 @@ export function ComponentForm({
   const isFormValid = Boolean(formData.processType && formData.processName.trim());
 
   /* ------- submit ------- */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!validateForm()) return;
     setIsSubmitting(true);
 
     try {
-      // Cast through unknown to accommodate the store's slightly narrower NodeType.
-      // Runtime string values are whatever the form collected — preserving the
-      // pre-existing behavior of the legacy implementation.
       const payload: Omit<ComponentNode, 'id'> = {
         caseId,
         type: formData.processType as unknown as ComponentNode['type'],
@@ -347,445 +297,572 @@ export function ComponentForm({
 
   const showDriversSection = formData.processType === 'elemental';
 
+  /* ------- breadcrumb items ------- */
+  const breadcrumbItems = [
+    { label: 'Projects', page: 'home' },
+    {
+      label: project?.name || 'Project',
+      onClick: () => router.push(`/project/${projectId}`),
+    },
+    {
+      label: currentCase?.name || 'Case',
+      onClick: () => router.push(`/project/${projectId}/case/${caseId}`),
+    },
+    { label: isEditMode ? 'Edit Component' : 'New Component' },
+  ];
+
   /* ------- render ------- */
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-6 md:px-8 pt-10 pb-40">
+    <>
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-on-surface-variant mb-6">
-          <Link href="/home" className="hover:text-on-surface">Home</Link>
-          <span className="opacity-40">/</span>
-          <Link href={`/project/${projectId}`} className="hover:text-on-surface">
-            {project?.name || 'Project'}
-          </Link>
-          <span className="opacity-40">/</span>
-          <Link href={`/project/${projectId}/case/${caseId}`} className="hover:text-on-surface">
-            {currentCase?.name || 'Case'}
-          </Link>
-          <span className="opacity-40">/</span>
-          <span className="text-on-surface font-medium">
-            {isEditMode ? 'Edit Component' : 'New Component'}
-          </span>
-        </nav>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 120px' }}>
+        <h1
+          className="display-md"
+          style={{ margin: 0, marginBottom: 8, fontSize: 26, fontWeight: 600, letterSpacing: '-0.01em' }}
+        >
+          {isEditMode ? 'Edit Component' : 'New Component'}
+        </h1>
+        <p className="body" style={{ margin: 0, marginBottom: 24, fontSize: 13, color: 'var(--text-tertiary)' }}>
+          {isEditMode
+            ? `Update this node in the process hierarchy for ${currentCase?.name ?? 'this case'}.`
+            : `Add a new node to the process hierarchy for ${currentCase?.name ?? 'this case'}.`}
+        </p>
 
-        {/* Header */}
-        <header className="mb-12">
-          <div className="flex items-center gap-4 mb-3">
-            <SectionPill>
-              {isEditMode ? 'Module Config · Edit' : 'Module Config · Create'}
-            </SectionPill>
-          </div>
-          <h1 className="text-5xl md:text-6xl font-black tracking-tight text-on-surface leading-tight">
-            {isEditMode ? 'Edit Component' : 'Define Component'}
-          </h1>
-          <p className="text-on-surface-variant max-w-xl mt-4 leading-relaxed">
-            Configure a process, material, or activity in the LCA model. Fields map directly
-            to the characterization pipeline — precision matters downstream.
-          </p>
-          {isAddChildMode && suggestedParent && (
-            <div className="mt-6 veridian-gradient-soft rounded-lg px-4 py-3 text-sm text-primary-container">
-              <strong>Adding child to:</strong>{' '}
-              {buildBreadcrumbPath(suggestedParent, processNodes)} / {suggestedParent.name}
-            </div>
-          )}
-        </header>
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-
-          {/* ---------------- Section 1: Type & Placement ---------------- */}
-          <SectionCard
-            step="Step 01"
-            title="Type & Placement"
-            icon={<Layers className="h-5 w-5" />}
-            tone="lowest"
+        {isAddChildMode && suggestedParent && (
+          <div
+            className="chip chip-active"
+            style={{ marginBottom: 16, padding: '8px 14px', fontSize: 12 }}
           >
-            <div className="space-y-2">
-              <FieldLabel required>Process Type</FieldLabel>
+            <Icon name="chevron-right" size={12} />
+            Adding child to: {buildBreadcrumbPath(suggestedParent, processNodes)} / {suggestedParent.name}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* ---------------- Section 1: Type & Placement ---------------- */}
+          <section className="card-section" style={{ padding: 24 }}>
+            <div className="title" style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+              Type &amp; Placement
+            </div>
+            <div className="body-sm" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
+              Where does this component fit in the process tree?
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
               <TypeSegmentedControl
                 value={formData.processType as ComponentTypeValue | ''}
                 onChange={handleTypeChange}
                 disabled={isProcessTypeLocked}
               />
               {errors.processType && (
-                <p className="text-sm text-error">{errors.processType}</p>
+                <p style={{ marginTop: 8, fontSize: 12, color: 'var(--signal-error)' }}>
+                  {errors.processType}
+                </p>
               )}
               {isProcessTypeLocked && (
-                <p className="font-mono text-[10px] uppercase tracking-widest text-outline">
+                <p
+                  className="mono"
+                  style={{
+                    marginTop: 8,
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
                   Locked — {isAddChildMode ? 'add-child mode' : 'component has a parent'}
                 </p>
               )}
             </div>
 
             {formData.processType && formData.processType !== 'product' && (
-              <div className="mt-8 space-y-2">
-                <FieldLabel>Parent Component</FieldLabel>
-                <Select
-                  value={formData.parentId || 'none'}
-                  onValueChange={(value) => {
-                    setFormData((p) => ({ ...p, parentId: value === 'none' ? '' : value }));
-                    if (errors.parentId) setErrors((p) => ({ ...p, parentId: '' }));
-                  }}
-                  disabled={isAddChildMode}
-                >
-                  <SelectTrigger
-                    className={`bg-surface-container-low ${errors.parentId ? 'ring-2 ring-error' : ''}`}
+              <div>
+                <label className="label">Parent component</label>
+                <div style={{ position: 'relative' }}>
+                  <select
+                    className="input"
+                    style={{ appearance: 'none', paddingRight: 32 }}
+                    value={formData.parentId || 'none'}
+                    disabled={isAddChildMode}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((p) => ({ ...p, parentId: value === 'none' ? '' : value }));
+                      if (errors.parentId) setErrors((p) => ({ ...p, parentId: '' }));
+                    }}
                   >
-                    <SelectValue placeholder="No parent (floating component)">
-                      {formData.parentId
-                        ? eligibleParents.find((p) => p.id === formData.parentId)?.name ||
-                          'Unknown Parent'
-                        : 'No Parent (Floating Component)'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Parent (Floating Component)</SelectItem>
+                    <option value="none">No parent (floating component)</option>
                     {eligibleParents.map((parent) => (
-                      <SelectItem key={parent.id} value={parent.id}>
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium">{parent.name}</span>
-                          <span className="text-[10px] text-on-surface-variant font-mono uppercase tracking-widest">
-                            {getTypeLabel(parent.type as unknown as NodeType)}
-                          </span>
-                        </div>
-                      </SelectItem>
+                      <option key={parent.id} value={parent.id}>
+                        {parent.name} ({getTypeLabel(parent.type as unknown as NodeType)})
+                      </option>
                     ))}
-                  </SelectContent>
-                </Select>
-                {errors.parentId && <p className="text-sm text-error">{errors.parentId}</p>}
-                {!formData.parentId && (
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-outline">
+                  </select>
+                  <Icon
+                    name="chevron-down"
+                    size={14}
+                    style={{
+                      position: 'absolute',
+                      right: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'var(--text-tertiary)',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                </div>
+                {errors.parentId && (
+                  <p style={{ marginTop: 6, fontSize: 12, color: 'var(--signal-error)' }}>
+                    {errors.parentId}
+                  </p>
+                )}
+                {!formData.parentId && !errors.parentId && (
+                  <p
+                    className="mono"
+                    style={{
+                      marginTop: 6,
+                      fontSize: 10,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
                     Floating — can be re-parented later
                   </p>
                 )}
               </div>
             )}
-          </SectionCard>
+          </section>
 
           {/* ---------------- Section 2: Identity ---------------- */}
-          <SectionCard
-            step="Step 02"
-            title="Identity & Metrics"
-            icon={<Fingerprint className="h-5 w-5" />}
-            tone="low"
-          >
-            <div className="space-y-8">
-              <div className="space-y-2">
-                <FieldLabel required>Component Full Name</FieldLabel>
-                <Input
-                  type="text"
-                  value={formData.processName}
-                  maxLength={100}
-                  placeholder="e.g. Battery Cell Assembly"
-                  onChange={(e) => {
-                    setFormData((p) => ({ ...p, processName: e.target.value }));
-                    if (errors.processName) setErrors((p) => ({ ...p, processName: '' }));
-                  }}
-                  className={`h-12 text-xl font-medium bg-transparent border-0 border-b border-outline-variant/40 rounded-none px-0 focus-visible:ring-0 focus-visible:border-primary ${errors.processName ? 'border-error' : ''}`}
-                />
-                <div className="flex justify-between">
-                  {errors.processName && <p className="text-sm text-error">{errors.processName}</p>}
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-outline ml-auto">
-                    {formData.processName.length} / 100
-                  </p>
-                </div>
-              </div>
+          <section className="card-section" style={{ padding: 24 }}>
+            <div className="title" style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
+              Identity
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="md:col-span-2 space-y-2">
-                  <FieldLabel>Technical Description</FieldLabel>
-                  <Textarea
-                    value={formData.processDescription}
-                    rows={3}
-                    placeholder="Process steps, materials, assumptions…"
-                    onChange={(e) =>
-                      setFormData((p) => ({ ...p, processDescription: e.target.value }))
-                    }
-                    className="bg-transparent border-0 border-b border-outline-variant/40 rounded-none px-0 resize-none text-sm leading-relaxed focus-visible:ring-0 focus-visible:border-primary"
-                  />
-                </div>
-                <div className="space-y-8">
-                  <div className="space-y-2">
-                    <FieldLabel>Quantity</FieldLabel>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.mass || ''}
-                      placeholder="0"
-                      onChange={(e) =>
-                        setFormData((p) => ({
-                          ...p,
-                          mass: e.target.value === '' ? 0 : parseFloat(e.target.value),
-                        }))
-                      }
-                      className="bg-transparent border-0 border-b border-outline-variant/40 rounded-none px-0 font-mono text-lg focus-visible:ring-0 focus-visible:border-primary"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FieldLabel>Reference Unit</FieldLabel>
-                    <Input
-                      type="text"
-                      value={formData.massUnit}
-                      placeholder="kg"
-                      onChange={(e) =>
-                        setFormData((p) => ({ ...p, massUnit: e.target.value }))
-                      }
-                      className="bg-transparent border-0 border-b border-outline-variant/40 rounded-none px-0 font-mono text-lg uppercase focus-visible:ring-0 focus-visible:border-primary"
-                    />
-                  </div>
-                </div>
+            <label className="label">
+              Name <span style={{ color: 'var(--signal-error)' }}>*</span>
+            </label>
+            <input
+              className="input"
+              type="text"
+              value={formData.processName}
+              maxLength={100}
+              placeholder="e.g. Cathode Coating"
+              onChange={(e) => {
+                setFormData((p) => ({ ...p, processName: e.target.value }));
+                if (errors.processName) setErrors((p) => ({ ...p, processName: '' }));
+              }}
+              style={{ marginBottom: 4 }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              {errors.processName ? (
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--signal-error)' }}>
+                  {errors.processName}
+                </p>
+              ) : <span />}
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  color: 'var(--text-tertiary)',
+                }}
+              >
+                {formData.processName.length} / 100
+              </span>
+            </div>
+
+            <label className="label">Description</label>
+            <textarea
+              className="input"
+              value={formData.processDescription}
+              rows={3}
+              placeholder="Process steps, materials, assumptions…"
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, processDescription: e.target.value }))
+              }
+              style={{ height: 72, padding: 10, marginBottom: 12, resize: 'vertical' }}
+            />
+
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+              <div>
+                <label className="label">Quantity</label>
+                <input
+                  className="input mono"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.mass || ''}
+                  placeholder="0"
+                  onChange={(e) =>
+                    setFormData((p) => ({
+                      ...p,
+                      mass: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">Unit</label>
+                <input
+                  className="input mono"
+                  type="text"
+                  value={formData.massUnit}
+                  placeholder="kg"
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, massUnit: e.target.value }))
+                  }
+                />
               </div>
             </div>
-          </SectionCard>
+          </section>
 
           {/* ---------------- Section 3: Drivers (elemental only) ---------------- */}
           {showDriversSection && (
-            <SectionCard
-              step="Step 03"
-              title="Structural Drivers"
-              icon={<Layers className="h-5 w-5" />}
-              tone="lowest"
-            >
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <FieldLabel>Driver Category</FieldLabel>
-                  <Select
-                    value={formData.driverCategory}
-                    onValueChange={(value) =>
-                      setFormData((p) => ({ ...p, driverCategory: value, drivers: [] }))
-                    }
-                  >
-                    <SelectTrigger className="bg-surface-container-low">
-                      <SelectValue placeholder="Select a driver category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DRIVER_CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {formData.driverCategory && (
-                  <div className="space-y-3">
-                    <FieldLabel>Drivers</FieldLabel>
-                    <div className="rounded-lg bg-surface-container-low p-4 divide-y divide-outline-variant/20">
-                      {availableDrivers.map((driver) => {
-                        const checked = formData.drivers.includes(driver);
-                        return (
-                          <label
-                            key={driver}
-                            className="flex items-center justify-between py-3 first:pt-0 last:pb-0 cursor-pointer group"
-                          >
-                            <span className="text-sm font-medium">{driver}</span>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFormData((p) => ({
-                                    ...p, drivers: [...p.drivers, driver],
-                                  }));
-                                } else {
-                                  setFormData((p) => ({
-                                    ...p,
-                                    drivers: p.drivers.filter((d) => d !== driver),
-                                  }));
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary"
-                            />
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {formData.drivers.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {formData.drivers.map((d) => (
-                          <Badge key={d} variant="secondary" className="text-xs">
-                            {d}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+            <section className="card-section" style={{ padding: 24 }}>
+              <div className="title" style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>
+                Structural Drivers
               </div>
-            </SectionCard>
+
+              <label className="label">Driver category</label>
+              <div style={{ position: 'relative', marginBottom: 16 }}>
+                <select
+                  className="input"
+                  style={{ appearance: 'none', paddingRight: 32 }}
+                  value={formData.driverCategory}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, driverCategory: e.target.value, drivers: [] }))
+                  }
+                >
+                  <option value="">Select a driver category</option>
+                  {DRIVER_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <Icon
+                  name="chevron-down"
+                  size={14}
+                  style={{
+                    position: 'absolute',
+                    right: 10,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-tertiary)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              </div>
+
+              {formData.driverCategory && (
+                <>
+                  <label className="label">Drivers</label>
+                  <div
+                    style={{
+                      background: 'var(--surface-overlay)',
+                      borderRadius: 6,
+                      padding: 12,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2,
+                    }}
+                  >
+                    {availableDrivers.map((driver) => {
+                      const checked = formData.drivers.includes(driver);
+                      return (
+                        <label
+                          key={driver}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 4px',
+                            cursor: 'pointer',
+                            fontSize: 13,
+                          }}
+                        >
+                          <span>{driver}</span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData((p) => ({ ...p, drivers: [...p.drivers, driver] }));
+                              } else {
+                                setFormData((p) => ({
+                                  ...p,
+                                  drivers: p.drivers.filter((d) => d !== driver),
+                                }));
+                              }
+                            }}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {formData.drivers.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                      {formData.drivers.map((d) => (
+                        <span key={d} className="chip" style={{ fontSize: 11 }}>
+                          {d}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
           )}
 
-          {/* ---------------- Section 4: Costs (collapsible) ---------------- */}
-          <Collapsible open={costsOpen} onOpenChange={setCostsOpen}>
-            <section className="bg-surface-container-lowest rounded-xl shadow-botanical overflow-hidden">
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full p-8 md:p-10 text-left"
-                >
-                  <div>
-                    <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary mb-1">
-                      Step {showDriversSection ? '04' : '03'}
-                    </h2>
-                    <h3 className="text-2xl font-bold tracking-tight text-on-surface">
-                      Economic Profile
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Coins className="h-5 w-5 text-primary/70" />
-                    <ChevronDown
-                      className={`h-5 w-5 text-on-surface-variant transition-transform ${costsOpen ? 'rotate-180' : ''}`}
-                    />
-                  </div>
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="px-8 md:px-10 pb-10 space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <CostField
-                      label="Operational Cost"
-                      value={formData.operationalCostUSD}
-                      currency={formData.currency}
-                      onChange={(v) =>
-                        setFormData((p) => ({ ...p, operationalCostUSD: v }))
-                      }
-                    />
-                    <CostField
-                      label="Capital Cost"
-                      value={formData.capitalCostUSD}
-                      currency={formData.currency}
-                      onChange={(v) =>
-                        setFormData((p) => ({ ...p, capitalCostUSD: v }))
-                      }
-                    />
-                  </div>
+          {/* ---------------- Section 4: Costs (collapsed) ---------------- */}
+          <section className="card-section" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setCostsOpen((v) => !v)}
+              style={{
+                padding: '16px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                width: '100%',
+                textAlign: 'left',
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
+              <Icon
+                name={costsOpen ? 'chevron-down' : 'chevron-right'}
+                size={14}
+                style={{ color: 'var(--text-tertiary)' }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>Costs</span>
+              <span className="mono" style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+                {formData.currency || 'USD'} {formatCostSummary(formData)} estimated
+              </span>
+            </button>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-outline-variant/20">
-                    <CostField
-                      label="Labor"
-                      value={formData.laborCost}
-                      currency={formData.currency}
-                      onChange={(v) => setFormData((p) => ({ ...p, laborCost: v }))}
-                    />
-                    <CostField
-                      label="Energy"
-                      value={formData.energyCost}
-                      currency={formData.currency}
-                      onChange={(v) => setFormData((p) => ({ ...p, energyCost: v }))}
-                    />
-                    <CostField
-                      label="Transportation"
-                      value={formData.transportationCost}
-                      currency={formData.currency}
-                      onChange={(v) =>
-                        setFormData((p) => ({ ...p, transportationCost: v }))
-                      }
-                    />
-                    <CostField
-                      label="Material"
-                      value={formData.materialCost}
-                      currency={formData.currency}
-                      onChange={(v) => setFormData((p) => ({ ...p, materialCost: v }))}
-                    />
-                    <CostField
-                      label="Equipment"
-                      value={formData.equipmentCost}
-                      currency={formData.currency}
-                      onChange={(v) => setFormData((p) => ({ ...p, equipmentCost: v }))}
-                    />
-                    <CostField
-                      label="Overhead"
-                      value={formData.overheadCost}
-                      currency={formData.currency}
-                      onChange={(v) => setFormData((p) => ({ ...p, overheadCost: v }))}
-                    />
-                  </div>
+            {costsOpen && (
+              <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+                  <CostField
+                    label="Operational cost"
+                    value={formData.operationalCostUSD}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, operationalCostUSD: v }))}
+                  />
+                  <CostField
+                    label="Capital cost"
+                    value={formData.capitalCostUSD}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, capitalCostUSD: v }))}
+                  />
                 </div>
-              </CollapsibleContent>
-            </section>
-          </Collapsible>
-
-          {/* ---------------- Section 5: Advanced (collapsible) ---------------- */}
-          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-            <section className="bg-surface-container-low rounded-xl overflow-hidden">
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full p-8 md:p-10 text-left"
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 12,
+                    paddingTop: 12,
+                    borderTop: '1px solid var(--border-subtle)',
+                  }}
                 >
+                  <CostField
+                    label="Labor"
+                    value={formData.laborCost}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, laborCost: v }))}
+                  />
+                  <CostField
+                    label="Energy"
+                    value={formData.energyCost}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, energyCost: v }))}
+                  />
+                  <CostField
+                    label="Material"
+                    value={formData.materialCost}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, materialCost: v }))}
+                  />
+                  <CostField
+                    label="Transportation"
+                    value={formData.transportationCost}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, transportationCost: v }))}
+                  />
+                  <CostField
+                    label="Equipment"
+                    value={formData.equipmentCost}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, equipmentCost: v }))}
+                  />
+                  <CostField
+                    label="Overhead"
+                    value={formData.overheadCost}
+                    currency={formData.currency}
+                    onChange={(v) => setFormData((p) => ({ ...p, overheadCost: v }))}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary mb-1">
-                      Advanced
-                    </h2>
-                    <h3 className="text-2xl font-bold tracking-tight text-on-surface">
-                      Currency & Metadata
-                    </h3>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Settings2 className="h-5 w-5 text-primary/70" />
-                    <ChevronDown
-                      className={`h-5 w-5 text-on-surface-variant transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-                    />
-                  </div>
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="px-8 md:px-10 pb-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <FieldLabel>Currency (ISO 4217)</FieldLabel>
-                    <Input
+                    <label className="label">Currency (ISO 4217)</label>
+                    <input
+                      className="input mono"
                       type="text"
                       value={formData.currency}
                       maxLength={3}
                       placeholder="USD"
                       onChange={(e) =>
-                        setFormData((p) => ({
-                          ...p,
-                          currency: e.target.value.toUpperCase(),
-                        }))
+                        setFormData((p) => ({ ...p, currency: e.target.value.toUpperCase() }))
                       }
-                      className="bg-transparent border-0 border-b border-outline-variant/40 rounded-none px-0 font-mono text-lg uppercase focus-visible:ring-0 focus-visible:border-primary"
                     />
                   </div>
                 </div>
-              </CollapsibleContent>
-            </section>
-          </Collapsible>
+              </div>
+            )}
+          </section>
+
+          {/* ---------------- Section 5: Advanced (collapsed) ---------------- */}
+          <section className="card-section" style={{ padding: 0, overflow: 'hidden' }}>
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((v) => !v)}
+              style={{
+                padding: '16px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                background: 'transparent',
+                border: 'none',
+                width: '100%',
+                textAlign: 'left',
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
+              <Icon
+                name={advancedOpen ? 'chevron-down' : 'chevron-right'}
+                size={14}
+                style={{ color: 'var(--text-tertiary)' }}
+              />
+              <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>Advanced</span>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+                Drivers JSON · metadata
+              </span>
+            </button>
+
+            {advancedOpen && (
+              <div style={{ padding: '0 24px 24px' }}>
+                <label className="label">Drivers (JSON array)</label>
+                <textarea
+                  className="input mono"
+                  rows={4}
+                  value={JSON.stringify(formData.drivers ?? [], null, 2)}
+                  placeholder='["Electricity (kWh)"]'
+                  onChange={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      if (Array.isArray(parsed)) {
+                        setFormData((p) => ({ ...p, drivers: parsed }));
+                      }
+                    } catch {
+                      /* ignore partial input */
+                    }
+                  }}
+                  style={{ height: 120, padding: 10, resize: 'vertical' }}
+                />
+                <p
+                  className="mono"
+                  style={{
+                    marginTop: 8,
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.1em',
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  Advanced metadata — parsed as JSON on blur-valid input
+                </p>
+              </div>
+            )}
+          </section>
         </form>
       </div>
 
-      {/* Sticky bottom action bar */}
-      <div className="fixed bottom-0 inset-x-0 z-30 glass-panel border-t border-outline-variant/15">
-        <div className="max-w-4xl mx-auto px-6 md:px-8 py-4 flex items-center justify-between">
-          <Button
+      {/* Sticky action bar */}
+      <div
+        className="glass"
+        style={{
+          position: 'sticky',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 32px',
+          zIndex: 40,
+          borderRadius: 0,
+          borderTop: '1px solid var(--border-subtle)',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 720,
+            width: '100%',
+            margin: '0 auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <button
             type="button"
-            variant="ghost"
-            onClick={() => router.push(`/project/${projectId}/case/${caseId}`)}
-            className="font-mono text-xs uppercase tracking-widest"
+            className="btn btn-ghost btn-sm"
+            onClick={() => router.back()}
           >
             Cancel
-          </Button>
-          <div className="flex items-center gap-4">
-            {!isFormValid && (
-              <span className="font-mono text-[10px] uppercase tracking-widest text-outline hidden md:inline">
-                Name + type required
-              </span>
-            )}
-            <Button
-              type="submit"
-              disabled={!isFormValid || isSubmitting}
-              onClick={handleSubmit}
-              className="veridian-gradient text-white px-8 py-3 h-auto rounded-lg font-bold tracking-tight shadow-botanical hover:opacity-95"
+          </button>
+          <button
+            type="button"
+            className="btn btn-tertiary btn-sm"
+            onClick={() => handleSubmit()}
+            disabled={!isFormValid || isSubmitting}
+          >
+            Save as draft
+          </button>
+          <div style={{ flex: 1 }} />
+          {!isFormValid && (
+            <span
+              className="mono"
+              style={{
+                fontSize: 10,
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                color: 'var(--text-tertiary)',
+                marginRight: 8,
+              }}
             >
-              {isSubmitting
-                ? (isEditMode ? 'Updating…' : 'Creating…')
-                : (isEditMode ? 'Save Changes' : 'Create Component')}
-              <ChevronRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
+              Name + type required
+            </span>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => handleSubmit()}
+            disabled={!isFormValid || isSubmitting}
+          >
+            {isSubmitting
+              ? isEditMode ? 'Saving…' : 'Creating…'
+              : isEditMode ? 'Save changes' : 'Create component'}
+          </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -802,11 +879,25 @@ function CostField({
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <FieldLabel>{label}</FieldLabel>
-      <div className="flex items-baseline gap-2 border-b border-outline-variant/40 focus-within:border-primary transition-colors">
-        <span className="font-mono text-xs text-outline">{currency || 'USD'}</span>
+    <div>
+      <label className="label">{label}</label>
+      <div style={{ position: 'relative' }}>
+        <span
+          className="mono"
+          style={{
+            position: 'absolute',
+            left: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontSize: 11,
+            color: 'var(--text-tertiary)',
+            pointerEvents: 'none',
+          }}
+        >
+          {currency || 'USD'}
+        </span>
         <input
+          className="input mono"
           type="number"
           min="0"
           step="0.01"
@@ -815,11 +906,33 @@ function CostField({
           onChange={(e) =>
             onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))
           }
-          className="flex-1 bg-transparent border-0 px-0 py-3 font-mono text-lg focus:outline-none"
+          style={{ paddingLeft: 46 }}
         />
       </div>
     </div>
   );
+}
+
+function formatCostSummary(f: {
+  operationalCostUSD: number;
+  capitalCostUSD: number;
+  laborCost: number;
+  energyCost: number;
+  materialCost: number;
+  transportationCost: number;
+  equipmentCost: number;
+  overheadCost: number;
+}) {
+  const total =
+    (f.operationalCostUSD || 0) +
+    (f.capitalCostUSD || 0) +
+    (f.laborCost || 0) +
+    (f.energyCost || 0) +
+    (f.materialCost || 0) +
+    (f.transportationCost || 0) +
+    (f.equipmentCost || 0) +
+    (f.overheadCost || 0);
+  return total.toFixed(2);
 }
 
 export default ComponentForm;
