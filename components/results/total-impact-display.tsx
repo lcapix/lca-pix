@@ -42,7 +42,7 @@ export function TotalImpactDisplay({
   const deltaNegative = typeof deltaPct === 'number' && deltaPct < 0;
 
   return (
-    <div className="bg-surface-container-lowest p-8 rounded-2xl relative overflow-hidden flex flex-col justify-between min-h-[450px]">
+    <div className="bg-surface-container-lowest p-6 sm:p-8 rounded-2xl relative overflow-hidden flex flex-col justify-between min-h-[450px]">
       <div className="relative z-10">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container text-[10px] font-bold uppercase tracking-wider mb-6">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
@@ -50,9 +50,9 @@ export function TotalImpactDisplay({
         </span>
 
         <div className="flex items-baseline gap-4 flex-wrap">
-          <h2 className="text-[6rem] md:text-[7.5rem] font-bold leading-none tracking-tighter text-primary">
+          <h2 className="text-[3.5rem] sm:text-[4.5rem] md:text-[6rem] lg:text-[7.5rem] font-bold leading-none tracking-tighter text-primary break-all">
             <Num value={displayValue} precision={precision} />
-            <span className="text-2xl md:text-3xl font-medium text-on-surface-variant ml-3 tracking-normal uppercase">
+            <span className="text-xl sm:text-2xl md:text-3xl font-medium text-on-surface-variant ml-3 tracking-normal uppercase">
               {displayUnit}
             </span>
           </h2>
@@ -63,7 +63,7 @@ export function TotalImpactDisplay({
         )}
       </div>
 
-      <div className="relative z-10 flex gap-4 mt-8">
+      <div className="relative z-10 flex flex-col sm:flex-row gap-4 mt-8">
         <div className="flex-1 p-4 bg-surface-container rounded-xl">
           <p className="text-[10px] font-mono uppercase text-on-surface-variant">Change</p>
           {typeof deltaPct === 'number' ? (
