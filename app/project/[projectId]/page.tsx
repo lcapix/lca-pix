@@ -32,8 +32,8 @@ import { transformProjectFromDB, transformCaseFromDB } from "@/lib/data-transfor
 import { CaseMiniVisualization } from "@/components/case-mini-visualization"
 import { CaseTreeVisualization } from "@/components/case-tree-visualization"
 import { getColorsByComponentType, normalizeComponentType } from "@/lib/hierarchy-colors"
-import { AuthGuard } from "@/components/auth-guard"
-import { AppShell } from "@/components/layout/app-shell"
+// AuthGuard + AppShell are provided by app/project/layout.tsx
+// (single-source-of-truth so sub-routes like /case/[id] inherit too)
 import { ProjectShell } from "@/components/project/project-shell"
 import { CaseTabPills } from "@/components/project/case-tab-pills"
 import { HierarchyStepPills } from "@/components/project/hierarchy-step-pills"
@@ -116,16 +116,12 @@ export default function ProjectPage() {
 
   if (isLoading || !project) {
     return (
-      <AuthGuard>
-        <AppShell activeHref="/home">
-          <div className="flex items-center justify-center h-[calc(100vh-64px)]">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
-              <h2 className="text-lg font-semibold text-on-surface">Loading project...</h2>
-            </div>
-          </div>
-        </AppShell>
-      </AuthGuard>
+      <div className="flex items-center justify-center h-[calc(100vh-64px)]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+          <h2 className="text-lg font-semibold text-on-surface">Loading project...</h2>
+        </div>
+      </div>
     )
   }
 
@@ -328,13 +324,11 @@ export default function ProjectPage() {
   ]
 
   return (
-    <AuthGuard>
-      <AppShell activeHref="/home">
-        <ProjectShell
-          projectName={project.name || "Project"}
-          projectId={projectId}
-          activeSection="editor"
-        >
+    <ProjectShell
+      projectName={project.name || "Project"}
+      projectId={projectId}
+      activeSection="editor"
+    >
           <div className="max-w-[1200px] mx-auto px-6 md:px-10 py-8">
             {/* Breadcrumb */}
             <nav className="font-mono text-[11px] uppercase tracking-[0.12em] text-on-surface-variant mb-4">
@@ -812,8 +806,6 @@ export default function ProjectPage() {
               </div>
             </DialogContent>
           </Dialog>
-        </ProjectShell>
-      </AppShell>
-    </AuthGuard>
+    </ProjectShell>
   )
 }
