@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
-import { AppLayout } from '@/components/app-layout';
+import { AppTopBar } from '@/components/lcapix';
 import { apiGet } from '@/lib/api-client';
 import { ImportButtons } from '@/components/integrations/import-buttons';
 import { LogViewer } from '@/components/integrations/log-viewer';
@@ -489,7 +489,7 @@ export default function IntegrationsAdminPage() {
 
   return (
     <AuthGuard>
-      <AppLayout>
+      <><AppTopBar current="home" />
         <div className="p-4 sm:p-6 md:p-8 lg:p-12 max-w-7xl mx-auto">
           {/* Editorial header */}
           <div className="mb-10">
@@ -553,7 +553,7 @@ export default function IntegrationsAdminPage() {
             </TabsContent>
           </Tabs>
         </div>
-      </AppLayout>
+      </>
     </AuthGuard>
   );
 }

@@ -1,4 +1,4 @@
-import { AppLayout } from "@/components/app-layout"
+import { AppTopBar } from "@/components/lcapix"
 import { AuthGuard } from "@/components/auth-guard"
 import { Leaf, Target, Users, Zap } from "lucide-react"
 
@@ -47,7 +47,7 @@ export default function AboutPage() {
 
   return (
     <AuthGuard>
-      <AppLayout>
+      <><AppTopBar current="home" />
         <div className="bg-surface min-h-screen">
           <div className="max-w-5xl mx-auto px-8 md:px-16 py-16">
             {/* Hero */}
@@ -177,7 +177,7 @@ export default function AboutPage() {
             </section>
           </div>
         </div>
-      </AppLayout>
+      </>
     </AuthGuard>
   )
 }

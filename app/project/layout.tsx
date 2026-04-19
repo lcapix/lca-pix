@@ -1,14 +1,14 @@
 import type React from "react"
 import { AuthGuard } from "@/components/auth-guard"
-import { AppShell } from "@/components/layout/app-shell"
+import { AppTopBar } from "@/components/lcapix"
 
 /**
- * Project layout — auth gate + Veridian top nav.
+ * Project layout — auth gate + LCAPIX top nav.
  *
- * Individual project pages may further wrap their content in
- * <ProjectShell> for the contextual left rail, but the top nav
- * (AppShell) is provided once here so every project page gets it
- * without having to repeat the wrapper.
+ * Replaced the legacy Stitch-era AppShell with the LCAPIX AppTopBar
+ * (the same nav shown on /home) so every authenticated route shares
+ * a single visual language. Individual pages can still wrap content
+ * in their own shells (e.g. case editor's 3-pane layout).
  */
 export default function ProjectLayout({
   children,
@@ -17,7 +17,8 @@ export default function ProjectLayout({
 }) {
   return (
     <AuthGuard requireAuth={true}>
-      <AppShell activeHref="/home">{children}</AppShell>
+      <AppTopBar current="home" />
+      {children}
     </AuthGuard>
   )
 }

@@ -1,4 +1,4 @@
-import { AppLayout } from "@/components/app-layout"
+import { AppTopBar } from "@/components/lcapix"
 import { AuthGuard } from "@/components/auth-guard"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -72,7 +72,7 @@ export default function GuidePage() {
 
   return (
     <AuthGuard>
-      <AppLayout>
+      <><AppTopBar current="home" />
         <div className="bg-surface min-h-screen">
           <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-12 px-6 md:px-12 py-16">
             {/* Sticky left TOC */}
@@ -443,7 +443,7 @@ export default function GuidePage() {
             </main>
           </div>
         </div>
-      </AppLayout>
+      </>
     </AuthGuard>
   )
 }
