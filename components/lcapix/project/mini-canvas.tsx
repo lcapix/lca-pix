@@ -47,30 +47,30 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
     flat.map((n) => [n.id, n.parent]),
   )
 
-  const COL_W = 200
-  const ROW_H = 44
   const NODE_W = 168
   const NODE_H = 40
+  const COL_W = NODE_W + 24   // horizontal sibling spacing
+  const ROW_H = NODE_H + 36   // vertical depth spacing
 
-  const yById: Record<string, number> = {}
+  const xById: Record<string, number> = {}
   let cursor = 0
   const layout = (id: string): number => {
     const kids = flat.filter((n) => parentOf[n.id] === id)
     if (kids.length === 0) {
-      yById[id] = cursor * ROW_H
+      xById[id] = cursor * COL_W
       cursor++
-      return yById[id]
+      return xById[id]
     }
-    const ys = kids.map((k) => layout(k.id))
-    yById[id] = (Math.min(...ys) + Math.max(...ys)) / 2
-    return yById[id]
+    const xs = kids.map((k) => layout(k.id))
+    xById[id] = (Math.min(...xs) + Math.max(...xs)) / 2
+    return xById[id]
   }
   layout(tree.id)
 
   const positioned: PositionedNode[] = flat.map((n) => ({
     ...n,
-    x: 20 + n.depth * COL_W,
-    y: 16 + (yById[n.id] || 0),
+    x: 20 + (xById[n.id] || 0),
+    y: 16 + n.depth * ROW_H,
   }))
   const posById: Record<string, PositionedNode> = Object.fromEntries(
     positioned.map((p) => [p.id, p]),
@@ -222,15 +222,15 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
             const pa = posById[parent]
             const pb = posById[child]
             if (!pa || !pb) return null
-            const x1 = pa.x + NODE_W
-            const y1 = pa.y + NODE_H / 2
-            const x2 = pb.x
-            const y2 = pb.y + NODE_H / 2
-            const mx = (x1 + x2) / 2
+            const x1 = pa.x + NODE_W / 2
+            const y1 = pa.y + NODE_H
+            const x2 = pb.x + NODE_W / 2
+            const y2 = pb.y
+            const my = (y1 + y2) / 2
             return (
               <path
                 key={i}
-                d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+                d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
                 stroke="var(--border-strong)"
                 strokeWidth="1"
                 fill="none"

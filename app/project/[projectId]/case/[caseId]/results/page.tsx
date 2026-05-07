@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/button'
 import { RunAssessmentModal } from '@/components/assessments/run-assessment-modal'
 
 import {
-  AppTopBar,
   Breadcrumb,
   Icon,
   MiniBar,
@@ -248,7 +247,6 @@ export default function ResultsPage() {
   if (isLoadingCase) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh' }}>
-        <AppTopBar current="home" />
         <div
           style={{
             display: 'flex',
@@ -270,7 +268,6 @@ export default function ResultsPage() {
   if (!currentCase) {
     return (
       <div className="app-shell" style={{ minHeight: '100vh' }}>
-        <AppTopBar current="home" />
         <div
           style={{
             display: 'flex',
@@ -432,7 +429,6 @@ export default function ResultsPage() {
 
   return (
     <div className="app-shell" style={{ minHeight: '100vh' }}>
-      <AppTopBar current="home" />
       <Breadcrumb items={breadcrumbItems} />
 
       <div style={{ padding: '24px 32px 80px', maxWidth: 1440, margin: '0 auto' }}>

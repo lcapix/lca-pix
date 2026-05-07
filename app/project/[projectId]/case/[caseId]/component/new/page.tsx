@@ -1,19 +1,8 @@
 "use client";
 
-/**
- * "New component" page — Veridian Flow redesign (Phase 7).
- *
- * This page is now a thin wrapper around the shared <ComponentForm>, which
- * also powers the edit page. The previous implementation lived entirely in
- * this file; its state, validation, and store contract were preserved
- * verbatim inside `components/component-form/component-form.tsx`.
- *
- * Legacy search-params (suggestedParent / type / edit / name / etc.) are
- * still honoured so existing inbound links keep working.
- */
-
 import { useParams, useSearchParams } from "next/navigation";
-import { ComponentForm, type ComponentFormInitialValues } from "@/components/component-form/component-form";
+import { ComponentFormModal } from "@/components/component-form/component-form-modal";
+import type { ComponentFormInitialValues } from "@/components/component-form/component-form";
 
 export default function NewComponentPage() {
   const params = useParams();
@@ -26,7 +15,6 @@ export default function NewComponentPage() {
   const suggestedType = searchParams.get("type");
   const editingId = searchParams.get("edit");
 
-  // Legacy edit-via-querystring flow: if "?edit=..." is supplied we pre-fill.
   const initial: ComponentFormInitialValues | undefined = editingId
     ? {
         id: editingId,
@@ -52,7 +40,7 @@ export default function NewComponentPage() {
     : undefined;
 
   return (
-    <ComponentForm
+    <ComponentFormModal
       projectId={projectId}
       caseId={caseId}
       mode={editingId ? "edit" : "create"}

@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lcapix-dev",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && cd '/Users/kavishpandit/Desktop/lca/lca project v3' && pnpm run dev"],
+      "port": 3002
+    },
+    {
+      "name": "byteshare-platform",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd '/Users/kavishpandit/Desktop/prototype_xenter/ByteShare Platform' && python3 -m http.server 8765"],
+      "port": 8765
+    },
+    {
+      "name": "byteshare-web",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && cd /Users/kavishpandit/Desktop/prototype_xenter/byteshare-web && npm run dev"],
+      "port": 3000
+    }
+  ]
+}

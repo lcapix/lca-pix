@@ -210,25 +210,12 @@ export default function CaseViewPage() {
     router.push(`/project/${projectId}/case/${caseId}/results`)
   }
 
-  // ---------- Create component (preserved) ----------
+  // ---------- Create component ----------
+  // Routes to the /component/new URL; an intercepting parallel route renders
+  // that page as a modal over this editor while keeping the case canvas
+  // mounted underneath.
   const handleCreateComponent = () => {
-    const hasProduct = components.some((c) => c.type === COMPONENT_TYPES.PRODUCT)
-    setSelectedNode(null)
-    setIsCreating(true)
-    setIsEditing(false)
-    setEditFormData({
-      processType: hasProduct ? '' : COMPONENT_TYPES.PRODUCT,
-      processName: '',
-      processDescription: '',
-      parentId: '',
-      driverCategory: '',
-      selectedDriver: '',
-      drivers: [],
-      mass: 0,
-      massUnit: 'kg',
-      operationalCostUSD: 0,
-      capitalCostUSD: 0,
-    })
+    router.push(`/project/${projectId}/case/${caseId}/component/new`)
   }
 
   // ---------- Save (preserved) ----------
@@ -703,7 +690,10 @@ export default function CaseViewPage() {
             flexDirection: 'column',
           }}
         >
-          <div style={{ position: 'relative', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+          <div
+            id="case-canvas-host"
+            style={{ position: 'relative', flex: 1, overflow: 'hidden', minHeight: 0 }}
+          >
             <div
               style={{
                 position: 'absolute',

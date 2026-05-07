@@ -28,8 +28,8 @@ interface NodePos {
 
 const NODE_W = 220
 const NODE_H = 72
-const COL_W = 300
-const ROW_GAP = 24
+const COL_W = NODE_W + 40   // horizontal gap between sibling columns
+const ROW_GAP = 80          // vertical gap between depth rows
 
 export function TreeCanvas({ root, flat, selected, onSelect, view = 'Tree' }: TreeCanvasProps) {
   if (view === 'List') return <ListView flat={flat} selected={selected} onSelect={onSelect} />
@@ -54,27 +54,27 @@ interface LaidOut {
 }
 
 function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
-  // 1. Compute initial positions via tidy-ish left-to-right tree layout
+  // 1. Compute initial positions via tidy-ish top-to-bottom tree layout
   const { initialPositions, nodes, parentOf, bounds } = useMemo(() => {
     const nodes: LaidOut[] = []
     const parentOf: Record<string, string | null> = {}
-    let rowCursor = 0
-    const yById: Record<string, number> = {}
+    let colCursor = 0
+    const xById: Record<string, number> = {}
 
     const walk = (n: CaseTreeNode, depth: number, parentId: string | null): number => {
       nodes.push({ id: n.id, node: n, depth, parentId })
       parentOf[n.id] = parentId
       const kids = n.children || []
       if (kids.length === 0) {
-        const y = rowCursor * (NODE_H + ROW_GAP)
-        yById[n.id] = y
-        rowCursor += 1
-        return y
+        const x = colCursor * COL_W
+        xById[n.id] = x
+        colCursor += 1
+        return x
       }
-      const childYs = kids.map((c) => walk(c, depth + 1, n.id))
-      const y = (childYs[0] + childYs[childYs.length - 1]) / 2
-      yById[n.id] = y
-      return y
+      const childXs = kids.map((c) => walk(c, depth + 1, n.id))
+      const x = (childXs[0] + childXs[childXs.length - 1]) / 2
+      xById[n.id] = x
+      return x
     }
     walk(root, 0, null)
 
@@ -82,8 +82,8 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
     let maxX = 0
     let maxY = 0
     for (const n of nodes) {
-      const x = n.depth * COL_W
-      const y = yById[n.id] || 0
+      const x = xById[n.id] || 0
+      const y = n.depth * (NODE_H + ROW_GAP)
       positions[n.id] = { x, y }
       if (x + NODE_W > maxX) maxX = x + NODE_W
       if (y + NODE_H > maxY) maxY = y + NODE_H
@@ -311,16 +311,16 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
             const a = positions[n.parentId]
             const b = positions[n.id]
             if (!a || !b) return null
-            const ax = a.x + NODE_W + 200
-            const ay = a.y + NODE_H / 2 + 200
-            const bx = b.x + 200
-            const by = b.y + NODE_H / 2 + 200
-            const mx = (ax + bx) / 2
+            const ax = a.x + NODE_W / 2 + 200
+            const ay = a.y + NODE_H + 200
+            const bx = b.x + NODE_W / 2 + 200
+            const by = b.y + 200
+            const my = (ay + by) / 2
             const col = colorFor(n.node.type)
             return (
               <path
                 key={n.id}
-                d={`M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`}
+                d={`M ${ax} ${ay} C ${ax} ${my}, ${bx} ${my}, ${bx} ${by}`}
                 stroke={col}
                 strokeWidth={1.5}
                 fill="none"

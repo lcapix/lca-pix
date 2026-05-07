@@ -80,11 +80,32 @@ export function GraphView({ flat, selected, onSelect }: GraphViewProps) {
     return () => clearTimeout(id)
   }, [flat.length, maxX, maxY])
 
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const delta = -e.deltaY * 0.0015
-    setTransform((t) => ({ ...t, k: Math.max(0.3, Math.min(2, t.k + delta)) }))
-  }
+  // Wheel zoom — attached natively so we can preventDefault (React's
+  // onWheel is passive and cannot). Mirrors tree-canvas behaviour: plain
+  // wheel is swallowed, zoom only on ⌘/Ctrl (trackpad pinch reports as
+  // wheel + ctrlKey on Chromium) and zoom centres on the cursor.
+  useEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    const handler = (e: WheelEvent) => {
+      e.preventDefault()
+      if (!e.ctrlKey && !e.metaKey) return
+      const rect = el.getBoundingClientRect()
+      const cx = e.clientX - rect.left
+      const cy = e.clientY - rect.top
+      setTransform((t) => {
+        const delta = -e.deltaY * 0.0015
+        const newK = Math.max(0.3, Math.min(2, t.k * (1 + delta)))
+        const scale = newK / t.k
+        const nx = cx - (cx - t.x) * scale
+        const ny = cy - (cy - t.y) * scale
+        return { x: nx, y: ny, k: newK }
+      })
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+
   const onMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-node]')) return
     dragRef.current = { x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y }
@@ -108,7 +129,6 @@ export function GraphView({ flat, selected, onSelect }: GraphViewProps) {
         cursor: dragRef.current ? 'grabbing' : 'grab',
         zIndex: 1,
       }}
-      onWheel={onWheel}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}

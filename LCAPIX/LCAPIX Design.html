@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>LCAPIX — Design</title>
+<link rel="stylesheet" href="styles.css"/>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  html, body, #root { height: 100%; }
+  body { overflow: hidden; }
+  .frame-wrap { width: 100vw; height: 100vh; display: flex; align-items: stretch; background: oklch(0.10 0.01 240); }
+  .chrome { flex: 1; display: flex; flex-direction: column; background: #202124; min-width: 0; }
+  .chrome-bar { height: 40px; background: #2d2e31; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid #3c4043; flex-shrink: 0; }
+  .lights { display: flex; gap: 6px; }
+  .light { width: 11px; height: 11px; border-radius: 50%; }
+  .chrome-tabs { display: flex; align-items: flex-end; flex: 1; gap: 2px; padding-left: 6px; overflow: hidden; }
+  .chrome-tab { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 28px; background: #202124; color: #9aa0a6; font: 12px/1 'Inter Tight', sans-serif; border-radius: 6px 6px 0 0; min-width: 160px; max-width: 200px; }
+  .chrome-tab.active { background: #35363a; color: #e8eaed; }
+  .chrome-url { height: 32px; background: #35363a; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid #3c4043; color: #9aa0a6; font-size: 12px; font-family: 'Inter Tight', sans-serif; flex-shrink: 0; }
+  .chrome-url-bar { flex: 1; height: 22px; background: #202124; border-radius: 11px; display: flex; align-items: center; padding: 0 12px; color: #bdc1c6; font-size: 12px; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .chrome-url-bar > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .chrome-content { flex: 1; overflow: auto; background: var(--surface-base); min-height: 0; }
+
+  /* Tweaks panel */
+  .tweaks {
+    position: fixed; right: 16px; bottom: 16px; width: 280px;
+    background: oklch(0.22 0.019 240); border: 1px solid oklch(0.45 0.025 240);
+    border-radius: 10px; padding: 14px; z-index: 1000;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5); color: oklch(0.98 0.003 240);
+    font-family: 'Inter Tight', sans-serif; display: none;
+  }
+  .tweaks.open { display: block; }
+  .tw-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; }
+  .tw-row { margin-bottom: 12px; }
+  .tw-label { font-size: 11px; color: oklch(0.65 0.02 240); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; font-weight: 500; }
+  .tw-opts { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tw-opt { padding: 5px 10px; border-radius: 4px; background: oklch(0.28 0.024 240); border: 1px solid transparent; color: oklch(0.82 0.014 240); font-size: 12px; cursor: pointer; font-family: inherit; }
+  .tw-opt.active { background: var(--brand-subtle); color: var(--brand-primary); border-color: var(--brand-primary); }
+  .tw-swatch { width: 24px; height: 24px; border-radius: 4px; border: 2px solid transparent; cursor: pointer; }
+  .tw-swatch.active { border-color: white; }
+
+  /* Nav buttons */
+  .pg-nav-toggle { position: fixed; left: 16px; bottom: 16px; z-index: 1000; background: oklch(0.22 0.019 240); border: 1px solid oklch(0.45 0.025 240); color: oklch(0.98 0.003 240); border-radius: 10px; padding: 10px 14px; font-family: 'Inter Tight', sans-serif; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .pg-list { position: fixed; left: 16px; bottom: 60px; z-index: 1000; background: oklch(0.22 0.019 240); border: 1px solid oklch(0.45 0.025 240); border-radius: 10px; padding: 8px; width: 240px; max-height: 60vh; overflow: auto; display: none; }
+  .pg-list.open { display: block; }
+  .pg-item { padding: 8px 10px; border-radius: 4px; color: oklch(0.82 0.014 240); font-family: 'Inter Tight', sans-serif; font-size: 13px; cursor: pointer; border: none; background: transparent; width: 100%; text-align: left; display: flex; align-items: center; gap: 8px; }
+  .pg-item:hover { background: oklch(0.28 0.024 240); color: oklch(0.98 0.003 240); }
+  .pg-item.active { background: var(--brand-subtle); color: var(--brand-primary); }
+  .pg-num { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.55 0.02 240); width: 18px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="shared.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="pages-landing.jsx"></script>
+<script type="text/babel" src="pages-app.jsx"></script>
+<script type="text/babel" src="pages-misc.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "emerald",
+  "density": "compact",
+  "theme": "light"
+}/*EDITMODE-END*/;
+
+const PAGES = [
+  { id: 'landing',    label: 'Landing',           url: 'lcapix.io', tab: 'LCAPIX — LCA for engineers' },
+  { id: 'login',      label: 'Login',             url: 'lcapix.io/login', tab: 'Log in — LCAPIX' },
+  { id: 'signup',     label: 'Sign up',           url: 'lcapix.io/signup', tab: 'Sign up — LCAPIX' },
+  { id: 'home',       label: 'Home Dashboard',    url: 'app.lcapix.io/home', tab: 'Projects — LCAPIX' },
+  { id: 'project',    label: 'Project Detail',    url: 'app.lcapix.io/project/ev-mfg', tab: 'EV Manufacturing — LCAPIX' },
+  { id: 'case',       label: 'Case Editor',       url: 'app.lcapix.io/project/ev-mfg/case/baseline-2025', tab: 'Baseline 2025 — LCAPIX' },
+  { id: 'results',    label: 'Results',           url: 'app.lcapix.io/project/ev-mfg/case/baseline-2025/results', tab: 'Results — LCAPIX' },
+  { id: 'newcomp',    label: 'Component Form',    url: 'app.lcapix.io/component/new', tab: 'New Component — LCAPIX' },
+  { id: 'compare',    label: 'Analytics · Compare', url: 'app.lcapix.io/project/ev-mfg/compare', tab: 'Comparison — LCAPIX' },
+  { id: 'admin',      label: 'Admin · Integrations', url: 'app.lcapix.io/admin/integrations', tab: 'Integrations — LCAPIX' },
+  { id: 'about',      label: 'About',             url: 'lcapix.io/about', tab: 'About — LCAPIX' },
+  { id: 'guide',      label: 'Guide · Docs',      url: 'lcapix.io/guide', tab: 'Guide — LCAPIX' },
+];
+
+function App() {
+  const saved = JSON.parse(localStorage.getItem('lcapix-state') || '{}');
+  const [pageId, setPageId] = React.useState(saved.page || 'landing');
+  const [ctx, setCtx] = React.useState(saved.ctx || {});
+  const [tweaks, setTweaks] = React.useState({ ...TWEAK_DEFAULTS, ...(saved.tweaks || {}) });
+  const [tweaksOpen, setTweaksOpen] = React.useState(false);
+  const [pgOpen, setPgOpen] = React.useState(false);
+  const [editMode, setEditMode] = React.useState(false);
+
+  React.useEffect(() => {
+    localStorage.setItem('lcapix-state', JSON.stringify({ page: pageId, ctx, tweaks }));
+  }, [pageId, ctx, tweaks]);
+
+  // Edit mode protocol
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const d = e.data || {};
+      if (d.type === '__activate_edit_mode') setEditMode(true);
+      if (d.type === '__deactivate_edit_mode') setEditMode(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const setTweak = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };
+
+  const navigate = (id, newCtx) => {
+    setPageId(id);
+    if (newCtx) setCtx({ ...ctx, ...newCtx });
+    setPgOpen(false);
+    // scroll content top
+    setTimeout(() => {
+      const el = document.querySelector('.chrome-content');
+      if (el) el.scrollTop = 0;
+    }, 10);
+  };
+
+  const page = PAGES.find(p => p.id === pageId) || PAGES[0];
+
+  const shellClass = [
+    'app-shell',
+    'accent-' + (tweaks.accent === 'emerald' ? '' : tweaks.accent),
+    tweaks.density === 'compact' ? 'density-compact' : (tweaks.density === 'airy' ? 'density-airy' : ''),
+    tweaks.theme === 'light' ? 'theme-light' : '',
+  ].join(' ').replace('accent-', tweaks.accent === 'emerald' ? '' : 'accent-').trim();
+
+  const pageEl = (() => {
+    const projectId = ctx.projectId || 'ev-mfg';
+    const caseId = ctx.caseId || 'baseline-2025';
+    switch (pageId) {
+      case 'landing': return <LandingPage onNav={navigate}/>;
+      case 'login':   return <AuthPage mode="login" onNav={navigate}/>;
+      case 'signup':  return <AuthPage mode="signup" onNav={navigate}/>;
+      case 'home':    return <HomePage onNav={navigate}/>;
+      case 'project': return <ProjectPage projectId={projectId} onNav={navigate}/>;
+      case 'case':    return <CaseEditorPage projectId={projectId} caseId={caseId} onNav={navigate}/>;
+      case 'results': return <ResultsPage projectId={projectId} caseId={caseId} onNav={navigate}/>;
+      case 'newcomp': return <ComponentFormPage projectId={projectId} caseId={caseId} onNav={navigate}/>;
+      case 'compare': return <ComparePage projectId={projectId} onNav={navigate}/>;
+      case 'admin':   return <AdminPage onNav={navigate}/>;
+      case 'about':   return <AboutPage onNav={navigate}/>;
+      case 'guide':   return <GuidePage onNav={navigate}/>;
+      default: return null;
+    }
+  })();
+
+  const rootClasses = [
+    tweaks.accent !== 'emerald' ? 'accent-' + tweaks.accent : '',
+    tweaks.density === 'compact' ? 'density-compact' : (tweaks.density === 'airy' ? 'density-airy' : ''),
+    tweaks.theme === 'light' ? 'theme-light' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className={rootClasses} style={{ height: '100%' }}>
+      <div className="frame-wrap">
+        <div className="chrome">
+          {/* Chrome bar + tab */}
+          <div className="chrome-bar">
+            <div className="lights">
+              <div className="light" style={{ background: '#ff5f57' }}/>
+              <div className="light" style={{ background: '#febc2e' }}/>
+              <div className="light" style={{ background: '#28c840' }}/>
+            </div>
+            <div className="chrome-tabs">
+              <div className="chrome-tab active">
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: 'var(--brand-primary)' }}/>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{page.tab}</span>
+                <span style={{ opacity: 0.5 }}>×</span>
+              </div>
+              <div className="chrome-tab" style={{ minWidth: 120 }}>
+                <div style={{ width: 12, height: 12, borderRadius: 2, background: '#5f6368' }}/>
+                <span>Docs</span>
+              </div>
+            </div>
+          </div>
+          <div className="chrome-url">
+            <div style={{ display: 'flex', gap: 12, color: '#9aa0a6' }}>
+              <span>←</span><span>→</span><span style={{ transform: 'rotate(90deg)' }}>↻</span>
+            </div>
+            <div className="chrome-url-bar">
+              <span style={{ color: 'var(--brand-primary)', fontSize: 11 }}>🔒</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{page.url}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 12, color: '#9aa0a6' }}>
+              <span>⚐</span><span>⋯</span>
+            </div>
+          </div>
+          <div className="chrome-content">
+            {pageEl}
+          </div>
+        </div>
+      </div>
+
+      {/* Page nav */}
+      <div className={'pg-list' + (pgOpen ? ' open' : '')}>
+        {PAGES.map((p, i) => (
+          <button key={p.id} className={'pg-item' + (pageId === p.id ? ' active' : '')} onClick={() => navigate(p.id)}>
+            <span className="pg-num">{String(i).padStart(2, '0')}</span>
+            <span>{p.label}</span>
+          </button>
+        ))}
+      </div>
+      <button className="pg-nav-toggle" onClick={() => setPgOpen(!pgOpen)}>
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: 'var(--brand-primary)' }}>{String(PAGES.findIndex(p => p.id === pageId)).padStart(2, '0')}</span>
+        {page.label}
+        <span style={{ opacity: 0.5 }}>▾</span>
+      </button>
+
+      {/* Tweaks panel */}
+      {editMode && (
+        <div className="tweaks open">
+          <div className="tw-title">
+            <span>Tweaks</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-tertiary)' }}>LCAPIX</span>
+          </div>
+          <div className="tw-row">
+            <div className="tw-label">Accent</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[
+                { id: 'emerald', c: 'oklch(0.73 0.165 155)' },
+                { id: 'teal',    c: 'oklch(0.75 0.110 195)' },
+                { id: 'amber',   c: 'oklch(0.80 0.150 75)' },
+                { id: 'violet',  c: 'oklch(0.72 0.150 290)' },
+              ].map(a => (
+                <div key={a.id} onClick={() => setTweak('accent', a.id)} className={'tw-swatch' + (tweaks.accent === a.id ? ' active' : '')} style={{ background: a.c }} title={a.id}/>
+              ))}
+            </div>
+          </div>
+          <div className="tw-row">
+            <div className="tw-label">Density</div>
+            <div className="tw-opts">
+              {['compact', 'normal', 'airy'].map(d => (
+                <button key={d} className={'tw-opt' + (tweaks.density === d ? ' active' : '')} onClick={() => setTweak('density', d)}>{d}</button>
+              ))}
+            </div>
+          </div>
+          <div className="tw-row">
+            <div className="tw-label">Theme</div>
+            <div className="tw-opts">
+              {['dark', 'light'].map(t => (
+                <button key={t} className={'tw-opt' + (tweaks.theme === t ? ' active' : '')} onClick={() => setTweak('theme', t)}>{t}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

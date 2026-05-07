@@ -14,7 +14,15 @@ export interface ListViewProps {
 
 export function ListView({ flat, selected, onSelect }: ListViewProps) {
   return (
-    <div style={{ padding: 24, position: 'relative', zIndex: 1 }}>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'auto',
+        padding: 24,
+        zIndex: 1,
+      }}
+    >
       <div className="card" style={{ padding: 0, overflow: 'hidden', maxWidth: 900 }}>
         <div
           style={{

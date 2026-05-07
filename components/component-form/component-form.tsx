@@ -75,6 +75,13 @@ export interface ComponentFormProps {
   /** Honoured in create-mode only: locks processType+parentId. */
   suggestedParentId?: string | null;
   suggestedType?: string | null;
+  /** Modal variant: skips breadcrumb + outer vertical padding; sticky action bar
+   *  sits inside the scrolling parent instead of the viewport. */
+  variant?: 'page' | 'modal';
+  /** Called on successful submit; if omitted, form navigates back to the case. */
+  onSuccess?: () => void;
+  /** Called when the user hits Cancel; if omitted, `router.back()` is used. */
+  onCancel?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -107,7 +114,9 @@ const DRIVERS_BY_CATEGORY: Record<string, string[]> = {
 
 export function ComponentForm({
   projectId, caseId, initial, mode, suggestedParentId, suggestedType,
+  variant = 'page', onSuccess, onCancel,
 }: ComponentFormProps) {
+  const isModal = variant === 'modal';
   const router = useRouter();
   const { toast } = useToast();
   const { projects, addComponentNode, updateComponentNode } = useProjectStore();
@@ -310,7 +319,11 @@ export function ComponentForm({
           description: `${formData.processName} saved to database`,
         });
       }
-      router.push(`/project/${projectId}/case/${caseId}`);
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push(`/project/${projectId}/case/${caseId}`);
+      }
     } catch (err: any) {
       console.error('Component save failed:', err);
       toast({
@@ -351,9 +364,15 @@ export function ComponentForm({
   /* ------- render ------- */
   return (
     <>
-      <Breadcrumb items={breadcrumbItems} />
+      {!isModal && <Breadcrumb items={breadcrumbItems} />}
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 120px' }}>
+      <div
+        style={
+          isModal
+            ? { padding: '24px 28px 96px' }
+            : { maxWidth: 720, margin: '0 auto', padding: '32px 24px 120px' }
+        }
+      >
         <h1
           className="display-md"
           style={{ margin: 0, marginBottom: 8, fontSize: 26, fontWeight: 600, letterSpacing: '-0.01em' }}
@@ -841,7 +860,7 @@ export function ComponentForm({
           height: 64,
           display: 'flex',
           alignItems: 'center',
-          padding: '0 32px',
+          padding: isModal ? '0 20px' : '0 32px',
           zIndex: 40,
           borderRadius: 0,
           borderTop: '1px solid var(--border-subtle)',
@@ -849,7 +868,7 @@ export function ComponentForm({
       >
         <div
           style={{
-            maxWidth: 720,
+            maxWidth: isModal ? '100%' : 720,
             width: '100%',
             margin: '0 auto',
             display: 'flex',
@@ -860,7 +879,7 @@ export function ComponentForm({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => router.back()}
+            onClick={() => (onCancel ? onCancel() : router.back())}
           >
             Cancel
           </button>
