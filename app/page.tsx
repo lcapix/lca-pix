@@ -511,8 +511,61 @@ export default function RootPage() {
       </section>
 
       {/* Final CTA — Veridian Light */}
-      <section className="veridian-glow" style={{ padding: '120px 64px', textAlign: 'center' }}>
-        <div className="eyebrow" style={{ marginBottom: 16 }}>
+      <section
+        className="veridian-glow"
+        style={{ padding: '120px 64px', textAlign: 'center', position: 'relative' }}
+      >
+        {/* Domain accent — left: LCA process-flow snippet (system → unit → result) */}
+        <svg
+          aria-hidden
+          width="180"
+          height="80"
+          viewBox="0 0 180 80"
+          style={{
+            position: 'absolute',
+            left: 64,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--brand-primary)',
+            opacity: 0.32,
+            pointerEvents: 'none',
+          }}
+        >
+          <line x1="14" y1="40" x2="58" y2="40" stroke="currentColor" strokeWidth="1" strokeDasharray="2 3" />
+          <line x1="70" y1="40" x2="116" y2="40" stroke="currentColor" strokeWidth="1" strokeDasharray="2 3" />
+          <line x1="128" y1="40" x2="168" y2="40" stroke="currentColor" strokeWidth="1" strokeDasharray="2 3" />
+          <rect x="2" y="34" width="12" height="12" rx="1.5" fill="currentColor" opacity="0.95" />
+          <rect x="58" y="34" width="12" height="12" rx="1.5" fill="currentColor" opacity="0.65" />
+          <rect x="116" y="34" width="12" height="12" rx="1.5" fill="currentColor" opacity="0.45" />
+          <circle cx="174" cy="40" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+        {/* Domain accent — right: tiny impact-categories bar cluster */}
+        <svg
+          aria-hidden
+          width="120"
+          height="100"
+          viewBox="0 0 120 100"
+          style={{
+            position: 'absolute',
+            right: 64,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--brand-primary)',
+            opacity: 0.32,
+            pointerEvents: 'none',
+          }}
+        >
+          <line x1="10" y1="10" x2="10" y2="90" stroke="currentColor" strokeWidth="1" />
+          <line x1="6" y1="20" x2="10" y2="20" stroke="currentColor" strokeWidth="1" />
+          <line x1="6" y1="40" x2="10" y2="40" stroke="currentColor" strokeWidth="1" />
+          <line x1="6" y1="60" x2="10" y2="60" stroke="currentColor" strokeWidth="1" />
+          <line x1="6" y1="80" x2="10" y2="80" stroke="currentColor" strokeWidth="1" />
+          <rect x="12" y="16" width="92" height="8" rx="1.5" fill="currentColor" opacity="0.85" />
+          <rect x="12" y="36" width="64" height="8" rx="1.5" fill="currentColor" opacity="0.55" />
+          <rect x="12" y="56" width="42" height="8" rx="1.5" fill="currentColor" opacity="0.35" />
+          <rect x="12" y="76" width="28" height="8" rx="1.5" fill="currentColor" opacity="0.22" />
+        </svg>
+        <div className="eyebrow" style={{ marginBottom: 16, position: 'relative' }}>
           Ready when you are
         </div>
         <h2

@@ -394,19 +394,47 @@ html, body {
 /* Focus ring */
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
 
-/* ——— Veridian Light — success glow ——— */
+/* ——— Veridian Light — calm centered glow behind CTA ——— */
 .veridian-glow {
   position: relative;
   isolation: isolate;
+  overflow: hidden;
 }
+/* Engineered dot-grid background — signals "technical product" at a glance. */
 .veridian-glow::before {
   content: "";
   position: absolute;
-  inset: -60% -10% 0;
-  background: radial-gradient(70% 70% at 50% 60%, rgba(0, 133, 88, 0.055) 0%, transparent 75%);
+  inset: 0;
+  background-image: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--brand-primary) 22%, transparent) 1px,
+    transparent 1.2px
+  );
+  background-size: 22px 22px;
+  background-position: center center;
+  /* Fade the grid in toward the center, transparent at edges. */
+  mask-image: radial-gradient(ellipse 60% 65% at 50% 50%, black 0%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 65% at 50% 50%, black 0%, transparent 75%);
+  opacity: 0.55;
+  z-index: -2;
+  pointer-events: none;
+}
+/* Soft centered halo behind the button — single tight radial, no rotation. */
+.veridian-glow::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 520px;
+  height: 320px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--brand-primary) 14%, transparent) 0%,
+    transparent 70%
+  );
   z-index: -1;
   pointer-events: none;
-  filter: blur(8px);
 }
 
 /* Ambient botanical hero gradient — reserved for landing hero. Very subtle additive layer. */
@@ -708,7 +736,7 @@ html, body {
   will-change: transform;
 }
 
-/* Conic glow behind primary CTAs */
+/* Calm halo behind primary CTAs — single soft radial, no rotation. */
 .cta-conic-host {
   position: relative;
   display: inline-block;
@@ -716,25 +744,21 @@ html, body {
 .cta-conic-host::before {
   content: "";
   position: absolute;
-  inset: -16px;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 260%;
+  transform: translate(-50%, -50%);
   border-radius: 999px;
-  background: conic-gradient(
-    from 0deg,
-    oklch(from var(--brand-primary) l c h / 0.0),
-    oklch(from var(--brand-primary) l c h / 0.18) 25%,
-    oklch(from var(--brand-primary) l c h / 0.0) 55%,
-    oklch(from var(--brand-primary) l c h / 0.10) 85%,
-    oklch(from var(--brand-primary) l c h / 0.0)
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--brand-primary) 18%, transparent) 0%,
+    color-mix(in oklab, var(--brand-primary) 6%, transparent) 35%,
+    transparent 70%
   );
-  filter: blur(14px);
+  filter: blur(2px);
   z-index: -1;
-  animation: ctaSpin 14s linear infinite;
   pointer-events: none;
-  opacity: 0.9;
-}
-@keyframes ctaSpin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
 }
 
 /* Success glow — used on Run Assessment completion */
@@ -792,7 +816,7 @@ html, body {
     scroll-behavior: auto !important;
   }
   .tile-premium:hover, .lift-hover:hover { transform: none; }
-  .cta-conic-host::before { animation: none !important; opacity: 0.35; }
+  .cta-conic-host::before { opacity: 0.6; }
   .card-spotlight::before { opacity: 0 !important; }
 }
 
