@@ -337,13 +337,6 @@ export default function PricingPage() {
                 textTransform: 'uppercase',
                 letterSpacing: '0.12em',
                 fontWeight: 600,
-                position: 'sticky',
-                top: 72,
-                zIndex: 5,
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                background:
-                  'linear-gradient(180deg, oklch(from var(--surface-overlay) l c h / 0.95) 0%, oklch(from var(--surface-overlay) l c h / 0.85) 100%)',
                 borderBottom: '1px solid var(--border-subtle)',
               }}
             >

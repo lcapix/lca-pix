@@ -75,9 +75,31 @@ const STEPS = [
 ] as const
 
 const FOOTER_COLS = [
-  { t: 'Product', links: ['Features', 'Pricing', 'Changelog', 'Roadmap'] },
-  { t: 'Resources', links: ['Docs', 'API reference', 'Methodology', 'Blog'] },
-  { t: 'Legal', links: ['Privacy', 'Terms', 'Security', 'DPA'] },
+  {
+    t: 'Product',
+    links: [
+      { label: 'Features', href: '/product' },
+      { label: 'Pricing', href: '/pricing' },
+      { label: 'Changelog', href: '/changelog' },
+    ],
+  },
+  {
+    t: 'Resources',
+    links: [
+      { label: 'Docs', href: '/guide' },
+      { label: 'API reference', href: '/guide/api-reference' },
+      { label: 'Methodology', href: '/guide/data-model' },
+      { label: 'Blog', href: '/blog' },
+    ],
+  },
+  {
+    t: 'Legal',
+    links: [
+      { label: 'Privacy', href: '/legal/privacy' },
+      { label: 'Terms', href: '/legal/terms' },
+      { label: 'Security', href: '/legal/security' },
+    ],
+  },
 ] as const
 
 export default function RootPage() {
@@ -553,17 +575,17 @@ export default function RootPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {col.links.map((l) => (
-                    <a
-                      key={l}
-                      href="#"
+                    <Link
+                      key={l.label}
+                      href={l.href}
                       style={{
                         color: 'var(--text-secondary)',
                         fontSize: 13,
                         textDecoration: 'none',
                       }}
                     >
-                      {l}
-                    </a>
+                      {l.label}
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -579,11 +601,26 @@ export default function RootPage() {
               color: 'var(--text-tertiary)',
             }}
           >
-            <div>© 2026 LCAPIX · Privacy · Terms · Security</div>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <span>GitHub</span>
-              <span>LinkedIn</span>
-              <span>X</span>
+            <div>© 2026 LCAPIX</div>
+            <div style={{ display: 'flex', gap: 20 }}>
+              <Link
+                href="/legal/privacy"
+                style={{ color: 'var(--text-tertiary)', textDecoration: 'none' }}
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/legal/terms"
+                style={{ color: 'var(--text-tertiary)', textDecoration: 'none' }}
+              >
+                Terms
+              </Link>
+              <Link
+                href="/legal/security"
+                style={{ color: 'var(--text-tertiary)', textDecoration: 'none' }}
+              >
+                Security
+              </Link>
             </div>
           </div>
         </div>
