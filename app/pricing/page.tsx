@@ -103,33 +103,44 @@ export default function PricingPage() {
     <div className="app-shell page-pricing" style={{ minHeight: '100%' }}>
       <MarketingNav />
 
-      <section style={{ padding: '96px 24px 32px', textAlign: 'center' }}>
-        <div className="eyebrow" style={{ marginBottom: 14 }}>
-          Pricing
+      <section
+        style={{
+          padding: 'clamp(56px, 9vw, 96px) clamp(20px, 4vw, 40px) 32px',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{ maxWidth: 760, margin: '0 auto' }}
+        >
+          <div className="eyebrow" style={{ marginBottom: 14 }}>
+            Pricing
+          </div>
+          <h1
+            style={{
+              margin: 0,
+              color: 'var(--text-primary)',
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              letterSpacing: '-0.025em',
+              lineHeight: 1.05,
+              fontSize: 'clamp(2rem, 4.2vw, 3rem)',
+            }}
+          >
+            Free to model. Pay when you need live data.
+          </h1>
+          <p
+            style={{
+              fontSize: 16,
+              color: 'var(--text-secondary)',
+              maxWidth: 560,
+              margin: '20px auto 0',
+              lineHeight: 1.55,
+            }}
+          >
+            Most assessments fit comfortably on the Free tier. Pro unlocks
+            regional grid intensity, live cost data, and team collaboration.
+          </p>
         </div>
-        <h1
-          className="display display-lg"
-          style={{
-            margin: '0 auto',
-            color: 'var(--text-primary)',
-            maxWidth: 860,
-          }}
-        >
-          Free to model. Pay when you need live data.
-        </h1>
-        <p
-          style={{
-            marginTop: 20,
-            fontSize: 16,
-            color: 'var(--text-secondary)',
-            maxWidth: 580,
-            margin: '20px auto 0',
-            lineHeight: 1.55,
-          }}
-        >
-          Most assessments fit comfortably on the Free tier. Pro unlocks regional
-          grid intensity, live cost data, and team collaboration.
-        </p>
         {/* Billing toggle */}
         <div
           role="tablist"
@@ -204,13 +215,13 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section style={{ padding: '24px 24px 60px' }}>
+      <section style={{ padding: '24px clamp(20px, 4vw, 40px) 60px' }}>
         <div
           style={{
-            maxWidth: 1200,
+            maxWidth: 1120,
             margin: '0 auto',
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
             gap: 20,
             alignItems: 'stretch',
           }}
@@ -221,7 +232,8 @@ export default function PricingPage() {
               className="card fade-slide-up"
               style={{
                 animationDelay: `${i * 90}ms`,
-                padding: 32,
+                padding: 28,
+                minWidth: 0,
                 background: t.highlight
                   ? 'linear-gradient(180deg, var(--surface-raised) 0%, oklch(from var(--brand-primary) l c h / 0.04) 100%)'
                   : 'var(--surface-raised)',
@@ -317,7 +329,11 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section style={{ padding: '60px 24px 120px' }}>
+      <section
+        style={{
+          padding: '60px clamp(20px, 4vw, 40px) 120px',
+        }}
+      >
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div className="eyebrow" style={{ marginBottom: 14 }}>
             Compare plans
