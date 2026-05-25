@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AnimatedNumber } from '../animated-number'
+import { MethodName } from '../method-name'
 
 interface Material {
   id: string
@@ -112,7 +113,15 @@ export function InteractiveMethodCards() {
             }}
           >
             <div className="label-sm" style={{ marginBottom: 24, color: 'var(--primary)' }}>
-              {method === 'CML' ? 'CML 2001 v4' : method === 'ReCiPe' ? 'ReCiPe Midpoint (H)' : 'TRACI 2.1'}
+              <MethodName
+                value={
+                  method === 'CML'
+                    ? 'CML 2001 v4'
+                    : method === 'ReCiPe'
+                    ? 'ReCiPe Midpoint (H)'
+                    : 'TRACI 2.1'
+                }
+              />
             </div>
             <div
               key={`${activeId}-${method}`}

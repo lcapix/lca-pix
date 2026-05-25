@@ -1,3 +1,5 @@
+import { MethodName } from '@/components/lcapix/method-name';
+
 export function MethodComparison() {
   const methods = [
     {
@@ -47,7 +49,7 @@ export function MethodComparison() {
               </div>
               <div className="mb-4">
                 <div className="text-xs font-mono uppercase tracking-wider text-on-surface-variant mb-1">
-                  {m.name}
+                  <MethodName value={m.name} />
                 </div>
                 <div className="num text-3xl md:text-4xl font-bold text-on-surface">
                   {m.value}
