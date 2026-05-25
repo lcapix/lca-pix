@@ -10,7 +10,9 @@ import { useAuthStore } from '@/lib/store'
 import { Logo, Icon, fmtNum, type IconName } from '@/components/lcapix'
 import { HeroMockup } from '@/components/lcapix/landing/hero-mockup'
 import { ComparisonTable } from '@/components/lcapix/landing/comparison-table'
-import { DEMO_METHODS } from '@/lib/lcapix-demo'
+import { InteractiveMethodCards } from '@/components/lcapix/landing/interactive-method-cards'
+import { MagneticLink } from '@/components/lcapix/magnetic-button'
+import { SpotlightCard } from '@/components/lcapix/spotlight-card'
 
 interface Faq {
   readonly q: string
@@ -20,14 +22,14 @@ interface Faq {
 const FAQS: readonly Faq[] = [
   {
     q: 'How is LCAPIX different from openLCA / SimaPro?',
-    a: 'We run multiple valuation methods simultaneously (CML, ReCiPe, TRACI) and show cost and environmental impact in the same view. No desktop install, no license dongles — just a browser.',
+    a: 'We run multiple evaluation methods simultaneously (CML, ReCiPe, TRACI) and show cost and environmental impact in the same view. No desktop install, no license dongles — just a browser.',
   },
   {
     q: 'Is it ISO 14040/14044 compliant?',
     a: 'Yes. Every PDF export includes goal & scope, system boundaries, data quality assessment, and source attribution for every factor used.',
   },
   {
-    q: 'What valuation methods are supported?',
+    q: 'What evaluation methods are supported?',
     a: 'CML 2001, ReCiPe Midpoint (H), TRACI 2.1 out of the box. CED and IPCC GWP available as separate modules.',
   },
   {
@@ -52,14 +54,19 @@ interface Feature {
 
 const FEATURES: readonly Feature[] = [
   { icon: 'tree', title: 'Process hierarchies', desc: '5-tier tree from Product down to Elemental Task. Drag to restructure, debounced auto-save.' },
-  { icon: 'layers', title: 'Multiple methods', desc: "CML 2001, ReCiPe, TRACI side by side. Same inputs, different answers — that's science." },
-  { icon: 'globe', title: 'Region-aware', desc: 'Grid carbon via Electricity Maps, labor rates via BLS occupation codes. US, EU, APAC.' },
-  { icon: 'dollar', title: 'Cost × impact tradeoffs', desc: '"For +$240 you cut 28% CO₂." The commercial edge your engineers actually need.' },
+  { icon: 'layers', title: 'Multiple methods', desc: "CML 2001, ReCiPe (H), TRACI 2.1 side by side. Same inputs, different answers — that's science." },
+  { icon: 'globe', title: 'Region awareness', desc: 'Grid carbon via Electricity Maps, labor rates via BLS occupation codes. US, EU, APAC.' },
+  { icon: 'dollar', title: 'Cost × impact tradeoffs', desc: 'Steel vs aluminum bracket: −32% cost, +61% CO₂. The commercial edge your engineers actually need.' },
   { icon: 'file', title: 'ISO PDF reports', desc: 'Source-attributed per factor. ISO 14040/14044 compliant. Goal & scope to interpretation.' },
   { icon: 'database', title: 'Open data', desc: '5,234 factors from openLCA + 1,842 PubChem substances. CAS-mapped provenance.' },
 ]
 
-const NAV_LINKS = ['Product', 'Pricing', 'Docs', 'Changelog'] as const
+const NAV_LINKS = [
+  { label: 'Product', href: '/product' },
+  { label: 'Pricing', href: '/pricing' },
+  { label: 'Docs', href: '/docs' },
+  { label: 'Changelog', href: '/changelog' },
+] as const
 
 const STEPS = [
   { n: '01', t: 'Build tree', d: 'Model your process as Product → Machine → Subprocess → Operation → Task. Drag to restructure; auto-save debounced.' },
@@ -102,7 +109,7 @@ export default function RootPage() {
   }
 
   return (
-    <div className="app-shell" style={{ background: 'var(--surface-base)', minHeight: '100%' }}>
+    <div className="app-shell landing-canvas" style={{ minHeight: '100%' }}>
       {/* Sticky nav — glass */}
       <div
         style={{
@@ -121,8 +128,9 @@ export default function RootPage() {
         <Logo size={22} />
         <nav style={{ display: 'flex', gap: 4, marginLeft: 64 }}>
           {NAV_LINKS.map((l) => (
-            <button
-              key={l}
+            <Link
+              key={l.label}
+              href={l.href}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -133,10 +141,11 @@ export default function RootPage() {
                 fontFamily: 'var(--font-ui)',
                 fontWeight: 500,
                 letterSpacing: '-0.005em',
+                textDecoration: 'none',
               }}
             >
-              {l}
-            </button>
+              {l.label}
+            </Link>
           ))}
         </nav>
         <div style={{ flex: 1 }} />
@@ -213,10 +222,12 @@ export default function RootPage() {
             Run life-cycle assessments with cost and environmental impact in the same view. Import factors
             from openLCA, PubChem, and Electricity Maps. Export ISO-compliant PDF reports.
           </p>
-          <div style={{ display: 'flex', gap: 12, marginTop: 32, flexWrap: 'wrap' }}>
-            <Link href="/auth/signup" className="btn btn-primary btn-lg">
-              Get started free <Icon name="arrow-right" size={16} />
-            </Link>
+          <div style={{ display: 'flex', gap: 12, marginTop: 32, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="cta-conic-host">
+              <MagneticLink href="/auth/signup" className="btn btn-primary btn-lg">
+                Get started free <Icon name="arrow-right" size={16} />
+              </MagneticLink>
+            </span>
             <button className="btn btn-secondary btn-lg">Book a demo</button>
           </div>
           <div
@@ -254,7 +265,7 @@ export default function RootPage() {
       </section>
 
       {/* Same input, three methods */}
-      <section style={{ padding: '96px 64px', background: 'var(--surface-overlay)' }}>
+      <section style={{ padding: '96px 64px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div className="eyebrow" style={{ marginBottom: 16 }}>
             Same input, three methods
@@ -262,7 +273,7 @@ export default function RootPage() {
           <h2 className="display display-md" style={{ margin: 0, marginBottom: 16 }}>
             Different methods. Different answers.
             <br />
-            <span style={{ color: 'var(--text-tertiary)' }}>We show you all three.</span>
+            <span style={{ color: 'var(--text-tertiary)' }}>We show you using three different methodologies.</span>
           </h2>
           <p
             style={{
@@ -272,35 +283,9 @@ export default function RootPage() {
               maxWidth: 560,
             }}
           >
-            Same 60 kWh EV battery pack. Same bill of materials. Three ISO-recognized valuation methods.
+            Same 60 kWh EV battery pack. Same bill of materials. Three ISO-recognized evaluation methods (that include valuation).
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
-            {DEMO_METHODS.map((m) => (
-              <div key={m.id} className="card" style={{ padding: '36px 32px', boxShadow: 'var(--shadow-sm)' }}>
-                <div className="label-sm" style={{ marginBottom: 24, color: 'var(--primary)' }}>
-                  {m.name}
-                </div>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 44,
-                    fontWeight: 500,
-                    color: 'var(--text-primary)',
-                    marginBottom: 8,
-                    letterSpacing: '-0.025em',
-                    lineHeight: 1,
-                  }}
-                >
-                  {fmtNum(m.value, 2)}
-                </div>
-                <div className="label-sm" style={{ color: 'var(--text-tertiary)', letterSpacing: '0.1em' }}>
-                  kg CO₂-eq
-                </div>
-                <div className="divider-tonal" style={{ margin: '24px 0 16px' }} />
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{m.note}</div>
-              </div>
-            ))}
-          </div>
+          <InteractiveMethodCards />
         </div>
       </section>
 
@@ -341,7 +326,7 @@ export default function RootPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 32 }}>
             {FEATURES.map((f) => (
-              <div key={f.title} className="card card-hover" style={{ padding: 32 }}>
+              <SpotlightCard key={f.title} className="card card-hover" style={{ padding: 32 }}>
                 <div
                   style={{
                     width: 48,
@@ -372,21 +357,21 @@ export default function RootPage() {
                 <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
                   {f.desc}
                 </p>
-              </div>
+              </SpotlightCard>
             ))}
           </div>
         </div>
       </section>
 
       {/* How it works — tonal sectioning, no connector line */}
-      <section style={{ padding: '96px 64px', background: 'var(--surface-overlay)' }}>
+      <section style={{ padding: '96px 64px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
           <div style={{ marginBottom: 64 }}>
             <div className="eyebrow" style={{ marginBottom: 16 }}>
               How it works
             </div>
             <h2 className="display display-md" style={{ margin: 0 }}>
-              Three steps to a defensible number.
+              Three steps to a defensible ISO-compliant number.
             </h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 48 }}>
@@ -431,7 +416,7 @@ export default function RootPage() {
       </section>
 
       {/* FAQ */}
-      <section style={{ padding: '96px 64px', background: 'var(--surface-overlay)' }}>
+      <section style={{ padding: '96px 64px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
           <div className="eyebrow" style={{ marginBottom: 16 }}>
             FAQ
@@ -522,17 +507,20 @@ export default function RootPage() {
           <br />
           in the next sixty seconds.
         </h2>
-        <Link href="/auth/signup" className="btn btn-primary btn-lg">
-          Get started free <Icon name="arrow-right" size={16} />
-        </Link>
+        <span className="cta-conic-host">
+          <MagneticLink href="/auth/signup" className="btn btn-primary btn-lg">
+            Get started free <Icon name="arrow-right" size={16} />
+          </MagneticLink>
+        </span>
       </section>
 
       {/* Footer */}
       <footer
         style={{
           padding: '56px 40px 32px',
-          background: 'var(--surface-base)',
-          borderTop: '1px solid var(--border-subtle)',
+          background: 'transparent',
+          borderTop: 'none',
+          position: 'relative',
         }}
       >
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>

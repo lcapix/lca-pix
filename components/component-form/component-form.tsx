@@ -702,6 +702,19 @@ export function ComponentForm({
 
             {costsOpen && (
               <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <IntegrationSuggestPanel
+                  componentType={formData.processType}
+                  quantity={formData.mass ?? 1}
+                  region="US"
+                  onApply={(suggestion) =>
+                    setFormData((p) => ({
+                      ...p,
+                      laborCost: suggestion.labor ?? p.laborCost,
+                      energyCost: suggestion.energy ?? p.energyCost,
+                      materialCost: suggestion.material ?? p.materialCost,
+                    }))
+                  }
+                />
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                   <CostField
                     label="Operational cost"
@@ -992,3 +1005,297 @@ function formatCostSummary(f: {
 }
 
 export default ComponentForm;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integration-suggest panel — pulls live defaults from BLS / EIA / Metals-API
+// into the cost fields. Without this the editor would be 100% manual and
+// the Integrations page would be a graveyard of unused pipelines.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SuggestPayload {
+  labor?: number;
+  energy?: number;
+  material?: number;
+}
+
+function IntegrationSuggestPanel({
+  componentType,
+  quantity,
+  region,
+  onApply,
+}: {
+  componentType: string;
+  quantity: number;
+  region: string;
+  onApply: (s: SuggestPayload) => void;
+}) {
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [result, setResult] = React.useState<{
+    sources: string[];
+    payload: SuggestPayload;
+  } | null>(null);
+
+  // Heuristic: pick what to ask integrations for based on the node type.
+  const wants = React.useMemo(() => {
+    const t = (componentType || '').toLowerCase();
+    return {
+      labor: /machine|subprocess|operation/.test(t),
+      energy: /operation|elemental/.test(t),
+      material: /elemental|subprocess/.test(t),
+    };
+  }, [componentType]);
+
+  async function suggest() {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    const sources: string[] = [];
+    const payload: SuggestPayload = {};
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('auth_token')
+        : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    const q = Math.max(1, Number(quantity) || 1);
+    try {
+      if (wants.labor) {
+        // BLS OEWS 51-4121 = Welders / 51-4041 = Machinists. Default to welders.
+        const r = await fetch('/api/integrations/bls/fetch-wage', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ occupation: '51-4121', state: region }),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          const hourly = Number(d?.rate?.rateValue ?? d?.hourlyRate ?? 0);
+          if (hourly > 0) {
+            // Assume 0.5h labor per unit.
+            payload.labor = Math.round(hourly * 0.5 * q * 100) / 100;
+            sources.push(`BLS $${hourly.toFixed(2)}/hr × 0.5h × ${q}`);
+          }
+        }
+      }
+      if (wants.energy) {
+        const r = await fetch('/api/integrations/eia/fetch-energy-price', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ fuel: 'electricity', region }),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          const perKwh = Number(d?.rate?.rateValue ?? d?.pricePerKwh ?? 0);
+          if (perKwh > 0) {
+            // Assume 2 kWh per unit (typical operation).
+            payload.energy = Math.round(perKwh * 2 * q * 100) / 100;
+            sources.push(`EIA $${perKwh.toFixed(3)}/kWh × 2 kWh × ${q}`);
+          }
+        }
+      }
+      if (wants.material) {
+        const r = await fetch('/api/integrations/metals/fetch-price', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ symbol: 'steel' }),
+        });
+        if (r.ok) {
+          const d = await r.json();
+          const perKg = Number(d?.rate?.rateValue ?? d?.pricePerKg ?? 0);
+          if (perKg > 0) {
+            payload.material = Math.round(perKg * q * 100) / 100;
+            sources.push(`Metals-API $${perKg.toFixed(2)}/kg × ${q}`);
+          }
+        }
+      }
+
+      // If all three returned nothing (offline / no API keys), surface a
+      // sensible offline fallback so the UX still demonstrates the feature.
+      if (
+        payload.labor == null &&
+        payload.energy == null &&
+        payload.material == null
+      ) {
+        if (wants.labor) {
+          payload.labor = Math.round(24 * 0.5 * q * 100) / 100;
+          sources.push(`BLS fallback $24.00/hr × 0.5h × ${q}`);
+        }
+        if (wants.energy) {
+          payload.energy = Math.round(0.13 * 2 * q * 100) / 100;
+          sources.push(`EIA fallback $0.130/kWh × 2 kWh × ${q}`);
+        }
+        if (wants.material) {
+          payload.material = Math.round(0.95 * q * 100) / 100;
+          sources.push(`Metals-API fallback $0.95/kg × ${q}`);
+        }
+      }
+
+      setResult({ sources, payload });
+    } catch (e: any) {
+      setError(e?.message ?? 'Suggest failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const hasAnything = wants.labor || wants.energy || wants.material;
+  if (!hasAnything) return null;
+
+  return (
+    <div
+      style={{
+        padding: 14,
+        background:
+          'color-mix(in oklab, var(--brand-primary) 5%, var(--surface-raised))',
+        border:
+          '1px solid color-mix(in oklab, var(--brand-primary) 18%, var(--border-subtle))',
+        borderRadius: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            background:
+              'color-mix(in oklab, var(--brand-primary) 20%, transparent)',
+            color: 'var(--brand-primary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          ✦
+        </span>
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+            }}
+          >
+            Suggest from integrations
+          </div>
+          <div
+            style={{
+              fontSize: 11.5,
+              color: 'var(--text-tertiary)',
+              marginTop: 2,
+              lineHeight: 1.5,
+            }}
+          >
+            Pulls live defaults from
+            {wants.labor && ' BLS labor wages,'}
+            {wants.energy && ' EIA energy prices,'}
+            {wants.material && ' Metals-API spot prices,'}
+            {' '}for region <code className="mono">{region}</code>.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={suggest}
+          disabled={loading}
+          className="btn btn-secondary btn-sm"
+          style={{ flexShrink: 0 }}
+        >
+          {loading ? 'Fetching…' : result ? 'Refetch' : 'Fetch defaults'}
+        </button>
+      </div>
+      {error && (
+        <div style={{ fontSize: 12, color: 'var(--signal-error)' }}>
+          {error}
+        </div>
+      )}
+      {result && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+            padding: '10px 12px',
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 8,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: 16,
+              flexWrap: 'wrap',
+              fontSize: 12.5,
+            }}
+          >
+            {result.payload.labor != null && (
+              <span>
+                <span style={{ color: 'var(--text-tertiary)' }}>Labor</span>{' '}
+                <span className="mono" style={{ fontWeight: 600 }}>
+                  ${result.payload.labor.toFixed(2)}
+                </span>
+              </span>
+            )}
+            {result.payload.energy != null && (
+              <span>
+                <span style={{ color: 'var(--text-tertiary)' }}>Energy</span>{' '}
+                <span className="mono" style={{ fontWeight: 600 }}>
+                  ${result.payload.energy.toFixed(2)}
+                </span>
+              </span>
+            )}
+            {result.payload.material != null && (
+              <span>
+                <span style={{ color: 'var(--text-tertiary)' }}>Material</span>{' '}
+                <span className="mono" style={{ fontWeight: 600 }}>
+                  ${result.payload.material.toFixed(2)}
+                </span>
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              fontSize: 10.5,
+              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-mono)',
+              lineHeight: 1.5,
+            }}
+          >
+            {result.sources.join(' · ')}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => onApply(result.payload)}
+            >
+              Apply to fields
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setResult(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

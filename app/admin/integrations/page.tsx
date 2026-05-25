@@ -2,10 +2,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Sankey, Tooltip, ResponsiveContainer, Rectangle } from 'recharts';
 import { AuthGuard } from '@/components/auth-guard';
 import {
   AppTopBar,
-  Breadcrumb,
   Icon,
   StatusDot,
   MiniBar,
@@ -43,6 +43,59 @@ const SCHEMA_TABLES = [
   'cost_rates',
 ];
 
+// Per-source pipeline: which tables it writes to, what each write means,
+// and a current record count + freshness so the user can reason about it.
+interface PipelineRoute {
+  table: (typeof SCHEMA_TABLES)[number];
+  records: number;
+  note: string;
+}
+interface SourcePipeline {
+  sourceId: string;
+  routes: PipelineRoute[];
+}
+const SOURCE_PIPELINES: SourcePipeline[] = [
+  {
+    sourceId: 'openlca',
+    routes: [
+      { table: 'substances', records: 15, note: 'Substance master list with CAS numbers' },
+      { table: 'valuation_methods', records: 8, note: 'LCIA methods (CML 2001, ReCiPe…)' },
+      { table: 'characterization_factors', records: 18, note: 'Method × category × substance factors' },
+    ],
+  },
+  {
+    sourceId: 'pubchem',
+    routes: [
+      { table: 'substances', records: 1, note: 'Hazard data + formulas (enrichment)' },
+    ],
+  },
+  {
+    sourceId: 'electricitymaps',
+    routes: [
+      { table: 'cost_rates', records: 0, note: 'Grid carbon-intensity rate per region' },
+      { table: 'characterization_factors', records: 0, note: 'Real-time GWP factors for electricity' },
+    ],
+  },
+  {
+    sourceId: 'bls',
+    routes: [
+      { table: 'cost_rates', records: 0, note: 'Median hourly wages by occupation' },
+    ],
+  },
+  {
+    sourceId: 'eia',
+    routes: [
+      { table: 'cost_rates', records: 0, note: 'Energy price per fuel + region' },
+    ],
+  },
+  {
+    sourceId: 'metals',
+    routes: [
+      { table: 'cost_rates', records: 0, note: 'Spot prices for metal commodities' },
+    ],
+  },
+];
+
 function KpiCards({ status }: { status: Status }) {
   const substancesTotal = Number(status.substances.total ?? 0);
   const substancesEnriched = Number(status.substances.enriched ?? 0);
@@ -70,21 +123,25 @@ function KpiCards({ status }: { status: Status }) {
     {
       l: 'SUBSTANCES',
       v: fmtInt(substancesTotal),
-      s: `${fmtInt(substancesEnriched)} enriched`,
+      s: substancesTotal
+        ? `${fmtInt(substancesEnriched)} enriched`
+        : 'none loaded',
       pct: enrichedPct,
-      status: 'success',
+      status: substancesTotal ? 'success' : 'warn',
     },
     {
       l: 'METHODOLOGIES',
       v: fmtInt(methodsCount),
-      s: latestMethod,
-      status: 'success',
+      s: methodsCount ? latestMethod : 'no methods imported',
+      status: methodsCount ? 'success' : 'warn',
     },
     {
       l: 'COST RATES',
       v: fmtInt(rateCacheCount),
-      s: `${status.rateCache.length} types`,
-      status: 'success',
+      s: rateCacheCount
+        ? `${status.rateCache.length} types`
+        : 'no rates cached',
+      status: rateCacheCount ? 'success' : 'warn',
     },
     {
       l: 'CONNECTIONS',
@@ -469,87 +526,412 @@ function LogTab({ logRefresh }: { logRefresh: number }) {
 }
 
 function SchemaTab() {
+  // Per-table totals across all sources.
+  const tableTotals = SCHEMA_TABLES.reduce<Record<string, number>>((acc, t) => {
+    acc[t] = SOURCE_PIPELINES.reduce(
+      (s, p) =>
+        s +
+        p.routes
+          .filter((r) => r.table === t)
+          .reduce((rs, r) => rs + r.records, 0),
+      0,
+    );
+    return acc;
+  }, {});
+
+  // Build Sankey nodes + links. Recharts requires numeric src/target indices.
+  const sourceNodes = SOURCE_PIPELINES.map((p) => {
+    const src = DEMO_INTEGRATIONS.find((s) => s.id === p.sourceId);
+    return { name: src?.name ?? p.sourceId, kind: 'source' as const };
+  });
+  const tableNodes = SCHEMA_TABLES.map((t) => ({
+    name: t,
+    kind: 'table' as const,
+  }));
+  const nodes = [...sourceNodes, ...tableNodes];
+  const tableOffset = sourceNodes.length;
+  // Sankey requires every link to have a strictly positive value. We render
+  // zero-flow pipes by giving them a tiny placeholder weight so the user still
+  // sees the wiring, and we colour them grey via the link payload kind.
+  const links = SOURCE_PIPELINES.flatMap((p, srcIdx) =>
+    p.routes.map((r) => ({
+      source: srcIdx,
+      target: tableOffset + SCHEMA_TABLES.indexOf(r.table),
+      value: Math.max(r.records, 0.5),
+      records: r.records,
+    })),
+  );
+
   return (
-    <div className="card" style={{ padding: 32 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}>
-        Data population map
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '200px 1fr 200px',
-          gap: 20,
-          alignItems: 'center',
-        }}
-      >
+    <>
+      {/* Summary row — how many records each table holds across sources */}
+      <div className="card" style={{ padding: 18, marginBottom: 16 }}>
         <div
-          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            marginBottom: 4,
+          }}
         >
-          {DEMO_INTEGRATIONS.slice(0, 4).map((s) => (
-            <div
-              key={s.id}
-              style={{
-                padding: 12,
-                background: 'var(--surface-overlay)',
-                borderRadius: 6,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 13,
-              }}
-            >
-              <StatusDot status={s.status} /> {s.name}
-            </div>
-          ))}
+          What lives where
         </div>
-        <svg viewBox="0 0 200 300" style={{ height: 260, width: '100%' }}>
-          <defs>
-            <marker
-              id="ar"
-              viewBox="0 0 10 10"
-              refX="8"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto"
-            >
-              <path d="M0,0 L10,5 L0,10 z" fill="var(--brand-primary)" />
-            </marker>
-          </defs>
-          {[0, 1, 2, 3].map((i) => (
-            <path
-              key={i}
-              d={`M 10 ${30 + i * 66} Q 100 ${30 + i * 66} 190 ${20 + (i % 4) * 70}`}
-              stroke="var(--brand-primary)"
-              strokeWidth="1.5"
-              fill="none"
-              opacity="0.6"
-              markerEnd="url(#ar)"
-            />
-          ))}
-        </svg>
         <div
-          style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+          style={{
+            fontSize: 12,
+            color: 'var(--text-tertiary)',
+            marginBottom: 14,
+          }}
         >
-          {SCHEMA_TABLES.map((t) => (
-            <div
-              key={t}
-              className="mono"
-              style={{
-                padding: 12,
-                background: 'var(--surface-sunken)',
-                borderRadius: 6,
-                fontSize: 12,
-                color: 'var(--text-primary)',
-                border: '1px solid var(--border-subtle)',
-              }}
-            >
-              {t}
-            </div>
-          ))}
+          Each integration writes into specific tables. Below: total records
+          per table across every connected source.
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 12,
+          }}
+        >
+          {SCHEMA_TABLES.map((t) => {
+            const n = tableTotals[t] ?? 0;
+            return (
+              <div
+                key={t}
+                style={{
+                  padding: '14px 16px',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 10,
+                  background: 'var(--surface-raised)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background:
+                        n > 0
+                          ? 'var(--brand-primary)'
+                          : 'var(--text-tertiary)',
+                      opacity: n > 0 ? 1 : 0.4,
+                    }}
+                  />
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-tertiary)',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {t}
+                  </div>
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 600,
+                    color:
+                      n > 0
+                        ? 'var(--text-primary)'
+                        : 'var(--text-tertiary)',
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  {fmtInt(n)}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                    marginTop: 2,
+                  }}
+                >
+                  {n > 0 ? 'records' : 'empty'}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
-    </div>
+
+      {/* Sankey — the actual flow diagram */}
+      <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            marginBottom: 4,
+          }}
+        >
+          Flow of records · source → table
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-tertiary)',
+            marginBottom: 14,
+          }}
+        >
+          Band width is proportional to the number of records that source has
+          written. Greyed bands mean the pipeline is connected but empty.
+        </div>
+        <div style={{ width: '100%', height: 360 }}>
+          <ResponsiveContainer>
+            <Sankey
+              data={{ nodes, links }}
+              nodePadding={18}
+              nodeWidth={14}
+              linkCurvature={0.5}
+              margin={{ top: 8, right: 140, bottom: 8, left: 8 }}
+              node={(props: any) => {
+                const isTable =
+                  props.payload?.kind === 'table' ||
+                  props.index >= sourceNodes.length;
+                return (
+                  <g>
+                    <Rectangle
+                      x={props.x}
+                      y={props.y}
+                      width={props.width}
+                      height={props.height}
+                      fill={isTable ? '#52796f' : '#2d6a4f'}
+                      fillOpacity={0.9}
+                    />
+                    <text
+                      x={props.x + props.width + 8}
+                      y={props.y + props.height / 2}
+                      fontSize={12}
+                      fill="var(--text-secondary)"
+                      dominantBaseline="middle"
+                      fontFamily="var(--font-mono)"
+                    >
+                      {props.payload?.name}
+                    </text>
+                  </g>
+                );
+              }}
+              link={{ stroke: '#74c69d' }}
+            >
+              <Tooltip
+                content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null
+                  const p = payload[0].payload
+                  if (p?.source !== undefined && p?.target !== undefined) {
+                    return (
+                      <div
+                        style={{
+                          background: '#fff',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          fontSize: 12,
+                        }}
+                      >
+                        <div
+                          className="mono"
+                          style={{ marginBottom: 2 }}
+                        >
+                          {nodes[p.source]?.name} → {nodes[p.target]?.name}
+                        </div>
+                        <div style={{ color: 'var(--text-tertiary)' }}>
+                          {fmtInt(p.records ?? 0)} records
+                        </div>
+                      </div>
+                    )
+                  }
+                  if (p?.name) {
+                    return (
+                      <div
+                        style={{
+                          background: '#fff',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 8,
+                          padding: '8px 10px',
+                          fontSize: 12,
+                        }}
+                      >
+                        <div className="mono">{p.name}</div>
+                      </div>
+                    )
+                  }
+                  return null
+                }}
+              />
+            </Sankey>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Per-source pipeline cards — explicit "X feeds Y" with counts */}
+      <div className="card" style={{ padding: 18 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 8,
+            marginBottom: 4,
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 600 }}>Source pipelines</div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+            ({SOURCE_PIPELINES.length} sources)
+          </div>
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-tertiary)',
+            marginBottom: 14,
+          }}
+        >
+          One card per integration. Each pill shows the destination table and
+          how many records that source has populated.
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+            gap: 12,
+          }}
+        >
+          {SOURCE_PIPELINES.map((p) => {
+            const src = DEMO_INTEGRATIONS.find((s) => s.id === p.sourceId);
+            const totalRecords = p.routes.reduce(
+              (s, r) => s + r.records,
+              0,
+            );
+            return (
+              <div
+                key={p.sourceId}
+                style={{
+                  padding: 14,
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 10,
+                  background: 'var(--surface-raised)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    marginBottom: 10,
+                  }}
+                >
+                  <StatusDot status={src?.status ?? 'warn'} />
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {src?.name ?? p.sourceId}
+                  </span>
+                  <span
+                    className="mono"
+                    style={{
+                      marginLeft: 'auto',
+                      fontSize: 10,
+                      color: 'var(--text-tertiary)',
+                    }}
+                  >
+                    {fmtInt(totalRecords)} rows
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  {p.routes.map((r, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto 1fr auto',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '8px 10px',
+                        background: 'var(--surface-overlay)',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 13,
+                          color: 'var(--text-tertiary)',
+                        }}
+                      >
+                        →
+                      </span>
+                      <div>
+                        <div
+                          className="mono"
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--text-primary)',
+                            marginBottom: 2,
+                          }}
+                        >
+                          {r.table}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: 'var(--text-tertiary)',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {r.note}
+                        </div>
+                      </div>
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color:
+                            r.records > 0
+                              ? 'var(--text-primary)'
+                              : 'var(--text-tertiary)',
+                          padding: '3px 8px',
+                          borderRadius: 999,
+                          background:
+                            r.records > 0
+                              ? 'color-mix(in oklab, var(--brand-primary) 12%, transparent)'
+                              : 'var(--surface-raised)',
+                          border:
+                            '1px solid ' +
+                            (r.records > 0
+                              ? 'transparent'
+                              : 'var(--border-subtle)'),
+                        }}
+                      >
+                        {fmtInt(r.records)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -580,18 +962,11 @@ export default function IntegrationsAdminPage() {
 
   return (
     <AuthGuard>
-      <AppTopBar current="home" />
-      <Breadcrumb
-        items={[
-          { label: 'Projects', page: 'home' },
-          { label: 'Admin' },
-          { label: 'Integrations' },
-        ]}
-      />
+      <AppTopBar current="integrations" />
 
       <div
         style={{
-          padding: '24px 32px 80px',
+          padding: '32px 32px 80px',
           maxWidth: 1440,
           margin: '0 auto',
         }}
@@ -599,12 +974,28 @@ export default function IntegrationsAdminPage() {
         {/* Header */}
         <div
           style={{
-            marginBottom: 20,
+            marginBottom: 24,
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             gap: 16,
           }}
         >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 10,
+              background:
+                'linear-gradient(135deg, var(--brand-primary), color-mix(in oklab, var(--brand-primary) 60%, #2d6a4f))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              flexShrink: 0,
+            }}
+          >
+            <Icon name="settings" size={20} />
+          </div>
           <div style={{ flex: 1 }}>
             <h1
               className="display-md"
@@ -622,7 +1013,7 @@ export default function IntegrationsAdminPage() {
               style={{
                 fontSize: 13,
                 color: 'var(--text-tertiary)',
-                marginTop: 4,
+                marginTop: 2,
               }}
             >
               Monitor data source health, manage keys, view activity.

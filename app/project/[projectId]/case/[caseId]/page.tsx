@@ -65,6 +65,25 @@ export default function CaseViewPage() {
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
   const [components, setComponents] = useState<ComponentNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  // Fetched once for the breadcrumb so it reads "<project name>" instead of "Project".
+  const [projectName, setProjectName] = useState<string>('')
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/projects/${projectId}`)
+        const d = await r.json()
+        if (!cancelled && d?.success) {
+          setProjectName(d.project?.project_name ?? '')
+        }
+      } catch {
+        // breadcrumb falls back to 'Project'
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
 
   // ---------- UI state ----------
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -427,7 +446,10 @@ export default function CaseViewPage() {
       <Breadcrumb
         items={[
           { label: 'Projects', page: 'home' },
-          { label: 'Project', onClick: () => router.push(`/project/${projectId}`) },
+          {
+            label: projectName || 'Project',
+            onClick: () => router.push(`/project/${projectId}`),
+          },
           { label: currentCase.name },
         ]}
       />
@@ -445,6 +467,7 @@ export default function CaseViewPage() {
       >
         <div
           style={{
+            position: 'relative',
             display: 'flex',
             gap: 4,
             background: 'var(--surface-raised)',
@@ -453,24 +476,52 @@ export default function CaseViewPage() {
             padding: 2,
           }}
         >
+          {(() => {
+            const tabs = ['Tree', 'List', 'Graph'] as CanvasView[]
+            const activeIdx = tabs.indexOf(canvasView)
+            const tabW = 100 / tabs.length
+            return (
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: 2,
+                  bottom: 2,
+                  left: `calc(${activeIdx} * ${tabW}% + 2px)`,
+                  width: `calc(${tabW}% - 4px)`,
+                  background: 'var(--surface-overlay)',
+                  borderRadius: 4,
+                  transition: 'left 240ms cubic-bezier(0.2, 0.8, 0.2, 1), width 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                  boxShadow: '0 1px 3px rgba(15,23,42,0.08)',
+                  zIndex: 0,
+                }}
+              />
+            )
+          })()}
           {(['Tree', 'List', 'Graph'] as CanvasView[]).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setCanvasView(v)}
               style={{
+                position: 'relative',
+                zIndex: 1,
                 padding: '6px 12px',
                 borderRadius: 4,
-                background: canvasView === v ? 'var(--surface-overlay)' : 'transparent',
+                background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
                 color:
                   canvasView === v ? 'var(--text-primary)' : 'var(--text-tertiary)',
                 fontSize: 12,
                 fontFamily: 'var(--font-ui)',
+                fontWeight: canvasView === v ? 500 : 400,
+                transition: 'color 200ms',
+                flex: '1 0 auto',
+                textAlign: 'center',
               }}
             >
-              {v}
+              {v === 'Graph' ? 'Plot' : v}
             </button>
           ))}
         </div>
@@ -712,6 +763,7 @@ export default function CaseViewPage() {
                 selected={selectedNode}
                 onSelect={handleSelect}
                 view={canvasView}
+                highlightQuery={searchQuery}
               />
             ) : (
               <div

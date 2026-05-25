@@ -34,9 +34,18 @@ export function GroupedBarChart({
   const groupW = innerW / groupCount
   const barW = Math.max(2, (groupW - 20) / seriesCount)
 
-  // Normalize against the maximum across all bars so bars are comparable
-  // within each category (matches the prototype's per-category intent).
+  // When there are 2+ series, normalize per-group so each category shows
+  // a clear A vs B vs C comparison within itself.
+  // When there is only 1 series (e.g. one case), normalize globally so
+  // bars show the *relative* impact between categories — otherwise every
+  // bar would render at 100% height and convey nothing.
+  const globalMax = Math.max(
+    ...groups.flatMap((g) => g.values.map((v) => Math.abs(v))),
+    0,
+  )
+  const useGlobalNorm = seriesCount === 1
   const maxPerGroup = groups.map((g) => {
+    if (useGlobalNorm) return globalMax > 0 ? globalMax : 1
     const m = Math.max(...g.values.map((v) => Math.abs(v)), 0)
     return m > 0 ? m : 1
   })
@@ -71,9 +80,17 @@ export function GroupedBarChart({
             {seriesLabels.map((s, si) => {
               const rawVal = g.values[si] ?? 0
               const pct = Math.abs(rawVal) / normBase
-              const h = Math.max(0, pct * innerH * 0.85)
+              const h = Math.max(rawVal > 0 ? 3 : 0, pct * innerH * 0.78)
               const x = xg + 10 + si * barW
               const y = H - padY - h
+              const valLabel =
+                rawVal === 0
+                  ? '—'
+                  : rawVal < 0.01 && rawVal > 0
+                  ? rawVal.toExponential(1)
+                  : rawVal < 1
+                  ? rawVal.toFixed(3)
+                  : rawVal.toFixed(2)
               return (
                 <g key={s}>
                   <rect
@@ -82,14 +99,26 @@ export function GroupedBarChart({
                     width={Math.max(0, barW - 4)}
                     height={h}
                     fill={`var(--chart-${si + 1})`}
-                    rx="2"
+                    rx="3"
                   />
+                  {rawVal > 0 && (
+                    <text
+                      x={x + (barW - 4) / 2}
+                      y={y - 6}
+                      fill="var(--text-secondary)"
+                      fontSize="10"
+                      textAnchor="middle"
+                      fontFamily="var(--font-mono)"
+                    >
+                      {valLabel}
+                    </text>
+                  )}
                   {si === 0 && (
                     <text
                       x={xg + groupW / 2}
                       y={H - 8}
                       fill="var(--text-tertiary)"
-                      fontSize="10"
+                      fontSize="11"
                       textAnchor="middle"
                       fontFamily="var(--font-ui)"
                     >

@@ -30,11 +30,12 @@ export async function GET(
     }
 
     const flows = await query(
-      `SELECT f.*, s.substance_name, s.category as substance_category, s.unit as substance_default_unit
+      `SELECT f.*, f.direction as flow_type, f.amount as quantity,
+              s.substance_name, s.category as substance_category, s.default_unit as substance_default_unit
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.component_id = ?
-       ORDER BY f.flow_type, f.created_at`,
+       ORDER BY f.direction, f.created_at`,
       [componentId]
     );
 
@@ -91,21 +92,20 @@ export async function POST(
 
     const flowId = await insert(
       `INSERT INTO flows
-       (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (component_id, substance_id, direction, amount, unit)
+       VALUES (?, ?, ?, ?, ?)`,
       [
         componentId,
         substance_id,
         flow_type,
         quantity,
         unit,
-        is_driver ? 1 : 0,
-        driver_description || null,
       ]
     );
 
     const newFlow = await queryOne(
-      `SELECT f.*, s.substance_name, s.category as substance_category
+      `SELECT f.*, f.direction as flow_type, f.amount as quantity,
+              s.substance_name, s.category as substance_category
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.flow_id = ?`,

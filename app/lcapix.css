@@ -176,10 +176,11 @@ html, body {
   padding: 0 18px; height: 40px;
   display: inline-flex; align-items: center; gap: 8px;
   border: none;
-  cursor: pointer; transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  cursor: pointer; transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 140ms ease, background 140ms ease;
   white-space: nowrap;
   letter-spacing: -0.005em;
 }
+.btn:active { transform: scale(0.97); }
 .btn-primary {
   background: var(--brand-gradient);
   color: var(--on-primary);
@@ -234,20 +235,85 @@ html, body {
 /* ——— Cards ——— */
 .card {
   background: var(--surface-raised);
-  border: none;
+  border: 1px solid color-mix(in oklab, var(--border-subtle) 100%, #cdd6cf 30%);
   border-radius: var(--r-lg);
   padding: calc(24px * var(--density));
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+              0 4px 14px -8px rgba(15, 23, 42, 0.10);
 }
+/* Prevent double borders when cards nest inside cards */
+.card .card,
+.card .tile-premium,
+.card [class*="border"] {
+  box-shadow: none;
+}
+.card .card { border-color: transparent; }
+
+/* ——— Case-selector tab ——— */
+.case-tab {
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--border-subtle) 100%, #b8c3ba 35%);
+  background: var(--surface-raised);
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font-ui);
+  min-width: 240px;
+  flex: 0 0 auto;
+  position: relative;
+  transition: border-color 180ms ease, box-shadow 180ms ease,
+              transform 120ms ease, background 180ms ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.case-tab::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--text-tertiary);
+  opacity: 0.35;
+  transition: opacity 180ms, background 180ms;
+}
+.case-tab[data-kind="base"]::before { background: #2d6a4f; }
+.case-tab[data-kind="comp"]::before { background: #9f88cc; }
+.case-tab:hover {
+  border-color: color-mix(in oklab, var(--brand-primary) 30%, var(--border-subtle));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -8px rgba(15, 23, 42, 0.18);
+}
+.case-tab:hover::before { opacity: 0.9; }
+.case-tab[data-active="true"] {
+  border-color: color-mix(in oklab, var(--brand-primary) 80%, transparent);
+  border-width: 2px;
+  padding: 13px 17px;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--brand-primary) 22%, transparent),
+              0 10px 24px -12px color-mix(in oklab, var(--brand-primary) 50%, transparent),
+              0 4px 14px -8px rgba(15, 23, 42, 0.18);
+  background: color-mix(in oklab, var(--brand-primary) 7%, var(--surface-raised));
+  transform: translateY(-1px);
+}
+.case-tab[data-active="true"]::before { width: 5px; }
+.case-tab[data-active="true"]::before { opacity: 1; }
+.case-tab:active { transform: scale(0.99); }
 .card-section {
   /* For cards sitting on canvas, settle into tone */
   background: var(--surface-raised);
   border-radius: var(--r-lg);
   padding: calc(24px * var(--density));
 }
-.card-hover { transition: transform 180ms ease, box-shadow 180ms ease, background 220ms ease; cursor: pointer; }
+.card-hover {
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              background 220ms ease,
+              border-color 200ms ease;
+  cursor: pointer;
+  will-change: transform;
+}
 .card-hover:hover {
-  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.04),
+              0 16px 32px -14px rgba(15, 23, 42, 0.18);
   background: linear-gradient(135deg, var(--surface-raised) 0%, rgba(123, 250, 187, 0.06) 100%);
 }
 
@@ -267,14 +333,21 @@ html, body {
   padding: 5px 12px;
   border-radius: var(--r-pill);
   font-size: 12px; font-weight: 500;
-  border: none;
+  border: 1px solid color-mix(in oklab, var(--border-subtle) 100%, #b8c3ba 35%);
   color: var(--text-secondary);
   background: var(--surface-overlay);
   font-family: var(--font-ui);
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 100ms ease;
 }
+.chip:hover {
+  border-color: color-mix(in oklab, var(--brand-primary) 35%, var(--border-subtle));
+  color: var(--text-primary);
+}
+.chip:active { transform: scale(0.96); }
 .chip-active, .chip-brand {
   background: var(--secondary-container);
   color: var(--on-secondary-container);
+  border-color: color-mix(in oklab, var(--brand-primary) 45%, transparent);
 }
 .chip-emerald { background: var(--secondary-container); color: var(--on-secondary-container); }
 .chip-mono { font-family: var(--font-mono); letter-spacing: 0.02em; }
@@ -328,18 +401,37 @@ html, body {
 }
 .veridian-glow::before {
   content: "";
-  position: absolute; inset: -40%;
-  background: radial-gradient(circle at center, var(--primary-fixed) 0%, transparent 55%);
-  opacity: 0.25; z-index: -1;
+  position: absolute;
+  inset: -60% -10% 0;
+  background: radial-gradient(70% 70% at 50% 60%, rgba(0, 133, 88, 0.055) 0%, transparent 75%);
+  z-index: -1;
   pointer-events: none;
+  filter: blur(8px);
 }
 
-/* Ambient botanical hero gradient — reserved for landing hero */
+/* Ambient botanical hero gradient — reserved for landing hero. Very subtle additive layer. */
 .botanical-atmosphere {
   background:
-    radial-gradient(1200px 600px at 12% -10%, rgba(123, 250, 187, 0.18) 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 10%, rgba(0, 133, 88, 0.10) 0%, transparent 60%),
-    var(--surface-base);
+    radial-gradient(1200px 600px at 12% -10%, rgba(123, 250, 187, 0.08) 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 10%, rgba(0, 133, 88, 0.04) 0%, transparent 60%);
+}
+
+/* Continuous landing canvas — one calm surface, no banding */
+.landing-canvas {
+  background: var(--surface-base);
+  position: relative;
+  isolation: isolate;
+}
+/* Single soft ambient tint that runs the full page height — barely perceptible. */
+.landing-canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(900px 600px at 100% 8%, rgba(0, 106, 68, 0.035), transparent 60%),
+    radial-gradient(1000px 700px at 0% 96%, rgba(0, 106, 68, 0.040), transparent 60%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* Ghost divider — felt, not seen */
@@ -356,6 +448,353 @@ html, body {
 @keyframes bloomIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
 .fade-in { animation: fadeIn 400ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .bloom-in { animation: bloomIn 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* ============================================================
+   Premium polish — animation primitives
+   ============================================================ */
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulseRing {
+  0%   { transform: scale(1); box-shadow: 0 0 0 0 oklch(from var(--brand-primary) l c h / 0.35); }
+  60%  { transform: scale(1.05); box-shadow: 0 0 0 14px oklch(from var(--brand-primary) l c h / 0); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 oklch(from var(--brand-primary) l c h / 0); }
+}
+
+@keyframes drift {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  50%  { transform: translate(20px, -10px) rotate(2deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes badgePop {
+  0%   { transform: scale(0.7); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes successGlow {
+  0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0; }
+  30%  { opacity: 0.55; }
+  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+}
+
+@keyframes barFillIn {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes routeProgress {
+  0%   { width: 0%; opacity: 1; }
+  60%  { width: 80%; opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+
+@keyframes softPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.02); opacity: 0.95; }
+}
+
+/* Utility classes */
+
+.lift-hover {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+.lift-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -10px rgba(15, 23, 42, 0.18), 0 4px 8px -6px rgba(15, 23, 42, 0.08);
+}
+
+.press-active {
+  transition: transform 80ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.press-active:active {
+  transform: scale(0.97);
+}
+
+.fade-slide-up {
+  animation: fadeSlideUp 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-overlay) 0%,
+    var(--surface-raised) 40%,
+    var(--surface-overlay) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+.badge-pop {
+  animation: badgePop 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.bell-pulse {
+  animation: pulseRing 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) 1;
+}
+
+.drift-bg {
+  animation: drift 60s ease-in-out infinite;
+  will-change: transform;
+}
+
+.soft-pulse {
+  animation: softPulse 8s ease-in-out infinite;
+}
+
+/* Tile — premium dashboard KPI card */
+.tile-premium {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--surface-raised) 0%, var(--surface-base) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 22px 22px 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04),
+              0 6px 24px -12px rgba(15, 23, 42, 0.10);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              border-color 220ms;
+  isolation: isolate;
+}
+.tile-premium::before {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    400px 200px at var(--mouse-x, 50%) var(--mouse-y, 0%),
+    oklch(from var(--brand-primary) l c h / 0.10),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 280ms;
+  pointer-events: none;
+  z-index: -1;
+}
+.tile-premium:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.04),
+              0 16px 36px -16px rgba(15, 23, 42, 0.18);
+  border-color: oklch(from var(--brand-primary) l c h / 0.25);
+}
+.tile-premium:hover::before { opacity: 1; }
+.tile-premium .tile-spark {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+/* Tour guide highlight + callout */
+.tour-highlight {
+  position: absolute;
+  border-radius: 8px;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px var(--brand-primary),
+    0 0 0 6px oklch(from var(--brand-primary) l c h / 0.18),
+    0 6px 24px -10px oklch(from var(--brand-primary) l c h / 0.45);
+  transition: top 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2),
+              left 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2),
+              width 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2),
+              height 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2);
+  z-index: 6;
+}
+.tour-highlight::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 10px;
+  border: 1.5px dashed oklch(from var(--brand-primary) l c h / 0.45);
+  animation: tourPulse 1.8s ease-in-out infinite;
+}
+@keyframes tourPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.02); }
+}
+.tour-callout {
+  position: absolute;
+  background: var(--surface-raised);
+  border: 1px solid oklch(from var(--brand-primary) l c h / 0.35);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px -6px rgba(15, 23, 42, 0.18);
+  z-index: 7;
+  max-width: 240px;
+  transition: top 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2),
+              left 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2),
+              opacity 320ms;
+  pointer-events: none;
+  font-family: var(--font-ui);
+}
+.tour-arrow {
+  position: absolute;
+  pointer-events: none;
+  z-index: 6;
+  transition: top 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2),
+              left 520ms cubic-bezier(0.22, 0.9, 0.3, 1.2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-highlight, .tour-callout, .tour-arrow { transition: none !important; }
+  .tour-highlight::after { animation: none !important; }
+}
+
+/* Cursor spotlight — adds a soft radial green glow that follows the cursor */
+.card-spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.card-spotlight::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    320px 220px at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    oklch(from var(--brand-primary) l c h / 0.10),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+.card-spotlight:hover::before { opacity: 1; }
+.card-spotlight > * { position: relative; z-index: 1; }
+
+/* Vertical scroll-progress bar — right edge */
+.scroll-progress-rail {
+  position: fixed;
+  top: 80px;
+  right: 14px;
+  bottom: 80px;
+  width: 2px;
+  background: var(--border-subtle);
+  border-radius: 999px;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.scroll-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: var(--brand-gradient);
+  border-radius: 999px;
+  transform-origin: top;
+  box-shadow: 0 0 6px oklch(from var(--brand-primary) l c h / 0.5);
+  transition: height 80ms linear;
+}
+
+/* Magnetic button — uses translate3d via CSS vars set in JS */
+.btn-magnetic {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 220ms cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+  will-change: transform;
+}
+
+/* Conic glow behind primary CTAs */
+.cta-conic-host {
+  position: relative;
+  display: inline-block;
+}
+.cta-conic-host::before {
+  content: "";
+  position: absolute;
+  inset: -16px;
+  border-radius: 999px;
+  background: conic-gradient(
+    from 0deg,
+    oklch(from var(--brand-primary) l c h / 0.0),
+    oklch(from var(--brand-primary) l c h / 0.18) 25%,
+    oklch(from var(--brand-primary) l c h / 0.0) 55%,
+    oklch(from var(--brand-primary) l c h / 0.10) 85%,
+    oklch(from var(--brand-primary) l c h / 0.0)
+  );
+  filter: blur(14px);
+  z-index: -1;
+  animation: ctaSpin 14s linear infinite;
+  pointer-events: none;
+  opacity: 0.9;
+}
+@keyframes ctaSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Success glow — used on Run Assessment completion */
+.success-glow-host { position: relative; }
+.success-glow-host::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    oklch(from var(--brand-primary) l c h / 0.55) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.2);
+}
+.success-glow-host.is-glowing::after {
+  animation: successGlow 900ms cubic-bezier(0.2, 0.8, 0.2, 1) 1;
+}
+
+/* Reveal on scroll */
+.reveal { opacity: 0; transform: translateY(10px); transition: opacity 520ms cubic-bezier(0.2, 0.8, 0.2, 1), transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.reveal.is-revealed { opacity: 1; transform: none; }
+
+/* Tree node entry — staggered fade+slide based on data-depth */
+.tree-node-enter { animation: fadeSlideUp 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Bar fill — used for contributor bars */
+.bar-fill { transform-origin: left center; animation: barFillIn 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Route progress bar */
+.route-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: var(--brand-gradient);
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: 0 0 8px oklch(from var(--brand-primary) l c h / 0.5);
+}
+.route-progress.is-loading {
+  animation: routeProgress 800ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .tile-premium:hover, .lift-hover:hover { transform: none; }
+  .cta-conic-host::before { animation: none !important; opacity: 0.35; }
+  .card-spotlight::before { opacity: 0 !important; }
+}
 
 .badge-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 

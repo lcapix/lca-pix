@@ -228,6 +228,20 @@ export function InspectorPanel({
       </InspectorSection>
 
       <InspectorSection title="Costs">
+        {controlled && (
+          <InlineSuggestStrip
+            componentType={(node?.type as string) ?? ''}
+            quantity={(editFormData?.mass as number) ?? 1}
+            region="US"
+            onApply={(s) =>
+              onChange!({
+                laborCost: s.labor ?? editFormData!.laborCost,
+                energyCost: s.energy ?? editFormData!.energyCost,
+                materialCost: s.material ?? editFormData!.materialCost,
+              })
+            }
+          />
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {COST_FIELDS.map(([key, label]) => (
             <div key={key as string}>
@@ -357,6 +371,261 @@ export function InspectorSection({
         )}
       </button>
       {open && <div style={{ padding: '4px 20px 16px' }}>{children}</div>}
+    </div>
+  )
+}
+
+// ─── Inline "Suggest from integrations" — compact version for the right pane ───
+// Pulls BLS / EIA / Metals-API defaults and lets the user one-click apply.
+
+function InlineSuggestStrip({
+  componentType,
+  quantity,
+  region,
+  onApply,
+}: {
+  componentType: string
+  quantity: number
+  region: string
+  onApply: (s: { labor?: number; energy?: number; material?: number }) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{
+    sources: string[]
+    payload: { labor?: number; energy?: number; material?: number }
+  } | null>(null)
+
+  const t = (componentType || '').toLowerCase()
+  const wants = {
+    labor: /machine|subprocess|operation/.test(t),
+    energy: /operation|elemental/.test(t),
+    material: /elemental|subprocess/.test(t),
+  }
+  const hasAnything = wants.labor || wants.energy || wants.material
+  if (!hasAnything) return null
+
+  async function suggest() {
+    setLoading(true)
+    setResult(null)
+    const sources: string[] = []
+    const payload: { labor?: number; energy?: number; material?: number } = {}
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('auth_token')
+        : null
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers.Authorization = 'Bearer ' + token
+    const q = Math.max(1, Number(quantity) || 1)
+    try {
+      if (wants.labor) {
+        const r = await fetch('/api/integrations/bls/fetch-wage', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ occupation: '51-4121', state: region }),
+        })
+        if (r.ok) {
+          const d = await r.json()
+          const hourly = Number(d?.rate?.rateValue ?? d?.hourlyRate ?? 0)
+          if (hourly > 0) {
+            payload.labor = Math.round(hourly * 0.5 * q * 100) / 100
+            sources.push(`BLS $${hourly.toFixed(2)}/hr`)
+          }
+        }
+      }
+      if (wants.energy) {
+        const r = await fetch('/api/integrations/eia/fetch-energy-price', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ fuel: 'electricity', region }),
+        })
+        if (r.ok) {
+          const d = await r.json()
+          const perKwh = Number(d?.rate?.rateValue ?? d?.pricePerKwh ?? 0)
+          if (perKwh > 0) {
+            payload.energy = Math.round(perKwh * 2 * q * 100) / 100
+            sources.push(`EIA $${perKwh.toFixed(3)}/kWh`)
+          }
+        }
+      }
+      if (wants.material) {
+        const r = await fetch('/api/integrations/metals/fetch-price', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ symbol: 'steel' }),
+        })
+        if (r.ok) {
+          const d = await r.json()
+          const perKg = Number(d?.rate?.rateValue ?? d?.pricePerKg ?? 0)
+          if (perKg > 0) {
+            payload.material = Math.round(perKg * q * 100) / 100
+            sources.push(`Metals-API $${perKg.toFixed(2)}/kg`)
+          }
+        }
+      }
+      // Offline fallback so the affordance always works in demo mode.
+      if (
+        payload.labor == null &&
+        payload.energy == null &&
+        payload.material == null
+      ) {
+        if (wants.labor) {
+          payload.labor = Math.round(24 * 0.5 * q * 100) / 100
+          sources.push('BLS fallback $24/hr')
+        }
+        if (wants.energy) {
+          payload.energy = Math.round(0.13 * 2 * q * 100) / 100
+          sources.push('EIA fallback $0.13/kWh')
+        }
+        if (wants.material) {
+          payload.material = Math.round(0.95 * q * 100) / 100
+          sources.push('Metals-API fallback $0.95/kg')
+        }
+      }
+      setResult({ sources, payload })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        marginBottom: 10,
+        padding: 10,
+        background:
+          'color-mix(in oklab, var(--brand-primary) 5%, var(--surface-raised))',
+        border:
+          '1px solid color-mix(in oklab, var(--brand-primary) 18%, var(--border-subtle))',
+        borderRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span
+          aria-hidden
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            background:
+              'color-mix(in oklab, var(--brand-primary) 20%, transparent)',
+            color: 'var(--brand-primary)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 11,
+            fontWeight: 700,
+            flexShrink: 0,
+          }}
+        >
+          ✦
+        </span>
+        <span
+          style={{
+            flex: 1,
+            fontSize: 11.5,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.4,
+          }}
+        >
+          Suggest cost defaults from
+          {wants.labor && ' BLS,'}
+          {wants.energy && ' EIA,'}
+          {wants.material && ' Metals-API'}
+          .
+        </span>
+        <button
+          type="button"
+          onClick={suggest}
+          disabled={loading}
+          className="btn btn-ghost btn-sm"
+          style={{
+            fontSize: 11,
+            padding: '4px 10px',
+            flexShrink: 0,
+          }}
+        >
+          {loading ? 'Fetching…' : result ? 'Refetch' : 'Fetch'}
+        </button>
+      </div>
+      {result && (
+        <div
+          style={{
+            marginTop: 8,
+            paddingTop: 8,
+            borderTop: '1px dashed var(--border-subtle)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              flexWrap: 'wrap',
+              fontSize: 11,
+            }}
+          >
+            {result.payload.labor != null && (
+              <span>
+                <span style={{ color: 'var(--text-tertiary)' }}>L</span>{' '}
+                <span className="mono" style={{ fontWeight: 600 }}>
+                  ${result.payload.labor.toFixed(2)}
+                </span>
+              </span>
+            )}
+            {result.payload.energy != null && (
+              <span>
+                <span style={{ color: 'var(--text-tertiary)' }}>E</span>{' '}
+                <span className="mono" style={{ fontWeight: 600 }}>
+                  ${result.payload.energy.toFixed(2)}
+                </span>
+              </span>
+            )}
+            {result.payload.material != null && (
+              <span>
+                <span style={{ color: 'var(--text-tertiary)' }}>M</span>{' '}
+                <span className="mono" style={{ fontWeight: 600 }}>
+                  ${result.payload.material.toFixed(2)}
+                </span>
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              fontSize: 10,
+              color: 'var(--text-tertiary)',
+              fontFamily: 'var(--font-mono)',
+            }}
+          >
+            {result.sources.join(' · ')}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              style={{ fontSize: 11, padding: '4px 10px' }}
+              onClick={() => onApply(result.payload)}
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11, padding: '4px 10px' }}
+              onClick={() => setResult(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

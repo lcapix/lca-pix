@@ -7,11 +7,27 @@
 // case cards, verdict card, GroupedBarChart, and component-diff table.
 
 import * as React from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { apiRequest } from '@/lib/api-client'
 import { transformCaseFromDB } from '@/lib/data-transformers'
 import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react'
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Cell,
+  ReferenceLine,
+} from 'recharts'
 
 import {
   Breadcrumb,
@@ -23,6 +39,18 @@ import {
   fmtInt,
 } from '@/components/lcapix'
 import { DEMO_CATEGORIES, DEMO_CONTRIBUTORS } from '@/lib/lcapix-demo'
+
+const SERIES_COLORS = ['#2d6a4f', '#74c69d', '#d98568', '#9f88cc', '#4f90c9']
+const COMPONENT_COLORS = [
+  '#2d6a4f',
+  '#52796f',
+  '#84a98c',
+  '#d98568',
+  '#f0a68a',
+  '#f5c971',
+  '#9f88cc',
+  '#4f90c9',
+]
 
 interface AssessmentData {
   caseId: string
@@ -96,14 +124,24 @@ export default function AnalyticsPage() {
 
       const transformedCases = casesData.cases.map(transformCaseFromDB)
 
-      let casesToFetch = transformedCases
+      // Analytics is single-case. If ?caseId= is passed, use that; otherwise
+      // pick the base case (or the first case) and ignore everything else.
+      // Use the dedicated /comparison page when you want multi-case overlays.
+      let casesToFetch: any[]
       if (filterCaseId) {
-        casesToFetch = transformedCases.filter((c: any) => c.id === filterCaseId)
+        casesToFetch = transformedCases.filter(
+          (c: any) => c.id === filterCaseId,
+        )
         if (casesToFetch.length === 0) {
           setErrorMessage(`Case not found (ID: ${filterCaseId})`)
           setIsLoading(false)
           return
         }
+      } else {
+        const base =
+          transformedCases.find((c: any) => c.type === 'base') ??
+          transformedCases[0]
+        casesToFetch = [base]
       }
 
       setCases(casesToFetch)
@@ -428,13 +466,6 @@ export default function AnalyticsPage() {
           >
             <Icon name="download" size={14} /> PDF Export
           </button>
-          <button
-            className="btn btn-secondary btn-sm"
-            style={{ marginLeft: 8 }}
-            onClick={handleExportCSV}
-          >
-            <Icon name="share" size={14} /> Share
-          </button>
         </div>
 
         {hasNoData ? (
@@ -492,130 +523,184 @@ export default function AnalyticsPage() {
                   <div
                     key={c.caseId}
                     className="card"
-                    style={{
-                      padding: 24,
-                      borderLeft: `3px solid var(--chart-${(i % 5) + 1})`,
-                    }}
+                    style={{ padding: 0, overflow: 'hidden' }}
                   >
+                    {/* Header band with accent colour */}
                     <div
                       style={{
+                        padding: '14px 20px',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 12,
+                        gap: 10,
+                        background: `color-mix(in oklab, var(--chart-${(i % 5) + 1}) 12%, var(--surface-raised))`,
+                        borderBottom: '1px solid var(--border-subtle)',
                       }}
                     >
-                      <div
+                      <span
                         style={{
                           width: 10,
                           height: 10,
-                          borderRadius: 2,
+                          borderRadius: '50%',
                           background: `var(--chart-${(i % 5) + 1})`,
+                          flexShrink: 0,
                         }}
                       />
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: 'var(--text-primary)',
+                        }}
+                      >
                         {c.caseName}
                       </span>
                       <span
                         className="chip"
-                        style={{ fontSize: 10, marginLeft: 'auto' }}
+                        style={{
+                          fontSize: 10,
+                          marginLeft: 'auto',
+                          padding: '3px 9px',
+                        }}
                       >
                         {isBase ? 'BASE' : 'COMP'}
                       </span>
                     </div>
-                    <div className="eyebrow" style={{ marginBottom: 6 }}>
-                      TOTAL IMPACT
-                    </div>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 34,
-                        fontWeight: 600,
-                        color: 'var(--text-primary)',
-                        letterSpacing: '-0.02em',
-                      }}
-                    >
-                      {c.totalScore > 0 ? fmtNum(c.totalScore, 2) : '—'}
-                    </div>
-                    <div
-                      style={{ fontSize: 12, color: 'var(--text-tertiary)' }}
-                    >
-                      {c.categories[0]?.unit || 'kg CO₂-eq'}
-                    </div>
-                    {!isBase && (
+
+                    {/* Hero number */}
+                    <div style={{ padding: '20px 20px 16px' }}>
+                      <div
+                        className="eyebrow"
+                        style={{ marginBottom: 6, fontSize: 10 }}
+                      >
+                        TOTAL IMPACT
+                      </div>
                       <div
                         style={{
-                          marginTop: 10,
                           display: 'flex',
-                          gap: 10,
-                          fontSize: 12,
+                          alignItems: 'baseline',
+                          gap: 8,
+                          flexWrap: 'wrap',
                         }}
                       >
-                        {delta !== null ? (
+                        <div
+                          className="mono"
+                          style={{
+                            fontSize: 36,
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            letterSpacing: '-0.02em',
+                            lineHeight: 1,
+                          }}
+                        >
+                          {c.totalScore > 0 ? fmtNum(c.totalScore, 2) : '—'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--text-tertiary)',
+                          }}
+                        >
+                          {c.categories[0]?.unit || 'kg CO₂-eq'}
+                        </div>
+                        {!isBase && delta !== null && (
                           <span
                             className="mono"
                             style={{
+                              marginLeft: 'auto',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              padding: '4px 10px',
+                              borderRadius: 999,
                               color:
                                 delta < 0
-                                  ? 'var(--signal-success)'
-                                  : 'var(--signal-error)',
-                              fontWeight: 500,
+                                  ? 'var(--signal-success, #16a34a)'
+                                  : '#b45309',
+                              background:
+                                delta < 0
+                                  ? 'color-mix(in oklab, var(--signal-success, #16a34a) 14%, transparent)'
+                                  : 'color-mix(in oklab, #d98568 18%, transparent)',
                             }}
                           >
                             {delta < 0 ? '↓' : '↑'}{' '}
                             {fmtNum(Math.abs(delta), 1)}%
                           </span>
-                        ) : (
-                          <span
-                            className="mono"
-                            style={{ color: 'var(--text-tertiary)' }}
-                          >
-                            —
-                          </span>
                         )}
                       </div>
-                    )}
+                    </div>
+
+                    {/* Stat tiles row */}
                     <div
                       style={{
-                        marginTop: 16,
-                        paddingTop: 16,
-                        borderTop: '1px solid var(--border-subtle)',
                         display: 'grid',
-                        gridTemplateColumns: '1fr auto',
-                        rowGap: 6,
-                        fontSize: 12,
+                        gridTemplateColumns: 'repeat(3, 1fr)',
+                        borderTop: '1px solid var(--border-subtle)',
                       }}
                     >
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        Categories
-                      </span>
-                      <span
-                        className="mono"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {fmtInt(c.categories.length)}
-                      </span>
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        Components
-                      </span>
-                      <span
-                        className="mono"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {fmtInt(c.components.length)}
-                      </span>
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        Status
-                      </span>
-                      <span
+                      <div
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
+                          padding: '12px 16px',
+                          borderRight: '1px solid var(--border-subtle)',
                         }}
                       >
-                        <StatusDot status="success" />
-                      </span>
+                        <div
+                          className="eyebrow"
+                          style={{ fontSize: 9, marginBottom: 4 }}
+                        >
+                          CATEGORIES
+                        </div>
+                        <div
+                          className="mono"
+                          style={{
+                            fontSize: 18,
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {fmtInt(c.categories.length)}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          padding: '12px 16px',
+                          borderRight: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <div
+                          className="eyebrow"
+                          style={{ fontSize: 9, marginBottom: 4 }}
+                        >
+                          COMPONENTS
+                        </div>
+                        <div
+                          className="mono"
+                          style={{
+                            fontSize: 18,
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {fmtInt(c.components.length)}
+                        </div>
+                      </div>
+                      <div style={{ padding: '12px 16px' }}>
+                        <div
+                          className="eyebrow"
+                          style={{ fontSize: 9, marginBottom: 4 }}
+                        >
+                          STATUS
+                        </div>
+                        <div
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 13,
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          <StatusDot status="success" /> Assessed
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )
@@ -693,35 +778,34 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            {/* Grouped bar chart */}
-            <div
-              className="card"
-              style={{ padding: 24, marginBottom: 20 }}
-            >
-              <div
-                style={{ fontSize: 14, fontWeight: 600, marginBottom: 20 }}
-              >
-                Impact by category · across scenarios
-                {!hasRealData && (
-                  <span
-                    className="chip"
-                    style={{ marginLeft: 8, fontSize: 10 }}
-                  >
-                    DEMO
-                  </span>
-                )}
-              </div>
-              <GroupedBarChart
+            {/* Category visualizations: radar + normalized comparison */}
+            <CategoryComparisonPanel
+              groups={barGroups}
+              seriesLabels={barSeriesLabels}
+              demo={!hasRealData}
+            />
+
+            {/* Delta vs baseline */}
+            {hasRealData && assessmentData.length >= 2 && (
+              <DeltaChartPanel
                 groups={barGroups}
                 seriesLabels={barSeriesLabels}
               />
-            </div>
+            )}
+
+            {/* Component contribution — stacked horizontal bar per scenario */}
+            {allComponentNames.length > 0 && (
+              <ComponentBreakdownPanel
+                assessmentData={assessmentData}
+                allComponentNames={allComponentNames}
+              />
+            )}
 
             {/* Component diff table */}
             {allComponentNames.length > 0 && (
               <div
                 className="card"
-                style={{ padding: 0, overflow: 'hidden' }}
+                style={{ padding: 0, overflow: 'hidden', marginTop: 20 }}
               >
                 <div
                   style={{
@@ -829,5 +913,477 @@ export default function AnalyticsPage() {
         )}
       </div>
     </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Category visualisations — radar + normalised view + magnitude toggle
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface BarGroup {
+  label: string
+  values: number[]
+}
+
+function CategoryComparisonPanel({
+  groups,
+  seriesLabels,
+  demo,
+}: {
+  groups: BarGroup[]
+  seriesLabels: string[]
+  demo?: boolean
+}) {
+  const singleScenario = seriesLabels.length < 2
+  const [view, setView] = useState<'radar' | 'normalized' | 'log' | 'absolute'>(
+    singleScenario ? 'absolute' : 'radar',
+  )
+
+  const absoluteData = useMemo(() => {
+    return groups.map((g) => {
+      const point: Record<string, number | string> = { category: g.label }
+      seriesLabels.forEach((name, i) => {
+        point[name] = g.values[i]
+        point[`${name}__raw`] = g.values[i]
+      })
+      return point
+    })
+  }, [groups, seriesLabels])
+
+  const radarData = useMemo(() => {
+    // For radar, normalise each category to its max across scenarios so the
+    // shape reads at a glance (otherwise one giant category dwarfs the rest).
+    return groups.map((g) => {
+      const max = Math.max(...g.values, 1e-9)
+      const point: Record<string, number | string> = { category: g.label }
+      seriesLabels.forEach((name, i) => {
+        point[name] = (g.values[i] / max) * 100
+        point[`${name}__raw`] = g.values[i]
+      })
+      return point
+    })
+  }, [groups, seriesLabels])
+
+  const normalizedData = useMemo(() => {
+    return groups.map((g) => {
+      const max = Math.max(...g.values, 1e-9)
+      const point: Record<string, number | string> = { category: g.label }
+      seriesLabels.forEach((name, i) => {
+        point[name] = (g.values[i] / max) * 100
+        point[`${name}__raw`] = g.values[i]
+      })
+      return point
+    })
+  }, [groups, seriesLabels])
+
+  const logData = useMemo(() => {
+    return groups.map((g) => {
+      const point: Record<string, number | string> = { category: g.label }
+      seriesLabels.forEach((name, i) => {
+        const v = g.values[i]
+        point[name] = v > 0 ? Math.log10(v + 1) : 0
+        point[`${name}__raw`] = v
+      })
+      return point
+    })
+  }, [groups, seriesLabels])
+
+  return (
+    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: 20,
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
+          Impact by category · across scenarios
+          {demo && (
+            <span className="chip" style={{ marginLeft: 8, fontSize: 10 }}>
+              DEMO
+            </span>
+          )}
+        </div>
+        <div style={{ flex: 1 }} />
+        <div
+          style={{
+            display: 'inline-flex',
+            background: 'var(--surface-overlay)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 8,
+            padding: 3,
+            gap: 2,
+          }}
+        >
+          {(
+            [
+              { id: 'absolute', label: 'Absolute' },
+              { id: 'radar', label: 'Radar' },
+              { id: 'log', label: 'Log scale' },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setView(opt.id)}
+              style={{
+                padding: '5px 12px',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontFamily: 'var(--font-ui)',
+                fontSize: 12,
+                fontWeight: view === opt.id ? 600 : 450,
+                background:
+                  view === opt.id ? 'var(--surface-raised)' : 'transparent',
+                color:
+                  view === opt.id
+                    ? 'var(--text-primary)'
+                    : 'var(--text-tertiary)',
+                boxShadow:
+                  view === opt.id
+                    ? '0 1px 2px rgba(15,23,42,0.06)'
+                    : 'none',
+                transition: 'all 160ms ease',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ width: '100%', height: 340 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {view === 'radar' ? (
+            <RadarChart data={radarData} outerRadius="78%">
+              <PolarGrid stroke="var(--border-subtle)" />
+              <PolarAngleAxis
+                dataKey="category"
+                tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+              />
+              <PolarRadiusAxis
+                tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                tickFormatter={(v) => `${v}%`}
+              />
+              {seriesLabels.map((name, i) => (
+                <Radar
+                  key={name}
+                  name={name}
+                  dataKey={name}
+                  stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  fillOpacity={0.22}
+                  strokeWidth={2}
+                />
+              ))}
+              <Legend
+                wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                iconType="circle"
+              />
+              <Tooltip
+                formatter={(_v: any, name: string, props: any) =>
+                  [
+                    fmtNum(props.payload[`${name}__raw`] ?? 0, 3),
+                    name,
+                  ] as any
+                }
+                contentStyle={{
+                  background: '#fff',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+              />
+            </RadarChart>
+          ) : (
+            <BarChart
+              data={
+                view === 'log'
+                  ? logData
+                  : view === 'normalized'
+                    ? normalizedData
+                    : absoluteData
+              }
+              margin={{ top: 24, right: 16, bottom: 8, left: -8 }}
+            >
+              <XAxis
+                dataKey="category"
+                tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                axisLine={false}
+                tickLine={false}
+                scale={view === 'log' ? 'linear' : 'auto'}
+                tickFormatter={(v) =>
+                  view === 'normalized'
+                    ? `${v}%`
+                    : view === 'log'
+                      ? `10^${v.toFixed(1)}`
+                      : fmtNum(v, 2)
+                }
+              />
+              <Tooltip
+                formatter={(_v: any, name: string, props: any) => [
+                  fmtNum(props.payload[`${name}__raw`] ?? 0, 3),
+                  name,
+                ]}
+                contentStyle={{
+                  background: '#fff',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+                iconType="circle"
+              />
+              {seriesLabels.map((name, i) => (
+                <Bar
+                  key={name}
+                  dataKey={name}
+                  fill={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  radius={[4, 4, 0, 0]}
+                  label={
+                    view === 'absolute'
+                      ? {
+                          position: 'top',
+                          fontSize: 10,
+                          fill: 'var(--text-secondary)',
+                          formatter: (v: number) =>
+                            v === 0 ? '' : v < 0.01 ? v.toExponential(1) : fmtNum(v, 2),
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div
+        style={{
+          fontSize: 11,
+          color: 'var(--text-tertiary)',
+          marginTop: 8,
+        }}
+      >
+        {view === 'absolute' &&
+          'Raw impact values per category. A single huge bar means that category dominates — switch to Log scale or Normalised to see smaller ones.'}
+        {view === 'radar' &&
+          'Each axis is normalised to the highest scenario in that category — bigger polygon = larger overall footprint.'}
+        {view === 'normalized' &&
+          'Each category is scaled 0–100% of its own maximum so small-magnitude categories stay visible.'}
+        {view === 'log' &&
+          'Values shown on a log scale (log₁₀ of value + 1) so categories spanning orders of magnitude all fit.'}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Delta chart — diverging bars showing % difference vs baseline per category
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DeltaChartPanel({
+  groups,
+  seriesLabels,
+}: {
+  groups: BarGroup[]
+  seriesLabels: string[]
+}) {
+  const baseIndex = 0
+  const others = seriesLabels.slice(1)
+
+  const data = useMemo(() => {
+    return groups.map((g) => {
+      const base = g.values[baseIndex] || 0
+      const point: Record<string, number | string> = { category: g.label }
+      others.forEach((name, i) => {
+        const v = g.values[i + 1] || 0
+        point[name] = base > 0 ? ((v - base) / base) * 100 : 0
+      })
+      return point
+    })
+  }, [groups, others])
+
+  if (others.length === 0) return null
+
+  return (
+    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          marginBottom: 4,
+        }}
+      >
+        Change vs baseline · per category
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--text-tertiary)',
+          marginBottom: 16,
+        }}
+      >
+        Green = improvement, red = regression vs{' '}
+        <strong>{seriesLabels[baseIndex]}</strong>.
+      </div>
+      <div style={{ width: '100%', height: 280 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 8, right: 24, bottom: 8, left: 24 }}
+          >
+            <XAxis
+              type="number"
+              tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+              tickFormatter={(v) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="category"
+              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+              width={120}
+            />
+            <ReferenceLine x={0} stroke="var(--border-subtle)" />
+            <Tooltip
+              formatter={(v: any) => [`${v > 0 ? '+' : ''}${v.toFixed(1)}%`, '']}
+              contentStyle={{
+                background: '#fff',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+              cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+              iconType="circle"
+            />
+            {others.map((name, i) => (
+              <Bar key={name} dataKey={name} radius={[0, 4, 4, 0]}>
+                {data.map((entry, idx) => {
+                  const v = entry[name] as number
+                  return (
+                    <Cell
+                      key={idx}
+                      fill={v <= 0 ? '#2d6a4f' : '#d98568'}
+                    />
+                  )
+                })}
+              </Bar>
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component breakdown — one stacked horizontal bar per scenario
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ComponentBreakdownPanel({
+  assessmentData,
+  allComponentNames,
+}: {
+  assessmentData: AssessmentData[]
+  allComponentNames: string[]
+}) {
+  const data = useMemo(() => {
+    return assessmentData.map((d) => {
+      const point: Record<string, number | string> = { scenario: d.caseName }
+      allComponentNames.forEach((name) => {
+        const c = d.components.find((cc) => cc.component_name === name)
+        const v = c ? c.impacts.reduce((s, i) => s + i.impact_value, 0) : 0
+        point[name] = v
+      })
+      return point
+    })
+  }, [assessmentData, allComponentNames])
+
+  return (
+    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+        Component contribution · per scenario
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--text-tertiary)',
+          marginBottom: 16,
+        }}
+      >
+        Each bar is a scenario; segments show how much each component
+        contributes to its total impact.
+      </div>
+      <div
+        style={{
+          width: '100%',
+          height: Math.max(140, assessmentData.length * 70 + 60),
+        }}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 8, right: 16, bottom: 8, left: 24 }}
+          >
+            <XAxis
+              type="number"
+              tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              type="category"
+              dataKey="scenario"
+              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+              width={160}
+            />
+            <Tooltip
+              formatter={(v: any, name: string) => [fmtNum(v, 2), name]}
+              contentStyle={{
+                background: '#fff',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+              cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+              iconType="circle"
+            />
+            {allComponentNames.map((name, i) => (
+              <Bar
+                key={name}
+                dataKey={name}
+                stackId="components"
+                fill={COMPONENT_COLORS[i % COMPONENT_COLORS.length]}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   )
 }

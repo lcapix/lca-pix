@@ -73,7 +73,7 @@ export async function GET(
        FROM component c
        JOIN assessment_results ar ON c.component_id = ar.component_id
        JOIN impact_categories ic ON ar.category_id = ic.category_id
-       LEFT JOIN flows f ON c.component_id = f.component_id AND f.is_driver = TRUE
+       LEFT JOIN flows f ON c.component_id = f.component_id
        WHERE ar.run_id = ?
        GROUP BY c.component_id, c.component_name, c.component_type, ar.category_id, ic.category_name, ar.impact_value, ar.unit
        ORDER BY c.hierarchy_level, ic.category_id`,

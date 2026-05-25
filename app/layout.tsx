@@ -6,6 +6,8 @@ import "./lcapix.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { GlobalCommandPalette } from "@/components/global/command-palette"
 import { ShortcutHelp } from "@/components/global/shortcut-help"
+import { RouteProgress } from "@/components/global/route-progress"
+import { ScrollProgress } from "@/components/global/scroll-progress"
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -38,6 +40,8 @@ export default function RootLayout({
     >
       <body className="font-sans antialiased bg-background text-on-surface" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} themes={["light", "dark", "high-contrast"]}>
+          <RouteProgress />
+          <ScrollProgress />
           {children}
           <GlobalCommandPalette />
           <ShortcutHelp />

@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { HIERARCHY_TYPES, type HierarchyNodeType } from '@/lib/lcapix-demo'
+import { pastelFor } from '@/lib/hierarchy-pastels'
 import { ListView } from './list-view'
 import { GraphView } from './graph-view'
 import type { CaseTreeNode, FlatCaseNode } from '@/lib/case-tree-adapter-types'
@@ -19,6 +20,7 @@ export interface TreeCanvasProps {
   selected: string | null
   onSelect: (id: string) => void
   view?: CanvasView
+  highlightQuery?: string
 }
 
 interface NodePos {
@@ -31,12 +33,12 @@ const NODE_H = 72
 const COL_W = NODE_W + 40   // horizontal gap between sibling columns
 const ROW_GAP = 80          // vertical gap between depth rows
 
-export function TreeCanvas({ root, flat, selected, onSelect, view = 'Tree' }: TreeCanvasProps) {
+export function TreeCanvas({ root, flat, selected, onSelect, view = 'Tree', highlightQuery }: TreeCanvasProps) {
   if (view === 'List') return <ListView flat={flat} selected={selected} onSelect={onSelect} />
   if (view === 'Graph') return <GraphView flat={flat} selected={selected} onSelect={onSelect} />
 
   return (
-    <PlaygroundCanvas root={root} selected={selected} onSelect={onSelect} />
+    <PlaygroundCanvas root={root} selected={selected} onSelect={onSelect} highlightQuery={highlightQuery} />
   )
 }
 
@@ -44,6 +46,7 @@ interface PlaygroundProps {
   root: CaseTreeNode
   selected: string | null
   onSelect: (id: string) => void
+  highlightQuery?: string
 }
 
 interface LaidOut {
@@ -53,7 +56,8 @@ interface LaidOut {
   parentId: string | null
 }
 
-function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
+function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: PlaygroundProps) {
+  const normalizedQuery = (highlightQuery ?? '').trim().toLowerCase()
   // 1. Compute initial positions via tidy-ish top-to-bottom tree layout
   const { initialPositions, nodes, parentOf, bounds } = useMemo(() => {
     const nodes: LaidOut[] = []
@@ -335,7 +339,12 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
           const pos = positions[n.id]
           if (!pos) return null
           const active = selected === n.id
-          const col = colorFor(n.node.type)
+          const tone = pastelFor(n.node.type)
+          const isMatch =
+            normalizedQuery.length > 0 &&
+            (n.node.label?.toLowerCase().includes(normalizedQuery) ||
+              n.id.toLowerCase().includes(normalizedQuery))
+          const dimmed = normalizedQuery.length > 0 && !isMatch
           return (
             <div
               key={n.id}
@@ -350,16 +359,19 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
                 top: pos.y,
                 width: NODE_W,
                 height: NODE_H,
-                background: active ? 'var(--surface-overlay)' : 'var(--surface-raised)',
-                border: active
-                  ? `1.5px solid ${col}`
-                  : '1px solid var(--border-subtle)',
+                background: tone.bg,
+                border: isMatch
+                  ? `2px solid #f59e0b`
+                  : `1px solid ${tone.border}`,
                 borderRadius: 10,
-                padding: '10px 14px 10px 18px',
+                padding: '10px 14px',
                 cursor: 'grab',
-                boxShadow: active
-                  ? `0 0 0 4px oklch(from ${col} l c h / 0.18), var(--shadow-md)`
-                  : 'var(--shadow-sm)',
+                opacity: dimmed ? 0.35 : 1,
+                boxShadow: isMatch
+                  ? `0 0 0 4px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(15,23,42,0.10)`
+                  : active
+                  ? `0 0 0 3px ${tone.border}66, 0 4px 12px rgba(15,23,42,0.12)`
+                  : '0 1px 3px rgba(15,23,42,0.08)',
                 transition:
                   dragRef.current?.id === n.id
                     ? 'none'
@@ -368,38 +380,28 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
+                color: tone.text,
               }}
             >
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 3,
-                  background: col,
-                  borderTopLeftRadius: 10,
-                  borderBottomLeftRadius: 10,
-                }}
-              />
               <div
                 className="mono"
                 style={{
                   fontSize: 9,
-                  color: col,
+                  color: tone.text,
+                  opacity: 0.72,
                   textTransform: 'uppercase',
                   letterSpacing: '0.12em',
                   fontWeight: 600,
                   marginBottom: 3,
                 }}
               >
-                {labelFor(n.node.type)}
+                {tone.label}
               </div>
               <div
                 style={{
                   fontSize: 13,
-                  color: 'var(--text-primary)',
-                  fontWeight: 500,
+                  color: tone.text,
+                  fontWeight: 600,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -410,7 +412,7 @@ function PlaygroundCanvas({ root, selected, onSelect }: PlaygroundProps) {
               </div>
               <div
                 className="mono"
-                style={{ fontSize: 10, color: 'var(--text-tertiary)' }}
+                style={{ fontSize: 10, color: tone.text, opacity: 0.72 }}
               >
                 {n.node.flows} flows · ${n.node.cost}
               </div>

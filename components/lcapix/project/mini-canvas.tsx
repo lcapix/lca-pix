@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { HIERARCHY_TYPES, type DemoTreeNode } from '@/lib/lcapix-demo'
+import { pastelFor } from '@/lib/hierarchy-pastels'
 
 export interface MiniCanvasProps {
   tree: DemoTreeNode
@@ -240,12 +241,14 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
           })}
         </svg>
         {positioned.map((p) => {
-          const t = HIERARCHY_TYPES.find((h) => h.id === p.type)
+          const tone = pastelFor(p.type)
           const isHov = hovered === p.id
+          const isSelected = selectedId === p.id
           return (
             <div
               key={p.id}
               data-n
+              className="tree-node-enter"
               onMouseEnter={() => setHovered(p.id)}
               onMouseLeave={() => setHovered(null)}
               onClick={(e) => {
@@ -258,59 +261,44 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
                 top: p.y,
                 width: NODE_W,
                 height: NODE_H,
-                background: 'var(--surface-raised)',
-                border:
-                  selectedId === p.id
-                    ? `1.5px solid ${t?.color}`
-                    : isHov
-                      ? `1.5px solid ${t?.color}`
-                      : '1px solid var(--border-subtle)',
+                background: tone.bg,
+                border: `1px solid ${tone.border}`,
                 borderRadius: 6,
-                boxShadow:
-                  selectedId === p.id
-                    ? `0 0 0 3px oklch(from ${t?.color} l c h / 0.28), var(--shadow-md)`
-                    : isHov
-                      ? `0 0 0 3px oklch(from ${t?.color} l c h / 0.18), var(--shadow-md)`
-                      : 'var(--shadow-sm)',
+                boxShadow: isSelected
+                  ? `0 0 0 3px ${tone.border}55, 0 4px 12px rgba(15,23,42,0.10)`
+                  : isHov
+                    ? `0 0 0 2px ${tone.border}33, 0 3px 10px rgba(15,23,42,0.08)`
+                    : '0 1px 2px rgba(15,23,42,0.06)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
-                padding: '6px 10px 6px 14px',
+                padding: '6px 10px',
                 overflow: 'hidden',
                 cursor: 'pointer',
-                transition: 'box-shadow 140ms, border-color 140ms',
+                transition: 'box-shadow 140ms, transform 140ms',
+                color: tone.text,
+                animationDelay: `${(p.depth ?? 0) * 60 + 30}ms`,
               }}
             >
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 3,
-                  background: t?.color,
-                  borderTopLeftRadius: 6,
-                  borderBottomLeftRadius: 6,
-                }}
-              />
               <div
                 className="mono"
                 style={{
                   fontSize: 8,
                   fontWeight: 600,
-                  color: t?.color,
+                  color: tone.text,
+                  opacity: 0.72,
                   textTransform: 'uppercase',
                   letterSpacing: '0.12em',
                   lineHeight: 1.2,
                 }}
               >
-                {t?.label}
+                {tone.label}
               </div>
               <div
                 style={{
                   fontSize: 11,
-                  fontWeight: 500,
-                  color: 'var(--text-primary)',
+                  fontWeight: 600,
+                  color: tone.text,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',

@@ -31,6 +31,9 @@ import {
   type RunTimelineStatus,
 } from '@/components/lcapix'
 import { DEMO_CONTRIBUTORS, DEMO_FLOWS, DEMO_RUNS } from '@/lib/lcapix-demo'
+import { useNotificationsStore } from '@/lib/notifications-store'
+import { AnimatedNumber } from '@/components/lcapix/animated-number'
+import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
 
 // Impact categories supported (preserved from prior page for unit lookup).
 const IMPACT_CATEGORIES: Record<string, { unit: string }> = {
@@ -79,6 +82,7 @@ export default function ResultsPage() {
 
   // Case data
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
+  const [projectName, setProjectName] = useState<string>('Project')
   const [isLoadingCase, setIsLoadingCase] = useState(true)
 
   // Assessment state (PRESERVED)
@@ -88,6 +92,10 @@ export default function ResultsPage() {
     null,
   )
   const [assessOpen, setAssessOpen] = useState(false)
+  const [magicOpen, setMagicOpen] = useState(false)
+  const [flagshipGlow, setFlagshipGlow] = useState(false)
+  const [magicPulse, setMagicPulse] = useState(false)
+  const pushNotification = useNotificationsStore((s) => s.push)
 
   // LCAPIX UI state
   const [activeCategoryKey, setActiveCategoryKey] = useState<string | null>(null)
@@ -124,6 +132,14 @@ export default function ResultsPage() {
             setCurrentCase(transformedCase)
           }
         }
+        // Also fetch the parent project to populate the breadcrumb correctly
+        try {
+          const projRes = await apiRequest(`/api/projects/${projectId}`)
+          const projData = await projRes.json()
+          if (projData?.success && projData?.project?.project_name) {
+            setProjectName(projData.project.project_name)
+          }
+        } catch {}
       } catch (error) {
         console.error('Failed to fetch case:', error)
       } finally {
@@ -134,7 +150,7 @@ export default function ResultsPage() {
     if (caseId) {
       fetchCaseData()
     }
-  }, [caseId])
+  }, [caseId, projectId])
 
   // Load historical assessments (PRESERVED)
   useEffect(() => {
@@ -230,6 +246,20 @@ export default function ResultsPage() {
       setAssessmentResults((prev) => [result, ...prev])
       setCurrentAssessment(result)
       toast.success(`Assessment completed! Run ID: ${result.run_id}`)
+      pushNotification({
+        kind: 'assessment',
+        status: 'success',
+        actor: 'You',
+        text: `Assessment completed for ${currentCase?.name ?? 'case'} (${result.calculation_method})`,
+        href: `/project/${projectId}/case/${caseId}/results`,
+      })
+      // Flagship moment sequence
+      setFlagshipGlow(true)
+      setTimeout(() => setFlagshipGlow(false), 1100)
+      setTimeout(() => {
+        setMagicPulse(true)
+        setTimeout(() => setMagicPulse(false), 1500)
+      }, 800)
     } catch (error: any) {
       console.error('Failed to process assessment result:', error)
       toast.error(`Failed to process assessment result: ${error.message}`)
@@ -367,9 +397,11 @@ export default function ResultsPage() {
   const realRuns: RunTimelineRun[] = activeCat
     ? assessmentResults
         .filter((r) => typeof r.impacts?.[activeCat.key]?.value === 'number')
-        .map((r) => ({
+        .map((r) => {
+          const d = new Date(r.run_date)
+          return {
           id: r.run_id,
-          timestamp: new Date(r.run_date).toLocaleDateString('en-US', {
+          timestamp: isNaN(d.getTime()) ? 'recent' : d.toLocaleDateString('en-US', {
             month: 'short',
             day: '2-digit',
           }),
@@ -380,7 +412,8 @@ export default function ResultsPage() {
               : r.status === 'partial'
                 ? 'partial'
                 : 'error') as RunTimelineStatus,
-        }))
+          }
+        })
         .reverse()
     : []
 
@@ -402,7 +435,7 @@ export default function ResultsPage() {
     : '—'
   const activeCategoriesCount = impactEntries.length || Object.keys(IMPACT_CATEGORIES).length
   const lastRunLabel = mostRecentAssessment
-    ? new Date(mostRecentAssessment.run_date).toLocaleString()
+    ? (isNaN(new Date(mostRecentAssessment.run_date).getTime()) ? 'Recent' : new Date(mostRecentAssessment.run_date).toLocaleString())
     : 'Never'
 
   const totalImpactDisplay = activeCat
@@ -414,15 +447,27 @@ export default function ResultsPage() {
   // Breadcrumb items — plain const; this sits after two early returns
   // (isLoadingCase / !currentCase) so it cannot be a hook without
   // violating rules-of-hooks.
+  const safeDate = (raw?: string | null): string => {
+    if (!raw) return 'Recent'
+    const d = new Date(raw)
+    if (isNaN(d.getTime())) return 'Recent'
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
+  // Breadcrumb: Projects → <project> → Results · <case>.
+  // We dropped the standalone case-name level (it routed to an editor most
+  // users don't expect from a breadcrumb) and keep the case name on the page
+  // title row instead.
   const breadcrumbItems = [
     { label: 'Projects', page: 'home' },
     {
-      label: currentCase.name || 'Project',
+      label: projectName || 'Project',
       onClick: () => router.push(`/project/${projectId}`),
-    },
-    {
-      label: currentCase.name || 'Case',
-      onClick: () => router.push(`/project/${projectId}/case/${caseId}`),
     },
     { label: 'Results' },
   ]
@@ -479,7 +524,7 @@ export default function ResultsPage() {
                     LATEST RUN
                   </span>
                   Run #{mostRecentAssessment.run_id} ·{' '}
-                  {new Date(mostRecentAssessment.run_date).toLocaleString()}
+                  {safeDate(mostRecentAssessment.run_date)}
                 </>
               ) : (
                 'No assessments yet — run one to see results.'
@@ -575,6 +620,20 @@ export default function ResultsPage() {
 
           <button className="btn btn-secondary btn-sm" onClick={handleExportPDF}>
             <Icon name="download" size={14} /> Export PDF
+          </button>
+          <button
+            type="button"
+            className={`btn btn-secondary btn-sm ${magicPulse ? 'bell-pulse' : ''}`}
+            onClick={() => setMagicPulse(false) || setMagicOpen(true)}
+            style={{
+              background:
+                'linear-gradient(135deg, oklch(from var(--brand-primary) l c h / 0.12), oklch(from var(--chart-2, var(--brand-primary)) l c h / 0.12))',
+              color: 'var(--brand-primary)',
+              borderColor: 'var(--brand-primary)',
+            }}
+            title="AI summary of this assessment"
+          >
+            <Icon name="sparkle" size={14} /> Magic Insights
           </button>
           <button
             className="btn btn-primary btn-sm"
@@ -696,16 +755,25 @@ export default function ResultsPage() {
                 TOTAL · {activeCat?.label.toUpperCase() || '—'}
               </div>
               <div
-                className="mono"
+                className={`mono success-glow-host ${flagshipGlow ? 'is-glowing' : ''}`}
                 style={{
                   fontSize: 56,
                   fontWeight: 600,
                   color: 'var(--brand-primary)',
                   lineHeight: 1,
                   letterSpacing: '-0.02em',
+                  display: 'inline-block',
                 }}
               >
-                {totalImpactDisplay}
+                {activeCat && typeof activeCat.value === 'number' && activeCat.value >= 0.01 ? (
+                  <AnimatedNumber
+                    value={activeCat.value}
+                    decimals={activeCat.value < 1 ? 4 : 2}
+                    duration={900}
+                  />
+                ) : (
+                  totalImpactDisplay
+                )}
               </div>
               <div
                 style={{
@@ -1061,6 +1129,23 @@ export default function ResultsPage() {
         onClose={() => setAssessOpen(false)}
         caseId={Number(caseId)}
         onCompleted={handleAssessmentCompleted}
+      />
+
+      <MagicInsightsModal
+        open={magicOpen}
+        onClose={() => setMagicOpen(false)}
+        caseName={currentCase?.name ?? 'this case'}
+        method={mostRecentAssessment?.calculation_method ?? 'CML 2001'}
+        totalImpact={mostRecentAssessment?.impacts?.['Global warming']?.value}
+        totalCost={mostRecentAssessment?.costs?.total}
+        topContributors={contributors.slice(0, 5).map((c) => ({
+          id: c.id,
+          name: c.name,
+          pct: c.pct,
+          value: c.value,
+        }))}
+        projectId={projectId}
+        caseId={caseId}
       />
     </div>
   )

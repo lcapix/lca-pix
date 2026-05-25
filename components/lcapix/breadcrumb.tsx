@@ -38,15 +38,13 @@ export function Breadcrumb({ items, onNav }: BreadcrumbProps) {
   return (
     <div
       style={{
-        height: 40,
         display: 'flex',
         alignItems: 'center',
-        padding: '0 24px',
+        padding: '14px 32px 6px',
         fontSize: 13,
         color: 'var(--text-tertiary)',
         gap: 6,
-        borderBottom: '1px solid var(--border-subtle)',
-        background: 'var(--surface-base)',
+        background: 'transparent',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
       }}

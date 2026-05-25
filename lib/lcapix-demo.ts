@@ -204,43 +204,32 @@ export interface DemoTreeNode {
 export const DEMO_TREE: DemoTreeNode = {
   id: 'p1',
   type: 'Product',
-  label: 'NMC Battery Pack (60 kWh)',
+  label: 'Painted Metal Box',
   flows: 2,
-  cost: 8420,
+  cost: 1240,
   children: [
     {
       id: 'm1',
       type: 'Machine',
-      label: 'Cell Production Line',
+      label: 'Box Assembly',
       flows: 4,
-      cost: 3240,
+      cost: 720,
       children: [
         {
           id: 's1',
           type: 'Subprocess',
-          label: 'Cathode Coating',
+          label: 'Metal Cutting',
           flows: 3,
-          cost: 980,
+          cost: 220,
           children: [
             {
               id: 'o1',
               type: 'Operation',
-              label: 'Slurry Mixing',
+              label: 'Sheet Metal Stamping',
               flows: 2,
-              cost: 420,
+              cost: 120,
               children: [
-                { id: 't1', type: 'Task', label: 'NMC Powder Handling', flows: 6, cost: 180 },
-                { id: 't2', type: 'Task', label: 'Solvent Dispensing', flows: 4, cost: 90 },
-              ],
-            },
-            {
-              id: 'o2',
-              type: 'Operation',
-              label: 'Drying Oven',
-              flows: 3,
-              cost: 560,
-              children: [
-                { id: 't3', type: 'Task', label: 'Thermal Treatment', flows: 5, cost: 320 },
+                { id: 't1', type: 'Task', label: 'Cutting Electricity', flows: 6, cost: 90 },
               ],
             },
           ],
@@ -248,18 +237,18 @@ export const DEMO_TREE: DemoTreeNode = {
         {
           id: 's2',
           type: 'Subprocess',
-          label: 'Anode Coating',
+          label: 'Welding',
           flows: 2,
-          cost: 820,
+          cost: 240,
           children: [
             {
-              id: 'o3',
+              id: 'o2',
               type: 'Operation',
-              label: 'Graphite Deposition',
+              label: 'Seam Welding',
               flows: 4,
-              cost: 410,
+              cost: 160,
               children: [
-                { id: 't4', type: 'Task', label: 'Copper Foil Prep', flows: 3, cost: 210 },
+                { id: 't2', type: 'Task', label: 'Welding Energy & Materials', flows: 3, cost: 110 },
               ],
             },
           ],
@@ -269,41 +258,29 @@ export const DEMO_TREE: DemoTreeNode = {
     {
       id: 'm2',
       type: 'Machine',
-      label: 'Module Assembly',
+      label: 'Spray Painting',
       flows: 3,
-      cost: 2180,
+      cost: 520,
       children: [
         {
           id: 's3',
           type: 'Subprocess',
-          label: 'Cell Stacking',
+          label: 'Surface Preparation & Coating',
           flows: 2,
-          cost: 720,
+          cost: 360,
           children: [
             {
-              id: 'o4',
+              id: 'o3',
               type: 'Operation',
-              label: 'Automated Pick-Place',
+              label: 'Paint Application',
               flows: 3,
-              cost: 380,
+              cost: 240,
               children: [
-                { id: 't5', type: 'Task', label: 'Robotic Welding', flows: 7, cost: 240 },
+                { id: 't3', type: 'Task', label: 'Spray Painting Task', flows: 5, cost: 180 },
               ],
             },
           ],
         },
-        { id: 's4', type: 'Subprocess', label: 'Busbar Welding', flows: 3, cost: 560 },
-      ],
-    },
-    {
-      id: 'm3',
-      type: 'Machine',
-      label: 'Pack Integration',
-      flows: 3,
-      cost: 1480,
-      children: [
-        { id: 's5', type: 'Subprocess', label: 'Thermal Management Install', flows: 2, cost: 640 },
-        { id: 's6', type: 'Subprocess', label: 'BMS Integration', flows: 2, cost: 420 },
       ],
     },
   ],
@@ -318,11 +295,11 @@ export interface DemoContributor {
 }
 
 export const DEMO_CONTRIBUTORS: readonly DemoContributor[] = [
-  { id: 'c1', name: 'Cathode Material (NMC)', value: 48.2, pct: 38.0, cost: 4200 },
-  { id: 'c2', name: 'Electricity (Cell Production)', value: 32.7, pct: 25.8, cost: 1800 },
-  { id: 'c3', name: 'Aluminum Housing', value: 18.4, pct: 14.5, cost: 1240 },
-  { id: 'c4', name: 'Graphite Anode', value: 14.9, pct: 11.7, cost: 680 },
-  { id: 'c5', name: 'Electrolyte (LiPF6)', value: 12.6, pct: 9.9, cost: 500 },
+  { id: 'c1', name: 'Steel Sheet (1.2mm)', value: 1.82, pct: 42.0, cost: 420 },
+  { id: 'c2', name: 'Cutting Electricity', value: 0.92, pct: 21.2, cost: 180 },
+  { id: 'c3', name: 'Spray Paint (solvent-based)', value: 0.71, pct: 16.4, cost: 240 },
+  { id: 'c4', name: 'Welding Energy', value: 0.48, pct: 11.1, cost: 160 },
+  { id: 'c5', name: 'Assembly Labor', value: 0.41, pct: 9.3, cost: 240 },
 ]
 
 export interface DemoCategory {
@@ -337,7 +314,7 @@ export const DEMO_CATEGORIES: readonly DemoCategory[] = [
   { id: 'ap', name: 'Acidification', unit: 'kg SO₂-eq', value: 0.58 },
   { id: 'ep', name: 'Eutrophication', unit: 'kg PO₄-eq', value: 0.14 },
   { id: 'odp', name: 'Ozone Depletion', unit: 'kg CFC11-eq', value: 0.0000042 },
-  { id: 'pocp', name: 'Photochemical Oxid.', unit: 'kg C₂H₄-eq', value: 0.042 },
+  { id: 'pocp', name: 'Photochemical Oxidation', unit: 'kg C₂H₄-eq', value: 0.042 },
   { id: 'adp', name: 'Abiotic Depletion', unit: 'kg Sb-eq', value: 0.0018 },
 ]
 
@@ -418,6 +395,7 @@ export const DEMO_INTEGRATIONS: readonly DemoIntegration[] = [
   { id: 'bls', name: 'BLS', status: 'warn', lastRun: '1d ago', records: 238, keyRequired: true, description: 'Labor occupation codes' },
   { id: 'eia', name: 'EIA', status: 'success', lastRun: '6h ago', records: 94, keyRequired: true, description: 'Energy price data' },
   { id: 'metals', name: 'Metals-API', status: 'error', lastRun: '3d ago', records: 0, keyRequired: true, description: 'Commodity pricing' },
+  { id: 'matprice', name: 'Materials Pricing (openLCA)', status: 'success', lastRun: '8h ago', records: 1287, keyRequired: false, description: 'Raw material unit costs from openLCA' },
 ]
 
 export type ActivityStatus = 'success' | 'info' | 'warn' | 'error'

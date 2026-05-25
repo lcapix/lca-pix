@@ -12,6 +12,8 @@ import {
   fmtInt,
 } from '@/components/lcapix'
 import { DEMO_ACTIVITY } from '@/lib/lcapix-demo'
+import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-store'
+import { KpiTile } from '@/components/lcapix/kpi-tile'
 import { useAuthStore, useProjectStore } from '@/lib/store'
 import { useToast } from '@/hooks/use-toast'
 import { apiRequest } from '@/lib/api-client'
@@ -211,29 +213,34 @@ export default function HomePage() {
   const kpis = [
     {
       label: 'PROJECTS',
-      value: fmtInt(coerced.length),
-      trend:
-        coerced.length > 0 ? `${coerced.length} total` : 'None yet',
+      numeric: coerced.length,
+      trend: coerced.length > 0 ? `${coerced.length} total` : 'None yet',
       trendGood: coerced.length > 0,
       spark: [1, 1, 2, 2, 3, coerced.length || 1, coerced.length || 1],
+      icon: 'box' as const,
+      accent: '#006a44',
     },
     {
       label: 'ASSESSMENTS',
-      value: fmtInt(totalCases),
+      numeric: totalCases,
       trend: 'across all cases',
       trendGood: null as boolean | null,
       spark: [0, 1, 2, 3, 4, 5, totalCases || 0],
+      icon: 'activity' as const,
+      accent: '#7bb5e8',
     },
     {
       label: 'FACTORS',
-      value: fmtInt(kpiData.factors),
-      trend: kpiData.factors > 0 ? '→ synced' : 'awaiting sync',
-      trendGood: null as boolean | null,
+      numeric: kpiData.factors,
+      trend: kpiData.factors > 0 ? 'Synced' : 'Awaiting sync',
+      trendGood: kpiData.factors > 0,
       spark: [5100, 5140, 5180, 5200, 5210, 5224, kpiData.factors || 5234],
+      icon: 'database' as const,
+      accent: '#9f88cc',
     },
     {
       label: 'COMPONENTS',
-      value: fmtInt(totalComponents || kpiData.components),
+      numeric: totalComponents || kpiData.components,
       trend: 'across portfolio',
       trendGood: null as boolean | null,
       spark: [
@@ -245,6 +252,8 @@ export default function HomePage() {
         Math.max(0, totalComponents - 1),
         totalComponents || kpiData.components || 0,
       ],
+      icon: 'layers' as const,
+      accent: '#d98568',
     },
   ]
 
@@ -289,14 +298,7 @@ export default function HomePage() {
               </div>
               <div style={{ flex: 1 }} />
               <button
-                className="btn btn-secondary btn-sm"
-                onClick={handleImport}
-              >
-                <Icon name="download" size={14} /> Import
-              </button>
-              <button
                 className="btn btn-primary"
-                style={{ marginLeft: 8 }}
                 onClick={handleNewProject}
               >
                 <Icon name="plus" size={14} /> New Project
@@ -308,55 +310,22 @@ export default function HomePage() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 16,
+                gap: 20,
                 marginBottom: 32,
               }}
             >
-              {kpis.map((k) => (
-                <div key={k.label} className="card" style={{ padding: 20 }}>
-                  <div className="eyebrow" style={{ marginBottom: 10 }}>
-                    {k.label}
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-end',
-                      justifyContent: 'space-between',
-                    }}
-                  >
-                    <div>
-                      <div
-                        className="mono"
-                        style={{
-                          fontSize: 32,
-                          fontWeight: 600,
-                          color: 'var(--text-primary)',
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
-                        {k.value}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color:
-                            k.trendGood === true
-                              ? 'var(--signal-success)'
-                              : 'var(--text-tertiary)',
-                          marginTop: 4,
-                        }}
-                      >
-                        {k.trend}
-                      </div>
-                    </div>
-                    <Sparkline
-                      data={k.spark}
-                      color="var(--brand-primary)"
-                      width={72}
-                      height={28}
-                    />
-                  </div>
-                </div>
+              {kpis.map((k, i) => (
+                <KpiTile
+                  key={k.label}
+                  label={k.label}
+                  value={k.numeric}
+                  trend={k.trend}
+                  trendGood={k.trendGood}
+                  spark={k.spark}
+                  icon={k.icon}
+                  accent={k.accent}
+                  delayMs={i * 90}
+                />
               ))}
             </div>
 
@@ -493,7 +462,34 @@ export default function HomePage() {
             </div>
 
             {/* Projects content */}
-            {coerced.length === 0 && !isLoadingProjects ? (
+            {isLoadingProjects ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 16,
+                }}
+              >
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="card"
+                    style={{ padding: 20, height: 196 }}
+                  >
+                    <div className="skeleton" style={{ height: 18, width: '60%', marginBottom: 10 }} />
+                    <div className="skeleton" style={{ height: 12, width: '40%', marginBottom: 14 }} />
+                    <div className="skeleton" style={{ height: 10, width: '100%', marginBottom: 6 }} />
+                    <div className="skeleton" style={{ height: 10, width: '92%', marginBottom: 6 }} />
+                    <div className="skeleton" style={{ height: 10, width: '75%', marginBottom: 18 }} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <div className="skeleton" style={{ height: 14, width: 60 }} />
+                      <div className="skeleton" style={{ height: 14, width: 60 }} />
+                      <div className="skeleton" style={{ height: 14, width: 80 }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : coerced.length === 0 ? (
               <div
                 className="card"
                 style={{
@@ -766,48 +762,63 @@ export default function HomePage() {
                 gap: 14,
               }}
             >
-              {DEMO_ACTIVITY.slice(0, 7).map((a, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    gap: 10,
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <div style={{ marginTop: 5 }}>
-                    <StatusDot status={a.status} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        color: 'var(--text-primary)',
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      <span style={{ fontWeight: 500 }}>{a.actor}</span>{' '}
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {a.action}
-                      </span>
-                    </div>
-                    <div
-                      className="mono"
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--text-tertiary)',
-                        marginTop: 2,
-                      }}
-                    >
-                      {a.t}
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <RecentActivityFeed />
             </div>
           </aside>
         </div>
       </div>
     </AuthGuard>
+  )
+}
+
+function RecentActivityFeed() {
+  const items = useNotificationsStore((s) => s.items)
+  const list = items.length > 0 ? items.slice(0, 7) : []
+  if (list.length === 0) {
+    return (
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+        No activity yet.
+      </div>
+    )
+  }
+  return (
+    <>
+      {list.map((n) => (
+        <div
+          key={n.id}
+          style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'flex-start',
+          }}
+        >
+          <div style={{ marginTop: 5 }}>
+            <StatusDot status={n.status} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                lineHeight: 1.45,
+              }}
+            >
+              <span style={{ fontWeight: 500 }}>{n.actor}</span>{' '}
+              <span style={{ color: 'var(--text-secondary)' }}>{n.text}</span>
+            </div>
+            <div
+              className="mono"
+              style={{
+                fontSize: 11,
+                color: 'var(--text-tertiary)',
+                marginTop: 2,
+              }}
+            >
+              {formatRelativeTime(n.ts)}
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   )
 }

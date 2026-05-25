@@ -18,7 +18,11 @@ export async function GET(
     }
 
     const cases = await query(
-      `SELECT c.*
+      `SELECT c.*,
+              (SELECT COUNT(*) FROM component cm WHERE cm.case_id = c.case_id) AS component_count,
+              (SELECT COALESCE(SUM(JSON_LENGTH(cm.drivers)), 0)
+                 FROM component cm
+                WHERE cm.case_id = c.case_id AND cm.drivers IS NOT NULL) AS driver_count
        FROM case_table c
        WHERE c.project_id = ?
        ORDER BY c.created_at DESC`,

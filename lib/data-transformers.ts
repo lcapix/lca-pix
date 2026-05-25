@@ -32,11 +32,15 @@ export function transformCaseFromDB(dbCase: any): Case {
     projectId: String(dbCase.project_id),
     type: dbCase.case_type as 'base' | 'comparative',
     name: dbCase.case_name,
-    description: dbCase.case_description || dbCase.description || '',
+    // Prefer `description` (the column PUT /api/cases writes to); fall back
+    // to the legacy `case_description` column only if `description` is blank.
+    description: dbCase.description || dbCase.case_description || '',
     createdAt: new Date(dbCase.created_at),
     updatedAt: new Date(dbCase.updated_at),
     components: [], // Components loaded separately
-  };
+    componentCount: dbCase.component_count != null ? Number(dbCase.component_count) : undefined,
+    driverCount: dbCase.driver_count != null ? Number(dbCase.driver_count) : undefined,
+  } as Case;
 }
 
 /**

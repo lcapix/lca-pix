@@ -24,13 +24,13 @@ export async function GET(request: NextRequest) {
       params.push(parseInt(categoryId));
     }
 
-    const substanceId = searchParams.get('substance_id');
-    if (substanceId) {
-      sql += ` AND dif.substance_id = ?`;
-      params.push(parseInt(substanceId));
+    const driverName = searchParams.get('driver_name') || searchParams.get('substance_id');
+    if (driverName) {
+      sql += ` AND dif.driver_name = ?`;
+      params.push(driverName);
     }
 
-    sql += ` ORDER BY dif.substance_id, ic.category_name`;
+    sql += ` ORDER BY dif.driver_name, ic.category_name`;
 
     const factors = await query(sql, params);
 

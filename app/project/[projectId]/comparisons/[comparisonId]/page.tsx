@@ -90,6 +90,21 @@ export default function ComparisonResultsPage() {
 
   const [comparison, setComparison] = useState<ComparisonData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [projectName, setProjectName] = useState<string>('')
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/projects/${projectId}`)
+        const d = await r.json()
+        if (!cancelled && d?.success)
+          setProjectName(d.project?.project_name ?? '')
+      } catch {}
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
   const [isDeleting, setIsDeleting] = useState(false)
   const [baseCaseComponents, setBaseCaseComponents] = useState<Component[]>([])
   const [comparativeCaseComponents, setComparativeCaseComponents] = useState<
@@ -228,7 +243,7 @@ export default function ComparisonResultsPage() {
           items={[
             { label: 'Projects', page: 'home' },
             {
-              label: 'Project',
+              label: projectName || 'Project',
               onClick: () => router.push(`/project/${projectId}`),
             },
             { label: 'Comparison' },
@@ -263,7 +278,7 @@ export default function ComparisonResultsPage() {
           items={[
             { label: 'Projects', page: 'home' },
             {
-              label: 'Project',
+              label: projectName || 'Project',
               onClick: () => router.push(`/project/${projectId}`),
             },
             { label: 'Comparison' },
