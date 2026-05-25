@@ -141,6 +141,7 @@ html, body {
   background: var(--surface-base);
   color: var(--text-primary);
   min-height: 100%;
+  overflow-x: hidden;
 }
 
 /* ——— Typography ——— */

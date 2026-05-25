@@ -103,11 +103,18 @@ export default function PricingPage() {
     <div className="app-shell page-pricing" style={{ minHeight: '100%' }}>
       <MarketingNav />
 
-      <section style={{ padding: '96px 64px 32px', textAlign: 'center' }}>
+      <section style={{ padding: '96px 24px 32px', textAlign: 'center' }}>
         <div className="eyebrow" style={{ marginBottom: 14 }}>
           Pricing
         </div>
-        <h1 className="display display-lg" style={{ margin: 0, color: 'var(--text-primary)' }}>
+        <h1
+          className="display display-lg"
+          style={{
+            margin: '0 auto',
+            color: 'var(--text-primary)',
+            maxWidth: 860,
+          }}
+        >
           Free to model. Pay when you need live data.
         </h1>
         <p
@@ -197,7 +204,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section style={{ padding: '24px 64px 60px' }}>
+      <section style={{ padding: '24px 24px 60px' }}>
         <div
           style={{
             maxWidth: 1200,
@@ -310,7 +317,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section style={{ padding: '60px 64px 120px' }}>
+      <section style={{ padding: '60px 24px 120px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
           <div className="eyebrow" style={{ marginBottom: 14 }}>
             Compare plans
