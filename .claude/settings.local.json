@@ -149,7 +149,9 @@
       "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_3w3uC8/**)",
       "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_tPsgPk/**)",
       "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_iCMJS2/**)",
-      "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_9iBq8v/**)"
+      "Read(//var/folders/cc/820ld_053qb1tyk09yyb39br0000gn/T/TemporaryItems/NSIRD_screencaptureui_9iBq8v/**)",
+      "Bash(ls -la .vercel)",
+      "Bash(vercel --version)"
     ],
     "deny": [],
     "ask": []

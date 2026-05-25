@@ -1,71 +1,84 @@
 'use client'
 
 // HeroMockup — stylized product screenshot for the landing hero.
-// Now cycles through CML / ReCiPe / TRACI methodologies every 4s.
+// Mirrors the in-app DashboardHero (TOTAL IMPACT card on the case results
+// page): tinted right "IMPACT CATEGORIES" panel with selectable tiles, big
+// 56px brand-tinted number with a delta pill, KPI strip, and contribution
+// bars. An animated cursor walks the dashboard, switching methods and
+// clicking different categories so the big number morphs in real time.
 
 import { useEffect, useRef, useState } from 'react'
-import { Icon, fmtNum } from '@/components/lcapix'
+import { fmtNum } from '@/components/lcapix'
 import { DEMO_CONTRIBUTORS, DEMO_CATEGORIES } from '@/lib/lcapix-demo'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
-import { HeroTour, type TourStep } from './hero-tour'
-
-const TOUR_STEPS: TourStep[] = [
-  {
-    selector: '[data-tour="method-pill"]',
-    label: 'Methodology in use — cycles between CML, ReCiPe, and TRACI so you can compare.',
-    placement: 'bottom',
-  },
-  {
-    selector: '[data-tour="total"]',
-    label: 'Total impact for the selected method. Number morphs as you switch.',
-    placement: 'right',
-  },
-  {
-    selector: '[data-tour="delta"]',
-    label: 'Δ vs your previous assessment run — green if down, amber if up.',
-    placement: 'left',
-  },
-  {
-    selector: '[data-tour="contributor"]',
-    label: 'Top contributors with proportional bars — the longest is your biggest lever.',
-    placement: 'right',
-  },
-  {
-    selector: '[data-tour="category"]',
-    label: 'Per-category impact tiles — same run, six environmental scores.',
-    placement: 'left',
-  },
-]
+import { CursorTour, type CursorStep } from './cursor-tour'
 
 interface MethodVariant {
   id: 'cml' | 'recipe' | 'traci'
   label: string
-  total: number
   factor: number
   delta: number
 }
 
 const METHODS: MethodVariant[] = [
-  { id: 'cml', label: 'CML 2001 v4', total: 126.82, factor: 1.0, delta: -2.1 },
-  { id: 'recipe', label: 'ReCiPe Midpoint (H)', total: 142.6, factor: 1.124, delta: 1.4 },
-  { id: 'traci', label: 'TRACI 2.1', total: 122.1, factor: 0.963, delta: -3.8 },
+  { id: 'cml', label: 'CML 2001 v4', factor: 1.0, delta: -2.1 },
+  { id: 'recipe', label: 'ReCiPe Midpoint (H)', factor: 1.124, delta: 1.4 },
+  { id: 'traci', label: 'TRACI 2.1', factor: 0.963, delta: -3.8 },
 ]
 
-function prefersReducedMotion(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+// Pick a sensible default ordering for the category panel.
+const VISIBLE_CATEGORIES = DEMO_CATEGORIES.slice(0, 5)
+
+function formatCatVal(v: number): string {
+  if (!isFinite(v)) return '—'
+  if (v < 0.001 && v > 0) return v.toExponential(2)
+  if (v < 1) return v.toFixed(4)
+  if (v < 100) return v.toFixed(2)
+  return v.toFixed(0)
 }
 
 export function HeroMockup() {
-  const [idx, setIdx] = useState(0)
-  const method = METHODS[idx]
+  const [methodIdx, setMethodIdx] = useState(0)
+  const [activeCatIdx, setActiveCatIdx] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (prefersReducedMotion()) return
-    const t = setInterval(() => setIdx((i) => (i + 1) % METHODS.length), 4200)
-    return () => clearInterval(t)
-  }, [])
+  const method = METHODS[methodIdx]
+  const activeCat = VISIBLE_CATEGORIES[activeCatIdx]
+  const activeValue = activeCat.value * method.factor
+
+  // Cursor tour — visits categories, then the method pill, in a loop. Each
+  // "click" mutates state so the dashboard morphs as the cursor lands.
+  const tourSteps: CursorStep[] = [
+    {
+      selector: '[data-tour="cat-1"]',
+      label: 'Click a category — the big number and delta recompute.',
+      onClick: () => setActiveCatIdx(1),
+      holdMs: 3000,
+    },
+    {
+      selector: '[data-tour="cat-2"]',
+      label: 'Each tile shows its category-specific impact + unit.',
+      onClick: () => setActiveCatIdx(2),
+      holdMs: 3000,
+    },
+    {
+      selector: '[data-tour="method-pill"]',
+      label: 'Switch methodology — same inputs, different framework.',
+      onClick: () => setMethodIdx((i) => (i + 1) % METHODS.length),
+      holdMs: 3200,
+    },
+    {
+      selector: '[data-tour="cat-0"]',
+      label: 'Back to Global Warming — the headline number teams report.',
+      onClick: () => setActiveCatIdx(0),
+      holdMs: 3000,
+    },
+    {
+      selector: '[data-tour="contributor-0"]',
+      label: 'Top contributors — your biggest lever for cutting impact.',
+      holdMs: 3000,
+    },
+  ]
 
   return (
     <div
@@ -98,19 +111,19 @@ export function HeroMockup() {
           lcapix.io / project / ev-mfg / baseline-2025 / results
         </div>
         <div style={{ flex: 1 }} />
-        {/* Method indicator pills */}
+        {/* Method indicator pills (clickable + driven by cursor) */}
         <div style={{ display: 'flex', gap: 4 }}>
           {METHODS.map((m, i) => (
             <button
               key={m.id}
               type="button"
               aria-label={`Switch to ${m.label}`}
-              onClick={() => setIdx(i)}
+              onClick={() => setMethodIdx(i)}
               style={{
-                width: idx === i ? 18 : 6,
+                width: methodIdx === i ? 18 : 6,
                 height: 6,
                 borderRadius: 999,
-                background: idx === i ? 'var(--brand-primary)' : 'var(--border-subtle)',
+                background: methodIdx === i ? 'var(--brand-primary)' : 'var(--border-subtle)',
                 border: 'none',
                 cursor: 'pointer',
                 transition: 'width 320ms cubic-bezier(0.2, 0.8, 0.2, 1), background 320ms',
@@ -120,165 +133,283 @@ export function HeroMockup() {
           ))}
         </div>
       </div>
+
+      {/* Dashboard hero — mirrors the in-app card layout */}
       <div
         style={{
-          padding: 24,
           display: 'grid',
-          gridTemplateColumns: '1.2fr 1fr',
-          gap: 24,
+          gridTemplateColumns: 'minmax(0, 1.7fr) minmax(0, 1fr)',
           minHeight: 480,
         }}
       >
-        {/* Left: chart */}
-        <div>
+        {/* LEFT — total impact + delta + contribution bars */}
+        <div style={{ padding: '28px 28px 24px' }}>
           <div
-            className="eyebrow"
-            style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 10,
+              marginBottom: 10,
+            }}
           >
-            TOTAL IMPACT · GLOBAL WARMING
             <span
-              key={`pill-${method.id}`}
+              className="eyebrow"
+              style={{
+                fontSize: 11,
+                letterSpacing: '0.14em',
+                color: 'var(--brand-primary)',
+              }}
+            >
+              TOTAL IMPACT · {activeCat.name.toUpperCase()}
+            </span>
+            <span style={{ flex: 1 }} />
+            <span
               data-tour="method-pill"
+              key={`pill-${method.id}`}
               className="mono fade-slide-up"
               style={{
-                fontSize: 9.5,
-                padding: '2px 8px',
+                fontSize: 10,
+                padding: '3px 8px',
                 borderRadius: 999,
-                background: 'oklch(from var(--brand-primary) l c h / 0.10)',
-                color: 'var(--brand-primary)',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                marginLeft: 'auto',
+                background: 'var(--surface-overlay)',
+                color: 'var(--text-tertiary)',
+                letterSpacing: '0.04em',
               }}
             >
               {method.label}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 24 }}>
-            <span data-tour="total" style={{ display: 'inline-flex', alignItems: 'baseline' }}>
-              <AnimatedNumber
-                value={method.total}
-                decimals={2}
-                duration={700}
-                className="mono"
-                style={{
-                  fontSize: 48,
-                  fontWeight: 600,
-                  color: 'var(--brand-primary)',
-                  letterSpacing: '-0.02em',
-                }}
-              />
-            </span>
-            <div style={{ color: 'var(--text-tertiary)', fontSize: 14 }}>kg CO₂-eq</div>
-            <div
-              key={`delta-${method.id}`}
-              data-tour="delta"
-              className="fade-slide-up"
+
+          <div
+            data-tour="total"
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 14,
+              flexWrap: 'wrap',
+            }}
+          >
+            <AnimatedNumber
+              value={activeValue}
+              decimals={activeValue < 1 ? 4 : 2}
+              duration={700}
+              className="mono"
               style={{
-                marginLeft: 'auto',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
+                fontSize: 56,
+                fontWeight: 600,
+                color: 'var(--brand-primary)',
+                lineHeight: 1,
+                letterSpacing: '-0.02em',
+              }}
+            />
+            <div style={{ fontSize: 14, color: 'var(--text-tertiary)' }}>
+              {activeCat.unit}
+            </div>
+            <span
+              key={`delta-${method.id}-${activeCat.id}`}
+              className="mono fade-slide-up"
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: '4px 10px',
+                borderRadius: 999,
                 color:
-                  method.delta < 0 ? 'var(--signal-success, #16a34a)' : 'var(--signal-warn, #f59e0b)',
-                fontSize: 13,
+                  method.delta <= 0
+                    ? 'var(--signal-success, #16a34a)'
+                    : '#b45309',
+                background:
+                  method.delta <= 0
+                    ? 'color-mix(in oklab, var(--signal-success, #16a34a) 14%, transparent)'
+                    : 'color-mix(in oklab, #d98568 18%, transparent)',
               }}
             >
-              <Icon name={method.delta < 0 ? 'arrow-down' : 'arrow-up'} size={14} />
-              <span className="mono">
-                {method.delta > 0 ? '+' : ''}
-                {method.delta.toFixed(1)}%
-              </span>
-              <span style={{ color: 'var(--text-tertiary)' }}>vs last run</span>
-            </div>
+              {method.delta <= 0 ? '↓' : '↑'} {Math.abs(method.delta).toFixed(1)}% vs last run
+            </span>
           </div>
-          {/* Bar chart */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+          {/* Small KPI row */}
+          <div
+            style={{
+              marginTop: 14,
+              display: 'flex',
+              gap: 18,
+              fontSize: 11.5,
+              color: 'var(--text-tertiary)',
+            }}
+          >
+            <span>
+              <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                {VISIBLE_CATEGORIES.length}
+              </span>{' '}
+              categories
+            </span>
+            <span>·</span>
+            <span>
+              <span className="mono" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                12
+              </span>{' '}
+              components
+            </span>
+            <span>·</span>
+            <span>
+              last run <span className="mono">2h ago</span>
+            </span>
+          </div>
+
+          {/* Contribution bars */}
+          <div
+            style={{
+              marginTop: 26,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+            }}
+          >
             {DEMO_CONTRIBUTORS.map((c, i) => {
-              const scaledPct = Math.min(100, c.pct * 2.1 * method.factor)
+              const widthPct = Math.min(100, c.pct * 2.1 * method.factor)
               return (
                 <div
                   key={c.id}
-                  data-tour={i === 0 ? 'contributor' : undefined}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+                  data-tour={`contributor-${i}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(140px, 180px) 1fr 60px',
+                    alignItems: 'center',
+                    gap: 14,
+                  }}
                 >
                   <div
                     style={{
-                      width: 140,
-                      fontSize: 12,
+                      fontSize: 13,
                       color: 'var(--text-secondary)',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                     }}
+                    title={c.name}
                   >
                     {c.name}
                   </div>
                   <div
                     style={{
-                      flex: 1,
-                      height: 20,
+                      height: 22,
+                      borderRadius: 6,
                       background: 'var(--surface-overlay)',
-                      borderRadius: 3,
                       overflow: 'hidden',
                       position: 'relative',
                     }}
                   >
                     <div
                       style={{
-                        width: `${scaledPct}%`,
+                        width: `${widthPct}%`,
                         height: '100%',
-                        background: 'var(--brand-primary)',
-                        opacity: 1 - i * 0.12,
+                        background: `color-mix(in oklab, var(--brand-primary) ${
+                          100 - i * 14
+                        }%, var(--surface-raised))`,
                         transition: 'width 700ms cubic-bezier(0.2, 0.8, 0.2, 1)',
                       }}
                     />
                   </div>
                   <div
                     className="mono"
-                    style={{ width: 56, fontSize: 12, color: 'var(--text-primary)', textAlign: 'right' }}
+                    style={{
+                      fontSize: 13,
+                      textAlign: 'right',
+                      color: 'var(--text-primary)',
+                      fontWeight: 500,
+                    }}
                   >
-                    {fmtNum(c.value * method.factor, 1)}
+                    {fmtNum(c.value * method.factor, c.value < 1 ? 2 : 1)}
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
-        {/* Right: category tiles */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="eyebrow">IMPACT CATEGORIES</div>
-          {DEMO_CATEGORIES.slice(0, 5).map((cat, i) => {
+
+        {/* RIGHT — categories list (tinted panel, mirrors in-app dashboard) */}
+        <div
+          style={{
+            padding: '28px 24px 24px',
+            borderLeft: '1px solid var(--border-subtle)',
+            background: 'color-mix(in oklab, var(--brand-primary) 2%, var(--surface-raised))',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          <div
+            className="eyebrow"
+            style={{
+              fontSize: 11,
+              letterSpacing: '0.14em',
+              color: 'var(--brand-primary)',
+              marginBottom: 4,
+            }}
+          >
+            IMPACT CATEGORIES
+          </div>
+          {VISIBLE_CATEGORIES.map((cat, i) => {
             const val = cat.value * method.factor
+            const isActive = i === activeCatIdx
             return (
-              <div
+              <button
                 key={cat.id}
-                data-tour={i === 0 ? 'category' : undefined}
+                type="button"
+                data-tour={`cat-${i}`}
+                onClick={() => setActiveCatIdx(i)}
                 style={{
-                  padding: 12,
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 6,
-                  background: 'var(--surface-raised)',
-                  transition: 'background 400ms',
+                  textAlign: 'left',
+                  padding: '12px 14px',
+                  borderRadius: 8,
+                  border:
+                    '1px solid ' +
+                    (isActive
+                      ? 'color-mix(in oklab, var(--brand-primary) 45%, transparent)'
+                      : 'var(--border-subtle)'),
+                  background: isActive
+                    ? 'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))'
+                    : 'var(--surface-raised)',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-ui)',
+                  transition:
+                    'background 200ms ease, border-color 200ms ease, transform 200ms ease',
                 }}
               >
-                <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>{cat.name}</div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: isActive ? 600 : 500,
+                    color: 'var(--text-primary)',
+                    marginBottom: 4,
+                  }}
+                >
+                  {cat.name}
+                </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span
                     key={`${cat.id}-${method.id}`}
                     className="mono fade-slide-up"
-                    style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)' }}
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      color: isActive ? 'var(--brand-primary)' : 'var(--text-primary)',
+                      letterSpacing: '-0.01em',
+                    }}
                   >
-                    {val < 0.01 ? val.toExponential(2) : fmtNum(val, val < 1 ? 4 : 2)}
+                    {formatCatVal(val)}
                   </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{cat.unit}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                    {cat.unit}
+                  </span>
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
       </div>
-      <HeroTour containerRef={containerRef} steps={TOUR_STEPS} intervalMs={3400} />
+
+      <CursorTour containerRef={containerRef} steps={tourSteps} />
     </div>
   )
 }
