@@ -31,7 +31,7 @@ export async function GET(
 
     // Get project members
     const members = await query(
-      `SELECT pm.id as member_id, pm.user_id, pm.added_at,
+      `SELECT pm.member_id as member_id, pm.user_id, pm.added_at,
               a.username, a.email,
               perm.permission_name
        FROM project_members pm

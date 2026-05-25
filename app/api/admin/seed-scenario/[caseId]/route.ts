@@ -130,14 +130,14 @@ export async function POST(
     const latestRun = await queryOne<any>(
       `SELECT run_id FROM assessment_runs
         WHERE case_id = ? AND status = 'completed'
-        ORDER BY run_at DESC LIMIT 1`,
+        ORDER BY run_date DESC LIMIT 1`,
       [caseId],
     );
     const baseRun = baseCase
       ? await queryOne<any>(
           `SELECT run_id FROM assessment_runs
             WHERE case_id = ? AND status = 'completed'
-            ORDER BY run_at DESC LIMIT 1`,
+            ORDER BY run_date DESC LIMIT 1`,
           [baseCase.case_id],
         )
       : null;

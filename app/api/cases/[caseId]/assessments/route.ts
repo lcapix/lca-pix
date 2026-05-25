@@ -32,7 +32,7 @@ export async function GET(
        FROM assessment_runs ar
        LEFT JOIN account a ON ar.executed_by = a.id
        WHERE ar.case_id = ?
-       ORDER BY ar.run_at DESC`,
+       ORDER BY ar.run_date DESC`,
       [caseId]
     );
 

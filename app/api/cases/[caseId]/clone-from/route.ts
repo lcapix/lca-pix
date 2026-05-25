@@ -107,13 +107,13 @@ export async function POST(
       const latestRun = await queryOne<any>(
         `SELECT * FROM assessment_runs
           WHERE case_id = ? AND status = 'completed'
-          ORDER BY run_at DESC LIMIT 1`,
+          ORDER BY run_date DESC LIMIT 1`,
         [sourceCaseId],
       );
       if (latestRun) {
         clonedRunId = await insert(
           `INSERT INTO assessment_runs
-           (case_id, run_name, calculation_method, status, executed_by, run_at)
+           (case_id, run_name, calculation_method, status, executed_by, run_date)
            VALUES (?, ?, ?, 'completed', ?, NOW())`,
           [
             targetCaseId,
