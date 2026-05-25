@@ -811,3 +811,9 @@ html, body {
   .case-panes { grid-template-columns: 1fr !important; }
   .case-sidebar { display: none; }
 }
+
+/* Blog index rows — clear click affordance */
+.blog-row { cursor: pointer; }
+.blog-row h2 { transition: color 160ms ease; }
+.blog-row:hover { transform: translateX(4px); }
+.blog-row:hover h2 { color: var(--brand-primary); }
