@@ -13,6 +13,7 @@ import {
   SectionDivider,
   HeroOrnament,
   StepGlyph,
+  DataFlowDiagram,
 } from '@/components/lcapix/landing/section-divider'
 import { ComparisonTable } from '@/components/lcapix/landing/comparison-table'
 import { InteractiveMethodCards } from '@/components/lcapix/landing/interactive-method-cards'
@@ -395,6 +396,36 @@ export default function RootPage() {
       </section>
 
       <SectionDivider variant="tiles" />
+
+      {/* Where the data comes from — Sankey-style flow diagram */}
+      <section style={{ padding: '96px 64px 80px' }}>
+        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+          <div style={{ marginBottom: 48 }}>
+            <div className="eyebrow" style={{ marginBottom: 16 }}>
+              Where the data comes from
+            </div>
+            <h2 className="display display-md" style={{ margin: 0, marginBottom: 16, maxWidth: 720 }}>
+              Every factor traced back to its source.
+            </h2>
+            <p
+              style={{
+                color: 'var(--text-secondary)',
+                fontSize: 15,
+                maxWidth: 620,
+                margin: 0,
+                lineHeight: 1.6,
+              }}
+            >
+              We pull from the same authoritative datasets your auditor expects to see —
+              openLCA, PubChem, Electricity Maps, EIA &amp; BLS. Every characterization factor
+              is CAS-mapped, versioned, and cached so a re-run last week reads the same way today.
+            </p>
+          </div>
+          <DataFlowDiagram />
+        </div>
+      </section>
+
+      <SectionDivider variant="nodes" />
 
       {/* How it works — tonal sectioning, no connector line */}
       <section style={{ padding: '96px 64px' }}>
