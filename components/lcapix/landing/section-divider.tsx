@@ -58,229 +58,253 @@ export function SectionDivider({ spacing = 0, variant = 'tiles' }: SectionDivide
   )
 }
 
-// DataFlowDiagram — full-width Sankey-ish visualization showing how
-// external data sources fan into the LCAPIX factor index and out to
-// the three ISO methodologies. Renders as a substantial section feature
-// (not an ornament).
+// DataFlowDiagram — Sankey-style visualization showing how external
+// datasets fan into the LCAPIX factor index and out to the three ISO
+// methods. Cards are HTML (always crisp, always responsive); only the
+// connecting curves are SVG, drawn into a fixed viewBox that exactly
+// matches the layout so they never drift out of alignment.
 export function DataFlowDiagram() {
   const sources = [
-    { id: 'openlca',  label: 'openLCA',         count: '3,420 factors',  y: 50 },
-    { id: 'pubchem',  label: 'PubChem',         count: '1,842 substances', y: 130 },
-    { id: 'elmap',    label: 'Electricity Maps', count: '38 grid regions', y: 210 },
-    { id: 'eia',      label: 'EIA · BLS',       count: 'live cost data',  y: 290 },
+    { id: 'openlca',  label: 'openLCA',          count: '3,420 factors' },
+    { id: 'pubchem',  label: 'PubChem',          count: '1,842 substances' },
+    { id: 'elmap',    label: 'Electricity Maps', count: '38 grid regions' },
+    { id: 'eia',      label: 'EIA · BLS',        count: 'live cost data' },
   ]
   const methods = [
-    { id: 'cml',    label: 'CML 2001 v4',       y: 90 },
-    { id: 'recipe', label: 'ReCiPe Midpoint (H)', y: 170 },
-    { id: 'traci',  label: 'TRACI 2.1',         y: 250 },
+    { id: 'cml',    label: 'CML 2001 v4' },
+    { id: 'recipe', label: 'ReCiPe Midpoint (H)' },
+    { id: 'traci',  label: 'TRACI 2.1' },
   ]
-  // Centre node: factor index
-  const cx = 480
-  const cy = 170
-  const cw = 180
-  const ch = 120
+
+  // Source y-coords (in viewBox units) — match the visual stack of source cards
+  const srcY = [54, 154, 254, 354]
+  // Method y-coords — match the visual stack of method cards
+  const methY = [120, 200, 280]
+  const centerY = 200
+
   return (
-    <svg
-      width="100%"
-      viewBox="0 0 960 360"
-      preserveAspectRatio="xMidYMid meet"
-      style={{ display: 'block', color: 'var(--brand-primary)' }}
-      aria-hidden
+    <div
+      style={{
+        position: 'relative',
+        width: '100%',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 220px) 1fr minmax(0, 200px) 1fr minmax(0, 220px)',
+        alignItems: 'center',
+        gap: 0,
+        minHeight: 440,
+      }}
     >
-      <defs>
-        <linearGradient id="flowFade" x1="0" x2="1">
-          <stop offset="0%"  stopColor="currentColor" stopOpacity="0" />
-          <stop offset="40%" stopColor="currentColor" stopOpacity="0.45" />
-          <stop offset="60%" stopColor="currentColor" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="flowOut" x1="0" x2="1">
-          <stop offset="0%"   stopColor="currentColor" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {/* Inbound flows */}
-      {sources.map((s) => (
-        <path
-          key={`in-${s.id}`}
-          d={`M 200 ${s.y} C 320 ${s.y}, 360 ${cy}, ${cx} ${cy}`}
-          fill="none"
-          stroke="url(#flowFade)"
-          strokeWidth="14"
-          strokeLinecap="round"
-        />
-      ))}
-
-      {/* Outbound flows */}
-      {methods.map((m) => (
-        <path
-          key={`out-${m.id}`}
-          d={`M ${cx + cw} ${cy} C ${cx + cw + 80} ${cy}, ${cx + cw + 100} ${m.y}, ${cx + cw + 220} ${m.y}`}
-          fill="none"
-          stroke="url(#flowOut)"
-          strokeWidth="10"
-          strokeLinecap="round"
-        />
-      ))}
-
-      {/* Source nodes */}
-      {sources.map((s) => (
-        <g key={s.id}>
-          <rect
-            x="40"
-            y={s.y - 22}
-            width="160"
-            height="44"
-            rx="6"
-            fill="var(--surface-raised)"
-            stroke="currentColor"
-            strokeOpacity="0.4"
-            strokeWidth="1"
+      {/* SVG overlay — only the connecting curves */}
+      <svg
+        aria-hidden
+        viewBox="0 0 1000 420"
+        preserveAspectRatio="none"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          color: 'var(--brand-primary)',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      >
+        <defs>
+          <linearGradient id="dfdFade" x1="0" x2="1">
+            <stop offset="0%"  stopColor="currentColor" stopOpacity="0" />
+            <stop offset="45%" stopColor="currentColor" stopOpacity="0.42" />
+            <stop offset="55%" stopColor="currentColor" stopOpacity="0.42" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="dfdOut" x1="0" x2="1">
+            <stop offset="0%"   stopColor="currentColor" stopOpacity="0.42" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {srcY.map((y, i) => (
+          <path
+            key={`in-${i}`}
+            d={`M 220 ${y} C 360 ${y}, 360 ${centerY}, 500 ${centerY}`}
+            fill="none"
+            stroke="url(#dfdFade)"
+            strokeWidth="14"
+            strokeLinecap="round"
           />
-          <text
-            x="56"
-            y={s.y - 4}
-            fontSize="13"
-            fontWeight="600"
-            fill="var(--text-primary)"
-            fontFamily="var(--font-ui)"
-          >
-            {s.label}
-          </text>
-          <text
-            x="56"
-            y={s.y + 12}
-            fontSize="10.5"
-            fill="var(--text-tertiary)"
-            fontFamily="ui-monospace, monospace"
-            letterSpacing="0.04em"
-          >
-            {s.count}
-          </text>
-        </g>
-      ))}
-
-      {/* Central factor index node */}
-      <rect
-        x={cx}
-        y={cy - ch / 2}
-        width={cw}
-        height={ch}
-        rx="10"
-        fill="color-mix(in oklab, currentColor 10%, var(--surface-raised))"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <text
-        x={cx + cw / 2}
-        y={cy - 24}
-        fontSize="11"
-        fontWeight="600"
-        textAnchor="middle"
-        fill="currentColor"
-        fontFamily="ui-monospace, monospace"
-        letterSpacing="0.14em"
-      >
-        FACTOR INDEX
-      </text>
-      <text
-        x={cx + cw / 2}
-        y={cy + 8}
-        fontSize="34"
-        fontWeight="700"
-        textAnchor="middle"
-        fill="currentColor"
-        fontFamily="ui-monospace, monospace"
-        letterSpacing="-0.02em"
-      >
-        5,234
-      </text>
-      <text
-        x={cx + cw / 2}
-        y={cy + 32}
-        fontSize="11"
-        textAnchor="middle"
-        fill="var(--text-tertiary)"
-        fontFamily="var(--font-ui)"
-      >
-        characterization factors
-      </text>
-      <text
-        x={cx + cw / 2}
-        y={cy + 50}
-        fontSize="9"
-        textAnchor="middle"
-        fill="var(--text-tertiary)"
-        fontFamily="ui-monospace, monospace"
-        letterSpacing="0.06em"
-        opacity="0.7"
-      >
-        CAS-mapped · versioned · cached
-      </text>
-
-      {/* Method output nodes */}
-      {methods.map((m) => (
-        <g key={m.id}>
-          <rect
-            x="780"
-            y={m.y - 18}
-            width="160"
-            height="36"
-            rx="6"
-            fill="var(--surface-raised)"
-            stroke="currentColor"
-            strokeOpacity="0.4"
-            strokeWidth="1"
+        ))}
+        {methY.map((y, i) => (
+          <path
+            key={`out-${i}`}
+            d={`M 600 ${centerY} C 740 ${centerY}, 740 ${y}, 880 ${y}`}
+            fill="none"
+            stroke="url(#dfdOut)"
+            strokeWidth="10"
+            strokeLinecap="round"
           />
-          <text
-            x="796"
-            y={m.y + 5}
-            fontSize="12.5"
-            fontWeight="600"
-            fill="var(--text-primary)"
-            fontFamily="var(--font-ui)"
+        ))}
+      </svg>
+
+      {/* Left column — sources */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
+        <div
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.14em',
+            color: 'var(--text-tertiary)',
+            fontWeight: 600,
+            marginBottom: 2,
+          }}
+        >
+          INPUTS
+        </div>
+        {sources.map((s) => (
+          <div
+            key={s.id}
+            style={{
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 8,
+              padding: '10px 14px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 13.5,
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                lineHeight: 1.2,
+              }}
+            >
+              {s.label}
+            </div>
+            <div
+              className="mono"
+              style={{
+                fontSize: 10.5,
+                color: 'var(--text-tertiary)',
+                marginTop: 2,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {s.count}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Left curve gap — spacer column for the SVG paths */}
+      <div />
+
+      {/* Centre — factor index */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          background: 'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))',
+          border: '1.5px solid var(--brand-primary)',
+          borderRadius: 12,
+          padding: '20px 16px',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.14em',
+            color: 'var(--brand-primary)',
+            fontWeight: 600,
+            marginBottom: 8,
+          }}
+        >
+          FACTOR INDEX
+        </div>
+        <div
+          className="mono"
+          style={{
+            fontSize: 40,
+            fontWeight: 700,
+            color: 'var(--brand-primary)',
+            letterSpacing: '-0.02em',
+            lineHeight: 1,
+          }}
+        >
+          5,234
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-tertiary)',
+            marginTop: 6,
+          }}
+        >
+          characterization factors
+        </div>
+        <div
+          className="mono"
+          style={{
+            fontSize: 9.5,
+            color: 'var(--text-tertiary)',
+            marginTop: 8,
+            letterSpacing: '0.06em',
+            opacity: 0.75,
+          }}
+        >
+          CAS-mapped · versioned · cached
+        </div>
+      </div>
+
+      {/* Right curve gap */}
+      <div />
+
+      {/* Right column — methods */}
+      <div
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+        }}
+      >
+        <div
+          className="mono"
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.14em',
+            color: 'var(--text-tertiary)',
+            fontWeight: 600,
+            marginBottom: 2,
+          }}
+        >
+          ISO METHODS
+        </div>
+        {methods.map((m) => (
+          <div
+            key={m.id}
+            style={{
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 8,
+              padding: '12px 14px',
+              fontSize: 13.5,
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+            }}
           >
             {m.label}
-          </text>
-        </g>
-      ))}
-
-      {/* Section captions */}
-      <text
-        x="40"
-        y="24"
-        fontSize="10"
-        fill="var(--text-tertiary)"
-        fontFamily="ui-monospace, monospace"
-        letterSpacing="0.14em"
-        fontWeight="600"
-      >
-        INPUTS
-      </text>
-      <text
-        x={cx}
-        y="24"
-        fontSize="10"
-        fill="var(--text-tertiary)"
-        fontFamily="ui-monospace, monospace"
-        letterSpacing="0.14em"
-        fontWeight="600"
-      >
-        INDEX
-      </text>
-      <text
-        x="780"
-        y="24"
-        fontSize="10"
-        fill="var(--text-tertiary)"
-        fontFamily="ui-monospace, monospace"
-        letterSpacing="0.14em"
-        fontWeight="600"
-      >
-        ISO METHODS
-      </text>
-    </svg>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
