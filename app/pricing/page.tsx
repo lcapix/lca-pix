@@ -196,26 +196,41 @@ export default function PricingPage() {
             </button>
           ))}
         </div>
-        {/* SAVE 20% chip — lives beside the toggle so the two tabs stay
-            equal width and the sliding thumb tracks them correctly. */}
+        {/* Save-20 hint — only nudges you when you're on Monthly. Once
+            Annual is active the savings are already applied, so the hint
+            quietly disappears instead of nagging. Inline-text, no chip,
+            so it reads as a side note rather than a third button. */}
         <span
-          className="mono"
+          aria-live="polite"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
+            gap: 6,
             marginTop: 28,
-            marginLeft: 12,
-            fontSize: 10,
-            padding: '5px 10px',
-            borderRadius: 999,
-            background: 'oklch(from var(--brand-primary) l c h / 0.15)',
+            marginLeft: 14,
+            fontSize: 13,
+            fontFamily: 'var(--font-ui)',
             color: 'var(--brand-primary)',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
+            fontWeight: 500,
             verticalAlign: 'middle',
+            opacity: cadence === 'monthly' ? 1 : 0,
+            transform: cadence === 'monthly' ? 'translateX(0)' : 'translateX(-6px)',
+            pointerEvents: cadence === 'monthly' ? 'auto' : 'none',
+            transition:
+              'opacity 240ms ease, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
           }}
         >
-          SAVE 20% YEARLY
+          Save 20% with annual
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden style={{ flexShrink: 0 }}>
+            <path
+              d="M 3 7 L 11 7 M 8 4 L 11 7 L 8 10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </span>
       </section>
 

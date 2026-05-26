@@ -71,7 +71,6 @@ const NAV_LINKS = [
   { label: 'Product', href: '/product' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Docs', href: '/docs' },
-  { label: 'Blog', href: '/blog' },
   { label: 'Changelog', href: '/changelog' },
 ] as const
 
@@ -96,7 +95,6 @@ const FOOTER_COLS = [
       { label: 'Docs', href: '/guide' },
       { label: 'API reference', href: '/guide/api-reference' },
       { label: 'Methodology', href: '/guide/data-model' },
-      { label: 'Blog', href: '/blog' },
     ],
   },
   {
