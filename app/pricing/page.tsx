@@ -161,7 +161,7 @@ export default function PricingPage() {
               position: 'absolute',
               top: 4,
               bottom: 4,
-              left: cadence === 'monthly' ? 4 : 'calc(50% + 0px)',
+              left: cadence === 'monthly' ? 4 : '50%',
               width: 'calc(50% - 4px)',
               background: 'var(--surface-raised)',
               borderRadius: 999,
@@ -180,6 +180,7 @@ export default function PricingPage() {
                 position: 'relative',
                 zIndex: 1,
                 padding: '8px 22px',
+                minWidth: 112,
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
@@ -188,31 +189,34 @@ export default function PricingPage() {
                 fontFamily: 'var(--font-ui)',
                 fontWeight: cadence === c ? 600 : 500,
                 transition: 'color 200ms',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
+                textAlign: 'center',
               }}
             >
               {c === 'monthly' ? 'Monthly' : 'Annual'}
-              {c === 'annual' && (
-                <span
-                  className="mono"
-                  style={{
-                    fontSize: 9.5,
-                    padding: '2px 7px',
-                    borderRadius: 999,
-                    background: 'oklch(from var(--brand-primary) l c h / 0.15)',
-                    color: 'var(--brand-primary)',
-                    fontWeight: 600,
-                    letterSpacing: '0.06em',
-                  }}
-                >
-                  SAVE 20%
-                </span>
-              )}
             </button>
           ))}
         </div>
+        {/* SAVE 20% chip — lives beside the toggle so the two tabs stay
+            equal width and the sliding thumb tracks them correctly. */}
+        <span
+          className="mono"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            marginTop: 28,
+            marginLeft: 12,
+            fontSize: 10,
+            padding: '5px 10px',
+            borderRadius: 999,
+            background: 'oklch(from var(--brand-primary) l c h / 0.15)',
+            color: 'var(--brand-primary)',
+            fontWeight: 600,
+            letterSpacing: '0.08em',
+            verticalAlign: 'middle',
+          }}
+        >
+          SAVE 20% YEARLY
+        </span>
       </section>
 
       <section style={{ padding: '24px clamp(20px, 4vw, 40px) 60px' }}>
@@ -251,16 +255,20 @@ export default function PricingPage() {
                   className="mono"
                   style={{
                     position: 'absolute',
-                    top: -10,
-                    right: 20,
+                    top: -14,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
                     fontSize: 10,
-                    padding: '4px 10px',
+                    padding: '5px 12px',
                     background: 'var(--brand-gradient)',
                     color: 'var(--on-primary)',
                     borderRadius: 999,
                     letterSpacing: '0.14em',
                     textTransform: 'uppercase',
                     fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    boxShadow:
+                      '0 4px 12px -2px oklch(from var(--brand-primary) l c h / 0.35)',
                   }}
                 >
                   Most popular
