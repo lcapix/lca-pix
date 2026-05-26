@@ -141,14 +141,22 @@ export default function PricingPage() {
             regional grid intensity, live cost data, and team collaboration.
           </p>
         </div>
-        {/* Billing toggle */}
+        {/* Billing toggle — wrapped in a relative anchor so the
+            "Save 20%" hint can float off the right edge without pushing
+            the toggle off-centre. */}
+        <div
+          style={{
+            position: 'relative',
+            display: 'inline-block',
+            marginTop: 28,
+          }}
+        >
         <div
           role="tablist"
           aria-label="Billing cadence"
           style={{
             display: 'inline-flex',
             position: 'relative',
-            marginTop: 28,
             padding: 4,
             background: 'var(--surface-overlay)',
             borderRadius: 999,
@@ -196,25 +204,28 @@ export default function PricingPage() {
             </button>
           ))}
         </div>
-        {/* Save-20 hint — only nudges you when you're on Monthly. Once
-            Annual is active the savings are already applied, so the hint
-            quietly disappears instead of nagging. Inline-text, no chip,
-            so it reads as a side note rather than a third button. */}
+        {/* Save-20 hint — absolutely positioned off the right edge of
+            the toggle so it doesn't shift the toggle off-centre.
+            Only nudges you when you're on Monthly. */}
         <span
           aria-live="polite"
           style={{
+            position: 'absolute',
+            left: '100%',
+            top: '50%',
+            marginLeft: 14,
+            transform: cadence === 'monthly'
+              ? 'translate(0, -50%)'
+              : 'translate(-6px, -50%)',
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            marginTop: 28,
-            marginLeft: 14,
             fontSize: 13,
             fontFamily: 'var(--font-ui)',
             color: 'var(--brand-primary)',
             fontWeight: 500,
-            verticalAlign: 'middle',
+            whiteSpace: 'nowrap',
             opacity: cadence === 'monthly' ? 1 : 0,
-            transform: cadence === 'monthly' ? 'translateX(0)' : 'translateX(-6px)',
             pointerEvents: cadence === 'monthly' ? 'auto' : 'none',
             transition:
               'opacity 240ms ease, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
@@ -232,6 +243,7 @@ export default function PricingPage() {
             />
           </svg>
         </span>
+        </div>
       </section>
 
       <section style={{ padding: '24px clamp(20px, 4vw, 40px) 60px' }}>
