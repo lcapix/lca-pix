@@ -9,6 +9,11 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { Logo, Icon, fmtNum, type IconName } from '@/components/lcapix'
 import { HeroMockup } from '@/components/lcapix/landing/hero-mockup'
+import {
+  SectionDivider,
+  HeroOrnament,
+  StepGlyph,
+} from '@/components/lcapix/landing/section-divider'
 import { ComparisonTable } from '@/components/lcapix/landing/comparison-table'
 import { InteractiveMethodCards } from '@/components/lcapix/landing/interactive-method-cards'
 import { MagneticLink } from '@/components/lcapix/magnetic-button'
@@ -190,6 +195,7 @@ export default function RootPage() {
         }}
       >
         <div style={{ maxWidth: 1280, margin: '0 auto', position: 'relative' }}>
+          <HeroOrnament />
           <div style={{ display: 'grid', gridTemplateColumns: '7fr 5fr', gap: 64, alignItems: 'end' }}>
             <div>
               <div className="eyebrow" style={{ marginBottom: 28 }}>
@@ -312,6 +318,8 @@ export default function RootPage() {
         </div>
       </section>
 
+      <SectionDivider variant="nodes" />
+
       {/* Features — asymmetric editorial grid, tonal only */}
       <section style={{ padding: '128px 64px 96px 128px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
@@ -386,6 +394,8 @@ export default function RootPage() {
         </div>
       </section>
 
+      <SectionDivider variant="tiles" />
+
       {/* How it works — tonal sectioning, no connector line */}
       <section style={{ padding: '96px 64px' }}>
         <div style={{ maxWidth: 1280, margin: '0 auto' }}>
@@ -398,32 +408,38 @@ export default function RootPage() {
             </h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 48 }}>
-            {STEPS.map((s) => (
-              <div key={s.n}>
-                <div
-                  className="mono"
-                  style={{
-                    fontSize: 64,
-                    fontWeight: 500,
-                    color: 'var(--primary)',
-                    marginBottom: 24,
-                    letterSpacing: '-0.03em',
-                    lineHeight: 1,
-                  }}
-                >
-                  {s.n}
+            {STEPS.map((s, i) => {
+              const glyph = (['tree', 'methods', 'export'] as const)[i]
+              return (
+                <div key={s.n}>
+                  <StepGlyph kind={glyph} />
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 64,
+                      fontWeight: 500,
+                      color: 'var(--primary)',
+                      marginBottom: 24,
+                      letterSpacing: '-0.03em',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {s.n}
+                  </div>
+                  <h3 className="title" style={{ margin: 0, marginBottom: 12, color: 'var(--text-primary)' }}>
+                    {s.t}
+                  </h3>
+                  <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+                    {s.d}
+                  </p>
                 </div>
-                <h3 className="title" style={{ margin: 0, marginBottom: 12, color: 'var(--text-primary)' }}>
-                  {s.t}
-                </h3>
-                <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
-                  {s.d}
-                </p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>
+
+      <SectionDivider variant="nodes" />
 
       {/* Comparison table */}
       <section style={{ padding: '128px 64px 96px' }}>
