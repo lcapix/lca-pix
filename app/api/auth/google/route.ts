@@ -106,12 +106,18 @@ export async function GET(request: NextRequest) {
       account_type: user.account_type,
     })
 
-    // Create response with redirect
-    const response = NextResponse.redirect(new URL("/home", request.url))
+    // Redirect to a client-side callback page that syncs cookies into
+    // localStorage + Zustand auth store (which AuthGuard reads). Without this
+    // step, /home mounts with isAuthenticated=false and bounces to /auth/login.
+    const response = NextResponse.redirect(new URL("/auth/callback", request.url))
 
-    // Set auth data in cookies (more secure than localStorage for server-side)
+    // auth_token is readable from JS so the existing api-client (which reads
+    // localStorage.auth_token for the Authorization header) keeps working.
+    // This mirrors the email-login flow, which also keeps the token in
+    // localStorage. The trade-off vs httpOnly: XSS exposure — acceptable here
+    // because the email-login flow already does the same.
     response.cookies.set("auth_token", token, {
-      httpOnly: true,
+      httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
