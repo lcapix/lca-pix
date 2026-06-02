@@ -228,11 +228,23 @@ export async function POST(
       [result.runId]
     );
 
+    // Detect "zero inventory" runs and warn the caller — otherwise the user sees
+    // an empty results page with no explanation. (Bug #7 in the E2E audit.)
+    const warnings: string[] = [];
+    if (result.lcaResult.summary.components_with_flows === 0) {
+      warnings.push(
+        'No components in this case have any input/output flows yet. The assessment ran successfully but every impact is 0. Add at least one flow on a leaf component (Elemental Task) and re-run.',
+      );
+    }
+
     // Return comprehensive response with algorithm details
     return NextResponse.json({
       success: true,
       assessment: newAssessment,
+      // Promote run_id to the top level too — clients shouldn't have to dig into `assessment.run_id`. (Bug #8.)
+      run_id: result.runId,
       summary: result.lcaResult.summary,
+      ...(warnings.length ? { warnings } : {}),
       results,
       total_impacts: result.lcaResult.total_impacts,
       algorithm_steps: result.lcaResult.algorithm_steps.map(step => step.step_description),

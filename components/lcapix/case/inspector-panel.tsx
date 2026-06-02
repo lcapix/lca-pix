@@ -433,10 +433,11 @@ function InlineSuggestStrip({
         }
       }
       if (wants.energy) {
+        // EIA expects `state` (2-letter code), not `region`.
         const r = await fetch('/api/integrations/eia/fetch-energy-price', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ fuel: 'electricity', region }),
+          body: JSON.stringify({ fuel: 'electricity', state: region }),
         })
         if (r.ok) {
           const d = await r.json()
@@ -448,10 +449,11 @@ function InlineSuggestStrip({
         }
       }
       if (wants.material) {
+        // Metals-API uses ISO-style 3-letter codes (STL, ALU, …).
         const r = await fetch('/api/integrations/metals/fetch-price', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ symbol: 'steel' }),
+          body: JSON.stringify({ symbol: 'STL' }),
         })
         if (r.ok) {
           const d = await r.json()

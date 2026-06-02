@@ -5,9 +5,14 @@ import { requireAuth } from '@/lib/auth';
 import { syncZoneFactor } from '@/lib/integrations/electricity-maps/sync';
 import { logIntegration } from '@/lib/integrations/log';
 
+// Accept either `zones: string[]` (the batch interface) OR a single `zone: string`
+// (convenient for one-off lookups from the UI / curl).
 const Body = z.object({
-  zones: z.array(z.string().min(1)).min(1).max(20),
+  zones: z.array(z.string().min(1)).min(1).max(20).optional(),
+  zone: z.string().min(1).optional(),
   method: z.string().optional(),
+}).refine(b => Boolean(b.zones?.length) || Boolean(b.zone), {
+  message: 'Provide either `zone` (string) or `zones` (string[])',
 });
 
 export async function POST(request: NextRequest) {
@@ -16,11 +21,16 @@ export async function POST(request: NextRequest) {
   catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
 
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+  if (!parsed.success) {
+    // Emit the zod issues so callers can see which field is wrong (was generic "Invalid body").
+    return NextResponse.json({ error: 'Invalid body', issues: parsed.error.issues }, { status: 400 });
+  }
+
+  const zonesToFetch = parsed.data.zones ?? (parsed.data.zone ? [parsed.data.zone] : []);
 
   const results: Array<{ zone: string; factorValue?: number; inserted?: boolean; error?: string }> = [];
   let failed = 0;
-  for (const zone of parsed.data.zones) {
+  for (const zone of zonesToFetch) {
     try {
       const r = await syncZoneFactor(zone, parsed.data.method);
       results.push(r);
@@ -35,7 +45,7 @@ export async function POST(request: NextRequest) {
     recordsAffected: successful,
     executedBy: userId,
     status: failed === 0 ? 'success' : failed < results.length ? 'partial' : 'failed',
-    details: { zones: parsed.data.zones, results },
+    details: { zones: zonesToFetch, results },
   });
   return NextResponse.json({ success: true, results });
 }

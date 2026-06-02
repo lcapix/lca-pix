@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useEffect, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuthStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 
@@ -18,12 +18,30 @@ import { useToast } from "@/hooks/use-toast"
  *
  * Without this sync step, /home mounts with isAuthenticated=false and the
  * AuthGuard bounces the user straight back to /auth/login.
+ *
+ * Why the Suspense wrapper: useSearchParams forces the page off the static
+ * prerender path. Wrapping the consumer in <Suspense> tells Next.js it's
+ * intentional and is the documented escape hatch.
  */
 export default function OAuthCallbackPage() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <CallbackInner />
+    </Suspense>
+  )
+}
+
+function CallbackInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const login = useAuthStore((s) => s.login)
   const { toast } = useToast()
   const ran = useRef(false)
+
+  // Whitelist destination paths to avoid open-redirect attacks via ?next=.
+  const rawNext = searchParams.get("next") ?? "/home"
+  const next =
+    rawNext === "/home" || rawNext === "/auth/onboarding" ? rawNext : "/home"
 
   useEffect(() => {
     if (ran.current) return
@@ -75,7 +93,7 @@ export default function OAuthCallbackPage() {
         description: "Signed in with Google.",
       })
 
-      router.replace("/home")
+      router.replace(next)
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "OAuth sign-in failed."
@@ -86,8 +104,12 @@ export default function OAuthCallbackPage() {
       })
       router.replace("/auth/login?error=oauth_sync_failed")
     }
-  }, [login, router, toast])
+  }, [login, next, router, toast])
 
+  return <Spinner />
+}
+
+function Spinner() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />

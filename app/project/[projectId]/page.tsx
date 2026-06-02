@@ -684,6 +684,7 @@ export default function ProjectPage() {
               }}
             >
               <h1
+                data-tour="project-header"
                 className="display"
                 style={{
                   fontSize: 26,
@@ -736,6 +737,7 @@ export default function ProjectPage() {
             <Icon name="layers" size={14} /> Compare Cases
           </button>
           <button
+            data-tour="project-add-case"
             type="button"
             className="btn btn-primary btn-sm"
             onClick={handleAddCase}
@@ -883,6 +885,7 @@ export default function ProjectPage() {
               )}
               <div style={{ flex: 1 }} />
               <button
+                data-tour="project-open-editor"
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() =>

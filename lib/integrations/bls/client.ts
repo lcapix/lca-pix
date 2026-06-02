@@ -33,30 +33,47 @@ export interface BLSWage {
   period: string;
 }
 
+// BLS OEWS publishes annual mean wages using a 2,080 hr/yr divisor (40 hr × 52 wk).
+const ANNUAL_HOURS = 2080;
+// Any wage above this looks like an annual figure mis-tagged as hourly; convert.
+const HOURLY_SANITY_CEILING = 250;
+
 export async function fetchMedianHourlyWage(
   occupation: string, state: string,
 ): Promise<BLSWage | null> {
-  const seriesId = makeSeriesId({ occupation, state, dataType: '04' });
-  const payload: Record<string, unknown> = {
-    seriesid: [seriesId],
-    startyear: String(new Date().getFullYear() - 1),
-    endyear: String(new Date().getFullYear()),
-  };
-  if (process.env.BLS_API_KEY) payload.registrationkey = process.env.BLS_API_KEY;
+  // Try multiple series in order of preference. BLS sometimes lacks median-hourly
+  // data for a given occupation × state and only returns annual; fall back gracefully.
+  // 04 = median hourly, 03 = mean hourly, 13 = annual mean (we convert /2080 when used).
+  const dataTypes: Array<'04' | '03' | '13'> = ['04', '03', '13'];
 
-  const res = await fetch(BASE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`BLS error ${res.status}`);
+  for (const dataType of dataTypes) {
+    const seriesId = makeSeriesId({ occupation, state, dataType });
+    const payload: Record<string, unknown> = {
+      seriesid: [seriesId],
+      startyear: String(new Date().getFullYear() - 1),
+      endyear: String(new Date().getFullYear()),
+    };
+    if (process.env.BLS_API_KEY) payload.registrationkey = process.env.BLS_API_KEY;
 
-  const body: any = await res.json();
-  const rows = body?.Results?.series?.[0]?.data ?? [];
-  if (!rows.length) return null;
+    const res = await fetch(BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) continue;
 
-  const latest = rows.find((r: any) => r.value && !isNaN(parseFloat(r.value)));
-  if (!latest) return null;
+    const body: any = await res.json();
+    const rows = body?.Results?.series?.[0]?.data ?? [];
+    const latest = rows.find((r: any) => r.value && !isNaN(parseFloat(r.value)));
+    if (!latest) continue;
 
-  return { seriesId, hourlyRate: parseFloat(latest.value), year: latest.year, period: latest.period };
+    let value = parseFloat(latest.value);
+    // Convert annual to hourly if we used the annual series — or if BLS
+    // substituted annual data into the hourly series (caught by ceiling check).
+    if (dataType === '13' || value > HOURLY_SANITY_CEILING) {
+      value = Math.round((value / ANNUAL_HOURS) * 100) / 100;
+    }
+    return { seriesId, hourlyRate: value, year: latest.year, period: latest.period };
+  }
+  return null;
 }

@@ -20,6 +20,19 @@ export type { SparklineProps } from './sparkline'
 export { AppTopBar } from './app-top-bar'
 export type { AppTopBarProps } from './app-top-bar'
 
+// — enfos-pass primitives —
+export { SectionHeader } from './section-header'
+export type { SectionHeaderProps } from './section-header'
+
+export { NumberedRail } from './numbered-rail'
+export type { NumberedRailProps, NumberedRailStep } from './numbered-rail'
+
+export { MetricBlock } from './metric-block'
+export type { MetricBlockProps } from './metric-block'
+
+export { TrustStrip } from './trust-strip'
+export type { TrustStripProps, TrustItem } from './trust-strip'
+
 export { Breadcrumb } from './breadcrumb'
 export type { BreadcrumbProps, BreadcrumbItem } from './breadcrumb'
 

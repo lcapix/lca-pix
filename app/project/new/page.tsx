@@ -13,7 +13,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Icon } from "@/components/lcapix"
+import { Icon, SectionHeader, NumberedRail } from "@/components/lcapix"
 import { apiRequest } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 import { DEMO_METHODS } from "@/lib/lcapix-demo"
@@ -73,12 +73,20 @@ export default function NewProjectPage() {
         }),
       })
       const data = await res.json()
-      if (data?.success && data?.project_id) {
+      // API returns { success, project: { project_id, ... } } — the previous
+      // check expected a top-level project_id and so always failed silently
+      // even though the row was inserted.
+      const projectId =
+        data?.project?.project_id ??
+        data?.project?.id ??
+        data?.project_id ??
+        null
+      if (res.ok && data?.success && projectId != null) {
         toast({
           title: "Project created",
           description: `"${name.trim()}" is ready.`,
         })
-        router.push(`/project/${data.project_id}`)
+        router.push(`/project/${projectId}`)
       } else {
         toast({
           title: "Could not create project",
@@ -99,36 +107,15 @@ export default function NewProjectPage() {
 
   return (
     <div
-      className="botanical-atmosphere"
       style={{
         minHeight: "calc(100vh - 64px)",
-        position: "relative",
-        padding: "48px 32px 96px",
+        padding: "40px 28px 96px",
         background: "var(--surface-base)",
       }}
     >
-      {/* Subtle centered glow behind the card */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: 180,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 820,
-          height: 520,
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse at center, var(--brand-glow), transparent 62%)",
-          pointerEvents: "none",
-          zIndex: 0,
-          opacity: 0.9,
-        }}
-      />
-
-      <div style={{ maxWidth: 840, margin: "0 auto", position: "relative", zIndex: 1 }}>
+      <div style={{ maxWidth: 980, margin: "0 auto" }}>
         {/* Back link */}
-        <div style={{ marginBottom: 40 }}>
+        <div style={{ marginBottom: 28 }}>
           <Link
             href="/home"
             className="mono"
@@ -149,30 +136,43 @@ export default function NewProjectPage() {
           </Link>
         </div>
 
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 48 }}>
-          <h1
-            className="display-lg"
-            style={{
-              margin: 0,
-              color: "var(--text-primary)",
-              letterSpacing: "-0.03em",
-            }}
-          >
-            Create New LCA Project
-          </h1>
-          <p
-            className="body"
-            style={{
-              margin: "20px auto 0",
-              maxWidth: 560,
-              color: "var(--text-secondary)",
-            }}
-          >
-            Define your project scope to begin building your process hierarchy
-            with precision-engineered environmental modeling.
-          </p>
-        </div>
+        {/* Header — enfos rhythm */}
+        <SectionHeader
+          as="h1"
+          eyebrow="NEW PROJECT"
+          title="Define an assessment."
+          sub="A project sets the scope of one LCA study. Once created you'll build a process hierarchy and run the calculation."
+          style={{ marginBottom: 32 }}
+        />
+
+        {/* ISO 14040 rail above the form so the user sees the path they're entering */}
+        <NumberedRail
+          eyebrow="THE FIVE PHASES YOU'LL WORK THROUGH"
+          orientation="horizontal"
+          steps={[
+            {
+              title: "Goal & scope",
+              description: "You're here. Name the study and choose its boundaries.",
+            },
+            {
+              title: "Inventory",
+              description: "List inputs and outputs across every stage.",
+            },
+            {
+              title: "Impact",
+              description: "Convert flows into category scores.",
+            },
+            {
+              title: "Interpretation",
+              description: "Sensitivity, contribution, and uncertainty checks.",
+            },
+            {
+              title: "Report",
+              description: "Defensible record of method and result.",
+            },
+          ]}
+          style={{ marginBottom: 36 }}
+        />
 
         {/* Card */}
         <form onSubmit={handleSubmit}>

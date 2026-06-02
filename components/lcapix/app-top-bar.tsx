@@ -493,6 +493,17 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
               role="menuitem"
               onClick={() => {
                 setMenuOpen(false)
+                router.push('/profile')
+              }}
+              style={menuItemStyle}
+            >
+              <Icon name="shield" size={14} /> Profile
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
                 router.push('/home')
               }}
               style={menuItemStyle}

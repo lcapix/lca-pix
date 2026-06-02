@@ -10,10 +10,15 @@ import {
   StatusDot,
   fmtNum,
   fmtInt,
+  SectionHeader,
+  MetricBlock,
+  NumberedRail,
+  TrustStrip,
 } from '@/components/lcapix'
 import { DEMO_ACTIVITY } from '@/lib/lcapix-demo'
 import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-store'
-import { KpiTile } from '@/components/lcapix/kpi-tile'
+import { GuidedTour } from '@/components/global/guided-tour'
+import { LCAPIX_TOUR_STEPS } from '@/lib/lcapix-tour-steps'
 import { useAuthStore, useProjectStore } from '@/lib/store'
 import { useToast } from '@/hooks/use-toast'
 import { apiRequest } from '@/lib/api-client'
@@ -91,10 +96,35 @@ export default function HomePage() {
   const { toast } = useToast()
 
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
   const [kpiData, setKpiData] = useState({ factors: 0, components: 0 })
   const [view, setView] = useState<ViewMode>('grid')
   const [filter, setFilter] = useState<FilterId>('all')
   const [search, setSearch] = useState('')
+
+  // Defense-in-depth onboarding gate. The OAuth callback already routes
+  // brand-new Google users to /auth/onboarding, and the email signup page
+  // routes new email accounts the same way — but if someone bails halfway
+  // through and later signs in via email, the API redirect path is bypassed.
+  // We catch that here and nudge them back to the form.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    apiRequest('/api/auth/profile')
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return
+        if (data?.success && data.profile?.needsOnboarding) {
+          router.replace('/auth/onboarding')
+        }
+      })
+      .catch(() => {
+        /* non-fatal: just stay on /home */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user, router])
 
   // Preserved: fetch projects from DB on mount (same API, same transform)
   useEffect(() => {
@@ -209,51 +239,71 @@ export default function HomePage() {
     router.push(`/project/${projectId}`)
   }
 
-  // KPI tiles — Active projects from the real store; integrations where available.
+  // KPI metrics — enfos discipline: no per-tile accent colors, no sparklines,
+  // hairline borders only. Green is the only accent anywhere on the page;
+  // hover surfaces a brand-color CTA on interactive tiles.
   const kpis = [
     {
       label: 'PROJECTS',
       numeric: coerced.length,
-      trend: coerced.length > 0 ? `${coerced.length} total` : 'None yet',
-      trendGood: coerced.length > 0,
-      spark: [1, 1, 2, 2, 3, coerced.length || 1, coerced.length || 1],
+      sub: coerced.length > 0 ? `${coerced.length} total` : 'None yet',
       icon: 'box' as const,
-      accent: '#006a44',
     },
     {
       label: 'ASSESSMENTS',
       numeric: totalCases,
-      trend: 'across all cases',
-      trendGood: null as boolean | null,
-      spark: [0, 1, 2, 3, 4, 5, totalCases || 0],
+      sub: 'Across all cases',
       icon: 'activity' as const,
-      accent: '#7bb5e8',
     },
     {
       label: 'FACTORS',
       numeric: kpiData.factors,
-      trend: kpiData.factors > 0 ? 'Synced' : 'Awaiting sync',
-      trendGood: kpiData.factors > 0,
-      spark: [5100, 5140, 5180, 5200, 5210, 5224, kpiData.factors || 5234],
+      sub: kpiData.factors > 0 ? 'In factor library' : 'Awaiting sync',
       icon: 'database' as const,
-      accent: '#9f88cc',
+      href: '/library/factors',
+      hrefHint: 'Browse factor library',
     },
     {
       label: 'COMPONENTS',
       numeric: totalComponents || kpiData.components,
-      trend: 'across portfolio',
-      trendGood: null as boolean | null,
-      spark: [
-        Math.max(0, totalComponents - 12),
-        Math.max(0, totalComponents - 10),
-        Math.max(0, totalComponents - 6),
-        Math.max(0, totalComponents - 4),
-        Math.max(0, totalComponents - 2),
-        Math.max(0, totalComponents - 1),
-        totalComponents || kpiData.components || 0,
-      ],
+      sub:
+        totalComponents > 0
+          ? 'Across your projects'
+          : 'In substance catalog',
       icon: 'layers' as const,
-      accent: '#d98568',
+      href: '/library/substances',
+      hrefHint:
+        totalComponents > 0 ? 'View components' : 'Browse substance catalog',
+    },
+  ]
+
+  // ISO 14040 phases — the methodology rail shown to users without projects
+  // (and in /project/new). Borrowed posture: enfos's 01–05 numbered strip.
+  const isoSteps = [
+    {
+      title: 'Goal & scope',
+      description:
+        'Define what you\'re assessing and the boundaries of your study.',
+    },
+    {
+      title: 'Inventory',
+      description:
+        'List the inputs and outputs at every stage — materials, energy, emissions.',
+    },
+    {
+      title: 'Impact assessment',
+      description:
+        'Convert inventory flows into impact category scores using a chosen methodology.',
+    },
+    {
+      title: 'Interpretation',
+      description:
+        'Examine results, run sensitivity checks, and identify what drives the totals.',
+    },
+    {
+      title: 'Report',
+      description:
+        'Produce a defensible record of method, assumptions, and outcomes.',
     },
   ]
 
@@ -263,69 +313,62 @@ export default function HomePage() {
         <AppTopBar current="home" userInitials={userInitials} />
         <div style={{ display: 'flex', maxWidth: 1440, margin: '0 auto' }}>
           {/* Main column */}
-          <div style={{ flex: 1, padding: '32px 24px 80px', minWidth: 0 }}>
-            {/* Greeting */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: 32,
-              }}
-            >
-              <div>
-                <h1
-                  className="display"
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 600,
-                    margin: 0,
-                    letterSpacing: '-0.01em',
-                  }}
-                >
-                  Welcome back, {firstName}
-                </h1>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: 'var(--text-tertiary)',
-                    marginTop: 4,
-                  }}
-                >
-                  <span className="mono">{fmtInt(coerced.length)}</span>{' '}
-                  projects
-                  {isLoadingProjects ? ' · loading…' : ''}
-                </div>
-              </div>
-              <div style={{ flex: 1 }} />
-              <button
-                className="btn btn-primary"
-                onClick={handleNewProject}
-              >
-                <Icon name="plus" size={14} /> New Project
-              </button>
+          <div style={{ flex: 1, padding: '40px 28px 96px', minWidth: 0 }}>
+            {/* Hero header */}
+            <div data-tour="home-greeting">
+              <SectionHeader
+                as="h1"
+                eyebrow="DASHBOARD"
+                title={`Welcome back, ${firstName}.`}
+                sub={
+                  coerced.length > 0
+                    ? `You have ${coerced.length} ${coerced.length === 1 ? 'project' : 'projects'} in flight${isLoadingProjects ? ' · loading…' : '.'}`
+                    : 'Run an LCA project end-to-end — model, assess, compare, defend.'
+                }
+                actions={
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setTourOpen(true)}
+                      title="Take the guided tour"
+                    >
+                      <Icon name="sparkle" size={14} /> Walk me through
+                    </button>
+                    <button
+                      data-tour="home-new-project"
+                      className="btn btn-primary"
+                      onClick={handleNewProject}
+                    >
+                      <Icon name="plus" size={14} /> New project
+                    </button>
+                  </div>
+                }
+                style={{ marginBottom: 40 }}
+              />
             </div>
 
-            {/* KPIs */}
+            {/* KPIs — calm, neutral, hairline-bordered */}
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 20,
-                marginBottom: 32,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 16,
+                marginBottom: 48,
               }}
             >
               {kpis.map((k, i) => (
-                <KpiTile
-                  key={k.label}
+                <div key={k.label} data-tour={i === 0 ? 'home-kpi-projects' : undefined}>
+                <MetricBlock
                   label={k.label}
                   value={k.numeric}
-                  trend={k.trend}
-                  trendGood={k.trendGood}
-                  spark={k.spark}
+                  sub={k.sub}
                   icon={k.icon}
-                  accent={k.accent}
-                  delayMs={i * 90}
+                  delayMs={i * 80}
+                  href={(k as any).href}
+                  hrefHint={(k as any).hrefHint}
                 />
+                </div>
               ))}
             </div>
 
@@ -333,15 +376,38 @@ export default function HomePage() {
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: 'flex-end',
                 marginBottom: 20,
-                gap: 12,
+                gap: 16,
                 flexWrap: 'wrap',
               }}
             >
-              <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
-                Your Projects
-              </h2>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  className="eyebrow"
+                  style={{
+                    color: 'var(--text-tertiary)',
+                    fontSize: 11,
+                    letterSpacing: '0.16em',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    marginBottom: 6,
+                  }}
+                >
+                  YOUR PROJECTS
+                </div>
+                <h2
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 600,
+                    margin: 0,
+                    letterSpacing: '-0.015em',
+                    lineHeight: 1.15,
+                  }}
+                >
+                  Active assessments
+                </h2>
+              </div>
               <div style={{ display: 'flex', gap: 4, marginLeft: 12 }}>
                 {(
                   [
@@ -490,48 +556,41 @@ export default function HomePage() {
                 ))}
               </div>
             ) : coerced.length === 0 ? (
-              <div
-                className="card"
-                style={{
-                  padding: 48,
-                  textAlign: 'center',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                <div
-                  className="eyebrow"
-                  style={{
-                    marginBottom: 8,
-                    color: 'var(--text-tertiary)',
-                  }}
-                >
-                  NO PROJECTS YET
-                </div>
-                <div
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: 'var(--text-primary)',
-                    marginBottom: 6,
-                  }}
-                >
-                  Create your first project
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+                {/* Empty hero — no card chrome, just a quiet headline */}
+                <SectionHeader
+                  align="center"
+                  eyebrow="NOTHING HERE YET"
+                  title="Start your first assessment."
+                  sub="Below is the ISO 14040 path every project follows. You can move between phases as you learn."
+                  actions={undefined}
+                />
+                {/* ISO 14040 numbered rail */}
+                <NumberedRail
+                  steps={isoSteps}
+                  orientation="horizontal"
+                  eyebrow="ISO 14040 · 5 PHASES"
+                />
+                {/* CTA strip */}
                 <div
                   style={{
-                    fontSize: 13,
-                    color: 'var(--text-tertiary)',
-                    marginBottom: 20,
+                    display: 'flex',
+                    justifyContent: 'center',
+                    paddingTop: 8,
                   }}
                 >
-                  Start a new LCA project to begin modeling impacts.
+                  <button
+                    className="btn btn-primary btn-lg"
+                    onClick={handleNewProject}
+                  >
+                    <Icon name="plus" size={14} /> Create your first project
+                  </button>
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleNewProject}
-                >
-                  <Icon name="plus" size={14} /> Create your first project
-                </button>
+                {/* Trust strip — authority cues, calm and monochrome */}
+                <TrustStrip
+                  caption="Methodology-grade calculations, traceable from inventory to result."
+                  style={{ marginTop: 8 }}
+                />
               </div>
             ) : view === 'grid' ? (
               <div
@@ -746,20 +805,30 @@ export default function HomePage() {
           <aside
             className="home-sidebar"
             style={{
-              flex: '0 0 280px',
-              padding: '32px 24px 32px 0',
+              flex: '0 0 300px',
+              padding: '40px 28px 40px 0',
               borderLeft: '1px solid var(--border-subtle)',
-              paddingLeft: 20,
+              paddingLeft: 28,
             }}
           >
-            <div className="eyebrow" style={{ marginBottom: 16 }}>
+            <div
+              className="eyebrow"
+              style={{
+                marginBottom: 18,
+                color: 'var(--text-tertiary)',
+                fontSize: 11,
+                letterSpacing: '0.16em',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+              }}
+            >
               RECENT ACTIVITY
             </div>
             <div
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 14,
+                gap: 16,
               }}
             >
               <RecentActivityFeed />
@@ -767,6 +836,11 @@ export default function HomePage() {
           </aside>
         </div>
       </div>
+      <GuidedTour
+        steps={LCAPIX_TOUR_STEPS}
+        open={tourOpen}
+        onClose={() => setTourOpen(false)}
+      />
     </AuthGuard>
   )
 }

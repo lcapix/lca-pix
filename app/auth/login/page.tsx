@@ -96,8 +96,19 @@ export default function LoginPage() {
     }
   }
 
+  // Google sign-in is temporarily disabled until the OAuth client's redirect URIs
+  // are whitelisted in Google Cloud Console. Set NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=true
+  // once that's done to re-enable the live flow.
+  const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true"
+
   const handleGoogleLogin = () => {
-    // Redirect to Google OAuth
+    if (!googleEnabled) {
+      toast({
+        title: "Google sign-in is unavailable",
+        description: "We're finalizing the Google OAuth setup. Please use email and password below for now.",
+      })
+      return
+    }
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
     const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google`
     const scope = "openid email profile"
@@ -217,11 +228,56 @@ export default function LoginPage() {
           type="button"
           onClick={handleGoogleLogin}
           disabled={isLoading}
+          aria-disabled={!googleEnabled}
           className="btn btn-secondary"
-          style={{ height: 44, justifyContent: "center" }}
+          style={{
+            height: 44,
+            justifyContent: "center",
+            opacity: googleEnabled ? 1 : 0.55,
+            cursor: googleEnabled ? "pointer" : "not-allowed",
+            position: "relative",
+          }}
+          title={
+            googleEnabled
+              ? "Sign in with your Google account"
+              : "Google sign-in is temporarily unavailable — use email/password below"
+          }
         >
           <Icon name="google" size={16} /> Continue with Google
+          {!googleEnabled && (
+            <span
+              style={{
+                position: "absolute",
+                top: -7,
+                right: 10,
+                fontSize: 9,
+                padding: "2px 7px",
+                borderRadius: 999,
+                background: "var(--surface-overlay)",
+                color: "var(--text-tertiary)",
+                fontFamily: "var(--font-mono)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                fontWeight: 600,
+              }}
+            >
+              soon
+            </span>
+          )}
         </button>
+        {!googleEnabled && (
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "var(--text-tertiary)",
+              textAlign: "center",
+              marginTop: 6,
+              lineHeight: 1.5,
+            }}
+          >
+            Google sign-in is being finalized. Use email + password for now.
+          </div>
+        )}
 
         <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 16 }}>
           Don&apos;t have an account?{" "}

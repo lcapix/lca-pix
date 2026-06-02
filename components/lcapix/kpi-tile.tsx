@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { useCountUp } from '@/lib/hooks/use-count-up'
 import { Sparkline } from './sparkline'
 import type { IconName } from './icon'
@@ -19,6 +20,18 @@ interface KpiTileProps {
   decimals?: number
   prefix?: string
   suffix?: string
+  /**
+   * Optional click-through route. When set, the tile becomes a clickable
+   * button (pointer cursor + hover lift) and navigates on click. Use this
+   * to give numeric KPIs a payoff — otherwise a user sees "162 Factors"
+   * with no idea where to go to investigate.
+   */
+  href?: string
+  /**
+   * Short call-to-action shown under the trend line, e.g. "View library →".
+   * Only renders when href is set.
+   */
+  hrefHint?: string
 }
 
 export function KpiTile({
@@ -34,7 +47,10 @@ export function KpiTile({
   decimals = 0,
   prefix = '',
   suffix = '',
+  href,
+  hrefHint,
 }: KpiTileProps) {
+  const router = useRouter()
   const animated = useCountUp(value, 900, decimals)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -61,13 +77,34 @@ export function KpiTile({
       maximumFractionDigits: decimals,
     })}${suffix}`
 
+  const interactive = Boolean(href)
+  const handleClick = () => {
+    if (href) router.push(href)
+  }
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!href) return
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      router.push(href)
+    }
+  }
+
   return (
     <div
       ref={ref}
-      className="tile-premium press-active fade-slide-up"
+      className={
+        'tile-premium press-active fade-slide-up' +
+        (interactive ? ' tile-interactive' : '')
+      }
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? handleClick : undefined}
+      onKeyDown={interactive ? handleKeyDown : undefined}
+      aria-label={interactive ? `${label}: ${formatted}. ${trend}. ${hrefHint ?? 'Open'}` : undefined}
       style={{
         animationDelay: `${delayMs}ms`,
         borderRadius: 14,
+        cursor: interactive ? 'pointer' : undefined,
       }}
     >
       <div
@@ -132,6 +169,22 @@ export function KpiTile({
         )}
         {trend}
       </div>
+      {interactive && hrefHint && (
+        <div
+          style={{
+            fontSize: 11,
+            color: accentColor,
+            marginTop: 4,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            fontWeight: 500,
+          }}
+        >
+          {hrefHint}
+          <Icon name="arrow-up-right" size={11} style={{ color: 'currentColor' }} />
+        </div>
+      )}
       <div className="tile-spark">
         <Sparkline data={spark} color={accentColor} width={84} height={32} />
       </div>

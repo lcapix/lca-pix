@@ -1080,10 +1080,11 @@ function IntegrationSuggestPanel({
         }
       }
       if (wants.energy) {
+        // EIA route's zod schema requires `state` (2-letter code), not `region`.
         const r = await fetch('/api/integrations/eia/fetch-energy-price', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ fuel: 'electricity', region }),
+          body: JSON.stringify({ fuel: 'electricity', state: region }),
         });
         if (r.ok) {
           const d = await r.json();
@@ -1096,10 +1097,16 @@ function IntegrationSuggestPanel({
         }
       }
       if (wants.material) {
+        // Metals-API uses 3-letter ISO-style codes (ALU, XCU, STL, etc.) — map
+        // common material names to those codes.
+        const METALS_SYMBOL: Record<string, string> = {
+          steel: 'STL', aluminum: 'ALU', copper: 'XCU',
+          zinc: 'ZNC', nickel: 'NIK', lead: 'LEA', tin: 'TIN',
+        };
         const r = await fetch('/api/integrations/metals/fetch-price', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ symbol: 'steel' }),
+          body: JSON.stringify({ symbol: METALS_SYMBOL.steel }),
         });
         if (r.ok) {
           const d = await r.json();

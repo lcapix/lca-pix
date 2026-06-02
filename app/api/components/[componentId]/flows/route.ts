@@ -29,13 +29,16 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // NOTE: actual DB columns are `flow_type` and `quantity` (not `direction`/`amount`).
+    // The earlier session handoff aliased these for backward compatibility, but the
+    // aliases pointed at non-existent source columns — fixed here.
     const flows = await query(
-      `SELECT f.*, f.direction as flow_type, f.amount as quantity,
-              s.substance_name, s.category as substance_category, s.default_unit as substance_default_unit
+      `SELECT f.*,
+              s.substance_name, s.category as substance_category, s.unit as substance_default_unit
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.component_id = ?
-       ORDER BY f.direction, f.created_at`,
+       ORDER BY f.flow_type, f.created_at`,
       [componentId]
     );
 
@@ -92,19 +95,21 @@ export async function POST(
 
     const flowId = await insert(
       `INSERT INTO flows
-       (component_id, substance_id, direction, amount, unit)
-       VALUES (?, ?, ?, ?, ?)`,
+       (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         componentId,
         substance_id,
         flow_type,
         quantity,
         unit,
+        is_driver ? 1 : 0,
+        driver_description ?? null,
       ]
     );
 
     const newFlow = await queryOne(
-      `SELECT f.*, f.direction as flow_type, f.amount as quantity,
+      `SELECT f.*,
               s.substance_name, s.category as substance_category
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id

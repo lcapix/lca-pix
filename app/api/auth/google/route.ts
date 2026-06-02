@@ -80,7 +80,9 @@ export async function GET(request: NextRequest) {
       // User exists, log them in
       user = existingUsers[0]
     } else {
-      // Create new user
+      // Create new user. Seed full_name from Google profile so the onboarding
+      // form can pre-fill it — saves the user a keystroke and feels less
+      // mechanical. Company stays NULL so the onboarding gate still fires.
       const username = googleUser.email.split("@")[0]
 
       // Generate a random password hash (won't be used for OAuth users, but required by schema)
@@ -88,8 +90,8 @@ export async function GET(request: NextRequest) {
       const hashedPassword = await bcrypt.hash(randomPassword, 10)
 
       const result = await query(
-        "INSERT INTO account (username, email, password_hash, account_type, is_active) VALUES (?, ?, ?, 'user', TRUE)",
-        [username, googleUser.email, hashedPassword]
+        "INSERT INTO account (username, full_name, email, password_hash, account_type, is_active) VALUES (?, ?, ?, ?, 'user', TRUE)",
+        [username, googleUser.name ?? null, googleUser.email, hashedPassword]
       )
 
       // Fetch the newly created user
@@ -98,6 +100,14 @@ export async function GET(request: NextRequest) {
       ])
       user = newUsers[0]
     }
+
+    // Decide where to land. New users (no onboarded_at, no company) get
+    // routed through /auth/onboarding; everyone else goes straight to /home.
+    // The actual redirect happens on /auth/callback (the client page that
+    // syncs cookies → store), so we encode the desired destination as a
+    // query param on it.
+    const needsOnboarding = !user.onboarded_at || !user.company
+    const nextPath = needsOnboarding ? "/auth/onboarding" : "/home"
 
     // Generate JWT token
     const token = createToken({
@@ -109,7 +119,9 @@ export async function GET(request: NextRequest) {
     // Redirect to a client-side callback page that syncs cookies into
     // localStorage + Zustand auth store (which AuthGuard reads). Without this
     // step, /home mounts with isAuthenticated=false and bounces to /auth/login.
-    const response = NextResponse.redirect(new URL("/auth/callback", request.url))
+    const callbackUrl = new URL("/auth/callback", request.url)
+    callbackUrl.searchParams.set("next", nextPath)
+    const response = NextResponse.redirect(callbackUrl)
 
     // auth_token is readable from JS so the existing api-client (which reads
     // localStorage.auth_token for the Authorization header) keeps working.
