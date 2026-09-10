@@ -9,9 +9,26 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { fmtNum } from '@/components/lcapix'
-import { DEMO_CONTRIBUTORS, DEMO_CATEGORIES } from '@/lib/lcapix-demo'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
 import { CursorTour, type CursorStep } from './cursor-tour'
+
+// Illustrative sample data for the landing-page product preview (a "Painted
+// Metal Box" LCA). Self-contained on purpose — this is a marketing mockup of
+// the UI, not live data, so it has no dependency on app/demo state.
+const EXAMPLE_CATEGORIES: ReadonlyArray<{ id: string; name: string; unit: string; value: number }> = [
+  { id: 'gwp', name: 'Global Warming', unit: 'kg CO₂-eq', value: 126.82 },
+  { id: 'ap', name: 'Acidification', unit: 'kg SO₂-eq', value: 0.58 },
+  { id: 'ep', name: 'Eutrophication', unit: 'kg PO₄-eq', value: 0.14 },
+  { id: 'odp', name: 'Ozone Depletion', unit: 'kg CFC11-eq', value: 0.0000042 },
+  { id: 'pocp', name: 'Photochemical Oxidation', unit: 'kg C₂H₄-eq', value: 0.042 },
+]
+const EXAMPLE_CONTRIBUTORS: ReadonlyArray<{ id: string; name: string; pct: number }> = [
+  { id: 'c1', name: 'Steel Sheet (1.2mm)', pct: 42.0 },
+  { id: 'c2', name: 'Cutting Electricity', pct: 21.2 },
+  { id: 'c3', name: 'Spray Paint (solvent-based)', pct: 16.4 },
+  { id: 'c4', name: 'Welding Energy', pct: 11.1 },
+  { id: 'c5', name: 'Assembly Labor', pct: 9.3 },
+]
 
 interface MethodVariant {
   id: 'cml' | 'recipe' | 'traci'
@@ -27,7 +44,7 @@ const METHODS: MethodVariant[] = [
 ]
 
 // Pick a sensible default ordering for the category panel.
-const VISIBLE_CATEGORIES = DEMO_CATEGORIES.slice(0, 5)
+const VISIBLE_CATEGORIES = EXAMPLE_CATEGORIES.slice(0, 5)
 
 function formatCatVal(v: number): string {
   if (!isFinite(v)) return '—'
@@ -265,7 +282,7 @@ export function HeroMockup() {
               gap: 10,
             }}
           >
-            {DEMO_CONTRIBUTORS.map((c, i) => {
+            {EXAMPLE_CONTRIBUTORS.map((c, i) => {
               const widthPct = Math.min(100, c.pct * 2.1 * method.factor)
               return (
                 <div

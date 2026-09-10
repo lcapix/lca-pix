@@ -29,17 +29,26 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Get project members
-    const members = await query(
-      `SELECT pm.member_id as member_id, pm.user_id, pm.added_at,
-              a.username, a.email,
-              perm.permission_name
-       FROM project_members pm
-       LEFT JOIN account a ON pm.user_id = a.id
-       LEFT JOIN permissions perm ON pm.permission_id = perm.permission_id
-       WHERE pm.project_id = ?`,
-      [projectId]
-    );
+    // Get project members. Isolated in its own try/catch so the collaborators
+    // sub-query can never 500 the whole project fetch — core project data must
+    // always load even if the members/permissions schema is unavailable or
+    // drifts. Falls back to an empty members list.
+    let members: unknown[] = [];
+    try {
+      members = await query(
+        `SELECT pm.member_id as member_id, pm.user_id, pm.added_at,
+                a.username, a.email,
+                perm.permission_name
+         FROM project_members pm
+         LEFT JOIN account a ON pm.user_id = a.id
+         LEFT JOIN permissions perm ON pm.permission_id = perm.permission_id
+         WHERE pm.project_id = ?`,
+        [projectId]
+      );
+    } catch (memberErr) {
+      console.warn('[project GET] members sub-query failed, returning empty list:', memberErr);
+      members = [];
+    }
 
     return NextResponse.json({ success: true, project: { ...project, members } });
   } catch (error: any) {

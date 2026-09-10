@@ -42,7 +42,13 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
     rawById[node.id] = node
     ;(node.children || []).forEach((c) => walk(c, depth + 1, node.id))
   }
-  walk(tree)
+  // Skip the synthetic multi-root container — render its children as a forest
+  // so no fake "Case Root" node appears on the project-page canvas.
+  if (tree.id === '__root__') {
+    ;(tree.children || []).forEach((c) => walk(c, 0, null))
+  } else {
+    walk(tree)
+  }
 
   const parentOf: Record<string, string | null> = Object.fromEntries(
     flat.map((n) => [n.id, n.parent]),
@@ -66,7 +72,13 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
     xById[id] = (Math.min(...xs) + Math.max(...xs)) / 2
     return xById[id]
   }
-  layout(tree.id)
+  // Lay out every ROOT node (parent === null). Critically, when the synthetic
+  // '__root__' container is skipped above, its children become parent-null
+  // roots — calling layout('__root__') would match none of them and leave every
+  // node at x=0 (stacked/overlapping, hiding all but one). Iterating the real
+  // roots positions each subtree side by side. `cursor` is shared so roots
+  // don't overlap.
+  flat.filter((n) => n.parent === null).forEach((root) => layout(root.id))
 
   const positioned: PositionedNode[] = flat.map((n) => ({
     ...n,
@@ -262,13 +274,13 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
                 width: NODE_W,
                 height: NODE_H,
                 background: tone.bg,
-                border: `1px solid ${tone.border}`,
+                border: `1.5px solid ${tone.border}`,
                 borderRadius: 6,
                 boxShadow: isSelected
                   ? `0 0 0 3px ${tone.border}55, 0 4px 12px rgba(15,23,42,0.10)`
                   : isHov
                     ? `0 0 0 2px ${tone.border}33, 0 3px 10px rgba(15,23,42,0.08)`
-                    : '0 1px 2px rgba(15,23,42,0.06)',
+                    : '0 1px 3px rgba(15,23,42,0.12)',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',

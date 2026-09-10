@@ -37,10 +37,20 @@ export function Breadcrumb({ items, onNav }: BreadcrumbProps) {
 
   return (
     <div
+      // Sticky so the breadcrumb stays visible as the page scrolls. The 56px
+      // top offset matches the AppTopBar height so they sit flush. A soft
+      // backdrop-blur + translucent surface keeps content underneath from
+      // bleeding through the breadcrumb row.
       style={{
+        // NON-sticky: the breadcrumb scrolls away with the page. Making it
+        // sticky caused the prominent page title (the first content element)
+        // to clip under it on any small scroll, which read as broken. The
+        // persistent chrome is the top nav (which stays sticky); the
+        // breadcrumb is contextual and scrolls with content. This is the
+        // standard, premium-feeling behaviour.
         display: 'flex',
         alignItems: 'center',
-        padding: '14px 32px 6px',
+        padding: '14px 32px 4px',
         fontSize: 13,
         color: 'var(--text-tertiary)',
         gap: 6,

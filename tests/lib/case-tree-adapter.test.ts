@@ -56,9 +56,13 @@ describe('case-tree-adapter', () => {
     expect(tree!.id).toBe('__root__')
     expect(tree!.children).toHaveLength(2)
 
+    // The synthetic container is layout-only and never user-visible:
+    // flattenTree skips it and surfaces both roots at depth 0 (see the
+    // adapter's own contract comment). The old expectation (3 rows with the
+    // container included) predates that contract.
     const flat = flattenTree(tree)
-    expect(flat).toHaveLength(3)
-    expect(flat[0].depth).toBe(0)
-    expect(flat[1].depth).toBe(1)
+    expect(flat).toHaveLength(2)
+    expect(flat.map((n) => n.id).sort()).toEqual(['a', 'b'])
+    expect(flat.every((n) => n.depth === 0)).toBe(true)
   })
 })

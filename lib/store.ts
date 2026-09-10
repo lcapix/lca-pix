@@ -16,6 +16,9 @@ export interface Project {
   createdAt: Date
   updatedAt: Date
   cases: Case[]
+  /** Server-side aggregates from the projects API (cards render these). */
+  caseCount?: number
+  componentCount?: number
 }
 
 export interface Case {
@@ -46,6 +49,17 @@ export interface ComponentNode {
   massUnit?: string
   operationalCostUSD?: number
   capitalCostUSD?: number
+  /** ABC cost breakdown (component table columns). */
+  laborCost?: number
+  energyCost?: number
+  transportationCost?: number
+  materialCost?: number
+  equipmentCost?: number
+  overheadCost?: number
+  currency?: string
+  costAllocationType?: string
+  /** Real count of attached flows (from the flows table), for canvas cards. */
+  flowCount?: number
 }
 
 export interface Flow {

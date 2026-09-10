@@ -95,6 +95,14 @@ export default function ComparisonPage() {
   const [data, setData] = useState<AssessmentData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingData, setIsLoadingData] = useState(false)
+  // Bumped on window focus so returning from a fresh assessment re-pulls the
+  // latest runs instead of showing the numbers from page load.
+  const [refreshTick, setRefreshTick] = useState(0)
+  useEffect(() => {
+    const onFocus = () => setRefreshTick((t) => t + 1)
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   // Load project name + cases.
   useEffect(() => {
@@ -214,7 +222,7 @@ export default function ComparisonPage() {
     return () => {
       cancelled = true
     }
-  }, [selected, cases])
+  }, [selected, cases, refreshTick])
 
   const baseCaseId = useMemo(
     () => cases.find((c) => c.type === 'base')?.id ?? null,
@@ -299,15 +307,22 @@ export default function ComparisonPage() {
   )
 
   const baseCase = data.find((d) => d.caseType === 'base') ?? data[0]
+  // Headline deltas are computed on ONE category with ONE unit (Global
+  // Warming when present) — the old cross-category sum added kg CO2-eq to
+  // kg Sb-eq and let GW magnitude fake an "overall" number.
+  const headlineValue = (d: AssessmentData): number => {
+    const gw = d.categories.find((c) => c.category_name === 'Global Warming')
+    return gw ? gw.impact_value : (d.categories[0]?.impact_value ?? 0)
+  }
   const verdict = (() => {
-    if (!baseCase || data.length < 2 || baseCase.totalScore <= 0) return null
+    if (!baseCase || data.length < 2 || headlineValue(baseCase) <= 0) return null
     const others = data.filter((d) => d !== baseCase)
     let best = others[0]
-    for (const o of others) if (o.totalScore < best.totalScore) best = o
+    for (const o of others) if (headlineValue(o) < headlineValue(best)) best = o
     return {
       best,
       deltaPct:
-        ((baseCase.totalScore - best.totalScore) / baseCase.totalScore) * 100,
+        ((headlineValue(baseCase) - headlineValue(best)) / headlineValue(baseCase)) * 100,
     }
   })()
 
@@ -581,9 +596,9 @@ export default function ComparisonPage() {
                 {data.map((c, i) => {
                   const isBase = c === baseCase
                   const delta =
-                    !isBase && baseCase && baseCase.totalScore > 0
-                      ? ((c.totalScore - baseCase.totalScore) /
-                          baseCase.totalScore) *
+                    !isBase && baseCase && headlineValue(baseCase) > 0
+                      ? ((headlineValue(c) - headlineValue(baseCase)) /
+                          headlineValue(baseCase)) *
                         100
                       : null
                   return (
@@ -636,7 +651,13 @@ export default function ComparisonPage() {
                           className="eyebrow"
                           style={{ fontSize: 10, marginBottom: 4 }}
                         >
-                          TOTAL IMPACT
+                          {/* One category, one unit — same rule as the
+                              verdict. The old "TOTAL IMPACT" here rendered
+                              totalScore (a cross-unit sum) labeled kg CO2 eq. */}
+                          {(
+                            c.categories.find((k) => k.category_name === 'Global Warming') ??
+                            c.categories[0]
+                          )?.category_name?.toUpperCase() || 'TOTAL IMPACT'}
                         </div>
                         <div
                           style={{
@@ -655,8 +676,8 @@ export default function ComparisonPage() {
                               color: 'var(--text-primary)',
                             }}
                           >
-                            {c.totalScore > 0
-                              ? fmtNum(c.totalScore, 2)
+                            {headlineValue(c) > 0
+                              ? fmtNum(headlineValue(c), 2)
                               : '—'}
                           </div>
                           <div
@@ -665,7 +686,10 @@ export default function ComparisonPage() {
                               color: 'var(--text-tertiary)',
                             }}
                           >
-                            {c.categories[0]?.unit || 'kg CO₂-eq'}
+                            {(
+                              c.categories.find((k) => k.category_name === 'Global Warming') ??
+                              c.categories[0]
+                            )?.unit || 'kg CO₂-eq'}
                           </div>
                           {delta !== null && (
                             <span
@@ -784,7 +808,7 @@ export default function ComparisonPage() {
                     <strong style={{ color: 'var(--brand-primary)' }}>
                       {verdict.best.caseName}
                     </strong>{' '}
-                    — reduces total impact by{' '}
+                    — reduces Global Warming impact by{' '}
                     <span className="mono" style={{ fontWeight: 600 }}>
                       ↓ {fmtNum(verdict.deltaPct, 1)}%
                     </span>{' '}

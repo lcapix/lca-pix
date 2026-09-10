@@ -80,12 +80,13 @@ export async function importFactorMethod(
         await insert(
           `INSERT INTO driver_impact_factors
              (substance_id, category_id, method_name, factor_value, unit,
-              geographic_scope, source_reference)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+              geographic_scope, factor_basis, source_reference)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE factor_value = VALUES(factor_value),
-             unit = VALUES(unit), source_reference = VALUES(source_reference)`,
+             unit = VALUES(unit), factor_basis = VALUES(factor_basis),
+             source_reference = VALUES(source_reference)`,
           [substanceId, categoryId, methodName, f.value, f.unit,
-           'Global', `openLCA ${methodName}`],
+           'Global', seed.basis, `openLCA ${methodName}`],
         );
         result.inserted++;
       } catch (e: any) {

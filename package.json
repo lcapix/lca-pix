@@ -9,7 +9,8 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "deploy:prod": "URL=$(vercel --prod --yes | tail -1 | grep -oE 'https://[^ ]+vercel.app') && [ -n \"$URL\" ] && vercel alias set \"${URL#https://}\" lcapix.vercel.app && echo \"Live at https://lcapix.vercel.app\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -58,6 +59,7 @@
     "next": "15.2.9",
     "next-themes": "latest",
     "pdfkit": "^0.18.0",
+    "pptxgenjs": "^4.0.1",
     "react": "^19",
     "react-day-picker": "9.8.0",
     "react-dom": "^19",

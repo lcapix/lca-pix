@@ -10,10 +10,17 @@ import { useState, type ReactNode } from 'react'
 import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
 import { Icon } from '@/components/lcapix/icon'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
+import {
+  getLaborRate,
+  getEnergyRate,
+  pickMaterialRate,
+} from '@/lib/integrations/reference-rates'
+import { EnvironmentalFlowsEditor } from '@/components/lcapix/case/environmental-flows-editor'
 
 export interface InspectorEditFormData {
   processName?: string
   processDescription?: string
+  parentId?: string
   mass?: number
   massUnit?: string
   laborCost?: number
@@ -22,6 +29,12 @@ export interface InspectorEditFormData {
   materialCost?: number
   equipmentCost?: number
   overheadCost?: number
+}
+
+/** Candidate re-parent target for the inspector's Parent selector. */
+export interface ParentOption {
+  id: string
+  label: string
 }
 
 export interface InspectorFlow {
@@ -39,6 +52,10 @@ export interface InspectorPanelProps {
   onSave?: () => void
   onDelete?: () => void
   flows?: InspectorFlow[]
+  /** Candidate parents for re-parenting (excludes self + descendants). */
+  parentOptions?: ParentOption[]
+  /** Apply suggested costs AND persist them in one action. */
+  onApplyCosts?: (patch: Partial<InspectorEditFormData>) => void
 }
 
 const COST_FIELDS: Array<[keyof InspectorEditFormData, string]> = [
@@ -57,6 +74,8 @@ export function InspectorPanel({
   onSave,
   onDelete,
   flows = [],
+  parentOptions = [],
+  onApplyCosts,
 }: InspectorPanelProps) {
   if (!node) {
     return (
@@ -156,8 +175,69 @@ export function InspectorPanel({
         </div>
       </InspectorSection>
 
-      <InspectorSection title="Environmental Flows" count={flows.length}>
-        {flows.length === 0 ? (
+      {/* Placement — re-parent any non-product node anywhere in the tree, or
+          make it independent. Products are always roots, so this is hidden for
+          them. */}
+      {controlled && node.type !== 'Product' && (
+        <InspectorSection title="Placement" defaultOpen={true}>
+          <label
+            className="mono"
+            style={{
+              fontSize: 9,
+              color: 'var(--text-tertiary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+              fontWeight: 600,
+            }}
+          >
+            Parent
+          </label>
+          <div style={{ position: 'relative', marginTop: 6 }}>
+            <select
+              className="input"
+              style={{ appearance: 'none', paddingRight: 32, width: '100%' }}
+              value={editFormData?.parentId ?? 'none'}
+              onChange={(e) => {
+                const v = e.target.value
+                onChange!({ parentId: v === 'none' ? undefined : v })
+              }}
+            >
+              <option value="none">Independent — no parent (top-level)</option>
+              {parentOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <Icon
+              name="chevron-down"
+              size={14}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-tertiary)',
+                pointerEvents: 'none',
+              }}
+            />
+          </div>
+          <p style={{ marginTop: 6, fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.45 }}>
+            Move this node under a valid parent (one level up), or make it
+            independent. Then Save.
+          </p>
+        </InspectorSection>
+      )}
+
+      <InspectorSection title="Environmental Flows">
+        {controlled && node.id && node.id !== '__root__' ? (
+          // Live editor: list + add (substance picker from the catalog) + delete.
+          <EnvironmentalFlowsEditor
+            componentId={node.id}
+            componentName={node.label ?? ''}
+            componentType={(node.type as string) ?? ''}
+          />
+        ) : flows.length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 0' }}>
             No flows assigned.
           </div>
@@ -217,29 +297,26 @@ export function InspectorPanel({
             ))}
           </div>
         )}
-        <button
-          className="btn btn-ghost btn-sm"
-          style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}
-          type="button"
-          disabled
-        >
-          <Icon name="plus" size={12} /> Add flow
-        </button>
       </InspectorSection>
 
       <InspectorSection title="Costs">
         {controlled && (
           <InlineSuggestStrip
             componentType={(node?.type as string) ?? ''}
+            nodeName={(node?.label as string) ?? ''}
             quantity={(editFormData?.mass as number) ?? 1}
             region="US"
-            onApply={(s) =>
-              onChange!({
+            onApply={(s) => {
+              const patch = {
                 laborCost: s.labor ?? editFormData!.laborCost,
                 energyCost: s.energy ?? editFormData!.energyCost,
                 materialCost: s.material ?? editFormData!.materialCost,
-              })
-            }
+              }
+              onChange!(patch)
+              // Persist immediately so applied costs are saved without hunting
+              // for the Save button.
+              onApplyCosts?.(patch)
+            }}
           />
         )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -380,20 +457,22 @@ export function InspectorSection({
 
 function InlineSuggestStrip({
   componentType,
+  nodeName,
   quantity,
   region,
   onApply,
 }: {
   componentType: string
+  nodeName?: string
   quantity: number
   region: string
   onApply: (s: { labor?: number; energy?: number; material?: number }) => void
 }) {
-  const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{
     sources: string[]
     payload: { labor?: number; energy?: number; material?: number }
   } | null>(null)
+  const [applied, setApplied] = useState(false)
 
   const t = (componentType || '').toLowerCase()
   const wants = {
@@ -404,89 +483,32 @@ function InlineSuggestStrip({
   const hasAnything = wants.labor || wants.energy || wants.material
   if (!hasAnything) return null
 
-  async function suggest() {
-    setLoading(true)
-    setResult(null)
+  // Static suggestion from curated reference rates (BLS / EIA / USGS averages).
+  // No network — works with zero API keys, no rate limits. The per-unit
+  // multipliers (0.5 h labor, 2 kWh energy, 1× material mass) are conservative
+  // default estimates the user can override after applying.
+  function suggest() {
+    setApplied(false)
     const sources: string[] = []
     const payload: { labor?: number; energy?: number; material?: number } = {}
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('auth_token')
-        : null
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (token) headers.Authorization = 'Bearer ' + token
     const q = Math.max(1, Number(quantity) || 1)
-    try {
-      if (wants.labor) {
-        const r = await fetch('/api/integrations/bls/fetch-wage', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ occupation: '51-4121', state: region }),
-        })
-        if (r.ok) {
-          const d = await r.json()
-          const hourly = Number(d?.rate?.rateValue ?? d?.hourlyRate ?? 0)
-          if (hourly > 0) {
-            payload.labor = Math.round(hourly * 0.5 * q * 100) / 100
-            sources.push(`BLS $${hourly.toFixed(2)}/hr`)
-          }
-        }
-      }
-      if (wants.energy) {
-        // EIA expects `state` (2-letter code), not `region`.
-        const r = await fetch('/api/integrations/eia/fetch-energy-price', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ fuel: 'electricity', state: region }),
-        })
-        if (r.ok) {
-          const d = await r.json()
-          const perKwh = Number(d?.rate?.rateValue ?? d?.pricePerKwh ?? 0)
-          if (perKwh > 0) {
-            payload.energy = Math.round(perKwh * 2 * q * 100) / 100
-            sources.push(`EIA $${perKwh.toFixed(3)}/kWh`)
-          }
-        }
-      }
-      if (wants.material) {
-        // Metals-API uses ISO-style 3-letter codes (STL, ALU, …).
-        const r = await fetch('/api/integrations/metals/fetch-price', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ symbol: 'STL' }),
-        })
-        if (r.ok) {
-          const d = await r.json()
-          const perKg = Number(d?.rate?.rateValue ?? d?.pricePerKg ?? 0)
-          if (perKg > 0) {
-            payload.material = Math.round(perKg * q * 100) / 100
-            sources.push(`Metals-API $${perKg.toFixed(2)}/kg`)
-          }
-        }
-      }
-      // Offline fallback so the affordance always works in demo mode.
-      if (
-        payload.labor == null &&
-        payload.energy == null &&
-        payload.material == null
-      ) {
-        if (wants.labor) {
-          payload.labor = Math.round(24 * 0.5 * q * 100) / 100
-          sources.push('BLS fallback $24/hr')
-        }
-        if (wants.energy) {
-          payload.energy = Math.round(0.13 * 2 * q * 100) / 100
-          sources.push('EIA fallback $0.13/kWh')
-        }
-        if (wants.material) {
-          payload.material = Math.round(0.95 * q * 100) / 100
-          sources.push('Metals-API fallback $0.95/kg')
-        }
-      }
-      setResult({ sources, payload })
-    } finally {
-      setLoading(false)
+
+    if (wants.labor) {
+      const lr = getLaborRate(nodeName || componentType)
+      payload.labor = Math.round(lr.rate * 0.5 * q * 100) / 100
+      sources.push(`Labor ${lr.label} $${lr.rate.toFixed(2)}/hr`)
     }
+    if (wants.energy) {
+      const er = getEnergyRate()
+      payload.energy = Math.round(er.rate * 2 * q * 100) / 100
+      sources.push(`Energy ${er.label} $${er.rate.toFixed(3)}/kWh`)
+    }
+    if (wants.material) {
+      const mr = pickMaterialRate(nodeName)
+      payload.material = Math.round(mr.rate * q * 100) / 100
+      sources.push(`Material ${mr.label} $${mr.rate.toFixed(2)}/kg`)
+    }
+    setResult({ sources, payload })
   }
 
   return (
@@ -535,16 +557,12 @@ function InlineSuggestStrip({
             lineHeight: 1.4,
           }}
         >
-          Suggest cost defaults from
-          {wants.labor && ' BLS,'}
-          {wants.energy && ' EIA,'}
-          {wants.material && ' Metals-API'}
-          .
+          Suggest cost defaults from reference rates
+          {' '}(BLS / EIA / USGS averages).
         </span>
         <button
           type="button"
           onClick={suggest}
-          disabled={loading}
           className="btn btn-ghost btn-sm"
           style={{
             fontSize: 11,
@@ -552,9 +570,35 @@ function InlineSuggestStrip({
             flexShrink: 0,
           }}
         >
-          {loading ? 'Fetching…' : result ? 'Refetch' : 'Fetch'}
+          {result ? 'Refresh' : applied ? 'Suggest again' : 'Suggest'}
         </button>
       </div>
+      {applied && !result && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 11.5,
+            color: 'var(--signal-success, #0f7b3a)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          ✓ Applied &amp; saved to costs.
+        </div>
+      )}
+      {applied && !result && (
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 11,
+            color: 'var(--signal-success, #0F7B3A)',
+            fontWeight: 600,
+          }}
+        >
+          ✓ Applied &amp; saved to costs
+        </div>
+      )}
       {result && (
         <div
           style={{
@@ -613,9 +657,13 @@ function InlineSuggestStrip({
               type="button"
               className="btn btn-primary btn-sm"
               style={{ fontSize: 11, padding: '4px 10px' }}
-              onClick={() => onApply(result.payload)}
+              onClick={() => {
+                onApply(result.payload)
+                setApplied(true)
+                setResult(null)
+              }}
             >
-              Apply
+              Apply &amp; save
             </button>
             <button
               type="button"

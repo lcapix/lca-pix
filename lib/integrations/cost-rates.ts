@@ -16,6 +16,13 @@ export interface GetOrFetchParams {
   region: string;
   maxAgeDays?: number;
   fetcher: () => Promise<CostRate>;
+  /**
+   * Static reference value used when the live fetcher can't run — e.g. the
+   * provider's API key isn't configured (the clients throw immediately, before
+   * any network call, so this keeps the MVP working with zero API hits). When
+   * a key IS present the live `fetcher` runs first and this is only a safety net.
+   */
+  staticFallback?: () => CostRate | Promise<CostRate>;
 }
 
 /**
@@ -46,7 +53,19 @@ export async function getOrFetchRate(params: GetOrFetchParams): Promise<CostRate
     }
   }
 
-  const fresh = await params.fetcher();
+  // Try the live fetcher; if it can't run (no API key, network error, no data)
+  // fall back to the static reference value so cost lookups always resolve in
+  // the keyless MVP. Only if there's no fallback either do we surface the error.
+  let fresh: CostRate;
+  try {
+    fresh = await params.fetcher();
+  } catch (err) {
+    if (params.staticFallback) {
+      fresh = await params.staticFallback();
+    } else {
+      throw err;
+    }
+  }
   await insert(
     `INSERT INTO cost_rates
        (rate_type, rate_key, region_code, rate_value, rate_unit, effective_date, source)

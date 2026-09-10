@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
+import { canonicalizeRegion } from '@/lib/factor-selection';
+import { buildRunSnapshot, parseRunSnapshot } from '@/lib/run-snapshot';
 
 // GET /api/cases/[caseId]/assessments
 export async function GET(
@@ -27,8 +29,14 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // The production `assessment_runs` table's timestamp column is `run_date`
+    // (there is no `run_at` column). A prior "fix" selected/ordered by `ar.run_at`,
+    // which threw "Unknown column 'ar.run_at'" and 500'd this whole endpoint —
+    // making every case read as "Not Yet Assessed" even when completed runs with
+    // results existed. Use `run_date` (present in prod) and also expose it under
+    // the `run_at` alias so any client that still reads `run_at` keeps working.
     const assessments = await query(
-      `SELECT ar.*, a.username as executed_by_username
+      `SELECT ar.*, ar.run_date AS run_at, a.username as executed_by_username
        FROM assessment_runs ar
        LEFT JOIN account a ON ar.executed_by = a.id
        WHERE ar.case_id = ?
@@ -90,10 +98,86 @@ export async function GET(
           impacts: typeof comp.impacts === 'string' ? JSON.parse(comp.impacts) : comp.impacts
         }));
 
+        // Flow-level detail. Preferred source: the run SNAPSHOT captured at
+        // execution time (exact amounts, factors, scopes, unit conversions,
+        // warnings — immutable). Legacy runs without a snapshot fall back to
+        // recomputing from live flows/factors, clearly marked as such.
+        const snapshot = parseRunSnapshot((assessment as any).run_snapshot);
+        if (snapshot) {
+          return {
+            ...assessment,
+            run_snapshot: undefined, // raw JSON not needed client-side twice
+            impacts,
+            componentBreakdown,
+            flowDetail: snapshot.flow_detail.map((r) => ({
+              flow_id: r.flow_id,
+              component: r.component,
+              substance: r.substance,
+              category_name: r.category_name,
+              dir: r.dir,
+              amount: r.amount,
+              unit: r.unit,
+              factor: r.factor,
+              impact: r.impact,
+              scope: r.scope,
+              conversion: r.conversion,
+            })),
+            warnings: snapshot.warnings,
+            detail_source: 'snapshot' as const,
+          };
+        }
+
+        const flowRowsRaw = await query(
+          `SELECT f.flow_id, c.component_name, c.hierarchy_level,
+                  s.substance_name, f.flow_type, f.quantity, f.unit,
+                  dif.category_id, ic.category_name,
+                  dif.factor_value AS factor, dif.geographic_scope
+           FROM flows f
+           JOIN component c ON f.component_id = c.component_id
+           JOIN substances s ON f.substance_id = s.substance_id
+           JOIN driver_impact_factors dif
+             ON f.substance_id = dif.substance_id AND dif.method_name = ?
+           JOIN impact_categories ic ON dif.category_id = ic.category_id
+           WHERE c.case_id = ?
+           ORDER BY c.hierarchy_level, f.flow_id, ic.category_id`,
+          [assessment.calculation_method, caseId]
+        );
+
+        // Dedupe to one factor per (flow, category): prefer a row whose
+        // geographic_scope matches the run region, else 'Global', else first
+        // seen — mirroring the engine's region-preference logic.
+        const region = (assessment.region_code || '').toLowerCase();
+        const picked = new Map<string, any>();
+        for (const row of flowRowsRaw as any[]) {
+          const key = `${row.flow_id}:${row.category_id}`;
+          const scope = (row.geographic_scope || '').toLowerCase();
+          const score = region && scope === region ? 2 : scope === 'global' ? 1 : 0;
+          const prev = picked.get(key);
+          if (!prev || score > prev._score) picked.set(key, { ...row, _score: score });
+        }
+        const flowDetail = Array.from(picked.values()).map((row) => {
+          const amount = parseFloat(row.quantity) || 0;
+          const factor = parseFloat(row.factor) || 0;
+          return {
+            flow_id: row.flow_id,
+            component: row.component_name,
+            substance: row.substance_name,
+            category_name: row.category_name,
+            dir: row.flow_type === 'input' ? 'IN' : 'OUT',
+            amount,
+            unit: row.unit,
+            factor,
+            impact: amount * factor,
+          };
+        });
+
         return {
           ...assessment,
           impacts,
-          componentBreakdown
+          componentBreakdown,
+          flowDetail,
+          warnings: [],
+          detail_source: 'recomputed-legacy' as const,
         };
       })
     );
@@ -135,7 +219,9 @@ export async function POST(
 
     const { run_name, calculation_method, region_code } = await request.json();
     const method = calculation_method || 'CML 2001';
-    const regionCode = region_code || undefined;
+    // Canonical zone code ('US Grid' → 'US'); stored on the run so results are
+    // attributable to the region actually used, not the UI label.
+    const regionCode = canonicalizeRegion(region_code);
 
     const result = await transaction(async (conn) => {
       // Create assessment run record
@@ -143,9 +229,9 @@ export async function POST(
       const defaultName = `Assessment-${timestamp}`;
 
       const [runResult] = await conn.query(
-        `INSERT INTO assessment_runs (case_id, run_name, calculation_method, status, executed_by)
-         VALUES (?, ?, ?, 'running', ?)`,
-        [caseId, run_name || defaultName, method, userId]
+        `INSERT INTO assessment_runs (case_id, run_name, calculation_method, region_code, status, executed_by)
+         VALUES (?, ?, ?, ?, 'running', ?)`,
+        [caseId, run_name || defaultName, method, regionCode, userId]
       );
 
       const runId = (runResult as any).insertId;
@@ -185,10 +271,15 @@ export async function POST(
 
         console.log(`\n💾 Stored ${lcaResult.component_results.reduce((sum, cr) => sum + cr.impacts.length, 0)} results in database\n`);
 
+        // Freeze what this run computed (per-flow contributions, factor
+        // scopes, unit conversions, warnings) so results stay reproducible
+        // after flows or factors change.
+        const snapshot = buildRunSnapshot(lcaResult, method, regionCode);
+
         // Mark as completed
         await conn.query(
-          `UPDATE assessment_runs SET status = 'completed' WHERE run_id = ?`,
-          [runId]
+          `UPDATE assessment_runs SET status = 'completed', run_snapshot = ? WHERE run_id = ?`,
+          [JSON.stringify(snapshot), runId]
         );
 
         console.log(`${'='.repeat(80)}`);
@@ -236,6 +327,8 @@ export async function POST(
         'No components in this case have any input/output flows yet. The assessment ran successfully but every impact is 0. Add at least one flow on a leaf component (Elemental Task) and re-run.',
       );
     }
+    // Data-quality warnings from the engine (unit mismatches, exclusions).
+    warnings.push(...result.lcaResult.warnings);
 
     // Return comprehensive response with algorithm details
     return NextResponse.json({

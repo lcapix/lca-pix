@@ -16,23 +16,17 @@ import { useRouter } from "next/navigation"
 import { Icon, SectionHeader, NumberedRail } from "@/components/lcapix"
 import { apiRequest } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
-import { DEMO_METHODS } from "@/lib/lcapix-demo"
-
+// Only the LCIA methods that actually have characterization factors loaded in
+// the database (driver_impact_factors). Offering others (ReCiPe 2016, IPCC 2013,
+// EPS 2015, …) would let a user pick a method that silently produces all-zero
+// assessments. Keep in sync with the Run Assessment modal's method list.
 const METHODOLOGY_OPTIONS = [
   "CML 2001",
-  "ReCiPe 2016",
+  "ReCiPe Midpoint (H)",
   "TRACI 2.1",
-  "IPCC 2013",
-  "EPS 2015",
 ] as const
 
-// Seed from DEMO_METHODS so the two sources stay in sync visually.
-const METHODOLOGY_FROM_DEMO = Array.from(
-  new Set<string>([
-    ...DEMO_METHODS.map((m) => m.name),
-    ...METHODOLOGY_OPTIONS,
-  ])
-)
+const METHODOLOGY_FROM_DEMO = [...METHODOLOGY_OPTIONS]
 
 const REGION_OPTIONS = [
   "Global",
@@ -310,7 +304,7 @@ export default function NewProjectPage() {
               <button
                 type="submit"
                 className="btn btn-primary"
-                disabled={submitting}
+                disabled={submitting || !name.trim()}
                 style={{ minWidth: 188 }}
               >
                 {submitting ? "Creating…" : "Create Project"}

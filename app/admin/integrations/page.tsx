@@ -15,15 +15,93 @@ import {
 import { apiGet } from '@/lib/api-client';
 import { ImportButtons } from '@/components/integrations/import-buttons';
 import { LogViewer } from '@/components/integrations/log-viewer';
-import {
-  DEMO_INTEGRATIONS,
-  DEMO_ACTIVITY,
-} from '@/lib/lcapix-demo';
+
+interface ApiSource {
+  id: string;
+  name: string;
+  description: string;
+  keyRequired: boolean;
+  configured: boolean;
+  staticBacked?: boolean;
+  status: 'success' | 'warn' | 'error' | 'idle' | 'static';
+  events: number;
+  fails: number;
+  records: number;
+  lastSync: string | null;
+  lastStatus: string | null;
+  rateLimit: { used: number; limit: number } | null;
+}
 
 interface Status {
   substances: { total: number; enriched: number };
   factorsByMethod: Array<{ method_name: string; factors: number }>;
   rateCache: Array<{ rate_type: string; cnt: number }>;
+  sources?: ApiSource[];
+}
+
+// Human-readable "time ago" from an ISO timestamp (real data only).
+function relAgo(iso: string | null): string {
+  if (!iso) return 'Never';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return 'just now';
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
+// Shape the real /api/integrations/status sources for the table/card UI.
+// 'idle' (configured but never synced) collapses to the 'warn' dot.
+interface UISource {
+  id: string;
+  name: string;
+  description: string;
+  status: 'success' | 'warn' | 'error';
+  statusLabel: string;
+  lastRun: string;
+  records: number;
+  keyRequired: boolean;
+  configured: boolean;
+  staticBacked: boolean;
+  rateLimit: { used: number; limit: number } | null;
+}
+function uiSources(status: Status | null): UISource[] {
+  return (status?.sources ?? []).map((s) => {
+    const label =
+      s.status === 'static' ? 'reference data'
+      : !s.configured ? 'not configured'
+      : s.status === 'idle' ? 'never run'
+      : s.status === 'success' ? 'healthy'
+      : s.status === 'warn' ? 'degraded'
+      : 'failing';
+    // 'static' (running on bundled reference data) reads as a healthy dot —
+    // the feature works; it just isn't using a live API yet.
+    const dot: 'success' | 'warn' | 'error' =
+      s.status === 'static' || s.status === 'success' ? 'success'
+      : s.status === 'error' ? 'error'
+      : 'warn';
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      status: dot,
+      statusLabel: label,
+      lastRun:
+        s.status === 'static' ? 'Static reference'
+        : !s.configured ? 'Not configured'
+        : relAgo(s.lastSync),
+      records: s.records,
+      keyRequired: s.keyRequired,
+      configured: s.configured,
+      staticBacked: Boolean(s.staticBacked),
+      rateLimit: s.rateLimit,
+    };
+  });
 }
 
 type TabId = 'overview' | 'sources' | 'keys' | 'log' | 'schema';
@@ -70,7 +148,7 @@ const SOURCE_PIPELINES: SourcePipeline[] = [
     ],
   },
   {
-    sourceId: 'electricitymaps',
+    sourceId: 'electricity_maps',
     routes: [
       { table: 'cost_rates', records: 0, note: 'Grid carbon-intensity rate per region' },
       { table: 'characterization_factors', records: 0, note: 'Real-time GWP factors for electricity' },
@@ -107,10 +185,13 @@ function KpiCards({ status }: { status: Status }) {
   const enrichedPct = substancesTotal
     ? Math.round((substancesEnriched / substancesTotal) * 100)
     : 0;
-  const failingCount = DEMO_INTEGRATIONS.filter(
-    (i) => i.status === 'error'
-  ).length;
-  const activeCount = DEMO_INTEGRATIONS.length - failingCount;
+  const srcList = uiSources(status);
+  const failingCount = srcList.filter((i) => i.status === 'error').length;
+  const activeCount = srcList.filter((i) => i.status === 'success').length;
+  // "live" = backed by a real API call; "reference" = running on bundled static
+  // data because no live key is configured. Both are functional.
+  const liveCount = (status.sources ?? []).filter((s) => s.status === 'success').length;
+  const referenceCount = (status.sources ?? []).filter((s) => s.status === 'static').length;
   const latestMethod = status.factorsByMethod[0]?.method_name ?? '—';
 
   const kpis: Array<{
@@ -145,10 +226,14 @@ function KpiCards({ status }: { status: Status }) {
     },
     {
       l: 'CONNECTIONS',
-      v: `${activeCount} / ${DEMO_INTEGRATIONS.length}`,
+      v: `${activeCount} / ${srcList.length}`,
       s: failingCount
         ? `${failingCount} endpoint${failingCount === 1 ? '' : 's'} failing`
-        : 'all healthy',
+        : referenceCount
+        ? `${liveCount} live · ${referenceCount} reference data`
+        : srcList.length && activeCount === srcList.length
+        ? 'all healthy'
+        : 'some idle / unconfigured',
       status: failingCount ? 'warn' : 'success',
     },
   ];
@@ -258,7 +343,7 @@ function OverviewTab({
           <div>Records</div>
           <div style={{ textAlign: 'right' }}>Action</div>
         </div>
-        {DEMO_INTEGRATIONS.map((src) => (
+        {uiSources(status).map((src) => (
           <div
             key={src.id}
             style={{
@@ -280,17 +365,8 @@ function OverviewTab({
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <StatusDot status={src.status} />
-              <span
-                style={{
-                  color: 'var(--text-secondary)',
-                  textTransform: 'capitalize',
-                }}
-              >
-                {src.status === 'warn'
-                  ? 'degraded'
-                  : src.status === 'success'
-                  ? 'healthy'
-                  : src.status}
+              <span style={{ color: 'var(--text-secondary)' }}>
+                {src.statusLabel}
               </span>
             </div>
             <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
@@ -305,7 +381,7 @@ function OverviewTab({
                 className="btn btn-ghost btn-sm"
                 style={{ padding: '4px 10px' }}
               >
-                {src.status === 'error' ? 'Configure' : 'Run now'}
+                {!src.configured ? 'Configure' : 'Run now'}
               </button>
             </div>
           </div>
@@ -315,7 +391,7 @@ function OverviewTab({
   );
 }
 
-function SourcesTab() {
+function SourcesTab({ status }: { status: Status | null }) {
   return (
     <div
       style={{
@@ -324,7 +400,7 @@ function SourcesTab() {
         gap: 16,
       }}
     >
-      {DEMO_INTEGRATIONS.map((src) => (
+      {uiSources(status).map((src) => (
         <div key={src.id} className="card" style={{ padding: 20 }}>
           <div
             style={{
@@ -360,9 +436,9 @@ function SourcesTab() {
             }}
           >
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>Rate limit</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Status</div>
               <div className="mono" style={{ color: 'var(--text-primary)' }}>
-                842 / 1000
+                {src.statusLabel}
               </div>
             </div>
             <div>
@@ -372,13 +448,13 @@ function SourcesTab() {
               </div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>TTL</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>API key</div>
               <div className="mono" style={{ color: 'var(--text-primary)' }}>
-                24h
+                {src.keyRequired ? (src.configured ? 'Configured' : 'Missing') : 'Not required'}
               </div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>Records</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>Records synced</div>
               <div className="mono" style={{ color: 'var(--text-primary)' }}>
                 {fmtInt(src.records)}
               </div>
@@ -390,17 +466,14 @@ function SourcesTab() {
   );
 }
 
-function KeysTab() {
-  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
-  const toggle = (id: string) =>
-    setRevealed((r) => ({ ...r, [id]: !r[id] }));
-
+function KeysTab({ status }: { status: Status | null }) {
+  const keyed = uiSources(status).filter((s) => s.keyRequired);
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 2fr 1fr 120px',
+          gridTemplateColumns: '1fr 1.4fr 1fr 1fr',
           padding: '10px 20px',
           background: 'var(--surface-overlay)',
           fontSize: 10,
@@ -411,67 +484,57 @@ function KeysTab() {
         }}
       >
         <div>Service</div>
-        <div>Key</div>
+        <div>Key status</div>
         <div>Last used</div>
-        <div style={{ textAlign: 'right' }}>Action</div>
+        <div style={{ textAlign: 'right' }}>Health</div>
       </div>
-      {DEMO_INTEGRATIONS.filter((i) => i.keyRequired).map((src) => {
-        const isRevealed = !!revealed[src.id];
-        const maskedKey = isRevealed
-          ? `em_live_a93kfx2l8c${src.id.slice(0, 4)}`
-          : `em_•••••••••••••••••••${src.id.slice(0, 4)}`;
-        return (
-          <div
-            key={src.id}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 2fr 1fr 120px',
-              padding: '14px 20px',
-              borderTop: '1px solid var(--border-subtle)',
-              alignItems: 'center',
-              fontSize: 13,
-            }}
-          >
-            <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
-              {src.name}
-            </div>
-            <div
-              className="mono"
-              style={{
-                color: 'var(--text-tertiary)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <span>{maskedKey}</span>
-              <button
-                type="button"
-                onClick={() => toggle(src.id)}
-                aria-label={isRevealed ? 'Hide key' : 'Reveal key'}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--text-tertiary)',
-                  padding: 2,
-                  display: 'inline-flex',
-                }}
-              >
-                <Icon name="eye" size={12} />
-              </button>
-            </div>
-            <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
-              {src.lastRun}
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <button type="button" className="btn btn-ghost btn-sm">
-                Rotate
-              </button>
-            </div>
+      {keyed.map((src) => (
+        <div
+          key={src.id}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1.4fr 1fr 1fr',
+            padding: '14px 20px',
+            borderTop: '1px solid var(--border-subtle)',
+            alignItems: 'center',
+            fontSize: 13,
+          }}
+        >
+          <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+            {src.name}
           </div>
-        );
-      })}
+          {/* Real configured/missing state from the environment — the actual
+              secret is never sent to the client, so there is no key value to
+              reveal (previously a fabricated "em_live_…" string). */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StatusDot status={src.configured ? 'success' : 'error'} />
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {src.configured ? 'Configured' : 'Not configured'}
+            </span>
+          </div>
+          <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
+            {src.lastRun}
+          </div>
+          <div
+            className="mono"
+            style={{ color: 'var(--text-tertiary)', textAlign: 'right' }}
+          >
+            {src.statusLabel}
+          </div>
+        </div>
+      ))}
+      <div
+        style={{
+          padding: '12px 20px',
+          borderTop: '1px solid var(--border-subtle)',
+          fontSize: 11,
+          color: 'var(--text-tertiary)',
+        }}
+      >
+        Keys are configured via server environment variables and are never
+        exposed to the browser. Set or rotate them in your deployment
+        environment.
+      </div>
     </div>
   );
 }
@@ -525,23 +588,29 @@ function LogTab({ logRefresh }: { logRefresh: number }) {
   );
 }
 
-function SchemaTab() {
-  // Per-table totals across all sources.
-  const tableTotals = SCHEMA_TABLES.reduce<Record<string, number>>((acc, t) => {
-    acc[t] = SOURCE_PIPELINES.reduce(
-      (s, p) =>
-        s +
-        p.routes
-          .filter((r) => r.table === t)
-          .reduce((rs, r) => rs + r.records, 0),
-      0,
-    );
-    return acc;
-  }, {});
+function SchemaTab({ status }: { status: Status | null }) {
+  const uiSrc = uiSources(status);
+  // Per-table totals — REAL counts derived from /api/integrations/status
+  // (substance master, LCIA methods, characterization factors, cost rates)
+  // instead of the former hardcoded per-route numbers.
+  const factorsTotal = (status?.factorsByMethod ?? []).reduce(
+    (s, m) => s + Number(m.factors ?? 0),
+    0,
+  );
+  const ratesTotal = (status?.rateCache ?? []).reduce(
+    (s, r) => s + Number(r.cnt ?? 0),
+    0,
+  );
+  const tableTotals: Record<string, number> = {
+    substances: Number(status?.substances?.total ?? 0),
+    valuation_methods: (status?.factorsByMethod ?? []).length,
+    characterization_factors: factorsTotal,
+    cost_rates: ratesTotal,
+  };
 
   // Build Sankey nodes + links. Recharts requires numeric src/target indices.
   const sourceNodes = SOURCE_PIPELINES.map((p) => {
-    const src = DEMO_INTEGRATIONS.find((s) => s.id === p.sourceId);
+    const src = uiSrc.find((s) => s.id === p.sourceId);
     return { name: src?.name ?? p.sourceId, kind: 'source' as const };
   });
   const tableNodes = SCHEMA_TABLES.map((t) => ({
@@ -550,16 +619,26 @@ function SchemaTab() {
   }));
   const nodes = [...sourceNodes, ...tableNodes];
   const tableOffset = sourceNodes.length;
-  // Sankey requires every link to have a strictly positive value. We render
-  // zero-flow pipes by giving them a tiny placeholder weight so the user still
-  // sees the wiring, and we colour them grey via the link payload kind.
+  // How many sources write into each table — used to split a table's REAL
+  // record total evenly across its inbound pipes (we don't track per-source
+  // provenance per row, so an even split is the honest approximation rather
+  // than a fabricated per-edge count).
+  const writersPerTable = SCHEMA_TABLES.reduce<Record<string, number>>((acc, t) => {
+    acc[t] = SOURCE_PIPELINES.filter((p) => p.routes.some((r) => r.table === t)).length || 1;
+    return acc;
+  }, {});
+  // Sankey requires every link to have a strictly positive value. Zero-record
+  // pipes get a tiny placeholder weight so the wiring still renders.
   const links = SOURCE_PIPELINES.flatMap((p, srcIdx) =>
-    p.routes.map((r) => ({
-      source: srcIdx,
-      target: tableOffset + SCHEMA_TABLES.indexOf(r.table),
-      value: Math.max(r.records, 0.5),
-      records: r.records,
-    })),
+    p.routes.map((r) => {
+      const share = Math.round((tableTotals[r.table] ?? 0) / writersPerTable[r.table]);
+      return {
+        source: srcIdx,
+        target: tableOffset + SCHEMA_TABLES.indexOf(r.table),
+        value: Math.max(share, 0.5),
+        records: share,
+      };
+    }),
   );
 
   return (
@@ -806,9 +885,13 @@ function SchemaTab() {
           }}
         >
           {SOURCE_PIPELINES.map((p) => {
-            const src = DEMO_INTEGRATIONS.find((s) => s.id === p.sourceId);
+            const src = uiSrc.find((s) => s.id === p.sourceId);
+            // Real per-table share (table total / number of writers), summed
+            // across this source's destination tables.
+            const routeRecords = (table: string) =>
+              Math.round((tableTotals[table] ?? 0) / (writersPerTable[table] ?? 1));
             const totalRecords = p.routes.reduce(
-              (s, r) => s + r.records,
+              (s, r) => s + routeRecords(r.table),
               0,
             );
             return (
@@ -905,23 +988,23 @@ function SchemaTab() {
                           fontSize: 12,
                           fontWeight: 600,
                           color:
-                            r.records > 0
+                            routeRecords(r.table) > 0
                               ? 'var(--text-primary)'
                               : 'var(--text-tertiary)',
                           padding: '3px 8px',
                           borderRadius: 999,
                           background:
-                            r.records > 0
+                            routeRecords(r.table) > 0
                               ? 'color-mix(in oklab, var(--brand-primary) 12%, transparent)'
                               : 'var(--surface-raised)',
                           border:
                             '1px solid ' +
-                            (r.records > 0
+                            (routeRecords(r.table) > 0
                               ? 'transparent'
                               : 'var(--border-subtle)'),
                         }}
                       >
-                        {fmtInt(r.records)}
+                        {fmtInt(routeRecords(r.table))}
                       </span>
                     </div>
                   ))}
@@ -1100,10 +1183,10 @@ export default function IntegrationsAdminPage() {
             {tab === 'overview' && status && (
               <OverviewTab status={status} onRefresh={refresh} />
             )}
-            {tab === 'sources' && <SourcesTab />}
-            {tab === 'keys' && <KeysTab />}
+            {tab === 'sources' && <SourcesTab status={status} />}
+            {tab === 'keys' && <KeysTab status={status} />}
             {tab === 'log' && <LogTab logRefresh={logRefresh} />}
-            {tab === 'schema' && <SchemaTab />}
+            {tab === 'schema' && <SchemaTab status={status} />}
           </>
         )}
 

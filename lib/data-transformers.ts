@@ -60,6 +60,13 @@ export function transformComponentFromDB(dbComponent: any): ComponentNode {
     drivers: dbComponent.drivers ? (typeof dbComponent.drivers === 'string' ? JSON.parse(dbComponent.drivers) : dbComponent.drivers) : undefined,
     mass: dbComponent.quantity ? parseFloat(dbComponent.quantity) : undefined,
     massUnit: dbComponent.unit || undefined,
+    // Real attached-flow count from the API (for canvas card "N flows").
+    flowCount:
+      typeof dbComponent.flow_count === 'number'
+        ? dbComponent.flow_count
+        : dbComponent.flow_count != null
+          ? Number(dbComponent.flow_count)
+          : undefined,
     operationalCostUSD: dbComponent.opex ? parseFloat(dbComponent.opex) : undefined,
     capitalCostUSD: dbComponent.capex ? parseFloat(dbComponent.capex) : undefined,
 
@@ -68,6 +75,8 @@ export function transformComponentFromDB(dbComponent: any): ComponentNode {
     energyCost: dbComponent.energy_cost ? parseFloat(dbComponent.energy_cost) : undefined,
     transportationCost: dbComponent.transportation_cost ? parseFloat(dbComponent.transportation_cost) : undefined,
     materialCost: dbComponent.material_cost ? parseFloat(dbComponent.material_cost) : undefined,
+    equipmentCost: dbComponent.equipment_cost ? parseFloat(dbComponent.equipment_cost) : undefined,
+    overheadCost: dbComponent.overhead_cost ? parseFloat(dbComponent.overhead_cost) : undefined,
     currency: dbComponent.currency || 'USD',
     costAllocationType: dbComponent.cost_allocation_type || undefined,
   };
@@ -121,6 +130,8 @@ export function transformComponentToDB(component: Partial<ComponentNode>) {
     energy_cost: component.energyCost || null,
     transportation_cost: component.transportationCost || null,
     material_cost: component.materialCost || null,
+    equipment_cost: component.equipmentCost || null,
+    overhead_cost: component.overheadCost || null,
     currency: component.currency || 'USD',
     cost_allocation_type: component.costAllocationType || 'manual',
   };

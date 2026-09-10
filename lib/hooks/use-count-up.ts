@@ -16,7 +16,13 @@ export function useCountUp(target: number, durationMs = 700, precision = 2): num
   const startValueRef = useRef(0)
 
   useEffect(() => {
-    if (prefersReducedMotion()) {
+    // Snap to the target (no animation) when motion is reduced or the tab is
+    // hidden. requestAnimationFrame is paused in background/hidden tabs, so a
+    // pure-rAF count-up would otherwise stick at its start value (0) forever —
+    // e.g. a dashboard KPI loading its data while the tab isn't focused.
+    const hidden =
+      typeof document !== 'undefined' && document.visibilityState === 'hidden'
+    if (prefersReducedMotion() || hidden) {
       setValue(target)
       return
     }
@@ -36,8 +42,15 @@ export function useCountUp(target: number, durationMs = 700, precision = 2): num
       }
     }
     rafRef.current = requestAnimationFrame(tick)
+
+    // Safety net: if rAF never fires (tab hidden mid-animation, throttled,
+    // jank), force the final value once the duration has elapsed so the number
+    // always lands on `target` rather than freezing partway.
+    const settle = setTimeout(() => setValue(target), durationMs + 80)
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      clearTimeout(settle)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target, durationMs])

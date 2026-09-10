@@ -5,7 +5,9 @@
 
 import mysql from 'mysql2/promise';
 
-// Connection pool configuration
+// Connection pool configuration. Per Shreya (2026-09-09): keep the original
+// RDS host/user as fallbacks for now so the app reaches the original DB with
+// zero env setup. The password always comes from the environment.
 const pool = mysql.createPool({
   host: process.env.DATABASE_HOST || 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
   port: parseInt(process.env.DATABASE_PORT || '3306'),

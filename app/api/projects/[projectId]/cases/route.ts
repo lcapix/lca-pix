@@ -17,12 +17,17 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // driver_count must reflect REAL attached flows (the flows table), not the
+    // legacy `drivers` JSON column — otherwise the UI showed "0 drivers" even
+    // when components had flows, which looked like corrupt/inconsistent data
+    // across the project, results, and analytics views.
     const cases = await query(
       `SELECT c.*,
               (SELECT COUNT(*) FROM component cm WHERE cm.case_id = c.case_id) AS component_count,
-              (SELECT COALESCE(SUM(JSON_LENGTH(cm.drivers)), 0)
-                 FROM component cm
-                WHERE cm.case_id = c.case_id AND cm.drivers IS NOT NULL) AS driver_count
+              (SELECT COUNT(*)
+                 FROM flows f
+                 INNER JOIN component cm ON f.component_id = cm.component_id
+                WHERE cm.case_id = c.case_id) AS driver_count
        FROM case_table c
        WHERE c.project_id = ?
        ORDER BY c.created_at DESC`,

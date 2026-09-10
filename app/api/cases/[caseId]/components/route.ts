@@ -26,7 +26,7 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const components = await query(
+    const components = await query<any>(
       `SELECT c.*,
               parent.component_name as parent_component_name
        FROM component c
@@ -36,22 +36,28 @@ export async function GET(
       [caseId]
     );
 
-    // 🔍 DEBUG: Log first component's ABC cost data
-    if (components && components.length > 0) {
-      const firstComp = components[0];
-      console.log('🔍 API DEBUG - First component ABC cost data:', {
-        component_id: firstComp.component_id,
-        component_name: firstComp.component_name,
-        labor_cost: firstComp.labor_cost,
-        energy_cost: firstComp.energy_cost,
-        transportation_cost: firstComp.transportation_cost,
-        material_cost: firstComp.material_cost,
-        equipment_cost: firstComp.equipment_cost,
-        overhead_cost: firstComp.overhead_cost,
-        currency: firstComp.currency,
-        opex: firstComp.opex,
-        capex: firstComp.capex
-      });
+    // Attach a real flow_count per component (from the flows table) so the
+    // canvas cards can show the true number of attached flows instead of 0.
+    // Isolated/best-effort: if the flows table is unavailable, components still
+    // return with flow_count 0 rather than failing the whole request.
+    try {
+      const counts = await query<any>(
+        `SELECT f.component_id, COUNT(*) AS flow_count
+         FROM flows f
+         INNER JOIN component c ON f.component_id = c.component_id
+         WHERE c.case_id = ?
+         GROUP BY f.component_id`,
+        [caseId]
+      );
+      const byId = new Map<number, number>(
+        (counts || []).map((r: any) => [Number(r.component_id), Number(r.flow_count)])
+      );
+      for (const comp of components as any[]) {
+        comp.flow_count = byId.get(Number(comp.component_id)) ?? 0;
+      }
+    } catch (countErr) {
+      console.warn('[components GET] flow_count join skipped:', countErr);
+      for (const comp of components as any[]) comp.flow_count = comp.flow_count ?? 0;
     }
 
     return NextResponse.json({ success: true, components });

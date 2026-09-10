@@ -90,7 +90,7 @@ export default function CreateComparativeCasePage() {
           case_name: formData.name.trim(),
           case_type: "comparative",
           description: formData.description.trim() || null,
-          parent_case_id: baselineCaseId ? Number(baselineCaseId) : null,
+          parent_case_id: formData.baseCaseId ? Number(formData.baseCaseId) : null,
         }),
       })
       if (!res.ok) {
@@ -142,23 +142,34 @@ export default function CreateComparativeCasePage() {
         style={{
           maxWidth: 720,
           margin: "0 auto",
-          padding: "48px 32px 0",
+          padding: "28px 32px 0",
           position: "relative",
         }}
       >
-        {/* Header */}
-        <header style={{ textAlign: "center", marginBottom: 48 }}>
+        {/* Header — compact + left-aligned to match the project page chrome. */}
+        <header style={{ marginBottom: 28 }}>
+          <div
+            className="eyebrow"
+            style={{ color: "var(--brand-primary)", marginBottom: 10 }}
+          >
+            Alternative scenario
+          </div>
           <h1
-            className="display-lg"
-            style={{ margin: 0, color: "var(--text-primary)" }}
+            style={{
+              margin: 0,
+              fontSize: 30,
+              fontWeight: 600,
+              letterSpacing: "-0.02em",
+              color: "var(--text-primary)",
+            }}
           >
             Create Comparative Case
           </h1>
           <p
             className="body"
             style={{
-              margin: "20px auto 0",
-              maxWidth: 560,
+              margin: "12px 0 0",
+              maxWidth: 620,
               color: "var(--text-secondary)",
             }}
           >

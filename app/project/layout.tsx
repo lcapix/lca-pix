@@ -1,6 +1,7 @@
 import type React from "react"
 import { AuthGuard } from "@/components/auth-guard"
 import { AppTopBar } from "@/components/lcapix"
+import { GlobalTour } from "@/components/global/global-tour"
 
 /**
  * Project layout — auth gate + LCAPIX top nav.
@@ -19,6 +20,9 @@ export default function ProjectLayout({
     <AuthGuard requireAuth={true}>
       <AppTopBar current="home" />
       {children}
+      {/* Mounts the guided tour on all project routes so the nav Tour button
+          can launch it contextually (without bouncing to /home). */}
+      <GlobalTour />
     </AuthGuard>
   )
 }

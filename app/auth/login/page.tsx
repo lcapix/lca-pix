@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
@@ -20,6 +20,49 @@ export default function LoginPage() {
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
   const { toast } = useToast()
+
+  // Surface OAuth-callback errors as toasts. The Google route bounces here
+  // with ?error=... when the handshake fails or env vars are missing. Reading
+  // window.location.search (instead of useSearchParams) avoids forcing the
+  // page off Next.js's static prerender path.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const params = new URLSearchParams(window.location.search)
+    const err = params.get("error")
+    if (!err) return
+    const messages: Record<string, { title: string; description: string }> = {
+      google_not_configured: {
+        title: "Google sign-in not yet configured",
+        description:
+          "The Google OAuth keys haven't been set on the server. Use email + password for now.",
+      },
+      oauth_failed: {
+        title: "Google sign-in failed",
+        description: "We couldn't complete the Google handshake. Try again or use email + password.",
+      },
+      userinfo_failed: {
+        title: "Google profile lookup failed",
+        description: "Google accepted the sign-in but we couldn't read your profile. Try again.",
+      },
+      server_error: {
+        title: "Server error during Google sign-in",
+        description: "Something went wrong on our side. Try email + password.",
+      },
+      oauth_sync_failed: {
+        title: "Couldn't finish Google sign-in",
+        description: "Session sync failed after the redirect. Try again.",
+      },
+    }
+    const msg = messages[err] ?? {
+      title: "Sign-in error",
+      description: decodeURIComponent(err),
+    }
+    toast({ title: msg.title, description: msg.description, variant: "destructive" })
+    // Strip the param so reloads don't re-toast.
+    const url = new URL(window.location.href)
+    url.searchParams.delete("error")
+    window.history.replaceState({}, "", url.toString())
+  }, [toast])
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {}
@@ -96,28 +139,11 @@ export default function LoginPage() {
     }
   }
 
-  // Google sign-in is temporarily disabled until the OAuth client's redirect URIs
-  // are whitelisted in Google Cloud Console. Set NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED=true
-  // once that's done to re-enable the live flow.
-  const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true"
-
+  // Google sign-in: always live in the UI. Navigate to the server route, which
+  // owns the OAuth URL construction and will redirect to a friendly error toast
+  // here if env vars are missing on the server (see /api/auth/google).
   const handleGoogleLogin = () => {
-    if (!googleEnabled) {
-      toast({
-        title: "Google sign-in is unavailable",
-        description: "We're finalizing the Google OAuth setup. Please use email and password below for now.",
-      })
-      return
-    }
-    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google`
-    const scope = "openid email profile"
-
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`
-
-    window.location.href = googleAuthUrl
+    window.location.href = "/api/auth/google"
   }
 
   return (
@@ -228,56 +254,12 @@ export default function LoginPage() {
           type="button"
           onClick={handleGoogleLogin}
           disabled={isLoading}
-          aria-disabled={!googleEnabled}
           className="btn btn-secondary"
-          style={{
-            height: 44,
-            justifyContent: "center",
-            opacity: googleEnabled ? 1 : 0.55,
-            cursor: googleEnabled ? "pointer" : "not-allowed",
-            position: "relative",
-          }}
-          title={
-            googleEnabled
-              ? "Sign in with your Google account"
-              : "Google sign-in is temporarily unavailable — use email/password below"
-          }
+          style={{ height: 44, justifyContent: "center" }}
+          title="Sign in with your Google account"
         >
           <Icon name="google" size={16} /> Continue with Google
-          {!googleEnabled && (
-            <span
-              style={{
-                position: "absolute",
-                top: -7,
-                right: 10,
-                fontSize: 9,
-                padding: "2px 7px",
-                borderRadius: 999,
-                background: "var(--surface-overlay)",
-                color: "var(--text-tertiary)",
-                fontFamily: "var(--font-mono)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                fontWeight: 600,
-              }}
-            >
-              soon
-            </span>
-          )}
         </button>
-        {!googleEnabled && (
-          <div
-            style={{
-              fontSize: 11.5,
-              color: "var(--text-tertiary)",
-              textAlign: "center",
-              marginTop: 6,
-              lineHeight: 1.5,
-            }}
-          >
-            Google sign-in is being finalized. Use email + password for now.
-          </div>
-        )}
 
         <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 16 }}>
           Don&apos;t have an account?{" "}

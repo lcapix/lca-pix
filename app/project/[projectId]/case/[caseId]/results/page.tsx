@@ -30,7 +30,6 @@ import {
   type RunTimelineRun,
   type RunTimelineStatus,
 } from '@/components/lcapix'
-import { DEMO_CONTRIBUTORS, DEMO_FLOWS, DEMO_RUNS } from '@/lib/lcapix-demo'
 import { useNotificationsStore } from '@/lib/notifications-store'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
 import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
@@ -58,6 +57,22 @@ interface APIComponentBreakdown {
   }>
 }
 
+interface FlowDetailRow {
+  flow_id: number
+  component: string
+  substance: string
+  category_name: string
+  dir: 'IN' | 'OUT'
+  amount: number
+  unit: string
+  factor: number
+  impact: number
+  /** Factor scope the engine selected ('US', 'Global', ...) — snapshot runs only. */
+  scope?: string
+  /** Unit conversion the engine applied (e.g. "1 g = 0.001 kg") — snapshot runs only. */
+  conversion?: string | null
+}
+
 interface AssessmentResult {
   run_id: number
   run_name: string
@@ -68,7 +83,10 @@ interface AssessmentResult {
   impacts: Record<string, { value: number; unit: string }>
   costs: { operational: number; capital: number; total: number }
   componentBreakdown: APIComponentBreakdown[]
+  flowDetail: FlowDetailRow[]
   algorithmSteps?: string[]
+  /** Engine data-quality warnings frozen in the run snapshot. */
+  warnings?: string[]
 }
 
 type FilterDir = 'all' | 'in' | 'out'
@@ -152,9 +170,9 @@ export default function ResultsPage() {
     }
   }, [caseId, projectId])
 
-  // Load historical assessments (PRESERVED)
-  useEffect(() => {
-    const fetchAssessments = async () => {
+  // Load historical assessments (PRESERVED). Extracted so it can be re-run
+  // after a fresh assessment completes (to pull in server-computed flowDetail).
+  const fetchAssessments = async () => {
       try {
         const response = await apiRequest(`/api/cases/${caseId}/assessments`)
         if (response.ok) {
@@ -175,6 +193,8 @@ export default function ResultsPage() {
                   total: 0,
                 },
                 componentBreakdown: assessment.componentBreakdown || [],
+                flowDetail: assessment.flowDetail || [],
+                warnings: assessment.warnings || [],
               }),
             )
             setAssessmentResults(transformedAssessments)
@@ -188,9 +208,11 @@ export default function ResultsPage() {
       }
     }
 
+  useEffect(() => {
     if (caseId) {
       fetchAssessments()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId])
 
   // Build assessment result (PRESERVED)
@@ -232,6 +254,8 @@ export default function ResultsPage() {
         total: totalOperationalCost + totalCapitalCost,
       },
       componentBreakdown: data.component_breakdown || [],
+      flowDetail: data.flowDetail || [],
+      warnings: data.warnings || [],
       algorithmSteps: data.algorithm_steps || [],
     }
   }
@@ -245,6 +269,9 @@ export default function ResultsPage() {
       const result = buildAssessmentResult(data)
       setAssessmentResults((prev) => [result, ...prev])
       setCurrentAssessment(result)
+      // The POST response doesn't include server-computed flowDetail; refetch
+      // the list so the Flow-level detail table populates for the new run.
+      fetchAssessments()
       toast.success(`Assessment completed! Run ID: ${result.run_id}`)
       pushNotification({
         kind: 'assessment',
@@ -266,10 +293,43 @@ export default function ResultsPage() {
     }
   }
 
-  // PRESERVED handler — export PDF (wire existing handler if any; fallback to print)
-  const handleExportPDF = () => {
-    if (typeof window !== 'undefined') {
-      window.print()
+  // Export the most-recent assessment as a server-generated PDF or PowerPoint
+  // deck. The server route (/api/assessments/{runId}/export) builds the full
+  // report; we fetch it with auth and trigger a download. Falls back to
+  // window.print() only when there's no completed run to export yet.
+  const [exporting, setExporting] = useState<null | 'pdf' | 'pptx'>(null)
+  const handleExport = async (format: 'pdf' | 'pptx') => {
+    const runId = mostRecentAssessment?.run_id
+    if (!runId) {
+      if (typeof window !== 'undefined') window.print()
+      return
+    }
+    setExporting(format)
+    try {
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      const res = await fetch(
+        `/api/assessments/${runId}/export?format=${format}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      )
+      if (!res.ok) {
+        toast.error(`Export failed (${res.status})`)
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `LCAPIX_Report_${currentCase?.name?.replace(/[^a-zA-Z0-9]/g, '_') ?? runId}.${format}`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      toast.success(`${format.toUpperCase()} exported`)
+    } catch (e: any) {
+      toast.error(`Export error: ${e?.message ?? 'unknown'}`)
+    } finally {
+      setExporting(null)
     }
   }
 
@@ -377,21 +437,38 @@ export default function ResultsPage() {
           pct: (c.value / sum) * 100,
         }))
       })()
-    : DEMO_CONTRIBUTORS.map((c) => ({
-        id: c.id,
-        name: c.name,
-        value: c.value,
-        pct: c.pct,
-      }))
+    : []
+  // ^^ Bug fix: do NOT fall back to DEMO_CONTRIBUTORS. Empty contributors
+  // now drive a real empty state in the render below — previously a brand-
+  // new case looked like it had run an assessment when it hadn't.
 
   const usingDemoContributors = !realContributors.length
 
-  // Flow table rows — real flows not present on assessment payload; fall back to DEMO.
-  const flowRows = DEMO_FLOWS.filter((f) => {
-    if (flowFilter === 'in') return f.dir === 'IN'
-    if (flowFilter === 'out') return f.dir === 'OUT'
-    return true
-  })
+  // Flow table — real per-flow rows for the active category, computed
+  // server-side (Amount × Factor = Impact, matching the engine). Filtered by
+  // the input/output toggle. Empty when the active category has no driver
+  // flows (handled by an empty-state in the render below).
+  const flowRows = (mostRecentAssessment?.flowDetail || [])
+    .filter((f) => !activeCat || f.category_name === activeCat.key)
+    .filter((f) =>
+      flowFilter === 'all'
+        ? true
+        : flowFilter === 'in'
+          ? f.dir === 'IN'
+          : f.dir === 'OUT',
+    )
+    .map((f) => ({
+      id: String(f.flow_id),
+      component: f.component,
+      substance: f.substance,
+      dir: f.dir,
+      amount: f.amount,
+      unit: f.unit,
+      factor: f.factor,
+      impact: f.impact,
+      scope: f.scope,
+      conversion: f.conversion,
+    }))
 
   // Historical runs — real if at least two with active-category values, else DEMO.
   const realRuns: RunTimelineRun[] = activeCat
@@ -417,14 +494,11 @@ export default function ResultsPage() {
         .reverse()
     : []
 
-  const historyRuns: RunTimelineRun[] = realRuns.length >= 2
-    ? realRuns
-    : DEMO_RUNS.map((r) => ({
-        id: r.id,
-        timestamp: r.date,
-        totalImpact: r.value,
-        status: r.status as RunTimelineStatus,
-      }))
+  // Show whatever real runs we have. Previously, fewer than 2 real runs
+  // triggered a DEMO_RUNS fallback that made the history timeline look
+  // populated. Now: 0 real runs → empty timeline + empty-state. 1+ real
+  // runs → render them honestly.
+  const historyRuns: RunTimelineRun[] = realRuns
 
   const usingDemoRuns = realRuns.length < 2
 
@@ -618,8 +692,23 @@ export default function ResultsPage() {
             </select>
           </label>
 
-          <button className="btn btn-secondary btn-sm" onClick={handleExportPDF}>
-            <Icon name="download" size={14} /> Export PDF
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleExport('pdf')}
+            disabled={exporting !== null}
+            title="Download a PDF report of the latest run"
+          >
+            <Icon name="download" size={14} />{' '}
+            {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleExport('pptx')}
+            disabled={exporting !== null}
+            title="Download a PowerPoint deck of the latest run"
+          >
+            <Icon name="download" size={14} />{' '}
+            {exporting === 'pptx' ? 'Exporting…' : 'Export PPT'}
           </button>
           <button
             type="button"
@@ -674,12 +763,33 @@ export default function ResultsPage() {
             if (!prev) return null
             return ((cur - prev) / prev) * 100
           })()}
-          methodLabel={mostRecentAssessment?.method || 'CML 2001'}
+          methodLabel={mostRecentAssessment?.calculation_method || 'CML 2001'}
           activeCategoriesCount={activeCategoriesCount}
           componentsAssessed={allComponents.length}
           lastRunLabel={lastRunLabel}
         />
 
+
+        {/* Data-quality warnings frozen in the run snapshot */}
+        {(mostRecentAssessment?.warnings?.length ?? 0) > 0 && (
+          <div
+            className="card"
+            style={{
+              marginBottom: 20,
+              padding: '14px 18px',
+              borderLeft: '4px solid var(--warning, #b8860b)',
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', marginBottom: 6 }}>
+              DATA-QUALITY WARNINGS · {mostRecentAssessment!.warnings!.length}
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-secondary)' }}>
+              {mostRecentAssessment!.warnings!.map((w, i) => (
+                <li key={i} style={{ marginBottom: 4 }}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Row 3 — Flow table */}
         <div
@@ -703,15 +813,6 @@ export default function ResultsPage() {
               }}
             >
               <span className="mono">{flowRows.length}</span> flows
-              <span
-                style={{
-                  marginLeft: 8,
-                  fontSize: 10,
-                  color: 'var(--text-tertiary)',
-                }}
-              >
-                (sample)
-              </span>
             </span>
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', gap: 6 }}>
@@ -742,7 +843,7 @@ export default function ResultsPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1.5fr 2fr 80px 100px 80px 100px 100px',
+              gridTemplateColumns: '1.5fr 2fr 70px 100px 90px 90px 70px 100px',
               padding: '10px 20px',
               background: 'var(--surface-overlay)',
               fontSize: 10,
@@ -758,6 +859,7 @@ export default function ResultsPage() {
             <div style={{ textAlign: 'right' }}>Amount</div>
             <div>Unit</div>
             <div style={{ textAlign: 'right' }}>Factor</div>
+            <div>Scope</div>
             <div style={{ textAlign: 'right' }}>Impact</div>
           </div>
           {flowRows.map((f) => (
@@ -765,7 +867,7 @@ export default function ResultsPage() {
               key={f.id}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1.5fr 2fr 80px 100px 80px 100px 100px',
+                gridTemplateColumns: '1.5fr 2fr 70px 100px 90px 90px 70px 100px',
                 padding: '10px 20px',
                 borderTop: '1px solid var(--border-subtle)',
                 fontSize: 12,
@@ -795,13 +897,17 @@ export default function ResultsPage() {
               <div className="mono" style={{ textAlign: 'right' }}>
                 {fmtNum(f.amount, 2)}
               </div>
-              <div style={{ color: 'var(--text-tertiary)' }}>{f.unit}</div>
+              <div style={{ color: 'var(--text-tertiary)' }} title={f.conversion || undefined}>
+                {f.unit}
+                {f.conversion ? ' *' : ''}
+              </div>
               <div
                 className="mono"
                 style={{ textAlign: 'right', color: 'var(--text-tertiary)' }}
               >
                 {fmtNum(f.factor, 3)}
               </div>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{f.scope || '—'}</div>
               <div
                 className="mono"
                 style={{
@@ -814,6 +920,21 @@ export default function ResultsPage() {
               </div>
             </div>
           ))}
+          {flowRows.length === 0 && (
+            <div
+              style={{
+                padding: '28px 20px',
+                textAlign: 'center',
+                fontSize: 12,
+                color: 'var(--text-tertiary)',
+                borderTop: '1px solid var(--border-subtle)',
+              }}
+            >
+              {mostRecentAssessment
+                ? `No driver flows contribute to ${activeCat?.label ?? 'this category'}. Add input/output flows on a leaf component and re-run.`
+                : 'Run an assessment to see flow-level detail.'}
+            </div>
+          )}
         </div>
 
         {/* Historical runs */}
@@ -830,9 +951,6 @@ export default function ResultsPage() {
               }}
             >
               {historyRuns.length} runs
-              {usingDemoRuns && (
-                <span style={{ marginLeft: 6, fontSize: 10 }}>(sample)</span>
-              )}
             </span>
             <div style={{ flex: 1 }} />
             <button
@@ -852,6 +970,8 @@ export default function ResultsPage() {
         onClose={() => setAssessOpen(false)}
         caseId={Number(caseId)}
         onCompleted={handleAssessmentCompleted}
+        initialMethod={method}
+        initialRegion={region}
       />
 
       <MagicInsightsModal
@@ -859,14 +979,18 @@ export default function ResultsPage() {
         onClose={() => setMagicOpen(false)}
         caseName={currentCase?.name ?? 'this case'}
         method={mostRecentAssessment?.calculation_method ?? 'CML 2001'}
-        totalImpact={mostRecentAssessment?.impacts?.['Global warming']?.value}
-        totalCost={mostRecentAssessment?.costs?.total}
-        topContributors={contributors.slice(0, 5).map((c) => ({
-          id: c.id,
-          name: c.name,
-          pct: c.pct,
-          value: c.value,
+        impacts={mostRecentAssessment?.impacts}
+        componentBreakdown={mostRecentAssessment?.componentBreakdown?.map((c) => ({
+          component_id: c.component_id,
+          component_name: c.component_name,
+          impacts: c.impacts.map((i) => ({
+            category_name: i.category_name,
+            impact_value: i.impact_value,
+            unit: i.unit,
+          })),
         }))}
+        totalCost={mostRecentAssessment?.costs?.total}
+        initialCategory={activeKey}
         projectId={projectId}
         caseId={caseId}
       />
@@ -1138,13 +1262,13 @@ function DashboardHero({
             {usingDemoContributors && (
               <div
                 style={{
-                  fontSize: 11,
+                  fontSize: 12,
                   color: 'var(--text-tertiary)',
                   marginTop: 4,
                   fontStyle: 'italic',
                 }}
               >
-                Sample contributors — assessment not yet run for this case.
+                No contributors yet — run an assessment to see what is driving impact.
               </div>
             )}
           </div>

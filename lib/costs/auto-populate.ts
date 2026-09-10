@@ -5,6 +5,7 @@ import { query, queryOne, execute } from '@/lib/db-helpers';
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
 import { fetchMedianHourlyWage } from '@/lib/integrations/bls/client';
 import { fetchElectricityPrice, fetchNaturalGasPrice } from '@/lib/integrations/eia/client';
+import { getLaborRate, ENERGY_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 
 export interface AutoPopulateResult {
   laborSet: boolean;
@@ -43,6 +44,15 @@ export async function autoPopulateCosts(componentId: number): Promise<AutoPopula
             unit: '$/hr',
             source: `BLS ${w.year}`,
             effectiveDate: `${w.year}-05-01`,
+          };
+        },
+        staticFallback: () => {
+          const lr = getLaborRate(comp.labor_occupation);
+          return {
+            rateValue: lr.rate,
+            unit: '$/hr',
+            source: `BLS OEWS reference ${REFERENCE_VINTAGE}`,
+            effectiveDate: `${REFERENCE_VINTAGE}-01`,
           };
         },
       });
@@ -86,6 +96,12 @@ export async function autoPopulateCosts(componentId: number): Promise<AutoPopula
               source: `EIA ${p.period}`, effectiveDate: `${p.period}-01`,
             };
           },
+          staticFallback: () => ({
+            rateValue: ENERGY_RATES.electricity_industrial.rate,
+            unit: '$/kWh',
+            source: `EIA reference ${REFERENCE_VINTAGE}`,
+            effectiveDate: `${REFERENCE_VINTAGE}-01`,
+          }),
         });
         energyCost += rate.rateValue * qty;
         energyFound = true;
@@ -104,6 +120,12 @@ export async function autoPopulateCosts(componentId: number): Promise<AutoPopula
               source: `EIA ${p.period}`, effectiveDate: `${p.period}-01`,
             };
           },
+          staticFallback: () => ({
+            rateValue: ENERGY_RATES.natural_gas.rate,
+            unit: '$/kWh',
+            source: `EIA reference ${REFERENCE_VINTAGE}`,
+            effectiveDate: `${REFERENCE_VINTAGE}-01`,
+          }),
         });
         energyCost += rate.rateValue * qty;
         energyFound = true;

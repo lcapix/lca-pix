@@ -10,8 +10,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
+import { generateAssessmentPPTX } from '@/lib/pptx-generator';
 
 export async function GET(
   request: NextRequest,
@@ -21,6 +22,9 @@ export async function GET(
     const userId = await requireAuth(request);
     const { runId: runIdParam } = await params;
     const runId = parseInt(runIdParam);
+
+    // format=pdf (default) | pptx — committees often want an editable deck.
+    const format = (new URL(request.url).searchParams.get('format') || 'pdf').toLowerCase();
 
     // 1. Get assessment run with case and project info
     const assessment = await queryOne<any>(
@@ -40,6 +44,13 @@ export async function GET(
 
     if (!assessment) {
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
+    }
+
+    // Exports carry the full report; require at least viewer access on the
+    // owning project (this was the one resource route without the check).
+    const hasAccess = await checkProjectAccess(userId, assessment.project_id, 'viewer');
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // 2. Get all components for the case
@@ -74,9 +85,12 @@ export async function GET(
       [runId]
     );
 
-    // 5. Get all flows for the case
+    // 5. Get all flows for the case. The live `flows` table uses `direction`
+    // and `amount` columns (a prior migration renamed them from
+    // flow_type/quantity); querying the old names 500'd the export.
     const flows = await query<any>(
-      `SELECT c.component_name, s.substance_name, f.flow_type as direction, f.quantity as amount, f.unit
+      `SELECT c.component_name, s.substance_name,
+              f.flow_type AS direction, f.quantity AS amount, f.unit
        FROM flows f
        JOIN component c ON f.component_id = c.component_id
        JOIN substances s ON f.substance_id = s.substance_id
@@ -85,26 +99,43 @@ export async function GET(
       [assessment.case_id]
     );
 
-    // 6. Data sources for attribution
+    // 6. Data sources for attribution. These two lookups touch columns/tables
+    // that vary across environments (schema drift left some DBs without
+    // `driver_impact_factors.source_reference` or the `cost_rates` table). They
+    // are attribution niceties, not core report data, so make them best-effort:
+    // a failed lookup yields an empty source list rather than 500-ing the whole
+    // export. The real impact-factor source is `data_source`.
     const methodName: string = assessment.calculation_method ?? 'CML 2001';
     const regionCode: string = assessment.region_code ?? 'Global';
 
-    const factorSources = await query<any>(
-      `SELECT DISTINCT dif.source_reference
-         FROM assessment_results ar
-         JOIN driver_impact_factors dif ON dif.category_id = ar.category_id
-        WHERE ar.run_id = ?
-          AND dif.method_name = ?
-          AND dif.geographic_scope IN (?, 'Global')
-          AND dif.source_reference IS NOT NULL`,
-      [runId, methodName, regionCode],
-    );
+    // Prod schema: driver_impact_factors uses source_reference + geographic_scope
+    // (NOT data_source / geographic_region). Wrapped so attribution never blocks
+    // the export.
+    let factorSources: any[] = [];
+    try {
+      factorSources = await query<any>(
+        `SELECT DISTINCT dif.source_reference
+           FROM assessment_results ar
+           JOIN driver_impact_factors dif ON dif.category_id = ar.category_id
+          WHERE ar.run_id = ?
+            AND dif.geographic_scope IN (?, 'global', 'Global')
+            AND dif.source_reference IS NOT NULL`,
+        [runId, regionCode],
+      );
+    } catch {
+      factorSources = [];
+    }
 
-    const costSources = await query<any>(
-      `SELECT DISTINCT source FROM cost_rates
-         WHERE region_code IN (?, 'Global') ORDER BY source`,
-      [regionCode],
-    );
+    let costSources: any[] = [];
+    try {
+      costSources = await query<any>(
+        `SELECT DISTINCT source FROM cost_rates
+           WHERE region_code IN (?, 'Global') ORDER BY source`,
+        [regionCode],
+      );
+    } catch {
+      costSources = [];
+    }
 
     // 7. Build report data
     const reportData: ReportData = {
@@ -124,7 +155,9 @@ export async function GET(
       assessment: {
         run_id: assessment.run_id,
         run_name: assessment.run_name,
-        run_at: assessment.run_date,
+        // Canonical timestamp column is `run_at`; `run_date` is a missing alias
+        // in some DBs. Fall back so the report always shows a date.
+        run_at: assessment.run_at ?? assessment.run_date,
         calculation_method: assessment.calculation_method || 'CML 2001',
         executed_by_username: assessment.executed_by_username,
       },
@@ -144,7 +177,23 @@ export async function GET(
       },
     };
 
-    // 7. Generate PDF
+    const safeName = assessment.project_name.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // 7a. PowerPoint export — generate and stream a .pptx deck.
+    if (format === 'pptx' || format === 'ppt') {
+      const pptxBuffer = await generateAssessmentPPTX(reportData);
+      return new NextResponse(new Uint8Array(pptxBuffer), {
+        status: 200,
+        headers: {
+          'Content-Type':
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'Content-Disposition': `attachment; filename="LCAPIX_Report_${safeName}_${runId}.pptx"`,
+          'Content-Length': String(pptxBuffer.length),
+        },
+      });
+    }
+
+    // 7b. Generate PDF (default)
     const doc = generateAssessmentPDF(reportData);
 
     // 8. Stream response

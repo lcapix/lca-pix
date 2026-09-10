@@ -239,6 +239,41 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
         })}
       </nav>
       <div style={{ flex: 1, minWidth: 8 }} />
+      {/* Walk-me-through button. Mirrors the Tour button on /home so the
+          guided tour can be triggered from any project / case / results
+          page. Signals via sessionStorage + a custom event the home page
+          listens for. */}
+      <button
+        type="button"
+        title="Walk me through LCAPIX"
+        onClick={() => {
+          // Launch the tour on the CURRENT page. On /home the page's own
+          // GuidedTour listens; on project routes the layout's <GlobalTour>
+          // listens and starts at the step matching the page. No redirect —
+          // the tour is contextual to wherever the user is.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('lcapix:start-tour'))
+          }
+        }}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 30,
+          padding: '0 12px',
+          marginRight: 8,
+          borderRadius: 6,
+          border: '1px solid color-mix(in oklab, var(--brand-primary) 30%, transparent)',
+          background: 'color-mix(in oklab, var(--brand-primary) 8%, transparent)',
+          color: 'var(--brand-primary)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        <Icon name="sparkle" size={13} /> Tour
+      </button>
       <div
         style={{
           display: 'flex',

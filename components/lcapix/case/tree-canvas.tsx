@@ -80,7 +80,13 @@ function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: Playgrou
       xById[n.id] = x
       return x
     }
-    walk(root, 0, null)
+    // Skip the synthetic multi-root container: render its children as an
+    // independent forest of top-level nodes (no fake "Case Root" parent).
+    if (root.id === '__root__') {
+      ;(root.children || []).forEach((c) => walk(c, 0, null))
+    } else {
+      walk(root, 0, null)
+    }
 
     const positions: Record<string, NodePos> = {}
     let maxX = 0
@@ -362,7 +368,7 @@ function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: Playgrou
                 background: tone.bg,
                 border: isMatch
                   ? `2px solid #f59e0b`
-                  : `1px solid ${tone.border}`,
+                  : `1.5px solid ${tone.border}`,
                 borderRadius: 10,
                 padding: '10px 14px',
                 cursor: 'grab',
@@ -371,7 +377,7 @@ function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: Playgrou
                   ? `0 0 0 4px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(15,23,42,0.10)`
                   : active
                   ? `0 0 0 3px ${tone.border}66, 0 4px 12px rgba(15,23,42,0.12)`
-                  : '0 1px 3px rgba(15,23,42,0.08)',
+                  : '0 1px 4px rgba(15,23,42,0.14)',
                 transition:
                   dragRef.current?.id === n.id
                     ? 'none'

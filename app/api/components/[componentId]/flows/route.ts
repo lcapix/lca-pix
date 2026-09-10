@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { convertQuantity, compatibleUnits } from '@/lib/units';
 
 // GET /api/components/[componentId]/flows - Get all flows for a component
 export async function GET(
@@ -29,12 +30,19 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // NOTE: actual DB columns are `flow_type` and `quantity` (not `direction`/`amount`).
-    // The earlier session handoff aliased these for backward compatibility, but the
-    // aliases pointed at non-existent source columns — fixed here.
+    // The live `flows` table columns are `direction` and `amount` (a migration
+    // renamed them from flow_type/quantity). Querying/ordering by the old names
+    // 500'd the whole fetch. We alias `direction AS flow_type` and
+    // `amount AS quantity` so existing clients that read those keys keep working,
+    // and surface `cas_number` so the inspector can show each flow's data source.
+    // `s.unit` is intentionally omitted (absent in some environments); the flow's
+    // own `unit` column carries the unit.
+    // Prod schema: the flows table uses flow_type/quantity natively (NOT
+    // direction/amount). `f.*` returns them; we add substance fields for the
+    // inspector. `s.unit` is omitted (absent in some environments).
     const flows = await query(
       `SELECT f.*,
-              s.substance_name, s.category as substance_category, s.unit as substance_default_unit
+              s.substance_name, s.category as substance_category, s.cas_number
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.component_id = ?
@@ -79,8 +87,14 @@ export async function POST(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { substance_id, flow_type, quantity, unit, is_driver, driver_description } =
-      await request.json();
+    // Prod schema: the flows table columns are flow_type / quantity (NOT
+    // direction / amount). Accept either key from the client for resilience.
+    const body = await request.json();
+    const substance_id = body.substance_id;
+    const flow_type = body.flow_type ?? body.direction;
+    const quantity = body.quantity ?? body.amount;
+    const unit = body.unit;
+    const driver_description = body.driver_description ?? null;
 
     if (!substance_id || !flow_type || quantity === undefined || !unit) {
       return NextResponse.json(
@@ -93,24 +107,37 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
 
+    // Unit guard: the entered unit must be convertible into the substance's
+    // factor unit, or the assessment could only exclude this flow later. The
+    // flow keeps the unit AS ENTERED (provenance); the engine converts at
+    // calculation time.
+    const substanceRow = await queryOne<any>(
+      `SELECT unit AS default_unit, substance_name FROM substances WHERE substance_id = ?`,
+      [substance_id]
+    );
+    if (substanceRow?.default_unit) {
+      const conv = convertQuantity(1, unit, substanceRow.default_unit);
+      if (!conv) {
+        return NextResponse.json(
+          {
+            error: `Unit '${unit}' cannot be converted to '${substanceRow.default_unit}', the unit ${substanceRow.substance_name}'s impact factors are stored in. Compatible units: ${compatibleUnits(substanceRow.default_unit).join(', ') || substanceRow.default_unit}.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Bug #9: default is_driver to TRUE so new flows count in assessments.
     const flowId = await insert(
       `INSERT INTO flows
-       (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
+         (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        componentId,
-        substance_id,
-        flow_type,
-        quantity,
-        unit,
-        is_driver ? 1 : 0,
-        driver_description ?? null,
-      ]
+      [componentId, substance_id, flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
     );
 
     const newFlow = await queryOne(
       `SELECT f.*,
-              s.substance_name, s.category as substance_category
+              s.substance_name, s.category as substance_category, s.cas_number
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.flow_id = ?`,

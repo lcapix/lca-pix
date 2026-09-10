@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "lcapix-local",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH:/usr/local/bin && cd '/Users/shreyamendi/lca/lca project v3' && npx next dev --port 3000"],
+      "port": 3000
+    },
+    {
       "name": "lcapix-dev",
       "runtimeExecutable": "/bin/sh",
       "runtimeArgs": ["-c", "export PATH=/opt/homebrew/bin:$PATH && cd '/Users/kavishpandit/Desktop/lca/lca project v3' && pnpm run dev"],

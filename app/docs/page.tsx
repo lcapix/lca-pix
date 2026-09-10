@@ -1,10 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { Icon } from '@/components/lcapix'
 import { MarketingNav } from '@/components/lcapix/marketing-nav'
 
+// Every item links to a real guide page (no dead anchors). The professor's
+// manual content lives under /guide/* — getting started, first assessment,
+// data model, glossary, API reference, FAQ.
 const SECTIONS = [
   {
     icon: 'play' as const,
@@ -12,9 +16,9 @@ const SECTIONS = [
     blurb: 'Sign up, create your first project, model a hierarchy.',
     items: [
       { l: 'Quick start (5 min)', href: '/guide' },
-      { l: 'Concepts: Product → Elemental Task', href: '#concepts' },
-      { l: 'Importing existing LCA data', href: '#import' },
-      { l: 'First assessment', href: '#first-run' },
+      { l: 'Concepts: Product → Elemental Task', href: '/guide/data-model' },
+      { l: 'Building your first hierarchy', href: '/guide/first-assessment' },
+      { l: 'Running your first assessment', href: '/guide/first-assessment' },
     ],
   },
   {
@@ -22,11 +26,11 @@ const SECTIONS = [
     title: 'Methodology',
     blurb: 'CML, ReCiPe, TRACI explained. When to use which.',
     items: [
-      { l: 'CML 2001 — midpoint reference', href: '#cml' },
-      { l: 'ReCiPe Midpoint (H)', href: '#recipe' },
-      { l: 'TRACI 2.1 — US-focused', href: '#traci' },
-      { l: 'Characterization factors', href: '#cf' },
-      { l: 'Normalization & weighting', href: '#nw' },
+      { l: 'LCIA methods (CML · ReCiPe · TRACI)', href: '/guide/glossary' },
+      { l: 'Midpoint vs. endpoint', href: '/guide/glossary' },
+      { l: 'Characterization factors', href: '/guide/glossary' },
+      { l: 'Normalization & weighting', href: '/guide/glossary' },
+      { l: 'Impact categories', href: '/guide/glossary' },
     ],
   },
   {
@@ -34,10 +38,10 @@ const SECTIONS = [
     title: 'ABC costing',
     blurb: 'Activity-Based Costing applied to every flow.',
     items: [
-      { l: 'Cost drivers — Labor · Energy · Material', href: '#drivers' },
-      { l: 'Operational vs capital', href: '#opex-capex' },
-      { l: 'Per-flow attribution', href: '#flow-attr' },
-      { l: 'Region-aware cost rates', href: '#region-cost' },
+      { l: 'Cost drivers — Labor · Energy · Material', href: '/guide/data-model' },
+      { l: 'Operational vs capital', href: '/guide/data-model' },
+      { l: 'Per-flow attribution', href: '/guide/data-model' },
+      { l: 'Cost ↔ impact trade-off', href: '/guide/first-assessment' },
     ],
   },
   {
@@ -45,11 +49,10 @@ const SECTIONS = [
     title: 'Data sources',
     blurb: 'openLCA, PubChem, Electricity Maps, BLS, EIA.',
     items: [
-      { l: 'openLCA factor pack', href: '#openlca' },
-      { l: 'PubChem substance enrichment', href: '#pubchem' },
-      { l: 'Electricity Maps integration', href: '#emaps' },
-      { l: 'BLS labor codes', href: '#bls' },
-      { l: 'EIA energy prices', href: '#eia' },
+      { l: 'Substance catalog & sources', href: '/guide/data-model' },
+      { l: 'PubChem substance enrichment', href: '/guide/glossary' },
+      { l: 'Where each number comes from', href: '/guide/faq' },
+      { l: 'Reference cost rates', href: '/guide/data-model' },
     ],
   },
   {
@@ -57,11 +60,11 @@ const SECTIONS = [
     title: 'API reference',
     blurb: 'REST endpoints for projects, cases, assessments.',
     items: [
-      { l: 'Authentication', href: '#auth' },
-      { l: 'Projects', href: '#api-projects' },
-      { l: 'Cases & components', href: '#api-cases' },
-      { l: 'Run assessment', href: '#api-assess' },
-      { l: 'Export PDF', href: '#api-export' },
+      { l: 'Authentication', href: '/guide/api-reference' },
+      { l: 'Projects', href: '/guide/api-reference' },
+      { l: 'Cases & components', href: '/guide/api-reference' },
+      { l: 'Run assessment', href: '/guide/api-reference' },
+      { l: 'Export PDF / PowerPoint', href: '/guide/api-reference' },
     ],
   },
   {
@@ -69,10 +72,10 @@ const SECTIONS = [
     title: 'Compliance',
     blurb: 'ISO 14040/14044 alignment, audit trails, data lineage.',
     items: [
-      { l: 'ISO 14040/14044 mapping', href: '#iso' },
-      { l: 'Goal & scope template', href: '#goal-scope' },
-      { l: 'Data quality indicators', href: '#dqi' },
-      { l: 'Audit log format', href: '#audit' },
+      { l: 'ISO 14040/14044 mapping', href: '/guide/glossary' },
+      { l: 'Goal & scope', href: '/guide/first-assessment' },
+      { l: 'Common questions', href: '/guide/faq' },
+      { l: 'Glossary of terms', href: '/guide/glossary' },
     ],
   },
 ]
@@ -102,7 +105,18 @@ function highlight(text: string, query: string) {
 }
 
 export default function DocsPage() {
+  const router = useRouter()
   const [query, setQuery] = useState('')
+
+  // Launch the in-app guided walkthrough. It's anchored to the dashboard, so
+  // set the start flag and route to /home where <GuidedTour> auto-opens (same
+  // mechanism the navbar "Tour" button uses).
+  const startTour = () => {
+    try {
+      sessionStorage.setItem('lcapix:start-tour', '1')
+    } catch {}
+    router.push('/home')
+  }
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return SECTIONS.map((s) => ({ section: s, items: s.items }))
@@ -155,40 +169,68 @@ export default function DocsPage() {
               display: 'flex',
               alignItems: 'center',
               gap: 12,
-              padding: '14px 18px',
-              background: 'var(--surface-raised)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 10,
-              maxWidth: 560,
+              flexWrap: 'wrap',
             }}
           >
-            <Icon name="search" size={16} style={{ color: 'var(--text-tertiary)' }} />
-            <input
-              placeholder="Search the docs…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+            <div
               style={{
-                background: 'transparent',
-                border: 'none',
-                outline: 'none',
-                flex: 1,
-                fontSize: 14,
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-ui)',
-              }}
-            />
-            <span
-              className="mono"
-              style={{
-                padding: '2px 8px',
-                background: 'var(--surface-overlay)',
-                borderRadius: 4,
-                fontSize: 10,
-                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '14px 18px',
+                background: 'var(--surface-raised)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 10,
+                flex: '1 1 360px',
+                maxWidth: 560,
               }}
             >
-              ⌘K
-            </span>
+              <Icon name="search" size={16} style={{ color: 'var(--text-tertiary)' }} />
+              <input
+                placeholder="Search the docs…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  flex: 1,
+                  fontSize: 14,
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              />
+              <span
+                className="mono"
+                style={{
+                  padding: '2px 8px',
+                  background: 'var(--surface-overlay)',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                ⌘K
+              </span>
+            </div>
+            {/* Guided walkthrough — opens the interactive product tour. */}
+            <button
+              type="button"
+              onClick={startTour}
+              className="btn btn-primary"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '13px 20px',
+                borderRadius: 10,
+                fontSize: 14,
+                whiteSpace: 'nowrap',
+              }}
+              title="Take the interactive product walkthrough"
+            >
+              <Icon name="sparkle" size={16} /> Take the guided tour
+            </button>
           </div>
         </div>
       </section>

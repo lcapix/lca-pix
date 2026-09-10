@@ -104,27 +104,11 @@ export default function SignupPage() {
     }
   }
 
-  // Same kill-switch as login. Flip NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED to "true"
-  // in Vercel env vars once the redirect URI is whitelisted in Google Cloud Console.
-  const googleEnabled = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true"
-
+  // Google sign-up: always live in the UI. Navigate to the server route, which
+  // owns the OAuth URL construction and will redirect back here with an error
+  // query param if env vars are missing on the server (see /api/auth/google).
   const handleGoogleSignup = () => {
-    if (!googleEnabled) {
-      toast({
-        title: "Google sign-up is unavailable",
-        description: "We're finalizing the Google OAuth setup. Please use email and password for now.",
-      })
-      return
-    }
-    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google`
-    const scope = "openid email profile"
-
-    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}&response_type=code&scope=${encodeURIComponent(scope)}&access_type=offline&prompt=consent`
-
-    window.location.href = googleAuthUrl
+    window.location.href = "/api/auth/google"
   }
 
   return (
@@ -254,56 +238,12 @@ export default function SignupPage() {
           type="button"
           onClick={handleGoogleSignup}
           disabled={isLoading}
-          aria-disabled={!googleEnabled}
           className="btn btn-secondary"
-          style={{
-            height: 44,
-            justifyContent: "center",
-            opacity: googleEnabled ? 1 : 0.55,
-            cursor: googleEnabled ? "pointer" : "not-allowed",
-            position: "relative",
-          }}
-          title={
-            googleEnabled
-              ? "Sign up with your Google account"
-              : "Google sign-up is temporarily unavailable — use email/password above"
-          }
+          style={{ height: 44, justifyContent: "center" }}
+          title="Sign up with your Google account"
         >
           <Icon name="google" size={16} /> Continue with Google
-          {!googleEnabled && (
-            <span
-              style={{
-                position: "absolute",
-                top: -7,
-                right: 10,
-                fontSize: 9,
-                padding: "2px 7px",
-                borderRadius: 999,
-                background: "var(--surface-overlay)",
-                color: "var(--text-tertiary)",
-                fontFamily: "var(--font-mono)",
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                fontWeight: 600,
-              }}
-            >
-              soon
-            </span>
-          )}
         </button>
-        {!googleEnabled && (
-          <div
-            style={{
-              fontSize: 11.5,
-              color: "var(--text-tertiary)",
-              textAlign: "center",
-              marginTop: 6,
-              lineHeight: 1.5,
-            }}
-          >
-            Google sign-up is being finalized. Use email + password for now.
-          </div>
-        )}
 
         <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 16 }}>
           Already have an account?{" "}

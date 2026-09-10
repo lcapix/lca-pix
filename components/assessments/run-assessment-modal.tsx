@@ -1,36 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { apiPost } from '@/lib/api-client';
 
+// Regions the engine recognises (see normalizeRegion in lib/lca-engine). The
+// factor table currently only carries 'Global'-scope rows, so non-Global picks
+// gracefully fall back to Global — but these are the canonical values the rest
+// of the app (Results-page selector) uses, kept consistent here.
 const REGIONS = [
-  { code: 'Global', label: 'Global average' },
-  { code: 'US-NY', label: 'United States — New York' },
-  { code: 'US-CA', label: 'United States — California' },
-  { code: 'US-TX', label: 'United States — Texas' },
-  { code: 'FR',    label: 'France' },
-  { code: 'DE',    label: 'Germany' },
-  { code: 'GB',    label: 'United Kingdom' },
-  { code: 'CN',    label: 'China' },
-  { code: 'IN',    label: 'India' },
+  { code: 'US Grid',    label: 'United States — grid average' },
+  { code: 'EU Average', label: 'Europe — average' },
+  { code: 'Global',     label: 'Global average' },
 ];
 
-// Real LCIA methods that ship with the platform. These are the only valid
-// choices for an assessment run — what changes is the characterisation factor
-// set the engine uses, not the inventory drivers themselves.
+// LCIA methods the platform can actually calculate — i.e. the ones with
+// characterisation factors loaded in `driver_impact_factors`. Offering methods
+// with no factors (CML-IA 2016, EF 3.1, IPCC 2021, EPS 2020, …) silently
+// produced all-zero runs, which read as a broken assessment. Keep this list in
+// sync with the method_name values present in the factor table.
 const LCIA_METHODS = [
-  { value: 'CML 2001',    label: 'CML 2001 — midpoint, EU baseline' },
-  { value: 'CML-IA 2016', label: 'CML-IA 2016 — updated midpoint' },
-  { value: 'ReCiPe 2016 (M)', label: 'ReCiPe 2016 (Midpoint, H)' },
-  { value: 'ReCiPe 2016 (E)', label: 'ReCiPe 2016 (Endpoint, H/A)' },
-  { value: 'TRACI 2.1',   label: 'TRACI 2.1 — US EPA' },
-  { value: 'EF 3.1',      label: 'EF 3.1 — EU PEF / OEF' },
-  { value: 'IPCC 2021',   label: 'IPCC 2021 — climate change only' },
-  { value: 'EPS 2020',    label: 'EPS 2020 — monetised single score' },
+  { value: 'CML 2001',            label: 'CML 2001 — midpoint, EU baseline' },
+  { value: 'ReCiPe Midpoint (H)', label: 'ReCiPe Midpoint (H)' },
+  { value: 'TRACI 2.1',           label: 'TRACI 2.1 — US EPA' },
 ];
 
 interface Props {
@@ -38,12 +33,39 @@ interface Props {
   onClose: () => void;
   caseId: number;
   onCompleted?: (result: any) => void;
+  /** Pre-select the method/region (e.g. from the Results page selectors). */
+  initialMethod?: string;
+  initialRegion?: string;
 }
 
-export function RunAssessmentModal({ open, onClose, caseId, onCompleted }: Props) {
-  const [method, setMethod] = useState('CML 2001');
-  const [region, setRegion] = useState('Global');
+export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initialMethod, initialRegion }: Props) {
+  // Only honour a pre-selected method we can actually calculate; otherwise fall
+  // back to CML 2001 so a stale/unknown value never causes a silent zero run.
+  const validInitial = LCIA_METHODS.some(m => m.value === initialMethod) ? (initialMethod as string) : 'CML 2001';
+  const [method, setMethod] = useState(validInitial);
+  const [region, setRegion] = useState(initialRegion || 'Global');
   const [running, setRunning] = useState(false);
+
+  // The modal stays mounted (hidden) between opens, so re-sync the pre-selected
+  // method/region from props each time it re-opens — otherwise it would keep
+  // the value from first mount and ignore later Results-page selector changes.
+  useEffect(() => {
+    if (open) {
+      // Remember-last-settings (tool-review polish #5): explicit props win,
+      // then this case's last-used method/region, then defaults — so a
+      // re-run doesn't re-ask questions the user already answered.
+      let remembered: { method?: string; region?: string } = {};
+      try {
+        remembered = JSON.parse(
+          localStorage.getItem(`lcapix-run-prefs:${caseId}`) || '{}',
+        );
+      } catch { /* corrupt prefs are ignorable */ }
+      const wantedMethod = initialMethod ?? remembered.method;
+      setMethod(LCIA_METHODS.some(m => m.value === wantedMethod) ? (wantedMethod as string) : 'CML 2001');
+      setRegion(initialRegion ?? remembered.region ?? 'Global');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const [error, setError] = useState<string | null>(null);
   // We render the curated LCIA_METHODS list directly. (Previously we tried to
   // pull "imported methods" from /api/integrations/status, but that endpoint
@@ -61,6 +83,12 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted }: Props
           region_code: region,
         },
       );
+      try {
+        localStorage.setItem(
+          `lcapix-run-prefs:${caseId}`,
+          JSON.stringify({ method, region }),
+        );
+      } catch { /* storage may be unavailable; prefs are a convenience */ }
       onCompleted?.(result);
       onClose();
     } catch (e: any) {

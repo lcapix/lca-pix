@@ -55,11 +55,17 @@ export interface CaseValue {
 export interface OverallRanking {
   case_id: number
   case_name: string
-  total_score: number  // Sum of all impacts
-  normalized_score: number  // Normalized to 0-100
+  /** DISPLAY ONLY — raw sum across categories with different units. Never
+   * used for ranking (kg CO2-eq + kg Sb-eq is not a number that means
+   * anything). Kept for backward compatibility of stored comparisons. */
+  total_score: number
+  normalized_score: number  // 0–100, derived from mean category rank
   rank: number
   wins: number  // Number of categories where this case is best
   losses: number  // Number of categories where this case is worst
+  /** Average of this case's per-category ranks (1 = best in every category).
+   * The unit-safe basis for the overall ranking. */
+  mean_category_rank: number
 }
 
 export interface ComparisonResult {
@@ -321,27 +327,37 @@ function compareByCategory(
 /**
  * Calculate overall rankings across all categories
  */
-function calculateOverallRankings(
+export function calculateOverallRankings(
   cases: CaseImpact[],
   categoryComparisons: CategoryComparison[]
 ): OverallRanking[] {
   const rankings: OverallRanking[] = []
 
   cases.forEach(caseData => {
-    // Sum all impacts
+    // Raw cross-category sum is kept for DISPLAY/back-compat only. Summing
+    // kg CO2-eq with kg Sb-eq is not a meaningful quantity, so it must never
+    // decide the ranking (the old behavior let Global Warming's magnitude
+    // drown every other category).
     const totalScore = caseData.total_impacts.reduce(
       (sum, impact) => sum + impact.impact_value,
       0
     )
 
-    // Count wins and losses
+    // Count wins/losses and collect this case's per-category ranks.
     let wins = 0
     let losses = 0
+    const categoryRanks: number[] = []
 
     categoryComparisons.forEach(comp => {
       if (comp.best_case_id === caseData.case_id) wins++
       if (comp.worst_case_id === caseData.case_id) losses++
+      const mine = comp.values.find(v => v.case_id === caseData.case_id)
+      if (mine && typeof mine.rank === 'number') categoryRanks.push(mine.rank)
     })
+
+    const meanRank = categoryRanks.length > 0
+      ? categoryRanks.reduce((s, r) => s + r, 0) / categoryRanks.length
+      : Number.POSITIVE_INFINITY
 
     rankings.push({
       case_id: caseData.case_id,
@@ -350,23 +366,28 @@ function calculateOverallRankings(
       normalized_score: 0,  // Will be set after sorting
       rank: 0,
       wins,
-      losses
+      losses,
+      mean_category_rank: meanRank,
     })
   })
 
-  // Sort by total score (lower is better)
-  rankings.sort((a, b) => a.total_score - b.total_score)
+  // Unit-safe ordering: best average category rank first (Borda count);
+  // ties broken by more category wins, then fewer losses.
+  rankings.sort((a, b) =>
+    a.mean_category_rank - b.mean_category_rank ||
+    b.wins - a.wins ||
+    a.losses - b.losses
+  )
 
-  // Set ranks and normalized scores
-  const maxScore = rankings[rankings.length - 1].total_score
-  const minScore = rankings[0].total_score
-  const range = maxScore - minScore
-
+  // Rank + a 0–100 score derived from mean rank (100 = best possible mean
+  // rank of 1; 0 = worst possible mean rank of N).
+  const n = Math.max(cases.length, 2)
   rankings.forEach((ranking, idx) => {
     ranking.rank = idx + 1
-    ranking.normalized_score = range > 0
-      ? ((maxScore - ranking.total_score) / range) * 100
-      : 100
+    const mr = Number.isFinite(ranking.mean_category_rank)
+      ? ranking.mean_category_rank
+      : n
+    ranking.normalized_score = ((n - mr) / (n - 1)) * 100
   })
 
   return rankings

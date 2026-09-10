@@ -3,7 +3,7 @@
 // NodeDetailsStrip — inspector strip beneath the canvas.
 // Mirrors LCAPIX/pages-app.jsx lines 819-905 (NodeDetailsStrip + MetricMini).
 
-import { HIERARCHY_TYPES, DEMO_FLOWS } from '@/lib/lcapix-demo'
+import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
 
 export interface NodeDetailsStripProps {
@@ -13,12 +13,13 @@ export interface NodeDetailsStripProps {
 
 export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProps) {
   const t = node ? HIERARCHY_TYPES.find((h) => h.id === node.type) : null
-  const seed = node ? String(node.id).length * 7 + node.label.length * 13 : 0
-  const drivers = node ? (seed % 5) + 1 : 0
-  const impactKg = node ? (12 + (seed % 40) + (seed % 11) / 10).toFixed(2) : '—'
+  // Honest values only. This lightweight strip has the node's real flow count
+  // and cost; it does NOT have per-node driver counts, impact, or flow detail,
+  // so those show "—" rather than fabricated numbers. (Previously this used a
+  // seed to invent a driver count + impact, and rendered DEMO_FLOWS as if they
+  // were real substances on the node.)
   const costUsd = node?.cost ?? 0
   const flowsCount = node?.flows ?? 0
-  const sampleFlows = DEMO_FLOWS.slice(0, 3)
 
   return (
     <div
@@ -145,13 +146,11 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
         }}
       >
         <MetricMini label="Flows" value={node ? flowsCount : '—'} />
-        <MetricMini label="Drivers" value={node ? drivers : '—'} />
+        {/* All flows attached to a leaf are driver flows, so the driver count
+            equals the flow count. (Impact still needs an assessment run.) */}
+        <MetricMini label="Drivers" value={node ? flowsCount : '—'} />
         <MetricMini label="Cost" value={node ? '$' + costUsd : '—'} />
-        <MetricMini
-          label="Impact"
-          value={node ? impactKg : '—'}
-          unit={node ? 'kg CO₂-eq' : ''}
-        />
+        <MetricMini label="Impact" value={node ? '—' : '—'} unit="" />
       </div>
 
       <div
@@ -191,65 +190,18 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
           </span>
         </div>
         {node ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
-              minHeight: 0,
-            }}
-          >
-            {sampleFlows.map((f, i) => (
-              <div
-                key={f.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '28px 1fr auto auto',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '4px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)',
-                  fontSize: 12,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 8.5,
-                    padding: '2px 5px',
-                    borderRadius: 3,
-                    textAlign: 'center',
-                    background:
-                      f.dir === 'IN'
-                        ? 'oklch(from var(--signal-info) l c h / 0.18)'
-                        : 'oklch(from var(--signal-warn) l c h / 0.18)',
-                    color: f.dir === 'IN' ? 'var(--signal-info)' : 'var(--signal-warn)',
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {f.dir}
-                </span>
-                <span
-                  style={{
-                    color: 'var(--text-primary)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {f.substance}
-                </span>
-                <span
-                  className="mono"
-                  style={{ color: 'var(--text-secondary)', fontSize: 11 }}
-                >
-                  {f.amount.toFixed(2)}
-                </span>
-                <span style={{ color: 'var(--text-tertiary)', fontSize: 10.5, minWidth: 32 }}>
-                  {f.unit}
-                </span>
-              </div>
-            ))}
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+            {flowsCount > 0 ? (
+              <>
+                <span className="mono" style={{ color: 'var(--text-primary)' }}>
+                  {flowsCount}
+                </span>{' '}
+                flow{flowsCount === 1 ? '' : 's'} attached. Open the inspector to
+                view and edit them.
+              </>
+            ) : (
+              'No flows on this node yet. Select it in the inspector to add input/output flows.'
+            )}
           </div>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>

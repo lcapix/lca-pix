@@ -29,7 +29,6 @@ import type { NodeType } from '@/lib/hierarchy';
 import {
   getTypeLabel,
   getRequiredParentType,
-  validateParentChild,
   buildBreadcrumbPath,
 } from '@/lib/hierarchy';
 
@@ -109,6 +108,33 @@ const DRIVERS_BY_CATEGORY: Record<string, string[]> = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Type mapping — the segmented control uses short form values         */
+/* ('machine','elemental'); the DB/API + transformComponentFromDB use  */
+/* canonical values ('machine_line','elemental_task'). These two maps   */
+/* bridge them so created components are accepted by the API (previously */
+/* Machine/Line and Elemental Task always 400'd) and so editing an      */
+/* existing component pre-selects the right type.                       */
+/* ------------------------------------------------------------------ */
+const FORM_TO_DB_TYPE: Record<string, string> = {
+  product: 'product',
+  machine: 'machine_line',
+  subprocess: 'subprocess',
+  operation: 'operation',
+  elemental: 'elemental_task',
+};
+const DB_TO_FORM_TYPE: Record<string, string> = {
+  product: 'product',
+  machine_line: 'machine',
+  subprocess: 'subprocess',
+  operation: 'operation',
+  elemental_task: 'elemental',
+};
+const toFormType = (t?: string | null): string =>
+  t ? (DB_TO_FORM_TYPE[t] ?? t) : '';
+const toDbType = (t?: string | null): string =>
+  t ? (FORM_TO_DB_TYPE[t] ?? t) : '';
+
+/* ------------------------------------------------------------------ */
 /* Main form                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -124,7 +150,7 @@ export function ComponentForm({
   const isEditMode = mode === 'edit';
 
   const [formData, setFormData] = React.useState({
-    processType:        (initial?.type ?? suggestedType ?? '') as string,
+    processType:        toFormType(initial?.type ?? suggestedType ?? '') as string,
     processName:        initial?.name ?? '',
     processDescription: initial?.description ?? '',
     parentId:           (initial?.parentId ?? suggestedParentId ?? '') as string,
@@ -153,7 +179,37 @@ export function ComponentForm({
   const project = projects.find((p) => p.id === projectId);
   const currentCase = project?.cases.find((c) => c.id === caseId);
 
+  // The Zustand store often isn't hydrated with the case's full component list
+  // (the editor fetches them into its own local state via the API). Fetch them
+  // directly here so the parent dropdown + auto-attach default see every node,
+  // not just whatever happens to be in the store.
+  const [fetchedNodes, setFetchedNodes] = React.useState<ProcessNode[]>([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await apiRequest(`/api/cases/${caseId}/components`);
+        const d = await r.json();
+        if (!cancelled && d?.success && Array.isArray(d.components)) {
+          setFetchedNodes(
+            d.components.map((c: any) => ({
+              id: String(c.component_id),
+              name: c.component_name,
+              type: c.component_type,
+              description: c.description ?? undefined,
+              parentId: c.parent_component_id ? String(c.parent_component_id) : undefined,
+            })),
+          );
+        }
+      } catch {
+        /* fall back to store-derived nodes below */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [caseId]);
+
   const processNodes: ProcessNode[] = React.useMemo(() => {
+    if (fetchedNodes.length) return fetchedNodes;
     const list = currentCase?.components || [];
     return list.map((c) => ({
       id: c.id,
@@ -162,7 +218,7 @@ export function ComponentForm({
       description: c.description,
       parentId: c.parentId || undefined,
     }));
-  }, [currentCase?.components]);
+  }, [fetchedNodes, currentCase?.components]);
 
   const editingId = isEditMode ? initial?.id : undefined;
   const editingComponent: ComponentNode | undefined = editingId
@@ -175,13 +231,47 @@ export function ComponentForm({
     : null;
   const isProcessTypeLocked = isAddChildMode || (isEditMode && hasParent);
 
-  /* ------- eligible parent list ------- */
+  /* ------- eligible parent list -------
+   * Any non-product node can be re-parented to ANY other node in the case
+   * (full maneuverability), become independent, or stay put. The only hard
+   * constraints are: a node can't be its own parent, and can't be parented to
+   * one of its own descendants (that would create a cycle). Products are always
+   * roots and never show this selector. */
+  const descendantIds = React.useMemo(() => {
+    const set = new Set<string>();
+    if (!editingId) return set;
+    const childrenOf = (pid: string) =>
+      processNodes.filter((n) => n.parentId === pid);
+    const stack = [editingId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      for (const child of childrenOf(cur)) {
+        if (!set.has(child.id)) {
+          set.add(child.id);
+          stack.push(child.id);
+        }
+      }
+    }
+    return set;
+  }, [editingId, processNodes]);
+
   const eligibleParents = React.useMemo(() => {
-    if (!formData.processType) return [];
-    const required = getRequiredParentType(formData.processType as unknown as NodeType);
-    if (!required) return [];
-    return processNodes.filter((n) => (n.type as unknown as string) === (required as unknown as string));
-  }, [formData.processType, processNodes]);
+    if (!formData.processType || formData.processType === 'product') return [];
+    // Parent must be the tier directly above this node's tier (no level
+    // skipping), but it can be ANY node of that tier anywhere in the tree
+    // (cross-branch moves) — plus the "Independent" option in the UI. Exclude
+    // self + descendants to prevent cycles.
+    const requiredForm = getRequiredParentType(
+      formData.processType as unknown as NodeType,
+    );
+    if (!requiredForm) return [];
+    return processNodes.filter(
+      (n) =>
+        n.id !== editingId &&
+        !descendantIds.has(n.id) &&
+        toFormType(n.type as unknown as string) === (requiredForm as unknown as string),
+    );
+  }, [formData.processType, processNodes, editingId, descendantIds]);
 
   /* ------- validation ------- */
   const validateForm = () => {
@@ -192,10 +282,13 @@ export function ComponentForm({
     const processType = formData.processType as string;
     if (processType !== 'product' && formData.processType) {
       if (formData.parentId) {
-        const parent = processNodes.find((n) => n.id === formData.parentId);
-        if (parent && !validateParentChild(parent.type as unknown as NodeType, processType as unknown as NodeType)) {
-          const required = getRequiredParentType(processType as unknown as NodeType);
-          next.parentId = `Select a ${getTypeLabel(required!)} as the parent.`;
+        // Cycle / self guard (the dropdown already excludes these, but defend
+        // against stale state). Tier matching is no longer enforced — any node
+        // may be re-parented anywhere it doesn't create a cycle.
+        if (formData.parentId === editingId) {
+          next.parentId = 'A component cannot be its own parent.';
+        } else if (descendantIds.has(formData.parentId)) {
+          next.parentId = 'Cannot move a component under one of its own descendants.';
         }
         const siblings = processNodes.filter(
           (n) => n.parentId === formData.parentId && n.id !== editingId,
@@ -251,7 +344,7 @@ export function ComponentForm({
     try {
       const payload: Omit<ComponentNode, 'id'> = {
         caseId,
-        type: formData.processType as unknown as ComponentNode['type'],
+        type: toDbType(formData.processType) as unknown as ComponentNode['type'],
         name: formData.processName.trim(),
         description: formData.processDescription,
         parentId: formData.processType === 'product' ? null : (formData.parentId || null),
@@ -275,7 +368,10 @@ export function ComponentForm({
       // UI but the server write is what persists.
       const dbBody = {
         component_name: payload.name,
-        component_type: payload.type,
+        // Map the form's short type ('machine'/'elemental') to the canonical
+        // value the API validates against ('machine_line'/'elemental_task').
+        // Without this, Machine/Line and Elemental Task creates returned 400.
+        component_type: toDbType(payload.type as unknown as string),
         parent_component_id: payload.parentId ? Number(payload.parentId) : null,
         description: payload.description || null,
         driver_category: payload.driverCategory || null,
@@ -341,9 +437,54 @@ export function ComponentForm({
     : [];
 
   const handleTypeChange = (v: ComponentTypeValue) => {
-    setFormData((prev) => ({ ...prev, processType: v, parentId: '' }));
+    // Auto-attach by default: when a non-product type is chosen, pre-select the
+    // most recently created node of the tier directly above as the parent, so
+    // the new component joins the tree instead of floating off on its own. The
+    // user can still switch to "Independent" or a different parent. Product is
+    // always a root, so it gets no parent.
+    let defaultParent = '';
+    if (v !== 'product') {
+      const requiredForm = getRequiredParentType(v as unknown as NodeType);
+      if (requiredForm) {
+        const candidates = processNodes.filter(
+          (n) =>
+            n.id !== editingId &&
+            !descendantIds.has(n.id) &&
+            toFormType(n.type as unknown as string) === (requiredForm as unknown as string),
+        );
+        if (candidates.length) defaultParent = candidates[candidates.length - 1].id;
+      }
+    }
+    setFormData((prev) => ({ ...prev, processType: v, parentId: defaultParent }));
     if (errors.processType) setErrors((prev) => ({ ...prev, processType: '' }));
   };
+
+  // Default-fill the parent once the component list finishes loading, in case
+  // the user picked a type before the fetch returned (handleTypeChange would
+  // have found no candidates yet). Never overrides a parent the user touched.
+  const parentTouchedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (isEditMode || isAddChildMode || parentTouchedRef.current) return;
+    const ptype = formData.processType;
+    if (!ptype || ptype === 'product' || formData.parentId) return;
+    const requiredForm = getRequiredParentType(ptype as unknown as NodeType);
+    if (!requiredForm) return;
+    const candidates = processNodes.filter(
+      (n) =>
+        n.id !== editingId &&
+        !descendantIds.has(n.id) &&
+        toFormType(n.type as unknown as string) === (requiredForm as unknown as string),
+    );
+    // Auto-pick ONLY when the choice is unambiguous. Grabbing the last
+    // eligible node put brand-new parts under whatever operation happened to
+    // be created most recently — e.g. "Landfilling" instead of the node the
+    // user was looking at (tool-review bug #4). With several candidates the
+    // picker stays empty so the placement is a conscious choice.
+    if (candidates.length === 1) {
+      setFormData((prev) => ({ ...prev, parentId: candidates[0].id }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processNodes, formData.processType]);
 
   const showDriversSection = formData.processType === 'elemental';
 
@@ -399,7 +540,7 @@ export function ComponentForm({
           {/* ---------------- Section 1: Type & Placement ---------------- */}
           <section className="card-section" style={{ padding: 24 }}>
             <div className="title" style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-              Type &amp; Placement
+              Type &amp; Placement <span style={{ color: 'var(--signal-error)' }}>*</span>
             </div>
             <div className="body-sm" style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
               Where does this component fit in the process tree?
@@ -410,6 +551,17 @@ export function ComponentForm({
                 value={formData.processType as ComponentTypeValue | ''}
                 onChange={handleTypeChange}
                 disabled={isProcessTypeLocked}
+                // A case can only have one root Product: grey the option out
+                // ahead of time instead of erroring after the click
+                // (tool-review suggestion #2).
+                disabledTypes={
+                  mode === 'create' &&
+                  processNodes.some(
+                    (n) => toFormType(n.type as unknown as string) === 'product',
+                  )
+                    ? ['product']
+                    : undefined
+                }
               />
               {errors.processType && (
                 <p style={{ marginTop: 8, fontSize: 12, color: 'var(--signal-error)' }}>
@@ -435,6 +587,17 @@ export function ComponentForm({
             {formData.processType && formData.processType !== 'product' && (
               <div>
                 <label className="label">Parent component</label>
+                <p
+                  style={{
+                    margin: '0 0 8px',
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Attaches to a valid parent one level up by default. Pick a
+                  different one, or make it independent.
+                </p>
                 <div style={{ position: 'relative' }}>
                   <select
                     className="input"
@@ -443,14 +606,15 @@ export function ComponentForm({
                     disabled={isAddChildMode}
                     onChange={(e) => {
                       const value = e.target.value;
+                      parentTouchedRef.current = true;
                       setFormData((p) => ({ ...p, parentId: value === 'none' ? '' : value }));
                       if (errors.parentId) setErrors((p) => ({ ...p, parentId: '' }));
                     }}
                   >
-                    <option value="none">No parent (floating component)</option>
+                    <option value="none">Independent — no parent (top-level)</option>
                     {eligibleParents.map((parent) => (
                       <option key={parent.id} value={parent.id}>
-                        {parent.name} ({getTypeLabel(parent.type as unknown as NodeType)})
+                        {parent.name} ({getTypeLabel(toFormType(parent.type as unknown as string) as unknown as NodeType)})
                       </option>
                     ))}
                   </select>

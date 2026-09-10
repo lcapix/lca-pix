@@ -186,6 +186,7 @@ export const DEMO_CASES: readonly DemoCase[] = [
 ]
 
 export type HierarchyNodeType =
+  | 'Root'
   | 'Product'
   | 'Machine'
   | 'Subprocess'
@@ -427,6 +428,10 @@ export interface HierarchyTypeDef {
 }
 
 export const HIERARCHY_TYPES: readonly HierarchyTypeDef[] = [
+  // Neutral synthetic container shown only when a case has multiple top-level
+  // nodes (so the canvas has a single entry point). It is NOT a Product — it
+  // renders gray so users don't read it as a second product.
+  { id: 'Root', label: 'Case', short: '◇', color: 'var(--text-tertiary)' },
   { id: 'Product', label: 'Product', short: 'P', color: 'var(--brand-primary)' },
   { id: 'Machine', label: 'Machine/Line', short: 'M', color: 'var(--chart-2)' },
   { id: 'Subprocess', label: 'Subprocess', short: 'S', color: 'var(--text-secondary)' },

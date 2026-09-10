@@ -60,7 +60,12 @@ export async function fetchMedianHourlyWage(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) continue;
+    if (!res.ok) {
+      // An HTTP failure is an API outage, not "this series has no data" —
+      // trying the next series id against the same broken endpoint just
+      // burns quota. Surface it; callers fall back to static rates.
+      throw new Error(`BLS request failed: HTTP ${res.status}`);
+    }
 
     const body: any = await res.json();
     const rows = body?.Results?.series?.[0]?.data ?? [];

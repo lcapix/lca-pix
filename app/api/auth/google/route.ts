@@ -17,15 +17,39 @@ export async function GET(request: NextRequest) {
     }
 
     if (!code) {
-      // No authorization code - redirect to Google OAuth consent screen
-      const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-      googleAuthUrl.searchParams.set("client_id", process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!);
-      googleAuthUrl.searchParams.set("redirect_uri", `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/google`);
-      googleAuthUrl.searchParams.set("response_type", "code");
-      googleAuthUrl.searchParams.set("scope", "openid email profile");
-      googleAuthUrl.searchParams.set("access_type", "offline");
-      googleAuthUrl.searchParams.set("prompt", "consent");
-      return NextResponse.redirect(googleAuthUrl.toString());
+      // No authorization code — kick off the OAuth consent flow. Before
+      // bouncing to Google, confirm the server has what it needs. Missing env
+      // vars are the #1 cause of "invalid_client" Google error pages, which
+      // are confusing for end-users. Catch it here and bounce back to
+      // /auth/login with a query param the page can toast.
+      const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL
+      if (!clientId || !appUrl) {
+        console.warn(
+          "[google-oauth] Missing env var(s):",
+          { hasClientId: !!clientId, hasAppUrl: !!appUrl }
+        )
+        return NextResponse.redirect(
+          new URL("/auth/login?error=google_not_configured", request.url)
+        )
+      }
+
+      const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth")
+      googleAuthUrl.searchParams.set("client_id", clientId)
+      googleAuthUrl.searchParams.set("redirect_uri", `${appUrl}/api/auth/google`)
+      googleAuthUrl.searchParams.set("response_type", "code")
+      googleAuthUrl.searchParams.set("scope", "openid email profile")
+      googleAuthUrl.searchParams.set("access_type", "offline")
+      googleAuthUrl.searchParams.set("prompt", "consent")
+      return NextResponse.redirect(googleAuthUrl.toString())
+    }
+
+    // Code is present — confirm the secret is configured before exchanging.
+    if (!process.env.GOOGLE_CLIENT_SECRET) {
+      console.warn("[google-oauth] GOOGLE_CLIENT_SECRET missing on server")
+      return NextResponse.redirect(
+        new URL("/auth/login?error=google_not_configured", request.url)
+      )
     }
 
     // Exchange code for tokens

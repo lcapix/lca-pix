@@ -10,7 +10,7 @@ describe('matchSubstance', () => {
   it('matches by exact CAS number first', async () => {
     vi.mocked(dbHelpers.queryOne).mockResolvedValueOnce({ substance_id: 7 } as any);
     const id = await matchSubstance({
-      substanceName: 'Methane', casNumber: '74-82-8', aliases: [], factors: [],
+      substanceName: 'Methane', basis: 'elementary' as const, casNumber: '74-82-8', aliases: [], factors: [],
     });
     expect(id).toBe(7);
     const sql = vi.mocked(dbHelpers.queryOne).mock.calls[0][0];
@@ -22,7 +22,7 @@ describe('matchSubstance', () => {
       .mockResolvedValueOnce(null)          // no CAS match
       .mockResolvedValueOnce({ substance_id: 12 } as any);  // name match
     const id = await matchSubstance({
-      substanceName: 'Methane', casNumber: '74-82-8', aliases: [], factors: [],
+      substanceName: 'Methane', basis: 'elementary' as const, casNumber: '74-82-8', aliases: [], factors: [],
     });
     expect(id).toBe(12);
   });
@@ -35,7 +35,7 @@ describe('matchSubstance', () => {
       { substance_id: 99, substance_name: 'methane' },
     ] as any);
     const id = await matchSubstance({
-      substanceName: 'Methane', casNumber: null, aliases: ['CH4'], factors: [],
+      substanceName: 'Methane', basis: 'elementary' as const, casNumber: null, aliases: ['CH4'], factors: [],
     });
     expect(id).toBe(99);
   });
@@ -44,7 +44,7 @@ describe('matchSubstance', () => {
     vi.mocked(dbHelpers.queryOne).mockResolvedValue(null);
     vi.mocked(dbHelpers.query).mockResolvedValue([]);
     const id = await matchSubstance({
-      substanceName: 'NotAThing', casNumber: null, aliases: [], factors: [],
+      substanceName: 'NotAThing', basis: 'embodied' as const, casNumber: null, aliases: [], factors: [],
     });
     expect(id).toBeNull();
   });
@@ -66,7 +66,7 @@ describe('importFactorMethod', () => {
 
     const result = await importFactorMethod('CML 2001', [
       {
-        substanceName: 'CO2', casNumber: '124-38-9', aliases: [],
+        substanceName: 'CO2', basis: 'elementary' as const, casNumber: '124-38-9', aliases: [],
         factors: [
           { impactCategory: 'Global Warming', value: 1.0, unit: 'kg CO2 eq' },
           { impactCategory: 'Acidification', value: 0.0, unit: 'kg SO2 eq' },
@@ -91,7 +91,7 @@ describe('importFactorMethod', () => {
     const insertSpy = vi.mocked(dbHelpers.insert).mockResolvedValue(1);
 
     const result = await importFactorMethod('CML 2001', [
-      { substanceName: 'CO2', casNumber: null, aliases: [], factors: [
+      { substanceName: 'CO2', basis: 'embodied' as const, casNumber: null, aliases: [], factors: [
         { impactCategory: 'Global Warming', value: 1.0, unit: 'x' },
         { impactCategory: 'Nonexistent', value: 1.0, unit: 'x' },
       ]},
@@ -110,7 +110,7 @@ describe('importFactorMethod', () => {
     const insertSpy = vi.mocked(dbHelpers.insert).mockResolvedValue(1);
 
     const result = await importFactorMethod('CML 2001', [
-      { substanceName: 'Unknown', casNumber: null, aliases: [], factors: [
+      { substanceName: 'Unknown', basis: 'embodied' as const, casNumber: null, aliases: [], factors: [
         { impactCategory: 'Global Warming', value: 1.0, unit: 'x' },
       ]},
     ]);

@@ -21,7 +21,7 @@ import { Breadcrumbs } from "@/components/breadcrumbs"
 import { useTheme } from "next-themes"
 import { useAuthStore } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
-import { Search, User, Settings, Keyboard, LogOut, Sun, Moon, Monitor, Contrast } from "lucide-react"
+import { Search, User, Settings, Keyboard, LogOut, Sun, Moon, Monitor, Contrast, Sparkles } from "lucide-react"
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -86,6 +86,28 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Right: Search and user menu */}
           <div className="flex items-center space-x-2">
+            {/* Global "Take the tour" button — works from any page.
+                Sets a sessionStorage flag and routes to /home, where the
+                home page auto-opens the guided tour. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden md:flex items-center gap-1.5 text-primary hover:text-primary hover:bg-primary/10"
+              onClick={() => {
+                try { sessionStorage.setItem("lcapix:start-tour", "1") } catch {}
+                if (pathname === "/home") {
+                  // already on home — dispatch a custom event the page listens for
+                  window.dispatchEvent(new CustomEvent("lcapix:start-tour"))
+                } else {
+                  router.push("/home")
+                }
+              }}
+              title="Walk me through LCAPIX"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="text-sm">Tour</span>
+            </Button>
+
             {/* Search button */}
             <Button
               variant="outline"

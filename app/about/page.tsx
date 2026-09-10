@@ -2,8 +2,24 @@
 'use client';
 
 import { AuthGuard } from '@/components/auth-guard';
-import { AppTopBar, Icon, StatusDot } from '@/components/lcapix';
-import { DEMO_METHODS, DEMO_INTEGRATIONS } from '@/lib/lcapix-demo';
+import { AppTopBar, Icon } from '@/components/lcapix';
+
+// Accurate, static reference data for this descriptive page. The LCIA methods
+// are the ones the engine can actually calculate (factors present in the DB);
+// the data sources are the real integrations the platform is built on. No
+// fabricated live-health status is shown here — see /admin/integrations for
+// real per-source status.
+const METHODS: ReadonlyArray<{ id: string; name: string; note: string }> = [
+  { id: 'cml', name: 'CML 2001', note: 'Midpoint, EU baseline' },
+  { id: 'recipe', name: 'ReCiPe Midpoint (H)', note: 'Hierarchist perspective' },
+  { id: 'traci', name: 'TRACI 2.1', note: 'US EPA' },
+];
+const BUILT_ON: ReadonlyArray<{ id: string; name: string; description: string }> = [
+  { id: 'openlca', name: 'openLCA', description: 'LCA characterization-factor database' },
+  { id: 'pubchem', name: 'PubChem', description: 'Chemical substance enrichment' },
+  { id: 'bls', name: 'BLS', description: 'Labor occupation wage data' },
+  { id: 'eia', name: 'EIA', description: 'Energy price data' },
+];
 
 interface PhaseDef {
   readonly id: string;
@@ -20,12 +36,8 @@ const LCA_PHASES: readonly PhaseDef[] = [
   { id: 'report', label: 'Report', short: 'R', color: 'var(--chart-5)' },
 ];
 
-const SOURCE_IDS = ['openlca', 'pubchem', 'bls', 'eia'] as const;
-
 export default function AboutPage() {
-  const sources = SOURCE_IDS
-    .map((id) => DEMO_INTEGRATIONS.find((i) => i.id === id))
-    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  const sources = BUILT_ON;
 
   return (
     <AuthGuard>
@@ -130,7 +142,7 @@ export default function AboutPage() {
               marginBottom: 40,
             }}
           >
-            {DEMO_METHODS.map((m) => (
+            {METHODS.map((m) => (
               <div key={m.id} className="card" style={{ padding: 16 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
                 <div
@@ -157,22 +169,13 @@ export default function AboutPage() {
               <div key={s.id} className="card" style={{ padding: 14 }}>
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
                     marginBottom: 6,
                   }}
                 >
-                  <StatusDot status={s.status} />
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    {s.name}
-                  </span>
+                  {s.name}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
                   {s.description}

@@ -30,7 +30,7 @@ import {
   fmtNum,
   fmtInt,
 } from '@/components/lcapix'
-import { DEMO_CONTRIBUTORS, DEMO_TREE, HIERARCHY_TYPES, type DemoTreeNode } from '@/lib/lcapix-demo'
+import { type DemoTreeNode } from '@/lib/lcapix-demo'
 import { componentsToTree } from '@/lib/case-tree-adapter'
 import { transformComponentFromDB } from '@/lib/data-transformers'
 import { pastelFor } from '@/lib/hierarchy-pastels'
@@ -39,6 +39,12 @@ import { AnimatedNumber } from '@/components/lcapix/animated-number'
 // NOTE: AuthGuard + top nav are provided by app/project/layout.tsx
 // (AuthGuard → AppShell). Do not render AppTopBar here or we get a
 // duplicate top nav.
+
+// Number of impact categories the methodology reports — kept in sync with the
+// results page's IMPACT_CATEGORIES (Global warming, Ozone depletion, Smog
+// formation, Freshwater ecotoxicity, Acidification). Was hardcoded to 6 here,
+// which disagreed with the results page (5) and looked like inconsistent data.
+const IMPACT_CATEGORY_COUNT = 5
 
 export default function ProjectPage() {
   const params = useParams()
@@ -135,7 +141,12 @@ export default function ProjectPage() {
     if (!activeCaseId) {
       setCaseTree(null)
       setIsSyncedFromBase(false)
-      setSelectedTreeNode(DEMO_TREE)
+      // Bug fix: do NOT seed the canvas with the demo "Painted Metal Box"
+      // tree. A brand-new project with zero cases used to render a fake
+      // Product node with $4,200 cost / 39 flows / 2 sub-components — that
+      // came from DEMO_TREE leaking through. Now we show a true empty
+      // state until the user creates a case.
+      setSelectedTreeNode(null)
       return
     }
     let cancelled = false
@@ -160,6 +171,7 @@ export default function ProjectPage() {
           equipmentCost: c.equipmentCost,
           overheadCost: c.overheadCost,
           drivers: c.drivers,
+          flowCount: (c as any).flowCount ?? null,
         })),
       ) as DemoTreeNode | null
     }
@@ -175,7 +187,12 @@ export default function ProjectPage() {
         const tree = buildTree(data)
         if (tree) {
           setCaseTree(tree)
-          setSelectedTreeNode(tree)
+          // Never default-select the synthetic multi-root container — pick the
+          // first real root so the inspector shows an actual component, not
+          // "Case Root".
+          setSelectedTreeNode(
+            tree.id === '__root__' ? (tree.children?.[0] ?? null) : tree,
+          )
           return
         }
         // Empty case: keep base tree available as a *reference ghost* but DO NOT
@@ -641,6 +658,10 @@ export default function ProjectPage() {
   // Prefer real per-case cost from the assessment; fall back to demo only when
   // the case has neither a real cost nor any impact data at all.
   const totalCost = caseImpact?.costs?.total ?? null
+  // Bug fix: do NOT fall back to DEMO_CONTRIBUTORS. On a brand-new project
+  // with zero assessments, the panel used to render fake "Steel Sheet 42%"
+  // etc., which made the empty state untrustworthy. Empty contributors → the
+  // panel renders a real empty state below.
   const contributors =
     caseImpact && caseImpact.contributors.length > 0
       ? caseImpact.contributors.map((c) => ({
@@ -648,7 +669,7 @@ export default function ProjectPage() {
           value: c.value,
           pct: c.pct,
         }))
-      : DEMO_CONTRIBUTORS
+      : []
 
   // Optional comparison delta (visible only with ≥ 2 cases)
   const showComparisonBanner = cases.length >= 2
@@ -744,6 +765,127 @@ export default function ProjectPage() {
           >
             <Icon name="plus" size={14} /> Add Case
           </button>
+        </div>
+
+        {/* Mini-dashboard KPI strip — always renders, even when empty, so the
+            project page reads as a real workspace from minute one. Each tile
+            shows a count + a one-line context note. Honest empty states: a
+            "0" with a friendly nudge, not a fabricated number. */}
+        <div
+          style={{
+            marginTop: 20,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 16,
+          }}
+        >
+          {(() => {
+            const kpis: { label: string; value: string; note: string; tone?: 'brand' | 'neutral' }[] = [
+              {
+                label: 'Cases',
+                value: String(cases.length),
+                note:
+                  cases.length === 0
+                    ? 'Add a case to get started'
+                    : `${baseCases.length} base · ${comparativeCases.length} comparative`,
+                tone: cases.length > 0 ? 'brand' : 'neutral',
+              },
+              {
+                label: 'Components',
+                value: String(componentCount),
+                note:
+                  componentCount === 0
+                    ? 'Build a hierarchy in the editor'
+                    : `${driverCount} driver flow${driverCount === 1 ? '' : 's'}`,
+                tone: componentCount > 0 ? 'brand' : 'neutral',
+              },
+              {
+                label: 'Global Warming',
+                value:
+                  totalImpact != null
+                    ? totalImpact.toFixed(3)
+                    : '—',
+                note:
+                  totalImpact != null
+                    ? impactUnit
+                    : 'Run an assessment',
+                tone: totalImpact != null ? 'brand' : 'neutral',
+              },
+              {
+                label: 'Cost',
+                value: totalCost != null ? `$${Math.round(totalCost).toLocaleString()}` : '—',
+                note:
+                  totalCost != null
+                    ? 'Total ABC cost'
+                    : 'Add cost data on operations',
+                tone: totalCost != null ? 'brand' : 'neutral',
+              },
+            ]
+            return kpis.map((k) => (
+              <div
+                key={k.label}
+                className="card"
+                style={{
+                  padding: '22px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  minHeight: 124,
+                  justifyContent: 'center',
+                }}
+              >
+                <div
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 4,
+                    background:
+                      k.tone === 'brand'
+                        ? 'var(--brand-primary)'
+                        : 'color-mix(in oklab, var(--text-tertiary) 28%, transparent)',
+                  }}
+                />
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                    letterSpacing: '0.16em',
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                  }}
+                >
+                  {k.label}
+                </div>
+                <div
+                  className="mono"
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 600,
+                    color: 'var(--text-primary)',
+                    letterSpacing: '-0.02em',
+                    fontVariantNumeric: 'tabular-nums',
+                    lineHeight: 1.05,
+                  }}
+                >
+                  {k.value}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-tertiary)',
+                    fontStyle: k.tone === 'neutral' ? 'italic' : 'normal',
+                  }}
+                >
+                  {k.note}
+                </div>
+              </div>
+            ))
+          })()}
         </div>
 
         {/* Comparison banner */}
@@ -1178,8 +1320,12 @@ export default function ProjectPage() {
                         className="mono"
                         style={{ fontSize: 11, color: 'var(--text-tertiary)' }}
                       >
-                        Path: {(caseTree?.label ?? 'root')} ›{' '}
-                        {selectedTreeNode.id === caseTree?.id ? '(root)' : selectedTreeNode.label}
+                        {/* Don't show the synthetic '__root__' container in the
+                            path — top-level nodes read as roots themselves. */}
+                        Path:{' '}
+                        {caseTree && caseTree.id !== '__root__' && caseTree.id !== selectedTreeNode.id
+                          ? `${caseTree.label} › ${selectedTreeNode.label}`
+                          : selectedTreeNode.label}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -1432,7 +1578,7 @@ export default function ProjectPage() {
                 }}
               >
                 <span className="mono">{componentCount}</span> components ·{' '}
-                <span className="mono">6</span> categories ·{' '}
+                <span className="mono">{IMPACT_CATEGORY_COUNT}</span> categories ·{' '}
                 <span className="mono">{driverCount}</span> drivers
               </div>
             </div>
@@ -1444,52 +1590,67 @@ export default function ProjectPage() {
               >
                 Top contributors
               </div>
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
-              >
-                {contributors.slice(0, 5).map((c: any, i: number) => (
-                  <div key={c.id ?? c.name ?? i}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'baseline',
-                        fontSize: 12,
-                        marginBottom: 4,
-                      }}
-                    >
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {c.name}
-                      </span>
-                      <span
-                        className="mono"
+              {contributors.length === 0 ? (
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--text-tertiary)',
+                    fontStyle: 'italic',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {cases.length === 0
+                    ? 'Add a case and run an assessment to see what is driving impact.'
+                    : 'Run an assessment on this case to see top contributors.'}
+                </div>
+              ) : (
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+                >
+                  {contributors.slice(0, 5).map((c: any, i: number) => (
+                    <div key={c.id ?? c.name ?? i}>
+                      <div
                         style={{
-                          marginLeft: 'auto',
-                          color: 'var(--text-primary)',
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          fontSize: 12,
+                          marginBottom: 4,
                         }}
                       >
-                        {fmtNum(c.value, 1)}
-                      </span>
-                      <span
-                        className="mono"
-                        style={{
-                          marginLeft: 8,
-                          color: 'var(--text-tertiary)',
-                          width: 40,
-                          textAlign: 'right',
-                        }}
-                      >
-                        {fmtNum(c.pct, 1)}%
-                      </span>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          {c.name}
+                        </span>
+                        <span
+                          className="mono"
+                          style={{
+                            marginLeft: 'auto',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {fmtNum(c.value, 1)}
+                        </span>
+                        <span
+                          className="mono"
+                          style={{
+                            marginLeft: 8,
+                            color: 'var(--text-tertiary)',
+                            width: 40,
+                            textAlign: 'right',
+                          }}
+                        >
+                          {fmtNum(c.pct, 1)}%
+                        </span>
+                      </div>
+                      <MiniBar
+                        value={c.pct}
+                        max={40}
+                        height={4}
+                        color={`oklch(from var(--brand-primary) l c h / ${1 - i * 0.12})`}
+                      />
                     </div>
-                    <MiniBar
-                      value={c.pct}
-                      max={40}
-                      height={4}
-                      color={`oklch(from var(--brand-primary) l c h / ${1 - i * 0.12})`}
-                    />
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Cost summary */}

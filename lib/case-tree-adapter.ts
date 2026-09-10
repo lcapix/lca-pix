@@ -23,6 +23,8 @@ export interface ComponentLike {
   equipmentCost?: number | null
   overheadCost?: number | null
   drivers?: string[] | null
+  /** Real count of attached input/output flows (from the flows table). */
+  flowCount?: number | null
 }
 
 const TYPE_MAP: Record<string, HierarchyNodeType> = {
@@ -58,6 +60,9 @@ function costOf(c: ComponentLike): number {
 }
 
 function flowsOf(c: ComponentLike): number {
+  // Prefer the real flow count from the flows table; fall back to the legacy
+  // drivers-JSON length only when no count was provided.
+  if (typeof c.flowCount === 'number') return c.flowCount
   return Array.isArray(c.drivers) ? c.drivers.length : 0
 }
 
@@ -93,10 +98,13 @@ export function componentsToTree(components: ComponentLike[]): CaseTreeNode | nu
 
   if (roots.length === 1) return roots[0]
 
-  // Multi-root — wrap with synthetic Product root so views can render
+  // Multi-root — wrap with a NEUTRAL synthetic container ('Root', rendered as
+  // "Case") so the canvas has a single entry point. Previously this used
+  // type:'Product', which made a case with one Product + one floating
+  // Machine/Line show TWO green Product cards. The container is not a product.
   return {
     id: '__root__',
-    type: 'Product',
+    type: 'Root',
     label: 'Case Root',
     flows: roots.reduce((s, r) => s + r.flows, 0),
     cost: roots.reduce((s, r) => s + r.cost, 0),
@@ -104,8 +112,16 @@ export function componentsToTree(components: ComponentLike[]): CaseTreeNode | nu
   }
 }
 
+/** True for the internal multi-root layout container (never user-visible). */
+export const SYNTHETIC_ROOT_ID = '__root__'
+export function isSyntheticRoot(n: { id: string } | null | undefined): boolean {
+  return !!n && n.id === SYNTHETIC_ROOT_ID
+}
+
 /**
  * Flatten a tree depth-first for the sidebar nav and List/Graph views.
+ * The synthetic multi-root container is skipped — its children become the
+ * top-level entries so no fake "Case Root" ever shows.
  */
 export function flattenTree(root: CaseTreeNode | null): FlatCaseNode[] {
   if (!root) return []
@@ -121,6 +137,11 @@ export function flattenTree(root: CaseTreeNode | null): FlatCaseNode[] {
     })
     ;(n.children || []).forEach((c) => walk(c, depth + 1))
   }
-  walk(root, 0)
+  if (isSyntheticRoot(root)) {
+    // Forest: emit each real root at depth 0, skip the container.
+    ;(root.children || []).forEach((c) => walk(c, 0))
+  } else {
+    walk(root, 0)
+  }
   return out
 }

@@ -38,7 +38,6 @@ import {
   fmtNum,
   fmtInt,
 } from '@/components/lcapix'
-import { DEMO_CATEGORIES, DEMO_CONTRIBUTORS } from '@/lib/lcapix-demo'
 
 const SERIES_COLORS = ['#2d6a4f', '#74c69d', '#d98568', '#9f88cc', '#4f90c9']
 const COMPONENT_COLORS = [
@@ -51,6 +50,20 @@ const COMPONENT_COLORS = [
   '#9f88cc',
   '#4f90c9',
 ]
+
+interface CostBreakdown {
+  /** Sum of all per-component costs (labor+energy+material+transport, or opex+capex). */
+  total: number
+  labor: number
+  energy: number
+  material: number
+  transport: number
+  equipment: number
+  overhead: number
+  opex: number
+  capex: number
+  currency: string
+}
 
 interface AssessmentData {
   caseId: string
@@ -70,6 +83,41 @@ interface AssessmentData {
     }[]
   }[]
   totalScore: number
+  costs: CostBreakdown
+}
+
+const EMPTY_COSTS: CostBreakdown = {
+  total: 0,
+  labor: 0,
+  energy: 0,
+  material: 0,
+  transport: 0,
+  equipment: 0,
+  overhead: 0,
+  opex: 0,
+  capex: 0,
+  currency: 'USD',
+}
+
+const COST_COLORS: Record<string, string> = {
+  Labor: '#2d6a4f',
+  Energy: '#d98568',
+  Material: '#4f90c9',
+  Transport: '#9f88cc',
+  Equipment: '#c9a44f',
+  Overhead: '#8a8f98',
+}
+
+function fmtMoney(v: number, currency = 'USD'): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: v >= 1000 ? 0 : 2,
+    }).format(v)
+  } catch {
+    return `$${v.toLocaleString()}`
+  }
 }
 
 export default function AnalyticsPage() {
@@ -191,6 +239,45 @@ export default function AnalyticsPage() {
             (sum: number, cat: any) => sum + cat.impact_value,
             0
           )
+
+          // Cost analysis — aggregate per-component costs for this case. LCAPIX's
+          // whole point is cost ↔ impact together, so analytics must show cost
+          // too, not just impact-by-category. Best-effort: an empty/failed fetch
+          // just yields zeroed costs rather than breaking the page.
+          const costs: CostBreakdown = { ...EMPTY_COSTS }
+          try {
+            const compRes = await apiRequest(`/api/cases/${caseItem.id}/components`)
+            const compData = await compRes.json()
+            const rows: any[] = compData?.components ?? compData?.data ?? []
+            for (const r of rows) {
+              const labor = Number(r.labor_cost ?? r.laborCost ?? 0) || 0
+              const energy = Number(r.energy_cost ?? r.energyCost ?? 0) || 0
+              const material = Number(r.material_cost ?? r.materialCost ?? 0) || 0
+              const transport =
+                Number(r.transportation_cost ?? r.transportationCost ?? 0) || 0
+              const equipment = Number(r.equipment_cost ?? r.equipmentCost ?? 0) || 0
+              const overhead = Number(r.overhead_cost ?? r.overheadCost ?? 0) || 0
+              const opex = Number(r.opex ?? r.operationalCostUSD ?? 0) || 0
+              const capex = Number(r.capex ?? r.capitalCostUSD ?? 0) || 0
+              costs.labor += labor
+              costs.energy += energy
+              costs.material += material
+              costs.transport += transport
+              costs.equipment += equipment
+              costs.overhead += overhead
+              costs.opex += opex
+              costs.capex += capex
+              if (r.currency) costs.currency = r.currency
+            }
+            // Prefer the detailed ABC breakdown total; fall back to opex+capex.
+            const abcTotal =
+              costs.labor + costs.energy + costs.material + costs.transport +
+              costs.equipment + costs.overhead
+            costs.total = abcTotal > 0 ? abcTotal : costs.opex + costs.capex
+          } catch {
+            /* non-fatal — cost panel shows an empty state */
+          }
+
           return {
             caseId: caseItem.id,
             caseName: caseItem.name,
@@ -198,6 +285,7 @@ export default function AnalyticsPage() {
             categories,
             components,
             totalScore,
+            costs,
           } as AssessmentData
         } catch {
           return null
@@ -271,7 +359,10 @@ export default function AnalyticsPage() {
   // Top-5 categories for the grouped bar chart.
   const topCategoryNames = allCategoryNames.slice(0, 5)
 
-  // If we have no real data, show DEMO_CATEGORIES as a visual placeholder.
+  // Bug fix: do NOT fall back to DEMO_CATEGORIES + fake "Baseline / Scenario
+  // A / Scenario B" series. A brand-new analytics tab with no assessments
+  // was rendering a fully-populated comparison chart with prototype numbers.
+  // Empty arrays now drive a real empty state in the render below.
   const hasRealData = assessmentData.length > 0
   const barGroups = hasRealData
     ? topCategoryNames.map((catName) => ({
@@ -281,15 +372,11 @@ export default function AnalyticsPage() {
           return c ? c.impact_value : 0
         }),
       }))
-    : DEMO_CATEGORIES.slice(0, 5).map((c, i) => ({
-        label: c.name,
-        // Demo values scale like the prototype factors (1, 0.72, 0.62).
-        values: [1, 0.72, 0.62].map((f) => c.value * f),
-      }))
+    : []
 
   const barSeriesLabels = hasRealData
     ? assessmentData.map((d) => d.caseName)
-    : ['Baseline', 'Scenario A', 'Scenario B']
+    : []
 
   // Component diff: union of component names across cases.
   const allComponentNames = Array.from(
@@ -457,7 +544,7 @@ export default function AnalyticsPage() {
             >
               {hasRealData
                 ? `Comparing ${assessmentData.length} case${assessmentData.length === 1 ? '' : 's'} · completed assessments`
-                : 'No assessments yet · showing demo scaffolding'}
+                : 'No assessments yet · run one to populate analytics'}
             </div>
           </div>
           <button
@@ -626,6 +713,36 @@ export default function AnalyticsPage() {
                           </span>
                         )}
                       </div>
+
+                      {/* Total cost line — cost sits alongside impact, the core
+                          LCAPIX cost↔impact pairing. */}
+                      {c.costs.total > 0 && (
+                        <div
+                          style={{
+                            marginTop: 12,
+                            paddingTop: 12,
+                            borderTop: '1px dashed var(--border-subtle)',
+                            display: 'flex',
+                            alignItems: 'baseline',
+                            gap: 8,
+                          }}
+                        >
+                          <span className="eyebrow" style={{ fontSize: 10 }}>
+                            TOTAL COST
+                          </span>
+                          <span
+                            className="mono"
+                            style={{
+                              fontSize: 18,
+                              fontWeight: 600,
+                              color: 'var(--text-primary)',
+                              marginLeft: 'auto',
+                            }}
+                          >
+                            {fmtMoney(c.costs.total, c.costs.currency)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Stat tiles row */}
@@ -784,6 +901,12 @@ export default function AnalyticsPage() {
               seriesLabels={barSeriesLabels}
               demo={!hasRealData}
             />
+
+            {/* Cost analysis — cost breakdown + cost-vs-impact. Cost must appear
+                in analytics, not just on the summary. */}
+            {hasRealData && (
+              <CostAnalysisPanel assessmentData={assessmentData} />
+            )}
 
             {/* Delta vs baseline */}
             {hasRealData && assessmentData.length >= 2 && (
@@ -988,6 +1111,21 @@ function CategoryComparisonPanel({
     })
   }, [groups, seriesLabels])
 
+  // No real data → render a proper empty state instead of an empty chart
+  // shell. Prevents the "demo bars looked real" failure mode.
+  if (groups.length === 0) {
+    return (
+      <div className="card" style={{ padding: 32, marginBottom: 20, textAlign: 'center' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+          Impact by category · across scenarios
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+          Run an assessment on at least one case to populate this chart.
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="card" style={{ padding: 24, marginBottom: 20 }}>
       <div
@@ -1184,6 +1322,185 @@ function CategoryComparisonPanel({
           'Each category is scaled 0–100% of its own maximum so small-magnitude categories stay visible.'}
         {view === 'log' &&
           'Values shown on a log scale (log₁₀ of value + 1) so categories spanning orders of magnitude all fit.'}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cost analysis — cost breakdown by category + cost-vs-impact pairing
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CostAnalysisPanel({
+  assessmentData,
+}: {
+  assessmentData: AssessmentData[]
+}) {
+  const currency = assessmentData[0]?.costs.currency || 'USD'
+  const hasAnyCost = assessmentData.some((d) => d.costs.total > 0)
+
+  // Stacked cost-breakdown bar — one bar per scenario, segmented by cost type.
+  const breakdownData = useMemo(
+    () =>
+      assessmentData.map((d) => ({
+        scenario: d.caseName,
+        Labor: d.costs.labor,
+        Energy: d.costs.energy,
+        Material: d.costs.material,
+        Transport: d.costs.transport,
+        Equipment: d.costs.equipment,
+        Overhead: d.costs.overhead,
+      })),
+    [assessmentData],
+  )
+
+  // Cost-vs-impact — pairs each scenario's total cost with its total impact so
+  // the user can see the trade-off LCAPIX exists to surface.
+  const costVsImpact = useMemo(
+    () =>
+      assessmentData.map((d) => ({
+        scenario: d.caseName,
+        cost: d.costs.total,
+        impact: d.totalScore,
+        // $ per unit of environmental load — lower is more cost-efficient.
+        intensity: d.totalScore > 0 ? d.costs.total / d.totalScore : 0,
+      })),
+    [assessmentData],
+  )
+
+  if (!hasAnyCost) {
+    return (
+      <div className="card" style={{ padding: 32, marginBottom: 20, textAlign: 'center' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+          Cost analysis
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+          No costs entered yet. Add labor / energy / material / transport costs on
+          components (or use Suggest in the inspector) to populate cost analysis.
+        </div>
+      </div>
+    )
+  }
+
+  const COST_TYPES = ['Labor', 'Energy', 'Material', 'Transport', 'Equipment', 'Overhead'] as const
+
+  return (
+    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+        Cost analysis · per scenario
+      </div>
+      <div
+        style={{
+          fontSize: 12,
+          color: 'var(--text-tertiary)',
+          marginBottom: 16,
+        }}
+      >
+        Activity-based cost broken down by type, paired with environmental impact
+        so you can weigh the cost ↔ impact trade-off.
+      </div>
+
+      {/* Stacked cost breakdown */}
+      <div style={{ width: '100%', height: Math.max(160, assessmentData.length * 64 + 60) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={breakdownData}
+            layout="vertical"
+            margin={{ top: 8, right: 16, bottom: 8, left: 24 }}
+          >
+            <XAxis
+              type="number"
+              tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => fmtMoney(v, currency)}
+            />
+            <YAxis
+              type="category"
+              dataKey="scenario"
+              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+              axisLine={false}
+              tickLine={false}
+              width={160}
+            />
+            <Tooltip
+              formatter={(v: any, name: string) => [fmtMoney(Number(v), currency), name]}
+              contentStyle={{
+                background: '#fff',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+              cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+            />
+            <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" />
+            {COST_TYPES.map((name) => (
+              <Bar
+                key={name}
+                dataKey={name}
+                stackId="cost"
+                fill={COST_COLORS[name]}
+                radius={[0, 0, 0, 0]}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Cost-vs-impact table */}
+      <div
+        style={{
+          marginTop: 20,
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '2fr 1fr 1fr 1.2fr',
+            padding: '10px 16px',
+            background: 'var(--surface-overlay)',
+            fontSize: 10,
+            color: 'var(--text-tertiary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            fontWeight: 600,
+          }}
+        >
+          <div>Scenario</div>
+          <div style={{ textAlign: 'right' }}>Total cost</div>
+          <div style={{ textAlign: 'right' }}>Total impact</div>
+          <div style={{ textAlign: 'right' }}>Cost / impact</div>
+        </div>
+        {costVsImpact.map((r) => (
+          <div
+            key={r.scenario}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 1fr 1fr 1.2fr',
+              padding: '12px 16px',
+              borderTop: '1px solid var(--border-subtle)',
+              fontSize: 13,
+            }}
+          >
+            <div style={{ color: 'var(--text-primary)' }}>{r.scenario}</div>
+            <div className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+              {r.cost > 0 ? fmtMoney(r.cost, currency) : '—'}
+            </div>
+            <div className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
+              {r.impact > 0 ? fmtNum(r.impact, 2) : '—'}
+            </div>
+            <div
+              className="mono"
+              style={{ textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}
+              title="Cost per unit of total environmental impact — lower is more cost-efficient"
+            >
+              {r.intensity > 0 ? fmtMoney(r.intensity, currency) : '—'}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -26,7 +26,12 @@ export function ComponentFormModal(props: ComponentFormModalProps) {
   // visits that don't render the case page).
   React.useEffect(() => {
     const host = document.getElementById('case-canvas-host');
-    setMountNode(host ?? document.body);
+    // Scope into the canvas only when it is tall enough to hold a usable
+    // dialog. On short/stacked layouts the absolutely-positioned overlay
+    // collapsed with its host to a ~40px strip (live-verified bug) — fall
+    // back to a fixed full-viewport modal instead.
+    const hostUsable = !!host && host.clientHeight >= 480;
+    setMountNode(hostUsable ? host : document.body);
   }, []);
 
   const scoped = mountNode?.id === 'case-canvas-host';
@@ -38,6 +43,17 @@ export function ComponentFormModal(props: ComponentFormModalProps) {
       router.push(`/project/${props.projectId}/case/${props.caseId}`);
     }
   }, [router, props.projectId, props.caseId]);
+
+  // On successful create/edit: tell the case editor to re-fetch its component
+  // list, THEN close the modal. Without this, the new node only appeared after
+  // a full page reload (the editor fetches client-side once on mount and the
+  // intercepting-route modal closing via router.back() doesn't re-trigger it).
+  const handleSuccess = React.useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('lcapix:components-changed'));
+    }
+    close();
+  }, [close]);
 
   // Esc to dismiss.
   React.useEffect(() => {
@@ -126,7 +142,7 @@ export function ComponentFormModal(props: ComponentFormModalProps) {
           <ComponentForm
             {...props}
             variant="modal"
-            onSuccess={close}
+            onSuccess={handleSuccess}
             onCancel={close}
           />
         </div>

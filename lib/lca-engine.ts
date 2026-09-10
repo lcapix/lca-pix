@@ -34,6 +34,8 @@
  */
 
 import type { Connection, RowDataPacket } from 'mysql2/promise';
+import { canonicalizeRegion, selectBestScopeRows } from './factor-selection';
+import { convertQuantity, normalizeUnit } from './units';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -51,6 +53,10 @@ export interface FlowContribution {
   impact_contribution: number;
   category_id: number;
   category_name: string;
+  /** Which factor scope produced this number ('US', 'Global', …). */
+  geographic_scope?: string;
+  /** Present when the flow quantity was converted into the factor's unit. */
+  unit_conversion?: string;
 }
 
 export interface ComponentImpactResult {
@@ -62,6 +68,9 @@ export interface ComponentImpactResult {
   flow_contributions: FlowContribution[];
   total_flows_processed: number;
   driver_flows_count: number;
+  /** Data-quality problems that excluded or altered contributions (unit
+   * mismatches, missing units). Never empty silently — surfaced to the run. */
+  warnings: string[];
 }
 
 export interface CategoryImpact {
@@ -93,6 +102,8 @@ export interface LCAResult {
   component_results: ComponentImpactResult[];
   algorithm_steps: AlgorithmStep[];
   total_impacts: CategoryImpact[];
+  /** Aggregated data-quality warnings from every component. */
+  warnings: string[];
 }
 
 export interface CalcOptions {
@@ -123,7 +134,10 @@ export async function calculateComponentImpacts(
   options: CalcOptions = {}
 ): Promise<ComponentImpactResult> {
   const method = options.method ?? 'CML 2001';
-  const region = options.regionCode ?? 'Global';
+  // UI labels ('US Grid') and stored scopes ('US') must agree before the query
+  // runs, or the region filter silently matches nothing and every factor falls
+  // back to Global.
+  const region = canonicalizeRegion(options.regionCode);
 
   // Step 1: Get component details
   const [components] = await connection.query<RowDataPacket[]>(
@@ -150,10 +164,13 @@ export async function calculateComponentImpacts(
        f.substance_id,
        s.substance_name,
        s.cas_number,
+       s.unit as substance_default_unit,
        f.flow_type,
        f.quantity,
        f.unit as flow_unit,
        dif.category_id,
+       dif.geographic_scope,
+       dif.factor_basis,
        ic.category_name,
        ic.unit as category_unit,
        dif.factor_value as characterization_factor
@@ -164,31 +181,122 @@ export async function calculateComponentImpacts(
       AND dif.method_name = ?
       AND dif.geographic_scope IN (?, 'Global')
      INNER JOIN impact_categories ic ON dif.category_id = ic.category_id
-     WHERE f.component_id = ? AND f.is_driver = TRUE
+     -- Bug #9: count every flow on the component, not just is_driver=TRUE.
+     -- New flows default is_driver=1, but older rows may be 0; treating every
+     -- attached flow as a driver keeps assessments from returning 0.
+     WHERE f.component_id = ?
      ORDER BY dif.category_id,
               CASE WHEN dif.geographic_scope = ? THEN 0 ELSE 1 END,
               f.flow_id`,
     [method, region, componentId, region]
   );
 
-  // Step 3: Calculate impact contributions
-  const flowContributions: FlowContribution[] = flowsData.map((row) => {
-    const impact_contribution = row.quantity * row.characterization_factor;
+  // Step 2b: keep exactly ONE factor row per flow × category. The IN-join
+  // returns both the regional row and the Global fallback when both exist;
+  // summing both double-counts. Exact-region rows win.
+  const { selected: selectedRows } = selectBestScopeRows(
+    flowsData as Array<RowDataPacket & { flow_id: number; category_id: number; geographic_scope: string }>,
+    region,
+  );
 
-    return {
+  // Step 3: Calculate impact contributions. A factor is stored per the
+  // substance's default unit; the flow quantity must be expressed in that
+  // unit before multiplying. Convertible units are converted (and recorded);
+  // unconvertible ones are EXCLUDED and reported — never multiplied raw.
+  const warnings: string[] = [];
+  let untypedFactorSeen = false;
+  const flowContributions: FlowContribution[] = [];
+  for (const row of selectedRows) {
+    // Direction rule: 'embodied' factors describe PRODUCING a substance and
+    // apply to input flows only (steel you buy, electricity you draw);
+    // 'elementary' factors describe EMITTING or treating it and apply to
+    // output flows only (CO2 you release, waste you send out). Charging both
+    // directions double-counts. Untyped factors (pre-migration-009 databases)
+    // keep the old both-directions behavior, loudly.
+    if (row.factor_basis === 'embodied' && row.flow_type === 'output') continue;
+    if (row.factor_basis === 'elementary' && row.flow_type === 'input') continue;
+    if (!row.factor_basis) untypedFactorSeen = true;
+
+    const rawQuantity = parseFloat(row.quantity);
+    const factor = parseFloat(row.characterization_factor);
+    const flowUnit: string | null = row.flow_unit ?? null;
+    const factorUnit: string | null = row.substance_default_unit ?? null;
+
+    let quantityInFactorUnit = rawQuantity;
+    let conversionNote: string | undefined;
+
+    const flowNorm = normalizeUnit(flowUnit);
+    const factorNorm = normalizeUnit(factorUnit);
+
+    if (!flowUnit || !flowUnit.trim()) {
+      warnings.push(
+        `Flow ${row.flow_id} (${row.substance_name}): no unit recorded — assumed ${factorUnit ?? 'factor unit'}.`,
+      );
+    } else if (factorNorm && flowNorm && flowNorm !== factorNorm) {
+      const conv = convertQuantity(rawQuantity, flowUnit, factorUnit);
+      if (conv) {
+        quantityInFactorUnit = conv.quantity;
+        conversionNote = conv.note;
+      } else {
+        warnings.push(
+          `Flow ${row.flow_id} (${row.substance_name}): unit '${flowUnit}' cannot be converted to factor unit '${factorUnit}' — EXCLUDED from ${row.category_name}.`,
+        );
+        continue;
+      }
+    } else if (flowUnit && !flowNorm) {
+      warnings.push(
+        `Flow ${row.flow_id} (${row.substance_name}): unrecognized unit '${flowUnit}' — EXCLUDED from ${row.category_name}.`,
+      );
+      continue;
+    }
+
+    flowContributions.push({
       flow_id: row.flow_id,
       substance_id: row.substance_id,
       substance_name: row.substance_name,
       cas_number: row.cas_number,
       flow_type: row.flow_type,
-      quantity: parseFloat(row.quantity),
+      quantity: rawQuantity,
       unit: row.flow_unit,
-      characterization_factor: parseFloat(row.characterization_factor),
-      impact_contribution,
+      characterization_factor: factor,
+      impact_contribution: quantityInFactorUnit * factor,
       category_id: row.category_id,
       category_name: row.category_name,
-    };
-  });
+      geographic_scope: row.geographic_scope,
+      unit_conversion: conversionNote,
+    });
+  }
+
+  if (untypedFactorSeen) {
+    warnings.push(
+      `Component ${component.component_name}: some factors have no direction typing (embodied/elementary) — run migration 009; until then those factors count on both inputs and outputs.`,
+    );
+  }
+
+  // Fuel + combustion-gas co-presence check. Our fuel factors (Natural Gas,
+  // Coal, Crude Oil) are combustion factors — the CO2 from burning them is
+  // already inside the input factor. If the user ALSO models the combustion
+  // gas as an output on the same component, the same emission is counted
+  // twice. Both entries stay (the user may genuinely have process emissions),
+  // but the run says so out loud.
+  const FUEL_NAMES = ['natural gas', 'coal', 'crude oil', 'fuel oil', 'lpg'];
+  const GAS_NAMES = ['carbon dioxide', 'methane', 'nitrous oxide'];
+  const inputFuels = new Set<string>();
+  const outputGases = new Set<string>();
+  for (const row of flowsData) {
+    const name = String(row.substance_name).toLowerCase();
+    if (row.flow_type === 'input' && FUEL_NAMES.some((f) => name.includes(f))) {
+      inputFuels.add(row.substance_name);
+    }
+    if (row.flow_type === 'output' && GAS_NAMES.some((g) => name.includes(g))) {
+      outputGases.add(row.substance_name);
+    }
+  }
+  if (inputFuels.size > 0 && outputGases.size > 0) {
+    warnings.push(
+      `Component ${component.component_name}: possible DOUBLE COUNT — fuel input(s) [${[...inputFuels].join(', ')}] already include combustion emissions in their factors, and combustion gas output(s) [${[...outputGases].join(', ')}] are modeled on the same component. Keep the gas output only if it is a separate process emission (not from burning the listed fuel).`,
+    );
+  }
 
   // Step 4: Aggregate impacts by category
   const impactsByCategory = new Map<number, CategoryImpact>();
@@ -226,6 +334,7 @@ export async function calculateComponentImpacts(
     flow_contributions: flowContributions,
     total_flows_processed: flowContributions.length,
     driver_flows_count: new Set(flowContributions.map((f) => f.flow_id)).size,
+    warnings,
   };
 }
 
@@ -250,7 +359,7 @@ export async function calculateCaseImpacts(
   const options: CalcOptions =
     typeof optionsOrMethod === 'string'
       ? { method: optionsOrMethod }
-      : optionsOrMethod;
+      : { ...optionsOrMethod, regionCode: canonicalizeRegion(optionsOrMethod.regionCode) };
   const calculationMethod = options.method ?? 'CML 2001';
 
   const algorithmSteps: AlgorithmStep[] = [];
@@ -371,6 +480,16 @@ export async function calculateCaseImpacts(
 
   const totalImpacts = Array.from(totalImpactsByCategory.values());
 
+  // Surface every component's data-quality warnings on the run itself.
+  const allWarnings = componentResults.flatMap((r) => r.warnings);
+  if (allWarnings.length > 0) {
+    algorithmSteps.push({
+      step_number: 5 + componentResults.length + 1.5,
+      step_description: `${allWarnings.length} data-quality warning(s) — see run warnings`,
+      details: { warnings: allWarnings },
+    });
+  }
+
   algorithmSteps.push({
     step_number: 5 + componentResults.length + 2,
     step_description: 'Calculation completed successfully',
@@ -403,6 +522,7 @@ export async function calculateCaseImpacts(
     component_results: componentResults,
     algorithm_steps: algorithmSteps,
     total_impacts: totalImpacts,
+    warnings: allWarnings,
   };
 }
 

@@ -64,7 +64,7 @@ const FEATURES: readonly Feature[] = [
   { icon: 'globe', title: 'Region awareness', desc: 'Grid carbon via Electricity Maps, labor rates via BLS occupation codes. US, EU, APAC.' },
   { icon: 'dollar', title: 'Cost × impact tradeoffs', desc: 'Steel vs aluminum bracket: −32% cost, +61% CO₂. The commercial edge your engineers actually need.' },
   { icon: 'file', title: 'ISO PDF reports', desc: 'Source-attributed per factor. ISO 14040/14044 compliant. Goal & scope to interpretation.' },
-  { icon: 'database', title: 'Open data', desc: '5,234 factors from openLCA + 1,842 PubChem substances. CAS-mapped provenance.' },
+  { icon: 'database', title: 'Open data', desc: 'openLCA-derived factor packs for CML 2001, ReCiPe and TRACI, with CAS-mapped PubChem provenance.' },
 ]
 
 const NAV_LINKS = [
@@ -219,7 +219,7 @@ export default function RootPage() {
             {/* Offset display number — editorial */}
             <div style={{ textAlign: 'right', paddingBottom: 12 }}>
               <div className="label-sm" style={{ color: 'var(--text-tertiary)', marginBottom: 8 }}>
-                Factors indexed
+                LCIA methods
               </div>
               <div
                 className="mono"
@@ -231,10 +231,10 @@ export default function RootPage() {
                   lineHeight: 1,
                 }}
               >
-                5,234
+                3
               </div>
               <div className="label-sm" style={{ marginTop: 6, color: 'var(--text-tertiary)' }}>
-                openLCA · PubChem · EIA
+                CML 2001 · ReCiPe · TRACI 2.1
               </div>
             </div>
           </div>

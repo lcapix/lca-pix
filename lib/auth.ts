@@ -7,7 +7,12 @@ import { hash, compare } from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { query, queryOne } from './db-helpers';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// A guessable signing secret turns every account into a forgeable token; the
+// app refuses to start without a real one (tests may inject their own).
+const JWT_SECRET = process.env.JWT_SECRET as string;
+if (!JWT_SECRET && process.env.NODE_ENV !== 'test') {
+  throw new Error('JWT_SECRET is not set — configure it in .env.local / Vercel env');
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
 export interface UserPayload {
@@ -47,7 +52,7 @@ export async function verifyPassword(
  */
 export function createToken(payload: UserPayload): string {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
 }
 

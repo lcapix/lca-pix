@@ -35,6 +35,12 @@ interface GuidedTourProps {
   storageKey?: string
   open: boolean
   onClose: () => void
+  /**
+   * When provided, opening the tour jumps to this step index instead of
+   * restoring saved progress. Lets the Tour button launch contextually from
+   * whatever page the user is on.
+   */
+  startAt?: number
 }
 
 function prefersReducedMotion(): boolean {
@@ -46,23 +52,32 @@ interface Box { top: number; left: number; width: number; height: number }
 
 const SCROLL_PADDING = 80
 
-export function GuidedTour({ steps, storageKey = 'lcapix-tour-v1', open, onClose }: GuidedTourProps) {
-  const [idx, setIdx] = useState(0)
+export function GuidedTour({ steps, storageKey = 'lcapix-tour-v1', open, onClose, startAt }: GuidedTourProps) {
+  // Initialise idx from startAt synchronously (lazy initializer) so the very
+  // first render already has the correct step. This prevents a race where idx
+  // briefly = 0 (the home-greeting step, which navigates to /home) and the
+  // navigate effect fires a redirect before startAt could be applied. Callers
+  // that want contextual launches should also give this component a `key` that
+  // changes per launch so this initializer re-runs.
+  const [idx, setIdx] = useState(() =>
+    typeof startAt === 'number' && startAt >= 0 ? startAt : 0
+  )
   const [box, setBox] = useState<Box | null>(null)
   const pathname = usePathname()
   const router = useRouter()
   const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const findTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Restore step from storage when tour opens
+  // On open with no explicit startAt, restore saved progress.
   useEffect(() => {
     if (!open) return
+    if (typeof startAt === 'number') return // honored via initializer above
     const saved = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null
     if (saved) {
       const n = Number(saved)
       if (!isNaN(n) && n >= 0 && n < steps.length) setIdx(n)
     }
-  }, [open, storageKey, steps.length])
+  }, [open, startAt, storageKey, steps.length])
 
   useEffect(() => {
     if (open) localStorage.setItem(storageKey, String(idx))

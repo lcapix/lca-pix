@@ -18,6 +18,7 @@ import { useProjectStore, type ComponentNode, type Case } from '@/lib/store'
 import {
   componentsToTree,
   flattenTree,
+  normalizeType,
   type ComponentLike,
 } from '@/lib/case-tree-adapter'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
@@ -65,6 +66,14 @@ export default function CaseViewPage() {
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
   const [components, setComponents] = useState<ComponentNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  // Bumped when the component-create/edit modal reports a change, forcing the
+  // fetch effect below to re-run so new nodes appear without a full reload.
+  const [refreshKey, setRefreshKey] = useState(0)
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1)
+    window.addEventListener('lcapix:components-changed', handler)
+    return () => window.removeEventListener('lcapix:components-changed', handler)
+  }, [])
   // Fetched once for the breadcrumb so it reads "<project name>" instead of "Project".
   const [projectName, setProjectName] = useState<string>('')
   useEffect(() => {
@@ -134,7 +143,7 @@ export default function CaseViewPage() {
     }
 
     fetchCaseData()
-  }, [caseId, projectId, router])
+  }, [caseId, projectId, router, refreshKey])
 
   // ---------- Auto-select first root (preserved) ----------
   useEffect(() => {
@@ -164,6 +173,7 @@ export default function CaseViewPage() {
       equipmentCost: (c as any).equipmentCost ?? null,
       overheadCost: (c as any).overheadCost ?? null,
       drivers: c.drivers ?? null,
+      flowCount: (c as any).flowCount ?? null,
     }))
     return componentsToTree(likes)
   }, [components])
@@ -185,6 +195,50 @@ export default function CaseViewPage() {
     () => (selectedNode ? components.find((c) => c.id === selectedNode) ?? null : null),
     [components, selectedNode],
   )
+
+  // Candidate re-parent targets for the inspector. A node may be moved under
+  // any node of the tier DIRECTLY ABOVE its own (no level skipping — e.g. an
+  // Operation can only sit under a Subprocess, never directly under a Product),
+  // across any branch of the tree, or made independent. Self + descendants are
+  // excluded to prevent cycles.
+  const parentOptions = useMemo(() => {
+    if (!selectedComponent) return []
+    // DB type -> required parent DB type (one tier up).
+    const REQUIRED_PARENT_DB: Record<string, string | null> = {
+      product: null,
+      machine_line: 'product',
+      subprocess: 'machine_line',
+      operation: 'subprocess',
+      elemental_task: 'operation',
+    }
+    const requiredParentDb = REQUIRED_PARENT_DB[selectedComponent.type as string]
+    if (!requiredParentDb) return []
+
+    const descendants = new Set<string>()
+    const stack = [selectedComponent.id]
+    while (stack.length) {
+      const cur = stack.pop()!
+      for (const c of components) {
+        if (c.parentId === cur && !descendants.has(c.id)) {
+          descendants.add(c.id)
+          stack.push(c.id)
+        }
+      }
+    }
+    return components
+      .filter(
+        (c) =>
+          c.id !== selectedComponent.id &&
+          !descendants.has(c.id) &&
+          (c.type as string) === requiredParentDb,
+      )
+      .map((c) => {
+        const tdef = HIERARCHY_TYPES.find(
+          (h) => (h.id as string) === (normalizeType(c.type) as unknown as string),
+        )
+        return { id: c.id, label: `${c.name} (${tdef?.label ?? c.type})` }
+      })
+  }, [components, selectedComponent])
 
   // ---------- Form helpers ----------
   function loadFormFor(c: ComponentNode) {
@@ -224,9 +278,58 @@ export default function CaseViewPage() {
     if (c) loadFormFor(c)
   }
 
-  // ---------- Run Assessment (preserved) ----------
-  const handleRunAssessment = () => {
-    router.push(`/project/${projectId}/case/${caseId}/results`)
+  // ---------- Run Assessment ----------
+  // One click actually RUNS the calculation (POST), then navigates to results.
+  // Previously this only navigated to the results page, forcing the user to
+  // click "Run new" there — so "Run Assessment" never actually computed.
+  const [isRunning, setIsRunning] = useState(false)
+  const handleRunAssessment = async () => {
+    if (isRunning) return
+    setIsRunning(true)
+    try {
+      // Honor the same per-case method/region memory the run modal writes —
+      // a quick-run that silently switched a US case back to Global made the
+      // latest run non-comparable with its own history (live-caught: run 119).
+      let remembered: { method?: string; region?: string } = {}
+      try {
+        remembered = JSON.parse(localStorage.getItem(`lcapix-run-prefs:${caseId}`) || '{}')
+      } catch { /* corrupt prefs are ignorable */ }
+      const calcMethod = remembered.method || 'CML 2001'
+      const regionCode = remembered.region || 'Global'
+      const res = await apiRequest(`/api/cases/${caseId}/assessments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          run_name: 'Assessment',
+          calculation_method: calcMethod,
+          region_code: regionCode,
+        }),
+      })
+      try {
+        localStorage.setItem(
+          `lcapix-run-prefs:${caseId}`,
+          JSON.stringify({ method: calcMethod, region: regionCode }),
+        )
+      } catch { /* storage may be unavailable; prefs are a convenience */ }
+      if (!res.ok) {
+        const msg = await res.text().catch(() => res.statusText)
+        throw new Error(msg || `Assessment failed (${res.status})`)
+      }
+      const data = await res.json().catch(() => ({}))
+      const total = data?.total_impacts?.find?.(
+        (t: any) => /global warming/i.test(t.category_name),
+      )?.impact_value
+      toast.success(
+        typeof total === 'number'
+          ? `Assessment complete — ${total.toFixed(3)} kg CO₂-eq`
+          : 'Assessment complete',
+      )
+      router.push(`/project/${projectId}/case/${caseId}/results`)
+    } catch (e: any) {
+      console.error('Run assessment failed:', e)
+      toast.error(e?.message || 'Assessment failed')
+    } finally {
+      setIsRunning(false)
+    }
   }
 
   // ---------- Create component ----------
@@ -234,16 +337,40 @@ export default function CaseViewPage() {
   // that page as a modal over this editor while keeping the case canvas
   // mounted underneath.
   const handleCreateComponent = () => {
-    router.push(`/project/${projectId}/case/${caseId}/component/new`)
+    // Carry the selection as placement context: a new component defaults to
+    // being the CHILD of the node the user is standing on (or its sibling,
+    // when a leaf is selected) — never a guess from elsewhere in the tree.
+    const CHILD_OF: Record<string, string> = {
+      product: 'machine_line',
+      machine_line: 'subprocess',
+      subprocess: 'operation',
+      operation: 'elemental_task',
+    }
+    const sel = selectedComponent
+    let query = ''
+    if (sel) {
+      const childType = CHILD_OF[sel.type as string]
+      if (childType) {
+        query = `?parent=${encodeURIComponent(sel.id)}&type=${encodeURIComponent(childType)}`
+      } else if (sel.parentId) {
+        // Leaf selected → suggest a sibling under the same parent.
+        query = `?parent=${encodeURIComponent(sel.parentId)}&type=${encodeURIComponent(sel.type as string)}`
+      }
+    }
+    router.push(`/project/${projectId}/case/${caseId}/component/new${query}`)
   }
 
   // ---------- Save (preserved) ----------
-  const handleSaveComponent = async () => {
-    if (!editFormData.processType) {
+  // Accepts an optional override merged over the current form state, so callers
+  // (e.g. the cost "Apply" affordance) can apply-and-save in one action without
+  // waiting for a separate Save click or a React state flush.
+  const handleSaveComponent = async (override?: Partial<EditFormData>) => {
+    const fd = { ...editFormData, ...(override || {}) }
+    if (!fd.processType) {
       toast.error('Please select a process type')
       return
     }
-    if (!editFormData.processName || !editFormData.processName.trim()) {
+    if (!fd.processName || !fd.processName.trim()) {
       toast.error('Component name is required')
       return
     }
@@ -251,29 +378,31 @@ export default function CaseViewPage() {
     try {
       if (isEditing && selectedNode) {
         const updatePayload = {
-          component_name: editFormData.processName.trim(),
-          component_type: editFormData.processType,
-          component_description: editFormData.processDescription || null,
-          parent_component_id: editFormData.parentId
-            ? parseInt(editFormData.parentId)
+          component_name: fd.processName.trim(),
+          component_type: fd.processType,
+          component_description: fd.processDescription || null,
+          parent_component_id: fd.parentId
+            ? parseInt(fd.parentId)
             : null,
-          process_type: editFormData.processType,
-          driver_category: editFormData.driverCategory || null,
-          driver_type: editFormData.selectedDriver || null,
+          process_type: fd.processType,
+          driver_category: fd.driverCategory || null,
+          driver_type: fd.selectedDriver || null,
           drivers:
-            editFormData.drivers && editFormData.drivers.length > 0
-              ? JSON.stringify(editFormData.drivers)
+            fd.drivers && fd.drivers.length > 0
+              ? JSON.stringify(fd.drivers)
               : null,
-          quantity: editFormData.mass || null,
-          unit: editFormData.massUnit || null,
-          opex: editFormData.operationalCostUSD || null,
-          capex: editFormData.capitalCostUSD || null,
-          labor_cost: editFormData.laborCost || null,
-          energy_cost: editFormData.energyCost || null,
-          transportation_cost: editFormData.transportationCost || null,
-          material_cost: editFormData.materialCost || null,
-          currency: editFormData.currency || 'USD',
-          cost_allocation_type: editFormData.costAllocationType || 'manual',
+          quantity: fd.mass || null,
+          unit: fd.massUnit || null,
+          opex: fd.operationalCostUSD || null,
+          capex: fd.capitalCostUSD || null,
+          labor_cost: fd.laborCost || null,
+          energy_cost: fd.energyCost || null,
+          transportation_cost: fd.transportationCost || null,
+          material_cost: fd.materialCost || null,
+          equipment_cost: fd.equipmentCost || null,
+          overhead_cost: fd.overheadCost || null,
+          currency: fd.currency || 'USD',
+          cost_allocation_type: fd.costAllocationType || 'manual',
         }
 
         const response = await apiRequest(`/api/components/${selectedNode}`, {
@@ -298,29 +427,31 @@ export default function CaseViewPage() {
           }
         }
         const createPayload = {
-          component_name: editFormData.processName.trim(),
-          component_type: editFormData.processType,
-          component_description: editFormData.processDescription || null,
-          parent_component_id: editFormData.parentId
-            ? parseInt(editFormData.parentId)
+          component_name: fd.processName!.trim(),
+          component_type: fd.processType,
+          component_description: fd.processDescription || null,
+          parent_component_id: fd.parentId
+            ? parseInt(fd.parentId)
             : null,
-          process_type: editFormData.processType,
-          driver_category: editFormData.driverCategory || null,
-          driver_type: editFormData.selectedDriver || null,
+          process_type: fd.processType,
+          driver_category: fd.driverCategory || null,
+          driver_type: fd.selectedDriver || null,
           drivers:
-            editFormData.drivers && editFormData.drivers.length > 0
-              ? JSON.stringify(editFormData.drivers)
+            fd.drivers && fd.drivers.length > 0
+              ? JSON.stringify(fd.drivers)
               : null,
-          quantity: editFormData.mass || null,
-          unit: editFormData.massUnit || null,
-          opex: editFormData.operationalCostUSD || null,
-          capex: editFormData.capitalCostUSD || null,
-          labor_cost: editFormData.laborCost || null,
-          energy_cost: editFormData.energyCost || null,
-          transportation_cost: editFormData.transportationCost || null,
-          material_cost: editFormData.materialCost || null,
-          currency: editFormData.currency || 'USD',
-          cost_allocation_type: editFormData.costAllocationType || 'manual',
+          quantity: fd.mass || null,
+          unit: fd.massUnit || null,
+          opex: fd.operationalCostUSD || null,
+          capex: fd.capitalCostUSD || null,
+          labor_cost: fd.laborCost || null,
+          energy_cost: fd.energyCost || null,
+          transportation_cost: fd.transportationCost || null,
+          material_cost: fd.materialCost || null,
+          equipment_cost: fd.equipmentCost || null,
+          overhead_cost: fd.overheadCost || null,
+          currency: fd.currency || 'USD',
+          cost_allocation_type: fd.costAllocationType || 'manual',
         }
 
         const response = await apiRequest(`/api/cases/${caseId}/components`, {
@@ -426,7 +557,9 @@ export default function CaseViewPage() {
     )
   }
 
-  const inspectorFlows: never[] = [] // TODO: wire EnvironmentalFlows when API is ready
+  // Flows for a selected component are loaded live by EnvironmentalFlowsEditor
+  // inside InspectorPanel (GET /api/components/:id/flows). The `flows` prop is
+  // only a read-only fallback for non-editable contexts, so it stays empty here.
 
   return (
     <div
@@ -569,11 +702,44 @@ export default function CaseViewPage() {
           <Icon name="refresh" size={14} /> Reset
         </button>
         <button
+          className="btn btn-secondary btn-sm"
+          type="button"
+          title="Deep-copy this case (tree, flows, costs) as a comparative what-if"
+          onClick={async () => {
+            try {
+              const r = await fetch(`/api/cases/${caseId}/duplicate`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(localStorage.getItem('auth_token')
+                    ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
+                    : {}),
+                },
+                body: JSON.stringify({}),
+              })
+              const j = await r.json().catch(() => null)
+              if (r.ok && j?.case_id) {
+                toast.success(
+                  `Duplicated as "${j.case_name}" — ${j.components_copied} components, ${j.flows_copied} flows`,
+                )
+                router.push(`/project/${projectId}/case/${j.case_id}`)
+              } else {
+                toast.error(j?.error || 'Could not duplicate case')
+              }
+            } catch {
+              toast.error('Could not duplicate case')
+            }
+          }}
+        >
+          <Icon name="layers" size={14} /> Duplicate
+        </button>
+        <button
           className="btn btn-primary btn-sm"
           type="button"
           onClick={handleRunAssessment}
+          disabled={isRunning}
         >
-          <Icon name="run" size={14} /> Run Assessment
+          <Icon name="run" size={14} /> {isRunning ? 'Running…' : 'Run Assessment'}
         </button>
       </div>
 
@@ -810,7 +976,7 @@ export default function CaseViewPage() {
             <CreateComponentBanner
               formData={editFormData}
               onChange={(patch) => setEditFormData({ ...editFormData, ...patch })}
-              onSave={handleSaveComponent}
+              onSave={() => handleSaveComponent()}
               onCancel={() => {
                 setIsCreating(false)
                 setEditFormData({})
@@ -826,9 +992,18 @@ export default function CaseViewPage() {
                   ? (patch) => setEditFormData({ ...editFormData, ...patch })
                   : undefined
               }
-              onSave={selectedComponent ? handleSaveComponent : undefined}
+              onSave={selectedComponent ? () => handleSaveComponent() : undefined}
               onDelete={selectedComponent ? handleDeleteSelected : undefined}
-              flows={inspectorFlows}
+              parentOptions={parentOptions}
+              onApplyCosts={
+                selectedComponent
+                  ? (patch) => {
+                      setEditFormData({ ...editFormData, ...patch })
+                      // Save with the patch merged directly (avoids stale state).
+                      handleSaveComponent(patch as any)
+                    }
+                  : undefined
+              }
             />
           )}
         </aside>

@@ -61,6 +61,11 @@ export function GraphView({ flat, selected, onSelect }: GraphViewProps) {
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 0.7 })
   const dragRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
   const hostRef = useRef<HTMLDivElement | null>(null)
+  // Fit exactly once per mount. Refitting whenever the layout extents change
+  // yanked the viewport back to center on every select/add/edit — losing the
+  // user's place on big trees (tool-review polish #4). The Fit button still
+  // recenters on demand.
+  const didFitRef = useRef(false)
 
   useEffect(() => {
     const fit = () => {
@@ -75,8 +80,16 @@ export function GraphView({ flat, selected, onSelect }: GraphViewProps) {
         k: kFinal,
       })
     }
-    fit()
-    const id = setTimeout(fit, 100)
+    if (didFitRef.current) return
+    const fitOnce = () => {
+      if (didFitRef.current) return
+      fit()
+      if (hostRef.current && hostRef.current.getBoundingClientRect().width >= 50) {
+        didFitRef.current = true
+      }
+    }
+    fitOnce()
+    const id = setTimeout(fitOnce, 100)
     return () => clearTimeout(id)
   }, [flat.length, maxX, maxY])
 

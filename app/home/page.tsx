@@ -15,7 +15,8 @@ import {
   NumberedRail,
   TrustStrip,
 } from '@/components/lcapix'
-import { DEMO_ACTIVITY } from '@/lib/lcapix-demo'
+// (DEMO_ACTIVITY import removed — was never used and pulled phantom data
+// into the bundle.)
 import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-store'
 import { GuidedTour } from '@/components/global/guided-tour'
 import { LCAPIX_TOUR_STEPS } from '@/lib/lcapix-tour-steps'
@@ -97,6 +98,22 @@ export default function HomePage() {
 
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
+
+  // The global navbar "Tour" button signals us either via sessionStorage
+  // (when it triggered a page navigation) or via a same-page custom event.
+  // Honor both — clear the flag after consuming it so a refresh doesn't
+  // re-trigger the tour.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("lcapix:start-tour") === "1") {
+        sessionStorage.removeItem("lcapix:start-tour")
+        setTourOpen(true)
+      }
+    } catch {}
+    const handler = () => setTourOpen(true)
+    window.addEventListener("lcapix:start-tour", handler)
+    return () => window.removeEventListener("lcapix:start-tour", handler)
+  }, [])
   const [kpiData, setKpiData] = useState({ factors: 0, components: 0 })
   const [view, setView] = useState<ViewMode>('grid')
   const [filter, setFilter] = useState<FilterId>('all')

@@ -65,9 +65,9 @@ export function SectionDivider({ spacing = 0, variant = 'tiles' }: SectionDivide
 // matches the layout so they never drift out of alignment.
 export function DataFlowDiagram() {
   const sources = [
-    { id: 'openlca',  label: 'openLCA',          count: '3,420 factors' },
-    { id: 'pubchem',  label: 'PubChem',          count: '1,842 substances' },
-    { id: 'elmap',    label: 'Electricity Maps', count: '38 grid regions' },
+    { id: 'openlca',  label: 'openLCA',          count: 'factor packs' },
+    { id: 'pubchem',  label: 'PubChem',          count: 'CAS provenance' },
+    { id: 'elmap',    label: 'Electricity Maps', count: 'grid intensity' },
     { id: 'eia',      label: 'EIA · BLS',        count: 'live cost data' },
   ]
   const methods = [
@@ -225,7 +225,7 @@ export function DataFlowDiagram() {
             marginBottom: 8,
           }}
         >
-          FACTOR INDEX
+          LCIA METHODS
         </div>
         <div
           className="mono"
@@ -237,7 +237,7 @@ export function DataFlowDiagram() {
             lineHeight: 1,
           }}
         >
-          5,234
+          3
         </div>
         <div
           style={{
@@ -246,7 +246,7 @@ export function DataFlowDiagram() {
             marginTop: 6,
           }}
         >
-          characterization factors
+          CML 2001 · ReCiPe · TRACI 2.1
         </div>
         <div
           className="mono"
@@ -310,7 +310,7 @@ export function DataFlowDiagram() {
 
 // HeroOrnament — abstract "many sources → one model" diagram anchored top-
 // left of the hero, in the negative space above the headline. No text
-// labels — the right column already prints "5,234 / openLCA · PubChem · EIA"
+// labels — the right column already prints the method count
 // so we only carry the visual structure here.
 export function HeroOrnament() {
   return (
