@@ -20,12 +20,24 @@ const nextConfig = {
   // is a no-op for the current production deploy.
   output: process.env.BUILD_STANDALONE ? 'standalone' : undefined,
 
-  // The standalone tracer doesn't follow pdfkit's runtime fs reads of its .afm
-  // font-metric data, so include them explicitly or PDF export 500s in a
-  // container with "ENOENT … Helvetica.afm".
-  outputFileTracingIncludes: {
-    '/api/assessments/**': ['./node_modules/pdfkit/js/data/**/*'],
-  },
+  // Standalone/container ONLY: the standalone tracer doesn't follow pdfkit's
+  // runtime fs reads of its .afm font-metric data, so include them explicitly
+  // or PDF export 500s in a container with "ENOENT … Helvetica.afm".
+  //
+  // Must NOT run on Vercel: this globs `./node_modules/pdfkit/...`, and under
+  // pnpm that path is a symlink into the virtual store, which makes Vercel's
+  // packager reject the function ("invalid deployment package … symlinked
+  // directories"). On Vercel, `serverExternalPackages: ['pdfkit']` already
+  // keeps pdfkit (and its .afm data) resolvable from node_modules at runtime,
+  // so the explicit include is unnecessary there. Gate it on BUILD_STANDALONE
+  // exactly like `output` above.
+  ...(process.env.BUILD_STANDALONE
+    ? {
+        outputFileTracingIncludes: {
+          '/api/assessments/**': ['./node_modules/pdfkit/js/data/**/*'],
+        },
+      }
+    : {}),
 }
 
 export default nextConfig
