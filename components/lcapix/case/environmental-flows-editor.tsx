@@ -104,6 +104,10 @@ export function EnvironmentalFlowsEditor({
   const [dir, setDir] = useState<'input' | 'output'>('input')
   const [qty, setQty] = useState('')
   const [unit, setUnit] = useState('kg')
+  // Transport-leg helper: for tonne-km substances a user shouldn't hand-compute
+  // tkm. They enter mass (tonnes) and distance (km); we set quantity = t × km.
+  const [legMassT, setLegMassT] = useState('')
+  const [legKm, setLegKm] = useState('')
 
   const loadFlows = useCallback(async () => {
     setLoading(true)
@@ -204,6 +208,8 @@ export function EnvironmentalFlowsEditor({
     setDir('input')
     setQty('')
     setUnit('kg')
+    setLegMassT('')
+    setLegKm('')
   }
 
   // Open the add form pre-filled from a suggestion. Quantity stays blank for
@@ -297,6 +303,17 @@ export function EnvironmentalFlowsEditor({
   }
 
   const selectedSubstance = substances.find((s) => s.substance_id === substanceId)
+  // A transport substance is quantified in tonne-km (freight work = mass ×
+  // distance). Detect it from the catalog unit or the name so we can offer the
+  // leg calculator instead of asking for a raw tkm figure.
+  const isTransportLeg =
+    !!selectedSubstance &&
+    ((selectedSubstance.unit || '').toLowerCase() === 'tkm' ||
+      /transport|freight|haul/i.test(selectedSubstance.substance_name || ''))
+  const legTkm =
+    legMassT && legKm && !isNaN(Number(legMassT)) && !isNaN(Number(legKm))
+      ? Number(legMassT) * Number(legKm)
+      : null
 
   return (
     <div>
@@ -662,6 +679,58 @@ export function EnvironmentalFlowsEditor({
               </div>
             )}
           </div>
+
+          {/* Transport-leg calculator: mass (t) × distance (km) → tonne-km. */}
+          {isTransportLeg && (
+            <div
+              style={{
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 6,
+                padding: '10px 12px',
+                marginBottom: 10,
+                background: 'oklch(from var(--brand-primary) l c h / 0.04)',
+              }}
+            >
+              <div className="label" style={{ fontSize: 11, marginBottom: 6 }}>
+                Transport leg — enter mass and distance, we compute tonne-km
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                <div>
+                  <label className="label" style={{ fontSize: 10 }}>Mass (tonnes)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={legMassT}
+                    onChange={(e) => {
+                      setLegMassT(e.target.value)
+                      const t = Number(e.target.value)
+                      const km = Number(legKm)
+                      if (t && km) { setQty(String(t * km)); setUnit('tkm') }
+                    }}
+                    placeholder="e.g. 1.2"
+                  />
+                </div>
+                <div>
+                  <label className="label" style={{ fontSize: 10 }}>Distance (km)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={legKm}
+                    onChange={(e) => {
+                      setLegKm(e.target.value)
+                      const km = Number(e.target.value)
+                      const t = Number(legMassT)
+                      if (t && km) { setQty(String(t * km)); setUnit('tkm') }
+                    }}
+                    placeholder="e.g. 450"
+                  />
+                </div>
+                <div className="mono" style={{ fontSize: 12, color: 'var(--text-secondary)', paddingBottom: 8 }}>
+                  = {legTkm != null ? legTkm.toLocaleString() : '—'} tkm
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Direction + qty + unit */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
