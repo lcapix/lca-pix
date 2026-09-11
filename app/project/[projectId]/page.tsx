@@ -758,6 +758,14 @@ export default function ProjectPage() {
             <Icon name="layers" size={14} /> Compare Cases
           </button>
           <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => router.push(`/project/${projectId}/import`)}
+            title="Create a case from a real document (upload → review → apply)"
+          >
+            <Icon name="file" size={14} /> Import Data
+          </button>
+          <button
             data-tour="project-add-case"
             type="button"
             className="btn btn-primary btn-sm"
