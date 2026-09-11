@@ -33,6 +33,16 @@ import {
 } from '@/components/lcapix/case'
 import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
 
+// A typed 0 is a real cost ("this operation costs nothing"), distinct from an
+// empty field (unknown). `x || null` collapsed both to null, and the component
+// PUT's COALESCE then kept the previous number — so editing a cost to 0 silently
+// reverted. This preserves 0 and any valid number; only truly-empty inputs → null.
+const costOrNull = (v: unknown): number | null => {
+  if (v === '' || v === null || v === undefined) return null
+  const n = Number(v)
+  return Number.isNaN(n) ? null : n
+}
+
 // Component type constants matching DB enum.
 const COMPONENT_TYPES = {
   PRODUCT: 'product',
@@ -393,14 +403,14 @@ export default function CaseViewPage() {
               : null,
           quantity: fd.mass || null,
           unit: fd.massUnit || null,
-          opex: fd.operationalCostUSD || null,
-          capex: fd.capitalCostUSD || null,
-          labor_cost: fd.laborCost || null,
-          energy_cost: fd.energyCost || null,
-          transportation_cost: fd.transportationCost || null,
-          material_cost: fd.materialCost || null,
-          equipment_cost: fd.equipmentCost || null,
-          overhead_cost: fd.overheadCost || null,
+          opex: costOrNull(fd.operationalCostUSD),
+          capex: costOrNull(fd.capitalCostUSD),
+          labor_cost: costOrNull(fd.laborCost),
+          energy_cost: costOrNull(fd.energyCost),
+          transportation_cost: costOrNull(fd.transportationCost),
+          material_cost: costOrNull(fd.materialCost),
+          equipment_cost: costOrNull(fd.equipmentCost),
+          overhead_cost: costOrNull(fd.overheadCost),
           currency: fd.currency || 'USD',
           cost_allocation_type: fd.costAllocationType || 'manual',
         }
@@ -442,14 +452,14 @@ export default function CaseViewPage() {
               : null,
           quantity: fd.mass || null,
           unit: fd.massUnit || null,
-          opex: fd.operationalCostUSD || null,
-          capex: fd.capitalCostUSD || null,
-          labor_cost: fd.laborCost || null,
-          energy_cost: fd.energyCost || null,
-          transportation_cost: fd.transportationCost || null,
-          material_cost: fd.materialCost || null,
-          equipment_cost: fd.equipmentCost || null,
-          overhead_cost: fd.overheadCost || null,
+          opex: costOrNull(fd.operationalCostUSD),
+          capex: costOrNull(fd.capitalCostUSD),
+          labor_cost: costOrNull(fd.laborCost),
+          energy_cost: costOrNull(fd.energyCost),
+          transportation_cost: costOrNull(fd.transportationCost),
+          material_cost: costOrNull(fd.materialCost),
+          equipment_cost: costOrNull(fd.equipmentCost),
+          overhead_cost: costOrNull(fd.overheadCost),
           currency: fd.currency || 'USD',
           cost_allocation_type: fd.costAllocationType || 'manual',
         }
