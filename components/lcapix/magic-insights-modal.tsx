@@ -83,6 +83,14 @@ export function MagicInsightsModal({
   const [prompt, setPrompt] = useState<string>('')
   const [submittedPrompt, setSubmittedPrompt] = useState<string>('')
 
+  // AI narration mode (open model via Hugging Face). Off by default: the
+  // deterministic computed insight is the always-available baseline and the
+  // automatic fallback whenever no model key is configured or a call fails.
+  const [aiMode, setAiMode] = useState<boolean>(false)
+  const [aiText, setAiText] = useState<string>('')
+  const [aiStatus, setAiStatus] = useState<'idle' | 'streaming' | 'done' | 'fallback'>('idle')
+  const [aiModel, setAiModel] = useState<string>('')
+
   // Reset state when the modal re-opens with new context.
   useEffect(() => {
     if (open) {
@@ -94,6 +102,8 @@ export function MagicInsightsModal({
       )
       setPrompt('')
       setSubmittedPrompt('')
+      setAiText('')
+      setAiStatus('idle')
     }
   }, [open, initialCategory, impacts])
 
@@ -236,6 +246,93 @@ export function MagicInsightsModal({
 
   const { value: streamed, done } = useStreamText(insightText)
 
+  // When AI mode is on, stream a grounded narration from the open model for the
+  // current facts. Re-runs whenever the facts change (chip/category/target/
+  // question). Any failure or missing key degrades silently to the computed
+  // insight — the AI path is strictly additive.
+  useEffect(() => {
+    if (!open || !aiMode) return
+    // 'custom' with no submitted question: nothing to narrate yet.
+    if (activeChip === 'custom' && !submittedPrompt.trim()) {
+      setAiText('')
+      setAiStatus('idle')
+      return
+    }
+    const controller = new AbortController()
+    const facts = {
+      caseName,
+      method,
+      categoryLabel: activeLabel,
+      total: activeTotal !== undefined ? { value: activeTotal, unit: activeUnit } : undefined,
+      totalCost,
+      contributors: contributors.map((c) => ({ name: c.name, pct: c.pct, value: c.value })),
+      mode: activeChip,
+      reducePct: activeChip === 'reduce' ? reducePct : undefined,
+      question: activeChip === 'custom' ? submittedPrompt : undefined,
+    }
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    setAiText('')
+    setAiStatus('streaming')
+    ;(async () => {
+      try {
+        const res = await fetch('/api/insights', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: 'Bearer ' + token } : {}),
+          },
+          body: JSON.stringify(facts),
+          signal: controller.signal,
+        })
+        const ct = res.headers.get('content-type') || ''
+        // JSON response = fallback signal (no key / upstream error).
+        if (ct.includes('application/json')) {
+          setAiStatus('fallback')
+          return
+        }
+        setAiModel(res.headers.get('x-insights-model') || '')
+        const reader = res.body?.getReader()
+        if (!reader) {
+          setAiStatus('fallback')
+          return
+        }
+        const decoder = new TextDecoder()
+        let acc = ''
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done: rdone, value } = await reader.read()
+          if (rdone) break
+          acc += decoder.decode(value, { stream: true })
+          setAiText(acc)
+        }
+        setAiStatus(acc.trim() ? 'done' : 'fallback')
+      } catch (e: any) {
+        if (e?.name !== 'AbortError') setAiStatus('fallback')
+      }
+    })()
+    return () => controller.abort()
+  }, [
+    open,
+    aiMode,
+    activeChip,
+    selectedCategory,
+    reducePct,
+    submittedPrompt,
+    caseName,
+    method,
+    activeLabel,
+    activeUnit,
+    activeTotal,
+    totalCost,
+    contributors,
+  ])
+
+  // What actually renders: AI narration when in AI mode and it produced text,
+  // otherwise the deterministic computed insight (also the fallback).
+  const usingAI = aiMode && aiStatus !== 'fallback' && (aiStatus === 'streaming' || aiStatus === 'done')
+  const bodyText = usingAI ? aiText : streamed
+  const showCursor = usingAI ? aiStatus === 'streaming' : !done
+
   if (!open) return null
 
   return (
@@ -303,6 +400,49 @@ export function MagicInsightsModal({
               >
                 {caseName} · {method}
               </div>
+            </div>
+            {/* Computed ↔ AI toggle. Computed is the deterministic baseline;
+                AI narrates the same figures via an open model. */}
+            <div
+              role="group"
+              aria-label="Insight mode"
+              style={{
+                display: 'inline-flex',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 8,
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}
+            >
+              {([
+                { id: false, label: 'Computed' },
+                { id: true, label: 'AI' },
+              ] as const).map((opt) => {
+                const on = aiMode === opt.id
+                return (
+                  <button
+                    key={String(opt.id)}
+                    type="button"
+                    onClick={() => setAiMode(opt.id)}
+                    aria-pressed={on}
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: 11.5,
+                      fontWeight: on ? 600 : 500,
+                      border: 'none',
+                      cursor: 'pointer',
+                      background: on ? 'var(--brand-primary)' : 'transparent',
+                      color: on ? 'var(--on-primary)' : 'var(--text-secondary)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    {opt.id === true && <Icon name="sparkle" size={11} />}
+                    {opt.label}
+                  </button>
+                )
+              })}
             </div>
             <button
               type="button"
@@ -540,8 +680,8 @@ export function MagicInsightsModal({
               lineHeight: 1.65,
             }}
           >
-            {renderWithCitations(streamed, contributors, { projectId, caseId })}
-            {!done && (
+            {renderWithCitations(bodyText, contributors, { projectId, caseId })}
+            {showCursor && (
               <span
                 aria-hidden
                 style={{
@@ -554,6 +694,21 @@ export function MagicInsightsModal({
                   animation: 'fadeIn 600ms ease infinite alternate',
                 }}
               />
+            )}
+          </div>
+          {/* Honest provenance line: computed vs AI, and — crucially — that the
+              numbers always come from the engine, never the model. */}
+          <div style={{ marginTop: 12, fontSize: 10.5, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+            {usingAI ? (
+              <>
+                Narrated by <span className="mono">{aiModel || 'an open model'}</span> via Hugging
+                Face, grounded on your computed figures — the model phrases the analysis, the
+                numbers come from the engine.
+              </>
+            ) : aiMode && aiStatus === 'fallback' ? (
+              <>AI narration unavailable (no model key configured) — showing the computed insight.</>
+            ) : (
+              <>Computed deterministically from your assessment results. Not AI-generated.</>
             )}
           </div>
         </div>
