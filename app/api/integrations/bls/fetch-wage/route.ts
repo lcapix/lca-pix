@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { fetchMedianHourlyWage } from '@/lib/integrations/bls/client';
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
+import { LABOR_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 import { logIntegration } from '@/lib/integrations/log';
 
 const Body = z.object({
@@ -39,6 +40,18 @@ export async function POST(request: NextRequest) {
           unit: '$/hr',
           source: `BLS OEWS ${wage.year}`,
           effectiveDate: `${wage.year}-05-01`,
+        };
+      },
+      // No live data → curated BLS OEWS national-mean reference for this SOC
+      // code (or the generic production-worker average).
+      staticFallback: () => {
+        const ref =
+          Object.values(LABOR_RATES).find((r) => r.soc === occupation) ?? LABOR_RATES.generic;
+        return {
+          rateValue: ref.rate,
+          unit: '$/hr',
+          source: `Reference ${REFERENCE_VINTAGE} (${ref.label})`,
+          effectiveDate: `${REFERENCE_VINTAGE}-01`,
         };
       },
     });

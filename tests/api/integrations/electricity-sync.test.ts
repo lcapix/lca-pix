@@ -35,6 +35,7 @@ describe('POST /api/integrations/electricity/sync', () => {
     vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(sync.syncZoneFactor).mockResolvedValue({
       zone: 'US-NY', factorValue: 0.283, inserted: true,
+      source: 'live', sourceRef: 'Electricity Maps API 2026-09-11',
     });
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 
@@ -49,7 +50,7 @@ describe('POST /api/integrations/electricity/sync', () => {
   it('reports errors in per-zone results without aborting the whole call', async () => {
     vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(sync.syncZoneFactor)
-      .mockResolvedValueOnce({ zone: 'US-NY', factorValue: 0.283, inserted: true })
+      .mockResolvedValueOnce({ zone: 'US-NY', factorValue: 0.283, inserted: true, source: 'live', sourceRef: 'Electricity Maps API 2026-09-11' })
       .mockRejectedValueOnce(new Error('fetch failed'));
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 

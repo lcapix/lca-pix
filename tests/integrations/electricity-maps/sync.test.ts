@@ -22,7 +22,8 @@ describe('syncZoneFactor', () => {
     const insertSpy = vi.mocked(db.insert).mockResolvedValue(1);
 
     const r = await syncZoneFactor('US-NY', 'CML 2001');
-    expect(r).toEqual({ zone: 'US-NY', factorValue: 0.283, inserted: true });
+    expect(r).toMatchObject({ zone: 'US-NY', factorValue: 0.283, inserted: true, source: 'live' });
+    expect(r.sourceRef).toMatch(/Electricity Maps API/);
     expect(insertSpy).toHaveBeenCalledOnce();
     const params = insertSpy.mock.calls[0][1]!;
     expect(params).toContain('US-NY');      // geographic_scope
@@ -45,6 +46,37 @@ describe('syncZoneFactor', () => {
     await syncZoneFactor('FR');
     const params = insertSpy.mock.calls[0][1]!;
     expect(params).toContain('CML 2001');
+  });
+
+  it('never overwrites an existing (audited) factor when the live API fails', async () => {
+    // No key / API error, but a factor is already on file → keep it, do NOT write.
+    vi.mocked(client.fetchCarbonIntensity).mockRejectedValue(new Error('401 no key'));
+    vi.mocked(db.queryOne)
+      .mockResolvedValueOnce({ substance_id: 7 } as any)                                  // elec
+      .mockResolvedValueOnce({ category_id: 1 } as any)                                    // GW
+      .mockResolvedValueOnce({ factor_value: 0.35, source_reference: 'EPA eGRID 2023' } as any); // existing
+    const insertSpy = vi.mocked(db.insert).mockResolvedValue(1);
+
+    const r = await syncZoneFactor('US', 'CML 2001');
+    expect(r.source).toBe('reference');
+    expect(r.inserted).toBe(false);       // crucial: nothing written
+    expect(r.factorValue).toBe(0.35);      // the audited value is preserved
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('fills a genuine gap with the curated reference when no factor exists', async () => {
+    vi.mocked(client.fetchCarbonIntensity).mockRejectedValue(new Error('401 no key'));
+    vi.mocked(db.queryOne)
+      .mockResolvedValueOnce({ substance_id: 7 } as any)  // elec
+      .mockResolvedValueOnce({ category_id: 1 } as any)   // GW
+      .mockResolvedValueOnce(null);                        // no existing factor for the zone
+    const insertSpy = vi.mocked(db.insert).mockResolvedValue(1);
+
+    const r = await syncZoneFactor('FR', 'CML 2001');
+    expect(r.source).toBe('reference');
+    expect(r.inserted).toBe(true);
+    expect(r.factorValue).toBe(0.05);     // FR reference from GRID_CARBON
+    expect(insertSpy).toHaveBeenCalledOnce();
   });
 
   it('throws if Electricity substance is missing', async () => {

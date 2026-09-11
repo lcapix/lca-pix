@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { fetchElectricityPrice, fetchNaturalGasPrice } from '@/lib/integrations/eia/client';
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
+import { ENERGY_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 import { logIntegration } from '@/lib/integrations/log';
 
 const Body = z.object({
@@ -38,6 +39,23 @@ export async function POST(request: NextRequest) {
           rateValue: p.rateValue, unit: p.unit,
           source: `EIA ${p.period}`,
           effectiveDate: `${p.period}-01`,
+        };
+      },
+      // No live key / EIA unavailable → curated EIA-average reference $/kWh.
+      staticFallback: () => {
+        const ref =
+          fuel === 'electricity'
+            ? sector === 'IND'
+              ? ENERGY_RATES.electricity_industrial
+              : sector === 'COM'
+                ? ENERGY_RATES.electricity_commercial
+                : ENERGY_RATES.electricity
+            : ENERGY_RATES.natural_gas;
+        return {
+          rateValue: ref.rate,
+          unit: '$/kWh',
+          source: `Reference ${REFERENCE_VINTAGE} (${ref.label})`,
+          effectiveDate: `${REFERENCE_VINTAGE}-01`,
         };
       },
     });

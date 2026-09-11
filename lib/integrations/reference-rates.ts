@@ -55,10 +55,15 @@ export const MATERIAL_RATES: Array<{ match: RegExp; rate: number; label: string 
 ]
 export const MATERIAL_DEFAULT = { rate: 1.50, label: 'Generic material (avg)' }
 
-// ── Grid carbon intensity: kg CO2-eq / kWh (Electricity Maps yearly avg) ─────
-// Used to seed the electricity characterization factor per region.
+// ── Grid carbon intensity: kg CO2-eq / kWh ──────────────────────────────────
+// Used ONLY to fill a genuine gap (a zone with no factor on file). The US and
+// Global values are kept consistent with the audited characterization factors
+// (migrate-009): US = EPA eGRID 2023 national average (0.350), Global = Ember
+// 2024 (0.473) — so a gap-fill can never reintroduce a coarser number than the
+// engine already trusts. Other zones are Electricity Maps published yearly
+// averages; refine them against a cited source before treating as ground truth.
 export const GRID_CARBON: Record<string, { factor: number; label: string }> = {
-  US:     { factor: 0.42, label: 'United States (grid avg)' },
+  US:     { factor: 0.350, label: 'United States (EPA eGRID 2023 avg)' },
   'US-CAL-CISO': { factor: 0.24, label: 'California (CAISO)' },
   EU:     { factor: 0.25, label: 'European Union (avg)' },
   FR:     { factor: 0.05, label: 'France' },
@@ -67,7 +72,7 @@ export const GRID_CARBON: Record<string, { factor: number; label: string }> = {
   CN:     { factor: 0.55, label: 'China' },
   IN:     { factor: 0.63, label: 'India' },
   NO:     { factor: 0.03, label: 'Norway' },
-  Global: { factor: 0.48, label: 'Global (avg)' },
+  Global: { factor: 0.473, label: 'Global (Ember 2024 avg)' },
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
