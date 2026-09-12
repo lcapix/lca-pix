@@ -269,6 +269,11 @@ export function MagicInsightsModal({
       mode: activeChip,
       reducePct: activeChip === 'reduce' ? reducePct : undefined,
       question: activeChip === 'custom' ? submittedPrompt : undefined,
+      // Full impact profile (every category), so the model can reason across
+      // categories instead of only restating the one on screen.
+      allCategories: impacts
+        ? Object.entries(impacts).map(([name, v]) => ({ name, value: v.value, unit: v.unit }))
+        : [],
     }
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
     setAiText('')

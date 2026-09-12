@@ -9,12 +9,16 @@
 
 import type { IngestCost, IngestNode, ProcessModel } from './schema';
 import { validateProcessModel } from './schema';
+import { convertQuantity } from '@/lib/units';
 
 // Unit conversions to the units LCAPIX factors actually use.
 // [from_unit, substance_hint, to_unit, factor, note] — hint rules first.
 const UNIT_CONVERSIONS: Array<[string, string | null, string, number, string]> = [
   ['mmbtu', 'natural gas', 'm3', 28.263, '1 MMBtu = 28.263 m3 natural gas (EIA heat content)'],
-  ['mmbtu', null, 'kWh', 293.071, '1 MMBtu = 293.071 kWh'],
+  // Other fuels (coal, LPG, fuel oil, wood) stay in MMBtu — their substances now
+  // carry per-MMBtu factors (migrate-011), so no conversion is needed. (Was
+  // MMBtu→kWh, which then failed against the fuels' mass-based factors.)
+  ['mmbtu', null, 'MMBtu', 1.0, ''],
   ['lbs', null, 'kg', 0.45359237, '1 lb = 0.45359 kg'],
   ['lb', null, 'kg', 0.45359237, '1 lb = 0.45359 kg'],
   ['tgal', null, 'm3', 3.785411784, '1 thousand US gal = 3.7854 m3'],
@@ -50,6 +54,9 @@ export interface MappedFlow {
   unit: string;
   conversion_note: string;
   provenance: string;
+  /** false when the flow's unit can't convert to the matched substance's factor
+   *  unit — the flow would be HELD at apply. Surfaced in the review screen. */
+  unit_compatible: boolean;
 }
 
 export interface IngestPlan {
@@ -191,6 +198,21 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
           `this flow would contribute 0 to every category`
       );
     }
+    // Unit-compatibility guard (finding 1b): if the matched substance's factor
+    // unit can't be reached from the flow's unit, the flow will be HELD at apply.
+    // Surface it here so the user sees it BEFORE applying, not as a silent drop.
+    let unitCompatible = true;
+    if (best) {
+      const factorUnit = best.unit ?? null;
+      if (factorUnit && !convertQuantity(1, conv.unit, factorUnit)) {
+        unitCompatible = false;
+        plan.review.push(
+          `UNIT MISMATCH: '${f.substance_text}' (${f.node}) is in '${conv.unit}' but ` +
+            `'${best.substance_name}' factors are in '${factorUnit}' — WILL BE HELD unless you ` +
+            `pick a substance whose unit is compatible`
+        );
+      }
+    }
     plan.flows.push({
       node: f.node,
       substance_text: f.substance_text,
@@ -203,6 +225,7 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
       unit: conv.unit,
       conversion_note: conv.note,
       provenance: f.provenance ? `${f.provenance.doc} · ${f.provenance.locator}` : '',
+      unit_compatible: unitCompatible,
     });
   }
   return plan;

@@ -279,16 +279,10 @@ export default function ProjectPage() {
           }))
           .sort((a, b) => b.value - a.value)
           .slice(0, 5)
-        // Cost summary: prefer real assessment_runs fields, else derive a
-        // plausible breakdown from the total impact so every assessed case
-        // shows a cost panel instead of an empty state.
-        const realLabor = Number(latest.total_labor_cost ?? 0)
-        const realEnergy = Number(latest.total_energy_cost ?? 0)
-        const realMaterial = Number(latest.total_material_cost ?? 0)
-        const realOverhead = Number(latest.total_overhead_cost ?? 0)
-        const realTotal =
-          Number(latest.total_cost ?? 0) ||
-          realLabor + realEnergy + realMaterial + realOverhead
+        // Cost summary from REAL component cost columns — never synthesized.
+        // (assessment_runs carries no cost fields, and the old fallback
+        // fabricated a $192/kg-CO2 breakdown; both removed. No cost data →
+        // costs stays null and the panel shows an honest empty state.)
         let costs: {
           labor: number
           energy: number
@@ -296,25 +290,28 @@ export default function ProjectPage() {
           overhead: number
           total: number
         } | null = null
-        if (realTotal > 0) {
-          costs = {
-            labor: realLabor,
-            energy: realEnergy,
-            material: realMaterial,
-            overhead: realOverhead,
-            total: realTotal,
-          }
-        } else if (total > 0) {
-          // Derived breakdown: ~$192 of operating cost per kg CO2-eq.
-          // Splits: labor 26% / energy 20% / material 47% / overhead 7%.
-          const synth = Math.round(total * 192)
-          costs = {
-            labor: Math.round(synth * 0.26),
-            energy: Math.round(synth * 0.2),
-            material: Math.round(synth * 0.47),
-            overhead: Math.round(synth * 0.07),
-            total: synth,
-          }
+        try {
+          const cr = await apiRequest(`/api/cases/${activeCaseId}/components`)
+          const cd = await cr.json()
+          const comps: any[] = cd?.components || cd?.data || []
+          const num = (v: any) => Number(v ?? 0) || 0
+          const labor = comps.reduce((s, c) => s + num(c.labor_cost), 0)
+          const energy = comps.reduce((s, c) => s + num(c.energy_cost), 0)
+          const material = comps.reduce((s, c) => s + num(c.material_cost), 0)
+          const overhead = comps.reduce(
+            (s, c) =>
+              s +
+              num(c.overhead_cost) +
+              num(c.equipment_cost) +
+              num(c.transportation_cost) +
+              num(c.opex) +
+              num(c.capex),
+            0,
+          )
+          const t = labor + energy + material + overhead
+          if (t > 0) costs = { labor, energy, material, overhead, total: t }
+        } catch {
+          /* no cost data → honest empty state */
         }
         if (!cancelled) {
           setCaseImpact({
@@ -2199,12 +2196,13 @@ function CaseTabs({
         paddingBottom: 8,
       }}
     >
-      {baseCase && (
+      {baseCases.map((bc) => (
         <button
+          key={bc.id}
           type="button"
-          onClick={() => onSelect(baseCase.id)}
+          onClick={() => onSelect(bc.id)}
           className="case-tab"
-          data-active={baseActive ? 'true' : 'false'}
+          data-active={activeCaseId === bc.id ? 'true' : 'false'}
           data-kind="base"
         >
           <div
@@ -2222,13 +2220,13 @@ function CaseTabs({
                 color: 'var(--text-primary)',
               }}
             >
-              {baseCase.name}
+              {bc.name}
             </span>
             <span
               className="label-sm"
               style={{
                 fontSize: 9,
-                color: baseActive
+                color: activeCaseId === bc.id
                   ? 'var(--brand-primary)'
                   : 'var(--text-tertiary)',
               }}
@@ -2246,17 +2244,17 @@ function CaseTabs({
           >
             <span>
               <span className="mono">
-                {baseCase.componentCount ?? baseCase.components?.length ?? 0}
+                {bc.componentCount ?? bc.components?.length ?? 0}
               </span>{' '}
               comps
             </span>
             <span>·</span>
             <span>
-              <span className="mono">{baseCase.driverCount ?? 0}</span> drivers
+              <span className="mono">{bc.driverCount ?? 0}</span> drivers
             </span>
           </div>
         </button>
-      )}
+      ))}
 
       {compCase ? (
         <div

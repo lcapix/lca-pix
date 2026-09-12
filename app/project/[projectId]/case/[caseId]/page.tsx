@@ -6,7 +6,7 @@
 // preserved from the prior implementation.
 
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 
 import { apiRequest } from '@/lib/api-client'
@@ -67,8 +67,12 @@ interface EditFormData extends InspectorEditFormData {
 export default function CaseViewPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const projectId = params.projectId as string
   const caseId = params.caseId as string
+  // Deep-link target: the results page links each flow row to
+  // ?component=<name> so "click a flow → edit its component" works.
+  const preselectComponent = searchParams.get('component')
 
   const { updateComponentNode, deleteComponentNode } = useProjectStore()
 
@@ -155,17 +159,20 @@ export default function CaseViewPage() {
     fetchCaseData()
   }, [caseId, projectId, router, refreshKey])
 
-  // ---------- Auto-select first root (preserved) ----------
+  // ---------- Auto-select: the ?component=<name> deep-link target, else first root ----------
   useEffect(() => {
     if (components.length > 0 && !selectedNode) {
-      const firstRoot = components.find((c) => !c.parentId) ?? components[0]
-      if (firstRoot) {
-        setSelectedNode(firstRoot.id)
-        loadFormFor(firstRoot)
+      const named = preselectComponent
+        ? components.find((c) => c.name === preselectComponent)
+        : null
+      const target = named ?? components.find((c) => !c.parentId) ?? components[0]
+      if (target) {
+        setSelectedNode(target.id)
+        loadFormFor(target)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [components.length])
+  }, [components.length, preselectComponent])
 
   // ---------- Tree adapter (memoized) ----------
   const tree = useMemo(() => {

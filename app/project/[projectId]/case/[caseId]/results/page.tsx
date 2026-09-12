@@ -874,7 +874,29 @@ export default function ResultsPage() {
                 alignItems: 'center',
               }}
             >
-              <div style={{ color: 'var(--text-secondary)' }}>{f.component}</div>
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/project/${projectId}/case/${caseId}?component=${encodeURIComponent(f.component)}`,
+                  )
+                }
+                title="Edit this component's flows (e.g. remove the CO₂ output to clear the double-count)"
+                style={{
+                  color: 'var(--brand-primary)',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  font: 'inherit',
+                  textDecoration: 'underline',
+                  textDecorationStyle: 'dotted',
+                  textUnderlineOffset: 2,
+                }}
+              >
+                {f.component}
+              </button>
               <div style={{ color: 'var(--text-primary)' }}>{f.substance}</div>
               <div>
                 <span

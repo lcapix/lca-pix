@@ -35,10 +35,12 @@ describe('convertIngestUnit', () => {
     expect(r.note).toContain('EIA heat content')
   })
 
-  it('falls back to the generic rule: MMBtu of coal → kWh', () => {
+  it('keeps non-gas fuels (coal, LPG, fuel oil, wood) in MMBtu — they carry per-MMBtu factors', () => {
     const r = convertIngestUnit(10, 'MMBtu', 'Coal')
-    expect(r.unit).toBe('kWh')
-    expect(r.quantity).toBeCloseTo(2930.71, 2)
+    expect(r.unit).toBe('MMBtu')
+    expect(r.quantity).toBe(10)
+    // still converts natural gas MMBtu → m³ (its factor is per m³)
+    expect(convertIngestUnit(10, 'MMBtu', 'Natural Gas').unit).toBe('m3')
   })
 
   it('converts lbs → kg and Tgal → m3 with named factors', () => {

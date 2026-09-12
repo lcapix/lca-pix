@@ -402,8 +402,8 @@ export default function ComparisonPage() {
                 marginBottom: 14,
               }}
             >
-              The base case is always the reference. Cycle through comparative
-              cases to switch which alternative is being compared.
+              Click any cases to add or remove them from the comparison — base or
+              comparative, as many as you like. The base case is the delta reference.
             </div>
             {isLoading ? (
               <div
@@ -426,132 +426,64 @@ export default function ComparisonPage() {
                   flexWrap: 'wrap',
                 }}
               >
-                {/* Base pill (pinned) */}
-                {baseCaseId &&
-                  (() => {
-                    const base = cases.find((c) => c.id === baseCaseId)!
-                    return (
-                      <div
-                        title="Base case is always the reference"
+                {/* Multi-select: toggle ANY case in/out of the comparison. The
+                    base case stays pinned as the delta reference. */}
+                {cases.map((c) => {
+                  const on = selected.has(c.id)
+                  const isBase = c.type === 'base'
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() =>
+                        setSelected((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(c.id)) next.delete(c.id)
+                          else next.add(c.id)
+                          return next
+                        })
+                      }
+                      title={
+                        isBase
+                          ? 'Base case — the reference for the deltas'
+                          : 'Click to add/remove from the comparison'
+                      }
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: 999,
+                        border: on
+                          ? '1px solid color-mix(in oklab, var(--brand-primary) 60%, transparent)'
+                          : '1px solid var(--border-subtle)',
+                        background: on
+                          ? 'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))'
+                          : 'var(--surface-raised)',
+                        color: on ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        fontSize: 13,
+                        fontFamily: 'var(--font-ui)',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      {on && (
+                        <Icon name="check" size={12} style={{ color: 'var(--brand-primary)' }} />
+                      )}
+                      <span style={{ fontWeight: on ? 500 : 400 }}>{c.name}</span>
+                      <span
+                        className="eyebrow"
                         style={{
-                          padding: '10px 16px',
-                          borderRadius: 999,
-                          border:
-                            '1px solid color-mix(in oklab, var(--brand-primary) 60%, transparent)',
-                          background:
-                            'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))',
-                          color: 'var(--text-primary)',
-                          fontSize: 13,
-                          fontFamily: 'var(--font-ui)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          cursor: 'default',
+                          fontSize: 9,
+                          color: 'var(--text-tertiary)',
+                          letterSpacing: '0.1em',
                         }}
                       >
-                        <Icon
-                          name="check"
-                          size={12}
-                          style={{ color: 'var(--brand-primary)' }}
-                        />
-                        <span style={{ fontWeight: 500 }}>{base.name}</span>
-                        <span
-                          className="eyebrow"
-                          style={{
-                            fontSize: 9,
-                            color: 'var(--text-tertiary)',
-                            letterSpacing: '0.1em',
-                          }}
-                        >
-                          BASE
-                        </span>
-                        <span style={{ fontSize: 10 }}>🔒</span>
-                      </div>
-                    )
-                  })()}
-
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: 'var(--text-tertiary)',
-                    padding: '0 4px',
-                  }}
-                >
-                  vs
-                </span>
-
-                {/* COMP toggle */}
-                {compCases.length === 0 ? (
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: 'var(--text-tertiary)',
-                      fontStyle: 'italic',
-                    }}
-                  >
-                    No comparative cases yet. Add one from the project page.
-                  </span>
-                ) : (
-                  <label
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '6px 8px 6px 14px',
-                      borderRadius: 999,
-                      border:
-                        '1px solid color-mix(in oklab, var(--brand-primary) 60%, transparent)',
-                      background:
-                        'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <select
-                      value={selectedCompId ?? compCases[0].id}
-                      onChange={(e) => setActiveComp(e.target.value)}
-                      style={{
-                        appearance: 'none',
-                        WebkitAppearance: 'none',
-                        background: 'transparent',
-                        border: 'none',
-                        outline: 'none',
-                        fontFamily: 'var(--font-ui)',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: 'var(--text-primary)',
-                        cursor: 'pointer',
-                        paddingRight: 4,
-                        maxWidth: 280,
-                      }}
-                    >
-                      {compCases.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    <span
-                      className="eyebrow"
-                      style={{
-                        fontSize: 9,
-                        color: 'var(--text-tertiary)',
-                        letterSpacing: '0.1em',
-                      }}
-                    >
-                      COMP
-                    </span>
-                    <span
-                      aria-hidden
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--text-tertiary)',
-                        marginRight: 4,
-                      }}
-                    >
-                      ▾
-                    </span>
-                  </label>
-                )}
+                        {isBase ? 'BASE' : 'COMP'}
+                      </span>
+                      {isBase && on && <span style={{ fontSize: 10 }}>🔒</span>}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>

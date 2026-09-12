@@ -25,6 +25,7 @@ export interface InsightFacts {
   mode: 'summary' | 'reduce' | 'tradeoff' | 'base' | 'custom';
   reducePct?: number;
   question?: string;            // free-text question in 'custom' mode
+  allCategories?: Array<{ name: string; value: number; unit: string }>; // full impact profile
 }
 
 const SYSTEM = [
@@ -40,10 +41,16 @@ const SYSTEM = [
   '   what data would be needed — do not guess.',
   '3. Do not claim a specific characterization factor, emission value, or source',
   '   unless it appears in the FACTS.',
-  '4. Be concise: at most ~150 words, plain prose, no markdown headings, no',
-  '   bullet lists unless the user asked for a list.',
+  '4. Be concise: at most ~140 words, plain prose, no markdown headings.',
   '5. Ground every recommendation in the contributor shares given: the biggest',
-  '   lever is the highest-share contributor.',
+  '   lever is the highest-share contributor — NAME it with its exact share/value.',
+  '6. Be SPECIFIC, never generic. Name the actual component and number, and a',
+  '   concrete lever (substitute the material, switch the energy source, cut',
+  '   consumption on that step). Do not fill space with LCA platitudes like',
+  '   "consider reducing energy use" — say which figure moves and by how much.',
+  '   Never restate the same point twice.',
+  '7. Each mode must read differently and lead with different figures — a summary,',
+  '   a reduction plan, a cost trade-off, and a base comparison are not the same.',
 ].join('\n');
 
 const MODE_TASK: Record<InsightFacts['mode'], string> = {
@@ -85,6 +92,12 @@ export function buildInsightMessages(facts: InsightFacts): {
   }
   if (facts.mode === 'reduce' && facts.reducePct !== undefined) {
     factLines.push(`Requested reduction target: ${facts.reducePct}%`);
+  }
+  if (facts.allCategories?.length) {
+    factLines.push('Full impact profile (all categories for this assessment):');
+    for (const c of facts.allCategories) {
+      factLines.push(`  - ${c.name}: ${c.value} ${c.unit}`);
+    }
   }
   if (facts.contributors.length) {
     factLines.push('Contributors (share of active category, absolute value):');

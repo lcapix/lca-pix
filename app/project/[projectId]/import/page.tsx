@@ -308,6 +308,18 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                                 {f.conversion_note}
                               </div>
                             )}
+                            {f.unit_compatible === false && (
+                              <div
+                                style={{
+                                  fontSize: 10.5,
+                                  color: 'var(--signal-error, #dc2626)',
+                                  fontWeight: 600,
+                                  marginTop: 2,
+                                }}
+                              >
+                                ⚠ unit won't convert to this substance — will be held
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '8px' }}>
                             <select
