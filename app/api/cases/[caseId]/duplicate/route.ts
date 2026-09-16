@@ -13,6 +13,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 
+/**
+ * Copy columns that later migrations added, when the source row has them.
+ * Column names come from fixed lists in this file, never from the request.
+ */
+async function copyOptionalColumns(
+  conn: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  table: 'case_table' | 'component',
+  idColumn: 'case_id' | 'component_id',
+  id: number,
+  source: Record<string, unknown>,
+  columns: string[],
+): Promise<void> {
+  const present = columns.filter((c) => Object.prototype.hasOwnProperty.call(source, c));
+  if (present.length === 0) return;
+  await conn.query(
+    `UPDATE ${table} SET ${present.map((c) => `${c} = ?`).join(', ')} WHERE ${idColumn} = ?`,
+    [...present.map((c) => source[c] ?? null), id],
+  );
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -35,9 +55,24 @@ export async function POST(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // Copying a case whose steps have not landed yet produces a silently empty
+    // copy (seen live: Duplicate pressed while a new comparative case was still
+    // being populated). Refuse instead.
+    const sourceSize = await queryOne<any>(
+      `SELECT COUNT(*) AS n FROM component WHERE case_id = ?`,
+      [caseId]
+    );
+    if (Number(sourceSize?.n ?? 0) === 0) {
+      return NextResponse.json(
+        { error: 'This case has no steps yet, so there is nothing to copy. Wait for it to finish loading, or import a document first.' },
+        { status: 400 }
+      );
+    }
+
     let body: any = {};
     try { body = await request.json(); } catch { /* empty body is fine */ }
-    const newName: string = body.case_name || `${sourceCase.case_name} (Copy)`;
+    const askedName = typeof body.case_name === 'string' ? body.case_name.trim().slice(0, 255) : '';
+    const newName: string = askedName || `${sourceCase.case_name} (Copy)`;
     const newType: string = ['base', 'comparative'].includes(body.case_type)
       ? body.case_type
       : 'comparative';
@@ -57,6 +92,14 @@ export async function POST(
         ]
       );
       const newCaseId = caseIns.insertId;
+
+      // Columns added by later migrations are copied only where they exist
+      // (SELECT * shows which): this alternative's reference flow and data basis.
+      await copyOptionalColumns(conn, 'case_table', 'case_id', newCaseId, sourceCase, [
+        'reference_flow',
+        'reference_flow_unit',
+        'modeled_output',
+      ]);
 
       // Copy components in hierarchy order so parents exist before children.
       const [components]: any = await conn.query(
@@ -102,6 +145,14 @@ export async function POST(
           ]
         );
         idMap.set(comp.component_id, compIns.insertId);
+        // Labor multiplicands and allocation, from later migrations.
+        await copyOptionalColumns(conn, 'component', 'component_id', compIns.insertId, comp, [
+          'labor_hours',
+          'labor_occupation',
+          'allocation_method',
+          'allocation_factor',
+          'allocation_note',
+        ]);
 
         const [flowIns]: any = await conn.query(
           `INSERT INTO flows (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)

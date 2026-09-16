@@ -17,6 +17,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Icon } from '@/components/lcapix/icon'
 import { substanceSource } from '@/lib/substance-source'
 import { compatibleUnits } from '@/lib/units'
+import { HelpTip } from '@/components/lcapix/help-tip'
+import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { toast } from 'sonner'
 
 interface FlowRow {
@@ -95,7 +97,18 @@ export function EnvironmentalFlowsEditor({
   // In-place edit of an existing row's quantity/unit — a what-if is
   // "duplicate the case, tweak a few quantities, re-run"; without this the
   // only way to change 95 → 40 was delete + re-add.
-  const [editing, setEditing] = useState<{ id: number; qty: string; unit: string } | null>(null)
+  // A flow's factor source comes from its catalog substance (the API returns
+  // the cited sources of its factors as data_source).
+  const sourceOf = (f: FlowRow) =>
+    substanceSource(substances.find((s) => s.substance_id === f.substance_id) ?? f)
+  // The substance can be swapped too (aluminum → steel): same flow, another
+  // material, which is what a comparative case changes.
+  const [editing, setEditing] = useState<{
+    id: number
+    qty: string
+    unit: string
+    substanceId: number
+  } | null>(null)
   const [editSaving, setEditSaving] = useState(false)
 
   // Add-form state
@@ -122,6 +135,14 @@ export function EnvironmentalFlowsEditor({
 
   useEffect(() => {
     loadFlows()
+  }, [loadFlows])
+
+  // Other panels (e.g. the machine-energy calculator) add flows too; reload
+  // when they announce it so the list never goes stale.
+  useEffect(() => {
+    const onChanged = () => loadFlows()
+    window.addEventListener('lcapix:flows-changed', onChanged)
+    return () => window.removeEventListener('lcapix:flows-changed', onChanged)
   }, [loadFlows])
 
   // Load the substance catalog once.
@@ -264,13 +285,20 @@ export function EnvironmentalFlowsEditor({
     }
     setEditSaving(true)
     try {
+      const before = flows.find((x) => x.flow_id === editing.id)
+      const swapped = !!before && before.substance_id !== editing.substanceId
       const r = await fetch(`/api/flows/${editing.id}`, {
         method: 'PUT',
         headers: authHeaders(),
-        body: JSON.stringify({ quantity: qtyNum, unit: editing.unit.trim() || undefined }),
+        body: JSON.stringify({
+          quantity: qtyNum,
+          unit: editing.unit.trim() || undefined,
+          ...(swapped ? { substance_id: editing.substanceId } : {}),
+        }),
       })
       if (r.ok) {
-        toast.success('Flow updated')
+        const to = substances.find((s) => s.substance_id === editing.substanceId)?.substance_name
+        toast.success(swapped && to ? `Swapped to ${to}` : 'Flow updated')
         setEditing(null)
         await loadFlows()
         if (typeof window !== 'undefined') {
@@ -377,7 +405,7 @@ export function EnvironmentalFlowsEditor({
                 </span>
                 <span
                   className="mono"
-                  title={`Source database: ${substanceSource(f).label}`}
+                  title={`Factor source: ${sourceOf(f).label}`}
                   style={{
                     fontSize: 9.5,
                     color: 'var(--text-tertiary)',
@@ -390,7 +418,7 @@ export function EnvironmentalFlowsEditor({
                   }}
                 >
                   <Icon name="database" size={9} />
-                  {substanceSource(f).label}
+                  {sourceOf(f).label}
                   {(() => {
                     const sub = substances.find((s) => s.substance_id === f.substance_id)
                     if (sub && (sub.factor_count ?? 0) === 0) {
@@ -408,11 +436,45 @@ export function EnvironmentalFlowsEditor({
                 </span>
               </span>
               {editing?.id === f.flow_id ? (
-                <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {(() => {
+                    // Swap candidates: same kind of substance (a material for a
+                    // material), a unit the flow can convert to, and impact data.
+                    const cur = substances.find((s) => s.substance_id === f.substance_id)
+                    const units = cur?.unit ? compatibleUnits(cur.unit) : []
+                    const options = substances.filter(
+                      (s) =>
+                        s.substance_id === f.substance_id ||
+                        ((s.factor_count ?? 0) > 0 &&
+                          (cur?.category ? s.category === cur.category : !/emission|waste/.test(s.category ?? '')) &&
+                          (!units.length || units.includes(s.unit ?? '')))
+                    )
+                    return options.length > 1 ? (
+                      <select
+                        className="input"
+                        value={editing.substanceId}
+                        onChange={(e) => setEditing({ ...editing, substanceId: Number(e.target.value) })}
+                        title="Swap the material: same flow, another substance with impact data"
+                        aria-label="Swap substance"
+                        style={{ width: 150, fontSize: 12, padding: '3px 6px' }}
+                      >
+                        {options.map((s) => (
+                          <option key={s.substance_id} value={s.substance_id}>
+                            {s.substance_name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null
+                  })()}
                   <input
                     className="input mono"
                     type="number"
+                    step="any"
                     autoFocus
+                    // Select the whole value on focus so typing replaces it
+                    // cleanly — number inputs otherwise keep the old digits when
+                    // the caret lands mid-value (the "1.40005 instead of 0.5" bug).
+                    onFocus={(e) => e.target.select()}
                     value={editing.qty}
                     onChange={(e) => setEditing({ ...editing, qty: e.target.value })}
                     onKeyDown={(e) => {
@@ -464,9 +526,14 @@ export function EnvironmentalFlowsEditor({
                 <button
                   type="button"
                   onClick={() =>
-                    setEditing({ id: f.flow_id, qty: String(f.quantity), unit: f.unit })
+                    setEditing({
+                      id: f.flow_id,
+                      qty: String(f.quantity),
+                      unit: f.unit,
+                      substanceId: f.substance_id,
+                    })
                   }
-                  title="Edit quantity/unit"
+                  title="Edit the quantity or unit, or swap the material"
                   aria-label={`Edit quantity of ${f.substance_name ?? 'flow'}`}
                   style={{
                     background: 'transparent',
@@ -582,7 +649,10 @@ export function EnvironmentalFlowsEditor({
         >
           {/* Substance search/picker */}
           <div>
-            <label className="label" style={{ fontSize: 11 }}>Substance</label>
+            <label className="label" style={{ fontSize: 11 }}>
+              Substance
+              <HelpTip label="What is a substance?">{ISO_HELP.flowSubstance}</HelpTip>
+            </label>
             <input
               className="input"
               placeholder="Search substances…"
@@ -735,7 +805,10 @@ export function EnvironmentalFlowsEditor({
           {/* Direction + qty + unit */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
             <div>
-              <label className="label" style={{ fontSize: 11 }}>Direction</label>
+              <label className="label" style={{ fontSize: 11 }}>
+                Direction
+                <HelpTip label="Input or output?">{ISO_HELP.flowDirection}</HelpTip>
+              </label>
               <select
                 className="input"
                 value={dir}
@@ -746,7 +819,10 @@ export function EnvironmentalFlowsEditor({
               </select>
             </div>
             <div>
-              <label className="label" style={{ fontSize: 11 }}>Quantity</label>
+              <label className="label" style={{ fontSize: 11 }}>
+                Quantity
+                <HelpTip label="How much should I enter?">{ISO_HELP.flowQuantity}</HelpTip>
+              </label>
               <input
                 className="input"
                 type="number"
@@ -756,7 +832,10 @@ export function EnvironmentalFlowsEditor({
               />
             </div>
             <div>
-              <label className="label" style={{ fontSize: 11 }}>Unit</label>
+              <label className="label" style={{ fontSize: 11 }}>
+                Unit
+                <HelpTip label="Which units work?">{ISO_HELP.flowUnit}</HelpTip>
+              </label>
               <input
                 className="input"
                 value={unit}

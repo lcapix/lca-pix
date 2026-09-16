@@ -45,7 +45,7 @@ export function structureItac(
   const fy = num(r['FY']);
   const prodlevel = num(r['PRODLEVEL']);
   const root = fy ? `${products} — FY${fy}` : products;
-  const caseName = `Ingested: ITAC ${plantId} (${products}${fy ? `, FY${fy}` : ''})`;
+  const caseName = `Ingested: ITAC ${plantId} (${products}${fy ? `, FY${fy}` : ''})`.slice(0, 100);
 
   const nodes: IngestNode[] = [];
   const flows: IngestFlow[] = [];
@@ -72,25 +72,30 @@ export function structureItac(
     provenance: { doc: docName, locator: loc, snippet: 'facility-level assessment' },
   });
 
+  // One operation per assessed stream, directly under the facility: the
+  // assessment states annual facility totals, nothing finer, so no finer level
+  // is invented.
+  const streamName = (human: string) => (fy ? `${human} FY${fy}` : `${human} (annual)`);
   for (const [code, human, substance, unit, direction] of ITAC_STREAMS) {
     const usage = num(r[`${code}_plant_usage`]);
     const cost = num(r[`${code}_plant_cost`]);
     if (usage === null || usage === 0) continue;
-    const sub = direction === 'input' ? `${human} supply` : `${human} handling`;
-    const op = `${human} — annual total`;
-    const leaf = `${human} FY${fy}`;
+    const op = streamName(human);
     const prov: Provenance = {
       doc: docName,
       locator: loc,
       snippet: `${code}_plant_usage=${usage}, ${code}_plant_cost=${cost}`,
     };
-    nodes.push({ name: sub, tier: 'subprocess', parent: line, provenance: prov });
-    nodes.push({ name: op, tier: 'operation', parent: sub, provenance: prov });
-    nodes.push({ name: leaf, tier: 'elemental_task', parent: op, quantity: 1, unit: 'year', provenance: prov });
-    flows.push({ node: leaf, substance_text: substance, direction, quantity: usage, unit, provenance: prov });
+    if (nodes.some((n) => n.name === op)) {
+      // Several fuel-oil grades share one stream name: add to the existing step.
+      flows.push({ node: op, substance_text: substance, direction, quantity: usage, unit, provenance: prov });
+    } else {
+      nodes.push({ name: op, tier: 'operation', parent: line, quantity: 1, unit: 'year', provenance: prov });
+      flows.push({ node: op, substance_text: substance, direction, quantity: usage, unit, provenance: prov });
+    }
     if (cost !== null && cost !== 0) {
       costs.push({
-        node: leaf,
+        node: op,
         category: code.startsWith('E') ? 'energy' : 'opex',
         amount: cost,
         basis: 'annual, from ITAC assessed totals',
@@ -99,11 +104,13 @@ export function structureItac(
     }
   }
 
-  // Demand charges are cost-only (no physical flow): attach to electricity leaf.
+  // Demand charges are cost-only (no physical flow): attach to the electricity
+  // step, or to the facility when no electricity use was assessed.
   const edCost = num(r['ED_plant_cost']);
   if (edCost !== null && edCost !== 0) {
+    const elec = streamName('Electricity consumption');
     costs.push({
-      node: `Electricity consumption FY${fy}`,
+      node: nodes.some((n) => n.name === elec) ? elec : line,
       category: 'energy',
       amount: edCost,
       basis: 'annual electricity demand charges',

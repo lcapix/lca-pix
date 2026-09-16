@@ -48,9 +48,15 @@ export const LCAPIX_TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="project-open-editor"]',
     title: 'Open the case editor',
-    body: "This is where you build the process hierarchy — Product → Machine/Line → Subprocess → Operation → Elemental Task. Five tiers, deepest where the real input/output flows live.",
+    body: 'This is where you build the process tree: Product → Machine/Line → Subprocess → Operation, with an optional Task under an operation. The operation is the unit process: its inputs, outputs and costs live there, and every level above is a sum.',
     actionHint: "Click 'Open editor'.",
     placement: 'top',
+  },
+  {
+    selector: '[data-tour="case-goal-scope"]',
+    title: 'Set the goal & scope',
+    body: 'Before any run, say what the product does, measured: the functional unit (ISO 14044). Every case in the project shares it, so designs are compared on the same job. Each case also states its reference flow: how much product one functional unit needs.',
+    placement: 'bottom',
   },
   {
     selector: '[data-tour="case-add-component"]',
@@ -61,25 +67,25 @@ export const LCAPIX_TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="case-flow-input"]',
     title: 'Add input/output flows',
-    body: 'Click any Elemental Task to add the actual flows — electricity consumed, raw material used, emissions generated. Flows reference substances from the LCA database with their characterization factors.',
+    body: 'Click an operation (a step with nothing under it) to add its flows: electricity consumed, material used, emissions released. Each flow references a substance with characterization factors; hover any "?" for what a field means.',
     placement: 'left',
   },
   {
     selector: '[data-tour="case-suggest-costs"]',
     title: 'Auto-fill cost data',
-    body: 'Toggle Labor / Energy / Material and click "Suggest". BLS pulls US wage data, EIA pulls energy prices, Metals-API pulls commodity prices — and the form fills itself in for the selected region.',
+    body: 'Click "Suggest" to fill labor, energy and material costs from cited public reference rates (BLS wages, EIA electricity prices, USGS material prices). Pick a state for a live BLS wage, and edit anything to match your own invoices.',
     placement: 'top',
   },
   {
     selector: '[data-tour="case-run-assessment"]',
     title: 'Run the assessment',
-    body: 'Pick CML 2001, ReCiPe (H), or TRACI 2.1. The engine traverses every flow under every component, multiplies by characterization factors, and produces impacts across 6+ categories plus an ABC cost summary.',
+    body: 'Pick CML 2001, ReCiPe Midpoint (H) or TRACI 2.1, and keep one method for every case you compare. The engine multiplies every flow by its characterization factors and sums up the tree. Run stays locked until a functional unit is set.',
     placement: 'left',
   },
   {
     selector: '[data-tour="results-total-impact"]',
     title: 'Read the results',
-    body: 'The headline total is your CO₂-eq under the chosen method. The contributor bars beneath show what is driving it. Click the ✨ Magic Insights button for a plain-English summary with citations.',
+    body: 'The headline is the case total for the chosen category, and the bars show which steps drive it. Below it are the result per functional unit and a data-quality statement that says how far to trust the number. Magic Insights writes a plain-English summary.',
     placement: 'bottom',
   },
   {

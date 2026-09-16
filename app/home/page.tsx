@@ -267,9 +267,10 @@ export default function HomePage() {
       icon: 'box' as const,
     },
     {
-      label: 'ASSESSMENTS',
+      // A case is one design alternative; runs are counted per case elsewhere.
+      label: 'CASES',
       numeric: totalCases,
-      sub: 'Across all cases',
+      sub: totalComponents > 0 ? `${fmtInt(totalComponents)} process steps` : 'Designs being assessed',
       icon: 'activity' as const,
     },
     {
@@ -281,16 +282,12 @@ export default function HomePage() {
       hrefHint: 'Browse factor library',
     },
     {
-      label: 'COMPONENTS',
-      numeric: totalComponents || kpiData.components,
-      sub:
-        totalComponents > 0
-          ? 'Across your projects'
-          : 'In substance catalog',
+      label: 'SUBSTANCES',
+      numeric: kpiData.components,
+      sub: 'In substance catalog',
       icon: 'layers' as const,
       href: '/library/substances',
-      hrefHint:
-        totalComponents > 0 ? 'View components' : 'Browse substance catalog',
+      hrefHint: 'Browse substance catalog',
     },
   ]
 
@@ -429,8 +426,8 @@ export default function HomePage() {
                 {(
                   [
                     { id: 'all', l: 'All' },
-                    { id: 'base', l: 'Base' },
-                    { id: 'comp', l: 'Comparative' },
+                    { id: 'base', l: 'Single case' },
+                    { id: 'comp', l: 'Comparison' },
                     { id: 'active', l: 'Active' },
                   ] as const
                 ).map((f) => (
@@ -691,17 +688,17 @@ export default function HomePage() {
                         >
                           {fmtInt(p.cases)}
                         </span>{' '}
-                        cases
+                        {p.cases === 1 ? 'case' : 'cases'}
                       </span>
                       <span style={{ color: 'var(--text-disabled)' }}>·</span>
-                      <span>
+                      <span title="Process steps (products, lines, operations) across all cases">
                         <span
                           className="mono"
                           style={{ color: 'var(--text-secondary)' }}
                         >
                           {fmtInt(p.components)}
                         </span>{' '}
-                        comps
+                        {p.components === 1 ? 'step' : 'steps'}
                       </span>
                       <span style={{ color: 'var(--text-disabled)' }}>·</span>
                       <span>{p.lastRun}</span>
@@ -717,8 +714,13 @@ export default function HomePage() {
                       <div
                         className="chip chip-mono"
                         style={{ fontSize: 10 }}
+                        title={
+                          p.type === 'comparative'
+                            ? 'More than one case: alternatives compared against the same functional unit'
+                            : 'One case so far: duplicate it to compare an alternative'
+                        }
                       >
-                        {p.type === 'comparative' ? 'COMP' : 'BASE'}
+                        {p.type === 'comparative' ? 'COMPARISON' : 'SINGLE CASE'}
                       </div>
                       <div
                         style={{

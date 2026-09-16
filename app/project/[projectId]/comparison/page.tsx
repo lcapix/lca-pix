@@ -1,102 +1,70 @@
 'use client'
 
-// /project/[id]/comparison — multi-case comparison.
-// Mirrors the visual language of /analytics (cards, radar, delta bars,
-// component breakdown) but with an explicit case picker so the user chooses
-// which scenarios to overlay. Analytics is single-case; this is multi-case.
+// /project/[id]/comparison: compare a base case with its copies.
+//
+// Everything comes from one read of /api/projects/[id]/compare: the run each
+// case is compared on, its results per functional unit, its current step costs
+// and what each copy changes against the base. The views follow what LCA tools
+// put side by side: what differs (openLCA's project variants), results by
+// category (absolute, change, relative), where a change comes from, hotspots,
+// cost against impact, and data quality.
 
-import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { apiRequest } from '@/lib/api-client'
 import { transformCaseFromDB } from '@/lib/data-transformers'
-import {
-  Breadcrumb,
-  Icon,
-  StatusDot,
-  fmtNum,
-  fmtInt,
-} from '@/components/lcapix'
-import {
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
-  ReferenceLine,
-} from 'recharts'
-
-const SERIES_COLORS = ['#2d6a4f', '#74c69d', '#d98568', '#9f88cc', '#4f90c9']
-
-const cycleBtn: React.CSSProperties = {
-  width: 22,
-  height: 22,
-  borderRadius: 6,
-  border: '1px solid var(--border-subtle)',
-  background: 'var(--surface-raised)',
-  color: 'var(--text-secondary)',
-  cursor: 'pointer',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 16,
-  lineHeight: 1,
-  padding: 0,
-}
-
-const COMPONENT_COLORS = [
-  '#2d6a4f',
-  '#52796f',
-  '#84a98c',
-  '#d98568',
-  '#f0a68a',
-  '#f5c971',
-  '#9f88cc',
-  '#4f90c9',
-]
+import { totalOf } from '@/lib/compare/analytics'
+import { HelpTip } from '@/components/lcapix/help-tip'
+import { Breadcrumb, Icon, fmtInt, fmtNum } from '@/components/lcapix'
+import type { CompareCase, CompareResponse } from '@/components/lcapix/compare/types'
+import { BAD, GOOD, SelectBox, seriesColor, signedPct } from '@/components/lcapix/compare/ui'
+import { WhatDiffersPanel } from '@/components/lcapix/compare/what-differs'
+import { ResultsPanel } from '@/components/lcapix/compare/results-panel'
+import { ChangePanel } from '@/components/lcapix/compare/change-panel'
+import { HotspotPanel } from '@/components/lcapix/compare/hotspot-panel'
+import { CostPanel } from '@/components/lcapix/compare/cost-panel'
+import { QualityPanel } from '@/components/lcapix/compare/quality-panel'
 
 interface CaseSummary {
   id: string
   name: string
   type: 'base' | 'comparative'
-  description?: string
 }
 
-interface AssessmentData {
-  caseId: string
-  caseName: string
-  caseType: string
-  description?: string
-  categories: { category_name: string; impact_value: number; unit: string }[]
-  components: {
-    component_name: string
-    impacts: { category_name: string; impact_value: number }[]
-  }[]
-  totalScore: number
-}
+type Tab = 'differs' | 'results' | 'change' | 'hotspots' | 'cost' | 'quality'
+
+const TABS: Array<{ id: Tab; label: string; help: string }> = [
+  { id: 'differs', label: 'What differs', help: 'What each copy changes against the base: run settings, exchanges, steps and costs.' },
+  { id: 'results', label: 'Results', help: 'Every impact category side by side, as values, as change against the base, or relative.' },
+  { id: 'change', label: 'Where the change comes from', help: 'The difference against the base, split by step or by material.' },
+  { id: 'hotspots', label: 'Hotspots', help: 'The steps or materials that carry the largest shares of each case.' },
+  { id: 'cost', label: 'Cost', help: 'Cost by kind, and what each change costs against what it saves.' },
+  { id: 'quality', label: 'Data quality', help: 'Sources, fallbacks and gaps behind each run, so the comparison is fair.' },
+]
+
+const unique = <T,>(xs: T[]) => Array.from(new Set(xs))
 
 export default function ComparisonPage() {
   const params = useParams()
   const router = useRouter()
-  const searchParams = useSearchParams()
   const projectId = params.projectId as string
+  // Seeds the selection from the URL once; after that the chips own it.
+  const initedRef = useRef(false)
 
   const [projectName, setProjectName] = useState('')
   const [cases, setCases] = useState<CaseSummary[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [data, setData] = useState<AssessmentData[]>([])
+  const [runPicks, setRunPicks] = useState<Record<string, number>>({})
+  const [data, setData] = useState<CompareResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingData, setIsLoadingData] = useState(false)
-  // Bumped on window focus so returning from a fresh assessment re-pulls the
-  // latest runs instead of showing the numbers from page load.
+  const [tab, setTab] = useState<Tab>('differs')
+  const [category, setCategory] = useState('Global Warming')
+
+  // Returning from a fresh run re-reads the comparison.
   const [refreshTick, setRefreshTick] = useState(0)
   useEffect(() => {
     const onFocus = () => setRefreshTick((t) => t + 1)
@@ -104,7 +72,7 @@ export default function ComparisonPage() {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  // Load project name + cases.
+  // Project name and its cases.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -120,27 +88,24 @@ export default function ComparisonPage() {
         if (pd.success) setProjectName(pd.project?.project_name ?? '')
         const list: CaseSummary[] = (cd.cases ?? []).map((c: any) => {
           const t = transformCaseFromDB(c)
-          return {
-            id: t.id,
-            name: t.name,
-            type: t.type,
-            description: (t as any).description ?? '',
-          }
+          return { id: t.id, name: t.name, type: t.type }
         })
+        // Base cases first, then copies in the order they were made.
+        list.sort((a, b) => (a.type === b.type ? Number(a.id) - Number(b.id) : a.type === 'base' ? -1 : 1))
         setCases(list)
-        // A comparison is always base + exactly one comp. Default: base + the
-        // first comp (or whatever the URL says, restricted to base + one comp).
-        const base = list.find((c) => c.type === 'base')
-        const comps = list.filter((c) => c.type === 'comparative')
-        const urlIds = (searchParams.get('cases') ?? '').split(',').filter(Boolean)
-        const urlComp = comps.find((c) => urlIds.includes(c.id))
-        const initialComp = urlComp ?? comps[0]
-        const ids = new Set<string>()
-        if (base) ids.add(base.id)
-        if (initialComp) ids.add(initialComp.id)
-        setSelected(ids)
+        if (!initedRef.current) {
+          initedRef.current = true
+          const urlIds = new Set((new URLSearchParams(window.location.search).get('cases') ?? '').split(',').filter(Boolean))
+          const fromUrl = list.filter((c) => urlIds.has(c.id))
+          const ids = new Set<string>()
+          const base = list.find((c) => c.type === 'base')
+          if (base) ids.add(base.id)
+          if (fromUrl.length) fromUrl.forEach((c) => ids.add(c.id))
+          else list.filter((c) => c.type === 'comparative').forEach((c) => ids.add(c.id))
+          setSelected(ids)
+        }
       } catch {
-        // ignore
+        if (!cancelled) setError('Could not load the cases.')
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -148,911 +113,490 @@ export default function ComparisonPage() {
     return () => {
       cancelled = true
     }
-  }, [projectId, searchParams])
+  }, [projectId])
 
-  // Load assessment data for the selected cases.
+  // The comparison itself.
+  const selectedIds = useMemo(
+    () => cases.filter((c) => selected.has(c.id)).map((c) => c.id),
+    [cases, selected],
+  )
   useEffect(() => {
-    if (selected.size === 0) {
-      setData([])
+    if (!selectedIds.length) {
+      setData(null)
       return
     }
     let cancelled = false
-    setIsLoadingData(true)
     ;(async () => {
-      const results: AssessmentData[] = []
-      for (const id of selected) {
-        const meta = cases.find((c) => c.id === id)
-        if (!meta) continue
-        try {
-          const ar = await apiRequest(`/api/cases/${id}/assessments`)
-          const ad = await ar.json()
-          const runs = (ad.assessments || []).filter(
-            (a: any) => !a.status || a.status === 'completed',
-          )
-          if (!runs.length) {
-            results.push({
-              caseId: id,
-              caseName: meta.name,
-              caseType: meta.type,
-              description: meta.description ?? '',
-              categories: [],
-              components: [],
-              totalScore: 0,
-            })
-            continue
-          }
-          const latest = runs[0]
-          const dr = await apiRequest(`/api/assessments/${latest.run_id}`)
-          const dd = await dr.json()
-          if (!dd.success) continue
-          const categories = (dd.total_impacts || []).map((c: any) => ({
-            category_name: c.category_name,
-            impact_value: Math.abs(Number(c.impact_value || 0)),
-            unit: c.unit,
-          }))
-          const components = (dd.component_breakdown || []).map((c: any) => ({
-            component_name: c.component_name,
-            impacts: (c.impacts || []).map((i: any) => ({
-              category_name: i.category_name,
-              impact_value: Math.abs(Number(i.impact_value || 0)),
-            })),
-          }))
-          const totalScore = categories.reduce(
-            (s: number, c: any) => s + c.impact_value,
-            0,
-          )
-          results.push({
-            caseId: id,
-            caseName: meta.name,
-            caseType: meta.type,
-            description: meta.description ?? '',
-            categories,
-            components,
-            totalScore,
-          })
-        } catch {
-          // skip
+      setIsLoadingData(true)
+      setError(null)
+      try {
+        const runs = Object.entries(runPicks)
+          .filter(([id]) => selectedIds.includes(id))
+          .map(([id, run]) => `${id}:${run}`)
+          .join(',')
+        const r = await apiRequest(
+          `/api/projects/${projectId}/compare?cases=${selectedIds.join(',')}${runs ? `&runs=${runs}` : ''}`,
+        )
+        const d = await r.json()
+        if (cancelled) return
+        if (!r.ok || !d.success) {
+          setError(d?.error || 'Could not compare these cases.')
+          setData(null)
+        } else {
+          setData(d)
         }
-      }
-      if (!cancelled) {
-        setData(results)
-        setIsLoadingData(false)
+      } catch {
+        if (!cancelled) setError('Could not compare these cases.')
+      } finally {
+        if (!cancelled) setIsLoadingData(false)
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [selected, cases, refreshTick])
+  }, [projectId, selectedIds, runPicks, refreshTick])
 
-  const baseCaseId = useMemo(
-    () => cases.find((c) => c.type === 'base')?.id ?? null,
-    [cases],
-  )
-  const compCases = useMemo(
-    () => cases.filter((c) => c.type === 'comparative'),
-    [cases],
-  )
-  // The currently selected COMP case (only one allowed at a time).
-  const selectedCompId = useMemo(() => {
-    for (const c of compCases) if (selected.has(c.id)) return c.id
-    return null
-  }, [compCases, selected])
-  const compIdx = useMemo(
-    () => compCases.findIndex((c) => c.id === selectedCompId),
-    [compCases, selectedCompId],
-  )
-
-  const setActiveComp = (id: string | null) => {
-    setSelected(() => {
-      const next = new Set<string>()
-      if (baseCaseId) next.add(baseCaseId)
-      if (id) next.add(id)
-      return next
-    })
-  }
-
-  const cycleComp = (dir: 1 | -1) => {
-    if (compCases.length === 0) return
-    const i =
-      (compIdx === -1 ? 0 : compIdx + dir + compCases.length) %
-      compCases.length
-    setActiveComp(compCases[i].id)
-  }
-
-  // Ensure the base case is always in the selection set.
+  // Keep the URL shareable.
   useEffect(() => {
-    if (!baseCaseId) return
-    setSelected((prev) => {
-      if (prev.has(baseCaseId)) return prev
-      const next = new Set(prev)
-      next.add(baseCaseId)
-      return next
-    })
-  }, [baseCaseId])
-
-  // Update URL when selection changes.
-  useEffect(() => {
-    if (cases.length === 0) return
-    const ids = [...selected].join(',')
-    const url = ids
-      ? `/project/${projectId}/comparison?cases=${ids}`
+    if (!cases.length) return
+    const url = selectedIds.length
+      ? `/project/${projectId}/comparison?cases=${selectedIds.join(',')}`
       : `/project/${projectId}/comparison`
     window.history.replaceState(null, '', url)
-  }, [selected, projectId, cases.length])
+  }, [selectedIds, projectId, cases.length])
 
-  const allCategoryNames = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          data.flatMap((d) => d.categories.map((c) => c.category_name)),
-        ),
-      ),
-    [data],
-  )
-  const topCategoryNames = allCategoryNames.slice(0, 5)
-  const barGroups = topCategoryNames.map((name) => ({
-    label: name,
-    values: data.map((d) => {
-      const c = d.categories.find((cc) => cc.category_name === name)
-      return c ? c.impact_value : 0
-    }),
-  }))
-  const seriesLabels = data.map((d) => d.caseName)
-  const allComponentNames = useMemo(
-    () =>
-      Array.from(
-        new Set(data.flatMap((d) => d.components.map((c) => c.component_name))),
-      ),
-    [data],
-  )
+  const compared: CompareCase[] = data?.cases ?? []
+  const base = compared.find((c) => c.caseId === data?.baseCaseId) ?? compared[0]
 
-  const baseCase = data.find((d) => d.caseType === 'base') ?? data[0]
-  // Headline deltas are computed on ONE category with ONE unit (Global
-  // Warming when present) — the old cross-category sum added kg CO2-eq to
-  // kg Sb-eq and let GW magnitude fake an "overall" number.
-  const headlineValue = (d: AssessmentData): number => {
-    const gw = d.categories.find((c) => c.category_name === 'Global Warming')
-    return gw ? gw.impact_value : (d.categories[0]?.impact_value ?? 0)
-  }
-  const verdict = (() => {
-    if (!baseCase || data.length < 2 || headlineValue(baseCase) <= 0) return null
-    const others = data.filter((d) => d !== baseCase)
-    let best = others[0]
-    for (const o of others) if (headlineValue(o) < headlineValue(best)) best = o
+  const categories = useMemo(
+    () => unique(compared.flatMap((c) => c.totals.map((t) => t.category))),
+    [compared],
+  )
+  useEffect(() => {
+    if (categories.length && !categories.includes(category)) setCategory(categories[0])
+  }, [categories, category])
+
+  const basis = useMemo(() => {
+    const withRun = compared.filter((c) => c.run)
+    const methods = unique(withRun.map((c) => c.run!.method ?? '')).filter(Boolean)
+    const regions = unique(withRun.map((c) => c.run!.region ?? '')).filter(Boolean)
+    const fus = unique(withRun.map((c) => (c.run!.functionalUnit ?? '').trim())).filter(Boolean)
     return {
-      best,
-      deltaPct:
-        ((headlineValue(baseCase) - headlineValue(best)) / headlineValue(baseCase)) * 100,
+      count: withRun.length,
+      methods,
+      regions,
+      fus,
+      methodMismatch: methods.length > 1,
+      regionMismatch: regions.length > 1,
+      fuMismatch: fus.length > 1,
+      fuUnrecorded: withRun.some((c) => !c.run!.functionalUnit),
     }
-  })()
+  }, [compared])
+
+  const unit = base?.totals.find((t) => t.category === category)?.unit ?? ''
+
+  const verdict = useMemo(() => {
+    if (!base?.run || basis.methodMismatch || basis.fuMismatch) return null
+    const copies = compared.filter((c) => c.caseId !== base.caseId && c.run)
+    if (!copies.length) return null
+    const baseValue = totalOf(base, category)
+    if (!(baseValue > 0)) return null
+    const best = copies.reduce((a, b) => (totalOf(b, category) < totalOf(a, category) ? b : a))
+    const bestValue = totalOf(best, category)
+    return { best, pct: ((bestValue - baseValue) / baseValue) * 100, lower: bestValue < baseValue }
+  }, [compared, base, basis, category])
 
   return (
     <>
       <Breadcrumb
-          items={[
-            { label: 'Projects', page: 'home' },
-            {
-              label: projectName || 'Project',
-              onClick: () => router.push(`/project/${projectId}`),
-            },
-            { label: 'Comparison' },
-          ]}
-        />
-        <div
-          style={{ padding: '8px 32px 80px', maxWidth: 1280, margin: '0 auto' }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 16,
-              marginBottom: 24,
-            }}
+        items={[
+          { label: 'Projects', page: 'home' },
+          { label: projectName || 'Project', onClick: () => router.push(`/project/${projectId}`) },
+          { label: 'Compare cases' },
+        ]}
+      />
+      <div style={{ padding: '8px 32px 80px', maxWidth: 1280, margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => router.push(`/project/${projectId}`)}
+            aria-label="Back to project"
+            style={{ padding: '6px 10px' }}
           >
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => router.push(`/project/${projectId}`)}
-              aria-label="Back to project"
-              style={{ padding: '6px 10px' }}
-            >
-              ←
-            </button>
-            <div style={{ flex: 1 }}>
-              <h1
-                className="display-md"
-                style={{
-                  margin: 0,
-                  fontSize: 26,
-                  fontWeight: 600,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {projectName || 'Comparison'}
-              </h1>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: 'var(--text-tertiary)',
-                  marginTop: 2,
-                }}
-              >
-                Pick the cases you want to compare side-by-side.
-              </div>
-            </div>
+            ←
+          </button>
+          <div style={{ flex: 1 }}>
+            <h1 className="display-md" style={{ margin: 0, fontSize: 26, fontWeight: 600, letterSpacing: '-0.01em' }}>
+              Compare cases
+            </h1>
+            <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 2 }}>{projectName}</div>
           </div>
+        </div>
 
-          {/* Case picker — base (fixed) vs one selectable comp */}
-          <div className="card" style={{ padding: 18, marginBottom: 20 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--text-primary)',
-                marginBottom: 4,
-              }}
-            >
-              Compare against baseline
+        {/* Case picker */}
+        <div className="card" style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+            Cases in the comparison
+            <HelpTip label="How does the comparison work?">
+              The base case is the reference: every change is measured against it. Add the copies you made from it,
+              each with one change, and read what differs and what it does to the result.
+            </HelpTip>
+          </div>
+          {isLoading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-tertiary)', fontSize: 13 }}>
+              <Loader2 className="animate-spin" size={14} /> Loading cases…
             </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                marginBottom: 14,
-              }}
-            >
-              Click any cases to add or remove them from the comparison — base or
-              comparative, as many as you like. The base case is the delta reference.
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {cases.map((c) => {
+                const on = selected.has(c.id)
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() =>
+                      setSelected((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(c.id)) next.delete(c.id)
+                        else next.add(c.id)
+                        return next
+                      })
+                    }
+                    aria-pressed={on}
+                    style={{
+                      padding: '7px 13px',
+                      borderRadius: 999,
+                      border: on
+                        ? '1px solid color-mix(in oklab, var(--brand-primary) 60%, transparent)'
+                        : '1px solid var(--border-subtle)',
+                      background: on ? 'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))' : 'var(--surface-raised)',
+                      color: on ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: 13,
+                      fontFamily: 'var(--font-ui)',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    {on && <Icon name="check" size={12} style={{ color: 'var(--brand-primary)' }} />}
+                    <span style={{ fontWeight: on ? 500 : 400 }}>{c.name}</span>
+                    <span className="eyebrow" style={{ fontSize: 9, color: 'var(--text-tertiary)', letterSpacing: '0.1em' }}>
+                      {c.type === 'base' ? 'BASE' : 'COPY'}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            {isLoading ? (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  color: 'var(--text-tertiary)',
-                  fontSize: 13,
-                }}
-              >
-                <Loader2 className="animate-spin" size={14} /> Loading cases…
+          )}
+        </div>
+
+        {error && (
+          <div className="card" style={{ padding: 14, marginBottom: 16, color: BAD, fontSize: 13 }}>
+            {error}
+          </div>
+        )}
+
+        {!selectedIds.length ? (
+          <EmptyState title="Pick at least one case" body="Use the chips above to choose which cases to compare." />
+        ) : isLoadingData && !data ? (
+          <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            <Loader2 className="animate-spin" size={18} style={{ display: 'inline-block', marginRight: 8 }} />
+            Comparing…
+          </div>
+        ) : !data || !base ? null : (
+          <div style={{ opacity: isLoadingData ? 0.6 : 1, transition: 'opacity 150ms' }}>
+            {/* Scope */}
+            {basis.count >= 2 && (basis.methodMismatch || basis.fuMismatch) ? (
+              <div className="card" style={{ marginBottom: 16, padding: '12px 16px', borderLeft: '3px solid var(--signal-warn)' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Not a valid comparison yet</div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  {basis.methodMismatch && <>These runs use different LCIA methods ({basis.methods.join(', ')}). Re-run every case under one method. </>}
+                  {basis.fuMismatch && <>They were computed per different functional units ({basis.fus.join(' vs ')}). Re-run them after setting one functional unit.</>}
+                </div>
               </div>
-            ) : (
+            ) : basis.count >= 1 ? (
+              <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', fontSize: 12, color: 'var(--text-tertiary)' }}>
+                <span className="chip" style={{ fontSize: 11 }}>Method: {basis.methods.join(', ') || '—'}</span>
+                <span className="chip" style={{ fontSize: 11 }}>
+                  {basis.regionMismatch ? 'Regions' : 'Region'}: {basis.regions.join(', ') || '—'}
+                </span>
+                <span className="chip" style={{ fontSize: 11 }}>Per: {basis.fus[0] ?? 'functional unit not recorded'}</span>
+                <span>
+                  {basis.fuUnrecorded
+                    ? 'At least one run has no functional unit recorded, so its values are raw case totals. Re-run after setting goal & scope.'
+                    : basis.regionMismatch
+                      ? 'Same functional unit and method; the runs used different regions, so a difference between them includes the electricity grid.'
+                      : 'Same functional unit, method and region.'}
+                  {basis.regionMismatch && !basis.fuUnrecorded && (
+                    <HelpTip label="Why does the region matter?">
+                      A run&apos;s region picks its electricity factor (US, EU or Global grid mix). Comparing across
+                      regions is right when the grid is the change you are testing. If it is not, re-run the cases on
+                      one region so a grid change does not hide inside another change. Each card shows its run&apos;s region.
+                    </HelpTip>
+                  )}
+                </span>
+              </div>
+            ) : null}
+
+            {/* Case cards */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(auto-fit, minmax(260px, 1fr))`,
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              {compared.map((c, i) => (
+                <CaseCard
+                  key={c.caseId}
+                  c={c}
+                  color={seriesColor(i)}
+                  base={base}
+                  category={category}
+                  unit={unit}
+                  regionMismatch={basis.regionMismatch}
+                  projectId={projectId}
+                  onPickRun={(runId) => setRunPicks((p) => ({ ...p, [c.caseId]: runId }))}
+                />
+              ))}
+            </div>
+
+            {verdict && (
               <div
+                className="card"
                 style={{
+                  padding: '12px 16px',
+                  marginBottom: 16,
+                  background: 'linear-gradient(135deg, var(--brand-subtle), transparent 70%)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
-                  flexWrap: 'wrap',
+                  fontSize: 13.5,
                 }}
               >
-                {/* Multi-select: toggle ANY case in/out of the comparison. The
-                    base case stays pinned as the delta reference. */}
-                {cases.map((c) => {
-                  const on = selected.has(c.id)
-                  const isBase = c.type === 'base'
+                <Icon name="target" size={18} style={{ color: 'var(--brand-primary)' }} />
+                {verdict.lower ? (
+                  <span>
+                    Lowest {category}: <strong style={{ color: 'var(--brand-primary)' }}>{verdict.best.name}</strong>,{' '}
+                    <span className="mono" style={{ fontWeight: 600 }}>{signedPct(verdict.pct, 1)}</span> against {base.name}.
+                  </span>
+                ) : (
+                  <span>No copy has a lower {category} than {base.name}.</span>
+                )}
+              </div>
+            )}
+
+            {/* Analysis */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+                borderBottom: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div role="tablist" aria-label="Comparison views" style={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                {TABS.map((t) => {
+                  const on = t.id === tab
                   return (
                     <button
-                      key={c.id}
+                      key={t.id}
                       type="button"
-                      onClick={() =>
-                        setSelected((prev) => {
-                          const next = new Set(prev)
-                          if (next.has(c.id)) next.delete(c.id)
-                          else next.add(c.id)
-                          return next
-                        })
-                      }
-                      title={
-                        isBase
-                          ? 'Base case — the reference for the deltas'
-                          : 'Click to add/remove from the comparison'
-                      }
+                      role="tab"
+                      aria-selected={on}
+                      title={t.help}
+                      onClick={() => setTab(t.id)}
                       style={{
-                        padding: '8px 14px',
-                        borderRadius: 999,
-                        border: on
-                          ? '1px solid color-mix(in oklab, var(--brand-primary) 60%, transparent)'
-                          : '1px solid var(--border-subtle)',
-                        background: on
-                          ? 'color-mix(in oklab, var(--brand-primary) 10%, var(--surface-raised))'
-                          : 'var(--surface-raised)',
-                        color: on ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        padding: '9px 12px',
+                        border: 'none',
+                        borderBottom: on ? '2px solid var(--brand-primary)' : '2px solid transparent',
+                        background: 'transparent',
+                        color: on ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                        fontWeight: on ? 600 : 400,
                         fontSize: 13,
                         fontFamily: 'var(--font-ui)',
                         cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
+                        marginBottom: -1,
                       }}
                     >
-                      {on && (
-                        <Icon name="check" size={12} style={{ color: 'var(--brand-primary)' }} />
-                      )}
-                      <span style={{ fontWeight: on ? 500 : 400 }}>{c.name}</span>
-                      <span
-                        className="eyebrow"
-                        style={{
-                          fontSize: 9,
-                          color: 'var(--text-tertiary)',
-                          letterSpacing: '0.1em',
-                        }}
-                      >
-                        {isBase ? 'BASE' : 'COMP'}
-                      </span>
-                      {isBase && on && <span style={{ fontSize: 10 }}>🔒</span>}
+                      {t.label}
                     </button>
                   )
                 })}
               </div>
-            )}
-          </div>
-
-          {selected.size === 0 ? (
-            <EmptyState
-              title="Pick at least one case"
-              body="Use the chips above to choose which cases to compare."
-            />
-          ) : isLoadingData ? (
-            <div
-              style={{
-                padding: 60,
-                textAlign: 'center',
-                color: 'var(--text-tertiary)',
-                fontSize: 13,
-              }}
-            >
-              <Loader2
-                className="animate-spin"
-                size={18}
-                style={{ display: 'inline-block', marginRight: 8 }}
-              />
-              Loading assessment data…
-            </div>
-          ) : data.length === 0 ? (
-            <EmptyState
-              title="No assessment data"
-              body="None of the selected cases have a completed assessment."
-            />
-          ) : (
-            <>
-              {/* Case summary cards */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${Math.min(data.length, 3)}, 1fr)`,
-                  gap: 16,
-                  marginBottom: 20,
-                }}
-              >
-                {data.map((c, i) => {
-                  const isBase = c === baseCase
-                  const delta =
-                    !isBase && baseCase && headlineValue(baseCase) > 0
-                      ? ((headlineValue(c) - headlineValue(baseCase)) /
-                          headlineValue(baseCase)) *
-                        100
-                      : null
-                  return (
-                    <div
-                      key={c.caseId}
-                      className="card"
-                      style={{ padding: 0, overflow: 'hidden' }}
-                    >
-                      <div
-                        style={{
-                          padding: '14px 18px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          background: `color-mix(in oklab, ${SERIES_COLORS[i % SERIES_COLORS.length]} 12%, var(--surface-raised))`,
-                          borderBottom: '1px solid var(--border-subtle)',
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            background:
-                              SERIES_COLORS[i % SERIES_COLORS.length],
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: 'var(--text-primary)',
-                          }}
-                        >
-                          {c.caseName}
-                        </span>
-                        <span
-                          className="chip"
-                          style={{
-                            marginLeft: 'auto',
-                            fontSize: 10,
-                            padding: '3px 9px',
-                          }}
-                        >
-                          {isBase ? 'BASE' : 'COMP'}
-                        </span>
-                      </div>
-                      <div style={{ padding: '16px 18px 14px' }}>
-                        <div
-                          className="eyebrow"
-                          style={{ fontSize: 10, marginBottom: 4 }}
-                        >
-                          {/* One category, one unit — same rule as the
-                              verdict. The old "TOTAL IMPACT" here rendered
-                              totalScore (a cross-unit sum) labeled kg CO2 eq. */}
-                          {(
-                            c.categories.find((k) => k.category_name === 'Global Warming') ??
-                            c.categories[0]
-                          )?.category_name?.toUpperCase() || 'TOTAL IMPACT'}
-                        </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'baseline',
-                            gap: 8,
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          <div
-                            className="mono"
-                            style={{
-                              fontSize: 28,
-                              fontWeight: 600,
-                              letterSpacing: '-0.02em',
-                              color: 'var(--text-primary)',
-                            }}
-                          >
-                            {headlineValue(c) > 0
-                              ? fmtNum(headlineValue(c), 2)
-                              : '—'}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              color: 'var(--text-tertiary)',
-                            }}
-                          >
-                            {(
-                              c.categories.find((k) => k.category_name === 'Global Warming') ??
-                              c.categories[0]
-                            )?.unit || 'kg CO₂-eq'}
-                          </div>
-                          {delta !== null && (
-                            <span
-                              className="mono"
-                              style={{
-                                marginLeft: 'auto',
-                                fontSize: 11,
-                                fontWeight: 600,
-                                padding: '3px 8px',
-                                borderRadius: 999,
-                                color:
-                                  delta < 0
-                                    ? 'var(--signal-success, #16a34a)'
-                                    : '#b45309',
-                                background:
-                                  delta < 0
-                                    ? 'color-mix(in oklab, var(--signal-success, #16a34a) 14%, transparent)'
-                                    : 'color-mix(in oklab, #d98568 18%, transparent)',
-                              }}
-                            >
-                              {delta < 0 ? '↓' : '↑'}{' '}
-                              {fmtNum(Math.abs(delta), 1)}%
-                            </span>
-                          )}
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 10,
-                            fontSize: 11,
-                            color: 'var(--text-tertiary)',
-                            display: 'flex',
-                            gap: 12,
-                          }}
-                        >
-                          <span>
-                            <span className="mono">
-                              {fmtInt(c.categories.length)}
-                            </span>{' '}
-                            categories
-                          </span>
-                          <span>·</span>
-                          <span>
-                            <span className="mono">
-                              {fmtInt(c.components.length)}
-                            </span>{' '}
-                            components
-                          </span>
-                          <span
-                            style={{
-                              marginLeft: 'auto',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                            }}
-                          >
-                            <StatusDot
-                              status={
-                                c.totalScore > 0 ? 'success' : 'warn'
-                              }
-                            />
-                            {c.totalScore > 0
-                              ? 'Assessed'
-                              : 'Not assessed'}
-                          </span>
-                        </div>
-                        {c.description && (
-                          <div
-                            style={{
-                              marginTop: 10,
-                              padding: '8px 10px',
-                              borderTop: '1px dashed var(--border-subtle)',
-                              paddingTop: 10,
-                              fontSize: 11.5,
-                              lineHeight: 1.55,
-                              color: 'var(--text-tertiary)',
-                            }}
-                          >
-                            {c.description}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {verdict && (
-                <div
-                  className="card"
-                  style={{
-                    padding: 18,
-                    marginBottom: 20,
-                    background:
-                      'linear-gradient(135deg, var(--brand-subtle), transparent 70%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 8,
-                      background: 'var(--brand-primary)',
-                      color: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Icon name="target" size={20} />
-                  </div>
-                  <div style={{ flex: 1, fontSize: 14 }}>
-                    Best-case scenario:{' '}
-                    <strong style={{ color: 'var(--brand-primary)' }}>
-                      {verdict.best.caseName}
-                    </strong>{' '}
-                    — reduces Global Warming impact by{' '}
-                    <span className="mono" style={{ fontWeight: 600 }}>
-                      ↓ {fmtNum(verdict.deltaPct, 1)}%
-                    </span>{' '}
-                    vs {baseCase!.caseName}.
-                  </div>
+              <div style={{ flex: 1 }} />
+              {categories.length > 1 && tab !== 'results' && tab !== 'quality' && (
+                <div style={{ paddingBottom: 6 }}>
+                  <SelectBox
+                    label="Impact category"
+                    value={category}
+                    onChange={setCategory}
+                    options={categories.map((k) => ({ value: k, label: k }))}
+                  />
                 </div>
               )}
+            </div>
 
-              {/* Radar */}
-              {data.length > 0 && barGroups.length > 0 && (
-                <RadarPanel groups={barGroups} seriesLabels={seriesLabels} />
-              )}
+            {tab === 'differs' && (
+              <WhatDiffersPanel base={base} cases={compared} diffs={data.diffs} category={category} />
+            )}
+            {tab === 'results' && <ResultsPanel cases={compared} baseId={base.caseId} />}
+            {tab === 'change' && <ChangePanel base={base} cases={compared} category={category} />}
+            {tab === 'hotspots' && <HotspotPanel cases={compared} category={category} />}
+            {tab === 'cost' && <CostPanel base={base} cases={compared} diffs={data.diffs} category={category} />}
+            {tab === 'quality' && <QualityPanel base={base} cases={compared} />}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
 
-              {/* Delta */}
-              {data.length >= 2 && (
-                <DeltaPanel groups={barGroups} seriesLabels={seriesLabels} />
-              )}
+function CaseCard({
+  c,
+  color,
+  base,
+  category,
+  unit,
+  regionMismatch,
+  projectId,
+  onPickRun,
+}: {
+  c: CompareCase
+  color: string
+  base: CompareCase
+  category: string
+  unit: string
+  regionMismatch: boolean
+  projectId: string
+  onPickRun: (runId: number) => void
+}) {
+  const isBase = c.caseId === base.caseId
+  const value = c.run ? totalOf(c, category) : null
+  const baseValue = base.run ? totalOf(base, category) : null
+  const delta = !isBase && value !== null && baseValue ? ((value - baseValue) / baseValue) * 100 : null
+  const latest = c.runs[0]
+  const reasonText =
+    c.run && latest && latest.runId !== c.run.runId
+      ? c.run.reason === 'matches-copies'
+        ? `Compared on run #${c.run.runId} (${c.run.region}) to match the copies. The latest run is #${latest.runId} (${latest.region}).`
+        : c.run.reason === 'matches-study'
+          ? `Compared on run #${c.run.runId}, the study's method and region. The latest run is #${latest.runId} (${latest.region}).`
+          : c.run.reason === 'picked'
+            ? `Compared on run #${c.run.runId}, picked here. The latest run is #${latest.runId}.`
+            : null
+      : null
 
-              {/* Component breakdown */}
-              {allComponentNames.length > 0 && (
-                <ComponentBreakdownPanel
-                  data={data}
-                  componentNames={allComponentNames}
-                />
-              )}
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          background: `color-mix(in oklab, ${color} 12%, var(--surface-raised))`,
+          borderBottom: '1px solid var(--border-subtle)',
+        }}
+      >
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flex: 'none' }} />
+        <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.name}>
+          {c.name}
+        </span>
+        <span style={{ flex: 1 }} />
+        {regionMismatch && c.run?.region && (
+          <span className="chip" style={{ fontSize: 10, padding: '2px 8px' }} title={`This run used the ${c.run.region} region`}>
+            {c.run.region}
+          </span>
+        )}
+        <span className="chip" style={{ fontSize: 10, padding: '2px 8px' }}>
+          {isBase ? 'BASE' : 'COPY'}
+        </span>
+      </div>
+      <div style={{ padding: '12px 16px' }}>
+        <div className="eyebrow" style={{ fontSize: 10, marginBottom: 2 }}>
+          {category}
+        </div>
+        {value === null ? (
+          <div style={{ fontSize: 13, color: BAD, padding: '6px 0' }}>
+            Not run yet.{' '}
+            <Link href={`/project/${projectId}/case/${c.caseId}`} style={{ color: 'var(--brand-primary)' }}>
+              Open the case
+            </Link>{' '}
+            and run it.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span className="mono" style={{ fontSize: 24, fontWeight: 600, letterSpacing: '-0.02em' }}>
+              {fmtNum(value, 2)}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{unit}</span>
+            {delta !== null && (
+              <span
+                className="mono"
+                style={{
+                  marginLeft: 'auto',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  color: delta <= 0 ? GOOD : BAD,
+                  background: delta <= 0 ? 'color-mix(in oklab, #16a34a 14%, transparent)' : 'color-mix(in oklab, #d98568 18%, transparent)',
+                }}
+              >
+                {signedPct(delta, 2)}
+              </span>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6 }}>
+          {fmtInt(c.inventory.steps)} nodes · {fmtInt(c.inventory.flows)} flows
+          {c.run && (
+            <>
+              {' · '}
+              <Link href={`/project/${projectId}/case/${c.caseId}/results`} style={{ color: 'var(--brand-primary)' }}>
+                Results
+              </Link>
             </>
           )}
         </div>
-    </>
+        {c.runs.length > 0 && c.run && (
+          <div style={{ marginTop: 8 }}>
+            <select
+              className="input"
+              aria-label={`Run used for ${c.name}`}
+              value={c.run.runId}
+              onChange={(e) => onPickRun(Number(e.target.value))}
+              style={{ height: 28, fontSize: 11.5, padding: '0 6px', width: '100%' }}
+            >
+              {c.runs.map((r) => (
+                <option key={r.runId} value={r.runId}>
+                  Run #{r.runId} · {r.method} · {r.region} · {new Date(r.runDate).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {reasonText && <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6 }}>{reasonText}</div>}
+        {c.run?.stale && (
+          <div style={{ fontSize: 11.5, color: BAD, marginTop: 6 }}>Edited after this run. Re-run it for current numbers.</div>
+        )}
+      </div>
+    </div>
   )
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div
-      className="card"
-      style={{
-        padding: 48,
-        textAlign: 'center',
-        color: 'var(--text-tertiary)',
-      }}
-    >
-      <div
-        style={{
-          fontSize: 15,
-          fontWeight: 600,
-          color: 'var(--text-primary)',
-          marginBottom: 6,
-        }}
-      >
-        {title}
-      </div>
+    <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-tertiary)' }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 13 }}>{body}</div>
-    </div>
-  )
-}
-
-interface BarGroup {
-  label: string
-  values: number[]
-}
-
-function RadarPanel({
-  groups,
-  seriesLabels,
-}: {
-  groups: BarGroup[]
-  seriesLabels: string[]
-}) {
-  const data = groups.map((g) => {
-    const max = Math.max(...g.values, 1e-9)
-    const p: Record<string, number | string> = { category: g.label }
-    seriesLabels.forEach((n, i) => {
-      p[n] = (g.values[i] / max) * 100
-      p[`${n}__raw`] = g.values[i]
-    })
-    return p
-  })
-  return (
-    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-        Impact by category · radar overlay
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: 'var(--text-tertiary)',
-          marginBottom: 16,
-        }}
-      >
-        Each axis is scaled to the highest-scoring scenario in that category —
-        smaller polygon means a better footprint.
-      </div>
-      <div style={{ width: '100%', height: 340 }}>
-        <ResponsiveContainer>
-          <RadarChart data={data} outerRadius="78%">
-            <PolarGrid stroke="var(--border-subtle)" />
-            <PolarAngleAxis
-              dataKey="category"
-              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
-            />
-            <PolarRadiusAxis
-              tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
-              tickFormatter={(v) => `${v}%`}
-            />
-            {seriesLabels.map((n, i) => (
-              <Radar
-                key={n}
-                name={n}
-                dataKey={n}
-                stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                fill={SERIES_COLORS[i % SERIES_COLORS.length]}
-                fillOpacity={0.22}
-                strokeWidth={2}
-              />
-            ))}
-            <Legend
-              wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-              iconType="circle"
-            />
-            <Tooltip
-              formatter={(_v: any, name: string, props: any) => [
-                fmtNum(props.payload[`${name}__raw`] ?? 0, 3),
-                name,
-              ]}
-              contentStyle={{
-                background: '#fff',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-            />
-          </RadarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  )
-}
-
-function DeltaPanel({
-  groups,
-  seriesLabels,
-}: {
-  groups: BarGroup[]
-  seriesLabels: string[]
-}) {
-  const baseIndex = 0
-  const others = seriesLabels.slice(1)
-  if (others.length === 0) return null
-  const data = groups.map((g) => {
-    const base = g.values[baseIndex] || 0
-    const p: Record<string, number | string> = { category: g.label }
-    others.forEach((n, i) => {
-      const v = g.values[i + 1] || 0
-      p[n] = base > 0 ? ((v - base) / base) * 100 : 0
-    })
-    return p
-  })
-  return (
-    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-        Change vs baseline · per category
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: 'var(--text-tertiary)',
-          marginBottom: 16,
-        }}
-      >
-        Green = improvement, amber = regression vs{' '}
-        <strong>{seriesLabels[baseIndex]}</strong>.
-      </div>
-      <div style={{ width: '100%', height: 260 }}>
-        <ResponsiveContainer>
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 8, right: 24, bottom: 8, left: 24 }}
-          >
-            <XAxis
-              type="number"
-              tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
-              tickFormatter={(v) => `${v > 0 ? '+' : ''}${v.toFixed(0)}%`}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="category"
-              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
-              axisLine={false}
-              tickLine={false}
-              width={120}
-            />
-            <ReferenceLine x={0} stroke="var(--border-subtle)" />
-            <Tooltip
-              formatter={(v: any) => [
-                `${v > 0 ? '+' : ''}${v.toFixed(1)}%`,
-                '',
-              ]}
-              contentStyle={{
-                background: '#fff',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-            />
-            <Legend
-              wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
-              iconType="circle"
-            />
-            {others.map((n) => (
-              <Bar key={n} dataKey={n} radius={[0, 4, 4, 0]}>
-                {data.map((e, idx) => (
-                  <Cell
-                    key={idx}
-                    fill={(e[n] as number) <= 0 ? '#2d6a4f' : '#d98568'}
-                  />
-                ))}
-              </Bar>
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  )
-}
-
-function ComponentBreakdownPanel({
-  data,
-  componentNames,
-}: {
-  data: AssessmentData[]
-  componentNames: string[]
-}) {
-  const rows = data.map((d) => {
-    const row: Record<string, number | string> = { scenario: d.caseName }
-    componentNames.forEach((n) => {
-      const c = d.components.find((cc) => cc.component_name === n)
-      const v = c ? c.impacts.reduce((s, i) => s + i.impact_value, 0) : 0
-      row[n] = v
-    })
-    return row
-  })
-  return (
-    <div className="card" style={{ padding: 24, marginBottom: 20 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-        Component contribution · per scenario
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          color: 'var(--text-tertiary)',
-          marginBottom: 16,
-        }}
-      >
-        Each bar is a scenario; segments show how much each component
-        contributes to its total impact.
-      </div>
-      <div
-        style={{
-          width: '100%',
-          height: Math.max(160, data.length * 70 + 70),
-        }}
-      >
-        <ResponsiveContainer>
-          <BarChart
-            data={rows}
-            layout="vertical"
-            margin={{ top: 8, right: 16, bottom: 8, left: 24 }}
-          >
-            <XAxis
-              type="number"
-              tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              type="category"
-              dataKey="scenario"
-              tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
-              axisLine={false}
-              tickLine={false}
-              width={160}
-            />
-            <Tooltip
-              formatter={(v: any, n: string) => [fmtNum(v, 2), n]}
-              contentStyle={{
-                background: '#fff',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              cursor={{ fill: 'rgba(0,0,0,0.04)' }}
-            />
-            <Legend
-              wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
-              iconType="circle"
-            />
-            {componentNames.map((n, i) => (
-              <Bar
-                key={n}
-                dataKey={n}
-                stackId="components"
-                fill={COMPONENT_COLORS[i % COMPONENT_COLORS.length]}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
     </div>
   )
 }

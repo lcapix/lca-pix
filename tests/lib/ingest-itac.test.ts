@@ -29,16 +29,16 @@ const ROW: Record<string, unknown> = {
 }
 
 describe('structureItac', () => {
-  it('builds a valid 5-tier model with one branch per present stream', () => {
+  it('builds a valid model with one operation per present stream, no invented levels', () => {
     const pm = structureItac([ROW], 'TS0001', 'ITAC.xlsx')
     expect(validateProcessModel(pm)).toEqual([])
-    // product + line + 3 streams × (subprocess + operation + leaf)
-    expect(pm.nodes).toHaveLength(2 + 3 * 3)
+    // product + facility + 3 stream operations
+    expect(pm.nodes).toHaveLength(2 + 3)
     expect(pm.flows).toHaveLength(3)
     expect(pm.case_name).toBe('Ingested: ITAC TS0001 (Electroplated parts, FY2024)')
-    const leaf = pm.nodes.find((n) => n.name === 'Electricity consumption FY2024')
-    expect(leaf?.tier).toBe('elemental_task')
-    expect(leaf?.parent).toBe('Electricity consumption — annual total')
+    const op = pm.nodes.find((n) => n.name === 'Electricity consumption FY2024')
+    expect(op?.tier).toBe('operation')
+    expect(op?.parent).toBe('Facility energy & utility systems')
   })
 
   it('keeps units and quantities exactly as the document states them', () => {

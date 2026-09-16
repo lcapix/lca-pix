@@ -5,7 +5,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { apiPost } from '@/lib/api-client';
+import { apiPost, apiRequest } from '@/lib/api-client';
+import { HelpTip } from '@/components/lcapix/help-tip';
 
 // Regions the engine recognises (see normalizeRegion in lib/lca-engine). The
 // factor table currently only carries 'Global'-scope rows, so non-Global picks
@@ -63,6 +64,24 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
       const wantedMethod = initialMethod ?? remembered.method;
       setMethod(LCIA_METHODS.some(m => m.value === wantedMethod) ? (wantedMethod as string) : 'CML 2001');
       setRegion(initialRegion ?? remembered.region ?? 'Global');
+      // Nothing chosen for this case yet: start from the study's scope (the
+      // project's method, the case's region).
+      const wantedRegion = initialRegion ?? remembered.region;
+      if (!wantedMethod || !wantedRegion) {
+        apiRequest(`/api/cases/${caseId}`)
+          .then((r) => r.json())
+          .then((d) => {
+            const c = d?.case ?? {};
+            if (!wantedMethod && LCIA_METHODS.some(m => m.value === c.project_lcia_method)) {
+              setMethod(c.project_lcia_method);
+            }
+            const scopeRegion = c.region_code || c.project_region_code;
+            if (!wantedRegion && scopeRegion) {
+              setRegion(scopeRegion === 'US' ? 'US Grid' : scopeRegion === 'EU' ? 'EU Average' : scopeRegion);
+            }
+          })
+          .catch(() => { /* keep the defaults */ });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -104,14 +123,23 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
         <DialogHeader>
           <DialogTitle>Run Assessment</DialogTitle>
           <DialogDescription>
-            Choose the valuation method and region for this calculation.
+            Choose the impact-assessment method and region for this calculation.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div>
             <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-on-surface-variant mb-1.5">
-              Valuation method
+              Impact-assessment method
+              <HelpTip label="What is an impact-assessment method?">
+                The method is the set of characterization factors that turns each input and
+                output into impact scores (for example, how many kg CO₂-eq one kg of methane
+                is worth). CML 2001 comes from Leiden University and is common in Europe;
+                TRACI 2.1 is the US EPA method (it reports eutrophication in kg N eq and smog
+                in kg O₃ eq); ReCiPe Midpoint (H) uses the default &quot;hierarchist&quot;
+                perspective. Results from different methods cannot be added or compared, so
+                keep one method for every case you compare.
+              </HelpTip>
             </label>
             <select
               value={method}
@@ -122,15 +150,18 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
-            <p className="text-xs text-on-surface-variant mt-1">
-              The method determines the characterisation-factor set used to
-              translate inventory flows into impact categories.
-            </p>
           </div>
 
           <div>
             <label className="block font-mono text-[10px] uppercase tracking-[0.12em] text-on-surface-variant mb-1.5">
               Region
+              <HelpTip label="What does the region change?">
+                The region picks location-specific factors where they exist: today that is the
+                electricity grid (US, EU and Global intensities differ a lot). Every other
+                material and emission uses its Global factor, and the results table marks
+                those rows as &quot;Global (fallback)&quot; so you can see where the region did
+                not apply.
+              </HelpTip>
             </label>
             <select
               value={region}
@@ -139,10 +170,6 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
             >
               {REGIONS.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
             </select>
-            <p className="text-xs text-on-surface-variant mt-1">
-              Location-specific factors are used when available (e.g. electricity grid carbon).
-              Global fallback is used otherwise.
-            </p>
           </div>
 
           {error && <div className="text-sm text-error">{error}</div>}

@@ -57,6 +57,64 @@ export interface FlowContribution {
   geographic_scope?: string;
   /** Present when the flow quantity was converted into the factor's unit. */
   unit_conversion?: string;
+  /** Where the factor came from (driver_impact_factors.source_reference). */
+  factor_source?: string | null;
+  /** Provenance tier of that source, for the ISO 14044 data-quality statement. */
+  source_tier?: SourceTier;
+  /** Share of this unit process's burden allocated to the product (ISO 14044 4.3.4). */
+  allocation_factor?: number;
+}
+
+/**
+ * Provenance tier of a characterization / embodied factor. All factors are
+ * secondary data in ISO terms; this grades HOW trustworthy that secondary
+ * source is, so a result can say how much of it rests on what.
+ *   authoritative    — published method or official dataset (US EPA TRACI via
+ *                      lciafmt, IPCC, eGRID, Ember, an EN 15804 / ISO 14025 EPD)
+ *   industry_average — sector-association or representative average (worldsteel,
+ *                      PlasticsEurope, International Aluminium Institute …)
+ *   unverified       — legacy value never traced to a source
+ *   unknown          — no source recorded
+ */
+export type SourceTier = 'authoritative' | 'industry_average' | 'unverified' | 'unknown';
+
+export function classifyFactorSource(ref?: string | null): SourceTier {
+  const s = (ref ?? '').toLowerCase();
+  if (!s.trim()) return 'unknown';
+  if (/legacy pack|not yet verified|zeroed|quarantin|no published source|not yet cited/.test(s)) {
+    return 'unverified';
+  }
+  // An industry-association average, or a declaration past its validity date,
+  // is published but not an official method/dataset: grade it one step down.
+  if (/industry.average|expired/.test(s)) return 'industry_average';
+  if (/lciafmt|us epa|\bepa\b|ipcc|egrid|\bember\b|\bepd\b|environdec|iso 14025|en 15804|openlca/.test(s)) {
+    return 'authoritative';
+  }
+  return 'industry_average';
+}
+
+/** Run-level data-quality summary (ISO 14044 4.2.3.6 data quality requirements). */
+export interface DataQualitySummary {
+  /** Flow × category contributions counted in the result. */
+  contributions: number;
+  /** How many contributions rest on each provenance tier. */
+  by_tier: Record<SourceTier, number>;
+  /** Share (0..1) of the Global Warming result carried by each tier. */
+  gw_share_by_tier: Record<SourceTier, number>;
+  /** Contributions that used a Global factor although a region was requested. */
+  regional_fallbacks: number;
+  /** Contributions whose quantity was unit-converted to the factor's unit. */
+  unit_conversions: number;
+  /** Flows left out of a category because their unit could not be converted. */
+  excluded_flows: number;
+  /** Components whose burden was allocated (allocation_factor < 1). */
+  allocated_components: number;
+  /** Flows no factor in the method characterizes (they add nothing). */
+  uncharacterized_flows: number;
+  /** Up to 10 substance names of those flows, for the statement. */
+  uncharacterized_examples: string[];
+  /** Plain-language statement lines for the results page and report. */
+  statement: string[];
 }
 
 export interface ComponentImpactResult {
@@ -71,6 +129,12 @@ export interface ComponentImpactResult {
   /** Data-quality problems that excluded or altered contributions (unit
    * mismatches, missing units). Never empty silently — surfaced to the run. */
   warnings: string[];
+  /** Flow × category pairs left out because the flow's unit could not be converted. */
+  excluded_flows?: number;
+  /** Flows with at least one applicable factor (after the direction rule). */
+  characterized_flow_ids?: number[];
+  /** Allocation share applied to this component (ISO 14044 4.3.4), when < 1. */
+  allocation_factor?: number;
 }
 
 export interface CategoryImpact {
@@ -104,6 +168,8 @@ export interface LCAResult {
   total_impacts: CategoryImpact[];
   /** Aggregated data-quality warnings from every component. */
   warnings: string[];
+  /** Data-quality statement for the run (ISO 14044 4.2.3.6). */
+  data_quality?: DataQualitySummary;
 }
 
 export interface CalcOptions {
@@ -173,6 +239,8 @@ export async function calculateComponentImpacts(
        dif.factor_basis,
        ic.category_name,
        ic.unit as category_unit,
+       dif.unit as factor_unit,
+       dif.source_reference as factor_source,
        dif.factor_value as characterization_factor
      FROM flows f
      INNER JOIN substances s ON f.substance_id = s.substance_id
@@ -206,6 +274,10 @@ export async function calculateComponentImpacts(
   const warnings: string[] = [];
   let untypedFactorSeen = false;
   const flowContributions: FlowContribution[] = [];
+  // For the completeness check: which flows had an applicable factor, and how
+  // many flow × category pairs a unit problem left out.
+  const characterized = new Set<number>();
+  let excluded = 0;
   for (const row of selectedRows) {
     // Direction rule: 'embodied' factors describe PRODUCING a substance and
     // apply to input flows only (steel you buy, electricity you draw);
@@ -216,6 +288,7 @@ export async function calculateComponentImpacts(
     if (row.factor_basis === 'embodied' && row.flow_type === 'output') continue;
     if (row.factor_basis === 'elementary' && row.flow_type === 'input') continue;
     if (!row.factor_basis) untypedFactorSeen = true;
+    characterized.add(row.flow_id);
 
     const rawQuantity = parseFloat(row.quantity);
     const factor = parseFloat(row.characterization_factor);
@@ -241,12 +314,14 @@ export async function calculateComponentImpacts(
         warnings.push(
           `Flow ${row.flow_id} (${row.substance_name}): unit '${flowUnit}' cannot be converted to factor unit '${factorUnit}' — EXCLUDED from ${row.category_name}.`,
         );
+        excluded++;
         continue;
       }
     } else if (flowUnit && !flowNorm) {
       warnings.push(
         `Flow ${row.flow_id} (${row.substance_name}): unrecognized unit '${flowUnit}' — EXCLUDED from ${row.category_name}.`,
       );
+      excluded++;
       continue;
     }
 
@@ -264,6 +339,8 @@ export async function calculateComponentImpacts(
       category_name: row.category_name,
       geographic_scope: row.geographic_scope,
       unit_conversion: conversionNote,
+      factor_source: row.factor_source ?? null,
+      source_tier: classifyFactorSource(row.factor_source),
     });
   }
 
@@ -298,6 +375,32 @@ export async function calculateComponentImpacts(
     );
   }
 
+  // Reference unit of a factor = its numerator: a factor stored as
+  // "kg SO2 eq / kg" characterizes 1 kg of input, but the RESULT is kg SO2 eq.
+  const refUnit = (u?: string | null): string => (u ?? '').split('/')[0].trim();
+  const rowFor = (c: FlowContribution) =>
+    selectedRows.find((row) => row.flow_id === c.flow_id && row.category_id === c.category_id);
+
+  // Unit-consistency guard: within one method every factor in a category must
+  // share one reference unit, or the sum is meaningless (kg N eq + kg PO4 eq).
+  const unitsByCat = new Map<number, Set<string>>();
+  for (const c of flowContributions) {
+    const r = rowFor(c);
+    const u = refUnit(r?.factor_unit || r?.category_unit);
+    if (!u) continue;
+    if (!unitsByCat.has(c.category_id)) unitsByCat.set(c.category_id, new Set());
+    unitsByCat.get(c.category_id)!.add(u);
+  }
+  for (const [catId, units] of unitsByCat) {
+    if (units.size > 1) {
+      const name =
+        flowContributions.find((c) => c.category_id === catId)?.category_name ?? `category ${catId}`;
+      warnings.push(
+        `Component ${component.component_name}: ${name} mixes reference units (${[...units].join(', ')}) under ${method} — the total is not comparable; the factor data needs fixing.`,
+      );
+    }
+  }
+
   // Step 4: Aggregate impacts by category
   const impactsByCategory = new Map<number, CategoryImpact>();
 
@@ -308,10 +411,14 @@ export async function calculateComponentImpacts(
       existing.impact_value += contribution.impact_contribution;
       existing.flow_count += 1;
     } else {
-      // Get category unit from the first contribution
-      const categoryUnit = flowsData.find(
-        (row) => row.category_id === contribution.category_id
-      )?.category_unit || '';
+      // Report the FACTOR's reference unit, not the category default: units
+      // are method-specific (TRACI eutrophication is kg N eq, CML is kg PO4
+      // eq), so labelling a TRACI result with the CML unit would be wrong.
+      const unitRow = rowFor(contribution);
+      const categoryUnit =
+        refUnit(unitRow?.factor_unit) ||
+        refUnit(unitRow?.category_unit) ||
+        refUnit(flowsData.find((row) => row.category_id === contribution.category_id)?.category_unit);
 
       impactsByCategory.set(contribution.category_id, {
         category_id: contribution.category_id,
@@ -335,6 +442,8 @@ export async function calculateComponentImpacts(
     total_flows_processed: flowContributions.length,
     driver_flows_count: new Set(flowContributions.map((f) => f.flow_id)).size,
     warnings,
+    excluded_flows: excluded,
+    characterized_flow_ids: [...characterized],
   };
 }
 
@@ -371,13 +480,31 @@ export async function calculateCaseImpacts(
     step_description: 'Loading component hierarchy from database',
   });
 
-  const [components] = await connection.query<RowDataPacket[]>(
-    `SELECT component_id, component_name, component_type, hierarchy_level
-     FROM component
-     WHERE case_id = ?
-     ORDER BY hierarchy_level, component_id`,
-    [caseId]
-  );
+  // Parent links + allocation shares come with the hierarchy. Databases
+  // without migrate-014 have no allocation column; every component then
+  // counts in full, which is the no-allocation default anyway.
+  let components: RowDataPacket[] = [];
+  try {
+    [components] = await connection.query<RowDataPacket[]>(
+      `SELECT component_id, component_name, component_type, hierarchy_level,
+              parent_component_id, allocation_factor
+       FROM component
+       WHERE case_id = ?
+       ORDER BY hierarchy_level, component_id`,
+      [caseId]
+    );
+  } catch (err: any) {
+    if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
+    [components] = await connection.query<RowDataPacket[]>(
+      `SELECT component_id, component_name, component_type, hierarchy_level,
+              parent_component_id
+       FROM component
+       WHERE case_id = ?
+       ORDER BY hierarchy_level, component_id`,
+      [caseId]
+    );
+  }
+  const allocation = effectiveAllocation(components as any[]);
 
   algorithmSteps.push({
     step_number: 2,
@@ -413,6 +540,20 @@ export async function calculateCaseImpacts(
     flow_count: row.flow_count,
   }));
 
+  // Terminating-node rule: a node with children is the sum of its children
+  // (ISO 14044 unit processes; the patent's baseline process). Flows sitting
+  // on such a node still count, but say so: the same flow modeled on a step
+  // below would be counted twice.
+  const nodesWithChildren = new Set(
+    components.map((c) => c.parent_component_id).filter((id) => id != null),
+  );
+  const structureWarnings = componentsWithFlows
+    .filter((c) => nodesWithChildren.has(c.component_id))
+    .map(
+      (c) =>
+        `Component ${c.component_name} has steps below it and also ${c.flow_count} flow(s) of its own. A parent should be the sum of its steps: move these flows onto the step that uses them, or check they are not also modeled below (double count).`,
+    );
+
   algorithmSteps.push({
     step_number: 4,
     step_description: `Found ${componentsWithFlows.length} component(s) with driver flows`,
@@ -437,6 +578,10 @@ export async function calculateCaseImpacts(
     });
 
     const result = await calculateComponentImpacts(comp.component_id, connection, options);
+    // Allocation (ISO 14044 4.3.4): a process that also makes other products
+    // carries only its allocated share into this product's result.
+    const share = allocation.get(comp.component_id) ?? 1;
+    if (share < 1) applyAllocation(result, share);
     componentResults.push(result);
 
     totalFlowsProcessed += result.total_flows_processed;
@@ -448,6 +593,7 @@ export async function calculateCaseImpacts(
       details: {
         component_id: comp.component_id,
         flows_processed: result.total_flows_processed,
+        ...(share < 1 ? { allocation_share: share } : {}),
         categories: result.impacts.map((imp) => ({
           category: imp.category_name,
           value: imp.impact_value,
@@ -464,12 +610,20 @@ export async function calculateCaseImpacts(
   });
 
   const totalImpactsByCategory = new Map<number, CategoryImpact>();
+  // Cross-component unit guard: two components reporting one category in
+  // different reference units cannot be summed into a meaningful case total.
+  const crossUnitWarnings = new Set<string>();
 
   for (const compResult of componentResults) {
     for (const impact of compResult.impacts) {
       const existing = totalImpactsByCategory.get(impact.category_id);
 
       if (existing) {
+        if (existing.unit && impact.unit && existing.unit !== impact.unit) {
+          crossUnitWarnings.add(
+            `${impact.category_name}: components report different reference units (${existing.unit} vs ${impact.unit}) under ${calculationMethod} — the case total is not comparable; the factor data needs fixing.`,
+          );
+        }
         existing.impact_value += impact.impact_value;
         existing.flow_count += impact.flow_count;
       } else {
@@ -481,7 +635,36 @@ export async function calculateCaseImpacts(
   const totalImpacts = Array.from(totalImpactsByCategory.values());
 
   // Surface every component's data-quality warnings on the run itself.
-  const allWarnings = componentResults.flatMap((r) => r.warnings);
+  const allWarnings = [
+    ...structureWarnings,
+    ...componentResults.flatMap((r) => r.warnings),
+    ...crossUnitWarnings,
+  ];
+
+  // Completeness check (ISO 14044 4.5.3.2): a flow that no factor in this
+  // method characterizes adds nothing to the result. Name those flows instead
+  // of letting them vanish, then grade the run (4.2.3.6).
+  const characterizedIds = new Set(
+    componentResults.flatMap((r) => r.characterized_flow_ids ?? []),
+  );
+  const [caseFlows] = await connection.query<RowDataPacket[]>(
+    `SELECT f.flow_id, s.substance_name, c.component_name
+     FROM flows f
+     JOIN component c ON c.component_id = f.component_id
+     JOIN substances s ON s.substance_id = f.substance_id
+     WHERE c.case_id = ?`,
+    [caseId]
+  );
+  const uncharacterized = (caseFlows ?? [])
+    .filter((f) => !characterizedIds.has(f.flow_id))
+    .map((f) => ({
+      substance_name: String(f.substance_name),
+      component_name: String(f.component_name),
+    }));
+  const dataQuality = summarizeDataQuality(componentResults, {
+    region: options.regionCode ?? 'Global',
+    uncharacterized,
+  });
   if (allWarnings.length > 0) {
     algorithmSteps.push({
       step_number: 5 + componentResults.length + 1.5,
@@ -489,6 +672,12 @@ export async function calculateCaseImpacts(
       details: { warnings: allWarnings },
     });
   }
+
+  algorithmSteps.push({
+    step_number: 5 + componentResults.length + 1.75,
+    step_description: 'Compiled the data-quality statement (ISO 14044 4.2.3.6)',
+    details: { statement: dataQuality.statement },
+  });
 
   algorithmSteps.push({
     step_number: 5 + componentResults.length + 2,
@@ -523,6 +712,184 @@ export async function calculateCaseImpacts(
     algorithm_steps: algorithmSteps,
     total_impacts: totalImpacts,
     warnings: allWarnings,
+    data_quality: dataQuality,
+  };
+}
+
+// ============================================================================
+// ALLOCATION + DATA QUALITY (ISO 14044 4.3.4, 4.2.3.6)
+// ============================================================================
+
+/**
+ * Effective allocation share per component: its own share times every
+ * ancestor's, so a share set on a machine line applies to each process under
+ * it. Missing or invalid shares count as 1 (no allocation).
+ */
+export function effectiveAllocation(
+  rows: Array<{
+    component_id: number;
+    parent_component_id?: number | null;
+    allocation_factor?: unknown;
+  }>,
+): Map<number, number> {
+  const own = new Map<number, number>();
+  const parent = new Map<number, number | null>();
+  for (const r of rows) {
+    const f = Number(r.allocation_factor);
+    own.set(r.component_id, Number.isFinite(f) && f > 0 && f <= 1 ? f : 1);
+    parent.set(r.component_id, r.parent_component_id ?? null);
+  }
+  const memo = new Map<number, number>();
+  const resolve = (id: number, depth: number): number => {
+    const known = memo.get(id);
+    if (known !== undefined) return known;
+    const p = parent.get(id);
+    // Depth guard: a corrupt parent cycle must not hang a run.
+    const up = p != null && own.has(p) && depth < 64 ? resolve(p, depth + 1) : 1;
+    const eff = (own.get(id) ?? 1) * up;
+    memo.set(id, eff);
+    return eff;
+  };
+  for (const id of own.keys()) resolve(id, 0);
+  return memo;
+}
+
+/** Scale a component's impacts and contributions to its allocated share. */
+export function applyAllocation(result: ComponentImpactResult, share: number): void {
+  for (const impact of result.impacts) impact.impact_value *= share;
+  for (const c of result.flow_contributions) {
+    c.impact_contribution *= share;
+    c.allocation_factor = share;
+  }
+  result.allocation_factor = share;
+}
+
+const SOURCE_TIERS: SourceTier[] = ['authoritative', 'industry_average', 'unverified', 'unknown'];
+const TIER_PHRASE: Record<SourceTier, string> = {
+  authoritative: 'authoritative sources (published LCIA methods and official datasets such as TRACI, CML, IPCC, eGRID)',
+  industry_average: 'industry-average factors',
+  unverified: 'unverified legacy factors',
+  unknown: 'factors with no recorded source',
+};
+
+/**
+ * Data-quality statement for a run (ISO 14044 4.2.3.6): where the factors
+ * come from, how geographically representative they are, and what was
+ * converted, excluded, left uncharacterized or allocated. Pure: built from the
+ * engine's own contributions, so every line traces to the flow table.
+ */
+export function summarizeDataQuality(
+  componentResults: ComponentImpactResult[],
+  opts: {
+    region?: string;
+    uncharacterized?: Array<{ substance_name: string; component_name?: string }>;
+  } = {},
+): DataQualitySummary {
+  const zero = (): Record<SourceTier, number> => ({
+    authoritative: 0,
+    industry_average: 0,
+    unverified: 0,
+    unknown: 0,
+  });
+  const by_tier = zero();
+  const gwMagnitude = zero();
+  const region = opts.region && opts.region.trim() ? opts.region.trim() : 'Global';
+  const regional = region.toLowerCase() !== 'global';
+  let contributions = 0;
+  let regional_fallbacks = 0;
+  let unit_conversions = 0;
+
+  for (const r of componentResults) {
+    for (const c of r.flow_contributions) {
+      contributions++;
+      const tier = c.source_tier ?? classifyFactorSource(c.factor_source);
+      by_tier[tier]++;
+      if (/global warming|climate change/i.test(c.category_name)) {
+        // Magnitude, so a credit (negative contribution) cannot push a share past 100%.
+        gwMagnitude[tier] += Math.abs(c.impact_contribution);
+      }
+      if (regional && (c.geographic_scope ?? 'Global').toLowerCase() === 'global') {
+        regional_fallbacks++;
+      }
+      if (c.unit_conversion) unit_conversions++;
+    }
+  }
+
+  const gwTotal = SOURCE_TIERS.reduce((s, t) => s + gwMagnitude[t], 0);
+  const gw_share_by_tier = zero();
+  for (const t of SOURCE_TIERS) gw_share_by_tier[t] = gwTotal > 0 ? gwMagnitude[t] / gwTotal : 0;
+  const excluded_flows = componentResults.reduce((s, r) => s + (r.excluded_flows ?? 0), 0);
+  const allocated = componentResults.filter((r) => (r.allocation_factor ?? 1) < 1);
+  const unchar = opts.uncharacterized ?? [];
+  const uncharNames = [...new Set(unchar.map((u) => u.substance_name))];
+
+  const pct = (x: number) => (x > 0 && x < 0.01 ? '<1%' : `${Math.round(x * 100)}%`);
+  const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+  const listed = (names: string[], max: number) =>
+    names.slice(0, max).join(', ') + (names.length > max ? ` and ${names.length - max} more` : '');
+
+  const statement: string[] = [
+    'Quantities are case data, entered by hand or extracted from the case documents. Every factor is secondary data; the flow table lists its source per row.',
+  ];
+  if (contributions === 0) {
+    statement.push('No flow was characterized, so there is nothing to grade yet.');
+  } else if (gwTotal > 0) {
+    const parts = SOURCE_TIERS.filter((t) => gwMagnitude[t] > 0).map(
+      (t) => `${pct(gw_share_by_tier[t])} on ${TIER_PHRASE[t]}`,
+    );
+    statement.push(`The Global Warming result rests ${parts.join(', ')}.`);
+  } else {
+    const parts = SOURCE_TIERS.filter((t) => by_tier[t] > 0).map(
+      (t) => `${by_tier[t]} on ${TIER_PHRASE[t]}`,
+    );
+    statement.push(`Of ${contributions} contributions, ${parts.join(', ')}.`);
+  }
+  if (contributions > 0) {
+    if (!regional) {
+      statement.push('All factors are Global averages (no region selected).');
+    } else if (regional_fallbacks > 0) {
+      statement.push(
+        `${regional_fallbacks} of ${contributions} contributions use a Global factor because no ${region} factor exists, so geographic representativeness is limited for them.`,
+      );
+    } else {
+      statement.push(`Every contribution uses a ${region} factor.`);
+    }
+  }
+  if (unit_conversions > 0) {
+    statement.push(
+      `${unit_conversions} ${plural(unit_conversions, 'quantity was', 'quantities were')} converted to the factor's unit; the flow table shows each conversion.`,
+    );
+  }
+  if (excluded_flows > 0) {
+    statement.push(
+      `${excluded_flows} flow-category ${plural(excluded_flows, 'pair was', 'pairs were')} left out because the unit could not be converted (see warnings).`,
+    );
+  }
+  if (unchar.length > 0) {
+    statement.push(
+      `${unchar.length} ${plural(unchar.length, 'flow has', 'flows have')} no factor in this method and add nothing to the result: ${listed(uncharNames, 5)}.`,
+    );
+  }
+  statement.push(
+    allocated.length > 0
+      ? `Allocation (ISO 14044 4.3.4) applied to ${allocated.length} ${plural(allocated.length, 'process', 'processes')}: ${listed(
+          allocated.map((r) => `${r.component_name} ${pct(r.allocation_factor ?? 1)}`),
+          5,
+        )}.`
+      : 'No allocation applied: every process is treated as making only this product.',
+  );
+
+  return {
+    contributions,
+    by_tier,
+    gw_share_by_tier,
+    regional_fallbacks,
+    unit_conversions,
+    excluded_flows,
+    allocated_components: allocated.length,
+    uncharacterized_flows: unchar.length,
+    uncharacterized_examples: uncharNames.slice(0, 10),
+    statement,
   };
 }
 

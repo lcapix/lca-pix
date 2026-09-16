@@ -9,10 +9,15 @@
  * database until /api/ingest/apply receives the (possibly edited) plan back.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db-helpers';
-import { requireAuth } from '@/lib/auth';
+import { query, queryOne } from '@/lib/db-helpers';
+import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { structureItac, listPlantIds } from '@/lib/ingest/itac';
+import { isBomHeader, structureBom } from '@/lib/ingest/bom';
+import { isRoutingHeader, structureRouting } from '@/lib/ingest/routing';
+import { isEquipmentHeader, structureEquipment, type CaseStep } from '@/lib/ingest/equipment';
 import { mapModel, type CatalogSubstance } from '@/lib/ingest/maplca';
+import { readSheet, workbookText, type SheetRead } from '@/lib/ingest/sheet-reader';
+import type { ProcessModel } from '@/lib/ingest/schema';
 
 export const runtime = 'nodejs';
 // The real ITAC workbook is ~16MB; parsing takes a few seconds.
@@ -20,7 +25,7 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
 
     const form = await request.formData();
     const file = form.get('file');
@@ -30,53 +35,209 @@ export async function POST(request: NextRequest) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
-    if (connector !== 'itac') {
-      return NextResponse.json(
-        { error: `Unknown connector '${connector}'. Available: itac (DOE ITAC workbook).` },
-        { status: 400 }
-      );
-    }
-    if (!plantId) {
-      return NextResponse.json(
-        { error: 'plant_id is required (an ITAC assessment ID, e.g. WV0661)' },
-        { status: 400 }
-      );
-    }
-
-    // Extract: read the ASSESS sheet. sheet_to_json keys rows by header row,
-    // matching what the proven Python pipeline saw through pandas.
-    const XLSX = await import('xlsx');
-    const buf = Buffer.from(await file.arrayBuffer());
-    const wb = XLSX.read(buf, { type: 'buffer' });
-    const assess = wb.Sheets['ASSESS'];
-    if (!assess) {
-      return NextResponse.json(
-        { error: `No ASSESS sheet found. Sheets present: ${wb.SheetNames.join(', ')}` },
-        { status: 400 }
-      );
-    }
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(assess);
-
-    // Structure: deterministic connector.
-    let pm;
-    try {
-      pm = structureItac(rows, plantId, file.name);
-    } catch {
-      const ids = listPlantIds(rows, plantId);
+    const STRUCTURED = ['itac', 'bom', 'equipment'];
+    const LLM_HINTS = ['sds', 'epd', 'routing'];
+    if (![...STRUCTURED, ...LLM_HINTS].includes(connector)) {
       return NextResponse.json(
         {
-          error: `Assessment '${plantId}' not found in ${file.name}.`,
-          matching_ids: ids.sample,
-          matching_count: ids.total,
+          error: `Unknown connector '${connector}'. Available: itac (DOE ITAC workbook), ` +
+            `bom (bill-of-materials CSV/XLSX), equipment (machine list CSV/XLSX), ` +
+            `routing (CSV/XLSX, or PDF via the AI path), sds / epd (AI-structured PDF/HTML/text).`,
         },
-        { status: 404 }
+        { status: 400 }
       );
+    }
+
+    const buf = Buffer.from(await file.arrayBuffer());
+    let pm: ProcessModel | undefined;
+    const lotSizeRaw = Number(form.get('lot_size'));
+    const lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : null;
+
+    // 'routing' is dual-mode: a spreadsheet routing is parsed deterministically;
+    // a PDF/text traveler goes through the LLM path below.
+    const isSpreadsheet = /\.(csv|xlsx?|tsv)$/i.test(file.name);
+
+    if ((connector === 'bom' || connector === 'routing') && isSpreadsheet) {
+      // Locate the table wherever it is (any sheet, header on any of the first
+      // rows, cleaned headers), then run the deterministic connector on it.
+      let read: SheetRead | null = null;
+      try {
+        read = readSheet(buf, file.name, connector === 'bom' ? isBomHeader : isRoutingHeader);
+      } catch (e: any) {
+        return NextResponse.json(
+          { error: `Could not open ${file.name} as a spreadsheet (${e?.message ?? 'unreadable file'}).` },
+          { status: 400 }
+        );
+      }
+      if (read) {
+        pm =
+          connector === 'bom'
+            ? structureBom(read.rows, file.name, plantId || undefined, {
+                massHints: read.massHints,
+                decimalComma: read.decimalComma,
+              })
+            : structureRouting(read.rows, file.name, plantId || undefined, {
+                lotSize,
+                timeHints: read.timeHints,
+                decimalComma: read.decimalComma,
+              });
+        pm.notes.unshift(...read.notes);
+      }
+      // Nothing recognisable: read the sheet text with the AI path instead of
+      // returning an empty plan. Same step checks, same human review.
+      const found =
+        !!pm &&
+        (connector === 'routing'
+          ? pm.nodes.some((n) => n.tier === 'operation')
+          : pm.flows.length > 0 || pm.notes.some((n) => /has no mass/.test(n)));
+      if (!found) {
+        try {
+          const { structureWithLLM } = await import('@/lib/ingest/llm-structure');
+          const aiPm = await structureWithLLM(workbookText(buf, file.name), connector, file.name);
+          aiPm.notes.unshift(
+            'The columns were not recognised, so this spreadsheet was read by the AI path. Check every line before applying.',
+          );
+          pm = aiPm;
+        } catch (e: any) {
+          if (!pm) {
+            return NextResponse.json(
+              {
+                error: `No ${connector === 'bom' ? 'bill-of-materials' : 'routing'} table found in ${file.name} (no recognisable column headers), and the AI fallback failed: ${e?.message}`,
+              },
+              { status: 400 }
+            );
+          }
+          pm.notes.push(`The AI fallback was not available: ${e?.message}`);
+        }
+      }
+    } else if (connector === 'itac') {
+      // The ITAC workbook has a fixed layout: the ASSESS sheet.
+      const XLSX = await import('xlsx');
+      let wb;
+      try {
+        wb = XLSX.read(buf, { type: 'buffer' });
+      } catch (e: any) {
+        return NextResponse.json(
+          { error: `Could not open ${file.name} as a workbook (${e?.message ?? 'unreadable file'}).` },
+          { status: 400 }
+        );
+      }
+      {
+        if (!plantId) {
+          return NextResponse.json(
+            { error: 'plant_id is required (an ITAC assessment ID, e.g. WV0661)' },
+            { status: 400 }
+          );
+        }
+        const assess = wb.Sheets['ASSESS'];
+        if (!assess) {
+          return NextResponse.json(
+            { error: `No ASSESS sheet found. Sheets present: ${wb.SheetNames.join(', ')}` },
+            { status: 400 }
+          );
+        }
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(assess);
+        try {
+          pm = structureItac(rows, plantId, file.name);
+        } catch {
+          const ids = listPlantIds(rows, plantId);
+          return NextResponse.json(
+            {
+              error: `Assessment '${plantId}' not found in ${file.name}.`,
+              matching_ids: ids.sample,
+              matching_count: ids.total,
+            },
+            { status: 404 }
+          );
+        }
+      }
+    } else if (connector === 'equipment') {
+      // An equipment list adds energy to the steps of an EXISTING case, joined
+      // on the work center and using the hours the routing gave each step.
+      const targetCaseId = Number(form.get('target_case_id'));
+      if (!targetCaseId) {
+        return NextResponse.json(
+          { error: 'An equipment list adds energy to the steps of an existing case: choose that case first.' },
+          { status: 400 }
+        );
+      }
+      const caseRow = await queryOne<any>(`SELECT project_id FROM case_table WHERE case_id = ?`, [targetCaseId]);
+      if (!caseRow) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
+      if (!(await checkProjectAccess(userId, caseRow.project_id, 'editor'))) {
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+      }
+      const comps = await query<any>(
+        `SELECT c.component_id, c.component_name, c.component_type, c.description, c.labor_hours,
+                c.parent_component_id, p.component_name AS parent_name
+           FROM component c
+           LEFT JOIN component p ON p.component_id = c.parent_component_id
+          WHERE c.case_id = ?`,
+        [targetCaseId]
+      );
+      const steps: CaseStep[] = (comps as any[])
+        .filter((c) => c.component_type === 'operation' || c.component_type === 'elemental_task')
+        .map((c) => ({
+          id: Number(c.component_id),
+          name: String(c.component_name),
+          // The routing wrote "Work center: X" on the step; else its parent group.
+          workCenter:
+            String(c.description ?? '').match(/Work center:\s*([^;\[\]]+)/i)?.[1]?.trim() ||
+            c.parent_name ||
+            null,
+          hoursPerUnit: c.labor_hours != null ? Number(c.labor_hours) : null,
+        }));
+      let read: SheetRead | null = null;
+      try {
+        read = readSheet(buf, file.name, isEquipmentHeader);
+      } catch (e: any) {
+        return NextResponse.json(
+          { error: `Could not open ${file.name} as a spreadsheet (${e?.message ?? 'unreadable file'}).` },
+          { status: 400 }
+        );
+      }
+      if (!read) {
+        return NextResponse.json(
+          { error: `No equipment table found in ${file.name}: it needs a work center column and a rated power column.` },
+          { status: 400 }
+        );
+      }
+      pm = structureEquipment(read.rows, file.name, {
+        productName: (comps as any[]).find((c) => !c.parent_component_id)?.component_name ?? 'Product',
+        steps,
+        powerHints: read.powerHints,
+        decimalComma: read.decimalComma,
+      });
+      pm.notes.unshift(...read.notes);
+    } else {
+      // LLM-structured connectors (sds / epd / routing): extract text → model.
+      const { extractDocText } = await import('@/lib/ingest/extract-text');
+      const { structureWithLLM } = await import('@/lib/ingest/llm-structure');
+      let text = '';
+      try {
+        ({ text } = await extractDocText(buf, file.name));
+      } catch (e: any) {
+        return NextResponse.json(
+          { error: `Could not read text from ${file.name} (${e?.message ?? 'unreadable file'}).` },
+          { status: 400 }
+        );
+      }
+      if (!text || text.trim().length < 40) {
+        return NextResponse.json(
+          { error: 'Could not extract readable text (a scanned PDF may need OCR).' },
+          { status: 400 }
+        );
+      }
+      try {
+        pm = await structureWithLLM(text, connector as 'sds' | 'epd' | 'routing', file.name);
+      } catch (e: any) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
+      }
     }
 
     // Map against the live catalog, factor coverage included so the review
     // screen can warn about zero-factor matches before anything is created.
     const substances = await query<any>(
-      `SELECT s.substance_id, s.substance_name, s.unit,
+      `SELECT s.substance_id, s.substance_name, s.unit, s.category,
               COALESCE(fc.factor_count, 0) AS factor_count
        FROM substances s
        LEFT JOIN (
@@ -86,6 +247,9 @@ export async function POST(request: NextRequest) {
          GROUP BY substance_id
        ) fc ON fc.substance_id = s.substance_id`
     );
+    if (!pm) {
+      return NextResponse.json({ error: 'Nothing could be read from this document.' }, { status: 400 });
+    }
     const plan = mapModel(pm, substances as CatalogSubstance[]);
 
     return NextResponse.json({ success: true, connector, plant_id: plantId, plan });

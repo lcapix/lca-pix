@@ -22,6 +22,14 @@ export interface InsightFacts {
   total?: { value: number; unit: string };
   totalCost?: number;
   contributors: InsightContributor[];
+  /** The same result grouped by material (one material can span several steps). */
+  materials?: InsightContributor[];
+  /** Consultant read: levers triggered by this case (title, why, concrete moves). */
+  levers?: Array<{ title: string; why: string; moves: string[] }>;
+  /** Share of total cost by kind (purchased material, labor, energy, other). */
+  costSplit?: Array<{ name: string; pct: number }>;
+  /** Per step: share of total cost next to share of the active category. */
+  stepCosts?: Array<{ name: string; costPct: number; impactPct: number }>;
   mode: 'summary' | 'reduce' | 'tradeoff' | 'base' | 'custom';
   reducePct?: number;
   question?: string;            // free-text question in 'custom' mode
@@ -29,9 +37,12 @@ export interface InsightFacts {
 }
 
 const SYSTEM = [
-  'You are a life-cycle assessment (LCA) analyst embedded in a professional',
-  'LCA tool. You explain assessment results to a sustainability engineer who',
-  'will defend them to a committee.',
+  'You are a senior sustainability consultant reviewing a manufacturer\'s',
+  'life-cycle assessment inside an LCA tool. You have read their process steps,',
+  'materials and energy flows. You advise the way a consultant would after',
+  'walking the shop floor: which material or step to act on first, and the',
+  'concrete move (use less, use recycled or lower-carbon grades, substitute,',
+  'ask the supplier for an EPD, change the energy supply or how a machine runs).',
   '',
   'HARD RULES:',
   '1. Use ONLY the figures provided in the FACTS block. Never invent, estimate,',
@@ -42,35 +53,40 @@ const SYSTEM = [
   '3. Do not claim a specific characterization factor, emission value, or source',
   '   unless it appears in the FACTS.',
   '4. Be concise: at most ~140 words, plain prose, no markdown headings.',
-  '5. Ground every recommendation in the contributor shares given: the biggest',
-  '   lever is the highest-share contributor — NAME it with its exact share/value.',
-  '6. Be SPECIFIC, never generic. Name the actual component and number, and a',
-  '   concrete lever (substitute the material, switch the energy source, cut',
-  '   consumption on that step). Do not fill space with LCA platitudes like',
-  '   "consider reducing energy use" — say which figure moves and by how much.',
-  '   Never restate the same point twice.',
+  '5. Ground every recommendation in the shares given. When a "By material" list',
+  '   is given, the biggest lever is its highest-share material (a material can',
+  '   span several steps); otherwise the highest-share contributor. NAME it with',
+  '   its exact share/value.',
+  '6. Be SPECIFIC, never generic. Name the material, step or flow and the',
+  '   concrete move. Build on the "Consultant read" levers when given, in their',
+  '   order; do not invent levers the facts do not support. Do not do arithmetic',
+  '   and do not estimate savings: a what-if is proven by running a copy of the',
+  '   case. No platitudes like "consider reducing energy use". Never repeat a point.',
   '7. Each mode must read differently and lead with different figures — a summary,',
   '   a reduction plan, a cost trade-off, and a base comparison are not the same.',
 ].join('\n');
 
 const MODE_TASK: Record<InsightFacts['mode'], string> = {
   summary:
-    'Give a 3-4 sentence executive summary of this assessment: the total, the ' +
-    'single biggest contributor and its share, and what that concentration means ' +
-    'for where to focus.',
+    'Give a short consultant readout: the total, the material (or step) that ' +
+    'drives it with its share, then the two or three moves you would make first ' +
+    'and why, drawn from the Consultant read.',
   reduce:
     'Explain how to reduce the active category. Target the highest-share ' +
     'contributor first; if the requested reduction exceeds what the top ' +
     'contributor can deliver, say so honestly and explain what scope change ' +
     'would be required.',
   tradeoff:
-    'Discuss the cost-vs-impact trade-off using the contributor shares and the ' +
-    'total cost. Identify where an impact cut is likely "cheap" vs "expensive" ' +
-    'in dollar terms, and how to find the best dollars-per-unit-impact moves.',
+    'Set cost against impact using only the cost split and the per-step cost and ' +
+    'impact shares given. Say where they sit together and where they part (labor ' +
+    'carries cost but no flows in an LCA), then name the move that changes the ' +
+    'impact and whether it is a purchasing or a process decision. If no cost facts ' +
+    'are given, say the case has no costs yet.',
   base:
-    'Explain what to look for when comparing this case against its base ' +
-    'scenario: which components are most likely to drive the delta, and the ' +
-    'kind of cost/impact trade-off the comparison view will surface.',
+    'Explain how to compare copies of this case in Compare Cases, which lists what ' +
+    'each copy changes and shows impact and cost side by side: keep the functional unit, method and region ' +
+    'the same, change one thing per copy, run each copy, and name the material and ' +
+    'steps whose rows will move, with their shares.',
   custom: 'Answer the user question below using only the FACTS.',
 };
 
@@ -106,6 +122,29 @@ export function buildInsightMessages(facts: InsightFacts): {
     }
   } else {
     factLines.push('Contributors: none available (assessment may not be run yet).');
+  }
+  if (facts.levers?.length) {
+    factLines.push('Consultant read (levers this case triggers; prioritise and explain these, do not invent others):');
+    for (const l of facts.levers) {
+      factLines.push(`  - ${l.title}: ${l.why}`);
+      for (const m of l.moves) factLines.push(`      * ${m}`);
+    }
+  }
+  if (facts.costSplit?.length) {
+    factLines.push('Cost split (share of total cost):');
+    for (const c of facts.costSplit) factLines.push(`  - ${c.name}: ${c.pct.toFixed(1)}%`);
+  }
+  if (facts.stepCosts?.length) {
+    factLines.push('Steps (share of total cost, share of the active category):');
+    for (const st of facts.stepCosts) {
+      factLines.push(`  - ${st.name}: cost ${st.costPct.toFixed(1)}%, impact ${st.impactPct.toFixed(1)}%`);
+    }
+  }
+  if (facts.materials?.length) {
+    factLines.push('By material (share of active category, absolute value; a material can span several steps):');
+    for (const m of facts.materials) {
+      factLines.push(`  - ${m.name}: ${m.pct.toFixed(1)}% (${m.value} ${facts.total?.unit ?? ''})`.trimEnd());
+    }
   }
 
   const task = MODE_TASK[facts.mode];

@@ -21,10 +21,15 @@ type Family = 'mass' | 'energy' | 'volume' | 'transport' | 'time' | 'area' | 'co
 const UNITS: Record<string, { canonical: string; family: Family; toBase: number }> = {
   // mass → kg
   kg:   { canonical: 'kg',  family: 'mass', toBase: 1 },
+  kilogram:  { canonical: 'kg', family: 'mass', toBase: 1 },
+  kilograms: { canonical: 'kg', family: 'mass', toBase: 1 },
   g:    { canonical: 'g',   family: 'mass', toBase: 0.001 },
+  gram: { canonical: 'g',   family: 'mass', toBase: 0.001 },
+  grams:{ canonical: 'g',   family: 'mass', toBase: 0.001 },
   mg:   { canonical: 'mg',  family: 'mass', toBase: 1e-6 },
   t:    { canonical: 't',   family: 'mass', toBase: 1000 },
   tonne:{ canonical: 't',   family: 'mass', toBase: 1000 },
+  tonnes:{ canonical: 't',  family: 'mass', toBase: 1000 },
   lb:   { canonical: 'lb',  family: 'mass', toBase: 0.45359237 },
   lbs:  { canonical: 'lb',  family: 'mass', toBase: 0.45359237 },
   oz:   { canonical: 'oz',  family: 'mass', toBase: 0.028349523125 },
@@ -66,6 +71,12 @@ const UNITS: Record<string, { canonical: string; family: Family; toBase: number 
   pcs:  { canonical: 'units', family: 'count', toBase: 1 },
   piece:{ canonical: 'units', family: 'count', toBase: 1 },
 };
+
+/** The unit's family (mass, energy, volume, transport, time, area, count), or null if unknown. */
+export function unitFamily(raw: string | null | undefined): Family | null {
+  if (!raw) return null;
+  return UNITS[raw.trim().toLowerCase()]?.family ?? null;
+}
 
 export function normalizeUnit(raw: string | null | undefined): string | null {
   if (!raw) return null;

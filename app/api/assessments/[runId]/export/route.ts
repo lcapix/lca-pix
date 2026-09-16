@@ -13,6 +13,19 @@ import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
 import { generateAssessmentPPTX } from '@/lib/pptx-generator';
+import { parseRunSnapshot } from '@/lib/run-snapshot';
+
+// "EPA eGRID 2023 US national average (0.350 kg CO2e/kWh) [EGRID-2023]; added by
+// audit 2026-09-09" → "EPA eGRID 2023 US national average": the citation a
+// reader needs, once each, in a stable order.
+function shortSources(raw: string[]): string[] {
+  const seen = new Set<string>()
+  for (const r of raw) {
+    const short = String(r ?? '').split(/\s\(|\s\[|;/)[0].trim()
+    if (short) seen.add(short)
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b))
+}
 
 export async function GET(
   request: NextRequest,
@@ -113,13 +126,19 @@ export async function GET(
     // the export.
     let factorSources: any[] = [];
     try {
+      // Only the factors this case's own flows can use under this run's
+      // method. Joining on category alone listed every source in the whole
+      // factor library (hundreds of lines on one slide).
       factorSources = await query<any>(
         `SELECT DISTINCT dif.source_reference
-           FROM assessment_results ar
-           JOIN driver_impact_factors dif ON dif.category_id = ar.category_id
-          WHERE ar.run_id = ?
-            AND dif.geographic_scope IN (?, 'global', 'Global')
-            AND dif.source_reference IS NOT NULL`,
+           FROM flows f
+           JOIN component c ON c.component_id = f.component_id
+           JOIN assessment_runs r ON r.case_id = c.case_id AND r.run_id = ?
+           JOIN driver_impact_factors dif
+             ON dif.substance_id = f.substance_id AND dif.method_name = r.calculation_method
+          WHERE dif.geographic_scope IN (?, 'global', 'Global')
+            AND dif.source_reference IS NOT NULL
+            AND dif.factor_value <> 0`,
         [runId, regionCode],
       );
     } catch {
@@ -137,8 +156,15 @@ export async function GET(
       costSources = [];
     }
 
+    // Goal & scope and the data-quality statement as frozen with the run, so
+    // the report states what the result is per and how far to trust it
+    // (ISO 14044 clause 5 reporting).
+    const snapshot = parseRunSnapshot(assessment.run_snapshot);
+
     // 7. Build report data
     const reportData: ReportData = {
+      goal_scope: snapshot?.goal_scope ?? null,
+      data_quality: snapshot?.data_quality ?? null,
       project: {
         project_id: assessment.project_id,
         project_name: assessment.project_name,
@@ -172,7 +198,11 @@ export async function GET(
       dataSources: {
         valuation_method: methodName,
         region_code: regionCode,
-        impact_factor_sources: (factorSources as any[]).map(r => r.source_reference).filter(Boolean),
+        impact_factor_sources: shortSources(
+          snapshot?.flow_detail?.length
+            ? snapshot.flow_detail.map((f) => f.source ?? '')
+            : (factorSources as any[]).map((r) => r.source_reference),
+        ),
         cost_rate_sources: (costSources as any[]).map(r => r.source).filter(Boolean),
       },
     };

@@ -11,6 +11,8 @@
  */
 
 import PDFDocument from 'pdfkit';
+import type { GoalScope } from './run-snapshot';
+import type { DataQualitySummary } from './lca-engine';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -71,6 +73,34 @@ export interface ReportData {
     impact_factor_sources: string[];  // unique source_reference values
     cost_rate_sources: string[];      // unique cost_rates.source values
   };
+  /** ISO 14044 goal & scope frozen with the run (4.2); null for runs made before it was stored. */
+  goal_scope?: GoalScope | null;
+  /** Data-quality statement frozen with the run (ISO 14044 4.2.3.6). */
+  data_quality?: DataQualitySummary | null;
+}
+
+export const BOUNDARY_LABEL: Record<string, string> = {
+  'cradle-to-gate': 'Cradle-to-gate (raw materials to factory gate)',
+  'gate-to-gate': 'Gate-to-gate (steps inside the plant)',
+  'cradle-to-grave': 'Cradle-to-grave (including use and end of life)',
+};
+
+/** Label/value rows for the report's goal & scope block (PDF and PPTX share it). */
+export function goalScopeRows(gs: GoalScope | null | undefined): [string, string][] {
+  if (!gs) {
+    return [
+      ['Goal & scope', 'Not recorded for this run (made before goal & scope was stored). Re-run to record it.'],
+    ];
+  }
+  const unit = gs.reference_flow_unit || 'unit';
+  return [
+    ['Functional unit', gs.functional_unit || 'Not set when this run was made'],
+    ['Reference flow', `${gs.reference_flow} ${unit}`],
+    ['Data basis', `${gs.modeled_output} ${unit} (the amount the entered data produce)`],
+    ['System boundary', BOUNDARY_LABEL[gs.system_boundary] ?? gs.system_boundary],
+    ['Exclusions & cut-off', gs.boundary_notes || 'None stated'],
+    ['Goal', gs.goal_statement || 'None stated'],
+  ];
 }
 
 // ============================================================================
@@ -184,7 +214,11 @@ function drawCoverPage(doc: PDFKit.PDFDocument, data: ReportData) {
   doc.text('CASE', 70, y);
   y += 18;
   doc.font('Helvetica').fontSize(14).fillColor(COLORS.text);
-  doc.text(`${data.case_info.case_name} (${data.case_info.case_type})`, 70, y);
+  doc.text(`${data.case_info.case_name} (${data.case_info.case_type})`, 70, y, {
+    width: 455,
+    height: 18,
+    ellipsis: true,
+  });
 
   // Assessment metadata
   y = 480;
@@ -201,7 +235,7 @@ function drawCoverPage(doc: PDFKit.PDFDocument, data: ReportData) {
     doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.textLight);
     doc.text(label.toUpperCase(), 70, y, { continued: false });
     doc.font('Helvetica').fontSize(10).fillColor(COLORS.text);
-    doc.text(value, 200, y);
+    doc.text(value, 200, y, { width: 325, height: 14, ellipsis: true });
     y += 18;
   }
 
@@ -228,7 +262,7 @@ function drawTableOfContents(doc: PDFKit.PDFDocument) {
     ['3', 'Impact Assessment Results', '5'],
     ['4', 'Component Contribution Breakdown', '6'],
     ['5', 'Environmental Flows Detail', '7'],
-    ['6', 'Data Sources', '8'],
+    ['6', 'Data Sources & Data Quality', '8'],
   ];
 
   let y = 120;
@@ -236,7 +270,7 @@ function drawTableOfContents(doc: PDFKit.PDFDocument) {
     doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.primary);
     doc.text(num + '.', 70, y, { width: 30 });
     doc.font('Helvetica').fontSize(12).fillColor(COLORS.text);
-    doc.text(title, 100, y, { width: 350 });
+    doc.text(title, 100, y, { width: 350, lineBreak: false, ellipsis: true });
     doc.font('Helvetica').fontSize(12).fillColor(COLORS.textLight);
     doc.text(page, 480, y, { width: 50, align: 'right' });
     y += 30;
@@ -280,6 +314,13 @@ function drawProjectOverview(doc: PDFKit.PDFDocument, data: ReportData) {
   ];
 
   y = drawInfoTable(doc, stats, y);
+
+  // Goal & scope the run was computed under (ISO 14044 4.2, reported per 5.2).
+  y += 30;
+  doc.font('Helvetica-Bold').fontSize(13).fillColor(COLORS.primary);
+  doc.text('Goal & Scope (ISO 14044 4.2)', 50, y);
+  y += 25;
+  drawWrappedInfoTable(doc, goalScopeRows(data.goal_scope), y);
 }
 
 // ============================================================================
@@ -292,8 +333,8 @@ function drawProcessHierarchy(doc: PDFKit.PDFDocument, data: ReportData) {
   let y = 120;
   doc.font('Helvetica').fontSize(10).fillColor(COLORS.textLight);
   doc.text(
-    'The process hierarchy below shows the 5-tier structure of the assessed product system, ' +
-    'from the top-level product down to elemental tasks.',
+    'The process tree of the assessed product system, from the product down to its ' +
+    'operations (unit processes) and any tasks under them.',
     50, y, { width: 495 }
   );
   y += 35;
@@ -303,7 +344,7 @@ function drawProcessHierarchy(doc: PDFKit.PDFDocument, data: ReportData) {
     machine_line: 'Machine/Line',
     subprocess: 'Subprocess',
     operation: 'Operation',
-    elemental_task: 'Elemental Task',
+    elemental_task: 'Task',
   };
 
   const typeColors: Record<string, string> = {
@@ -338,16 +379,16 @@ function drawProcessHierarchy(doc: PDFKit.PDFDocument, data: ReportData) {
 
     // Component name
     doc.font('Helvetica-Bold').fontSize(10).fillColor(color);
-    doc.text(comp.component_name, 70 + indent, y, { width: 250 });
+    doc.text(comp.component_name, 70 + indent, y, { width: 250, lineBreak: false, ellipsis: true });
 
     // Type badge
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.textLight);
-    doc.text(`[${label}]`, 350, y + 1, { width: 100 });
+    doc.text(`[${label}]`, 350, y + 1, { width: 100, lineBreak: false, ellipsis: true });
 
     // Quantity
     if (comp.quantity) {
       doc.font('Helvetica').fontSize(9).fillColor(COLORS.text);
-      doc.text(`${comp.quantity} ${comp.unit || ''}`, 450, y + 1, { width: 100 });
+      doc.text(`${comp.quantity} ${comp.unit || ''}`, 450, y + 1, { width: 100, lineBreak: false, ellipsis: true });
     }
 
     y += 22;
@@ -361,14 +402,24 @@ function drawProcessHierarchy(doc: PDFKit.PDFDocument, data: ReportData) {
 function drawImpactSummary(doc: PDFKit.PDFDocument, data: ReportData) {
   drawSectionHeader(doc, '3. Impact Assessment Results', 50);
 
+  // Results per functional unit (ISO 14044 4.3.3.2) when the case models a
+  // different amount of product than one functional unit needs.
+  const scale = data.goal_scope?.per_fu_scale ?? 1;
+  const perFu = scale !== 1;
+
   let y = 120;
   doc.font('Helvetica').fontSize(10).fillColor(COLORS.textLight);
   doc.text(
     'Total environmental impacts aggregated across all components in the product system. ' +
-    'Values represent the sum of all characterization factor calculations.',
+    'Values represent the sum of all characterization factor calculations.' +
+    (perFu
+      ? ' Per functional unit = case total x reference flow / data basis (ISO 14044 4.3.3.2).'
+      : data.goal_scope
+        ? ' The case totals are already per functional unit (reference flow equals the data basis).'
+        : ''),
     50, y, { width: 495 }
   );
-  y += 35;
+  y += perFu || data.goal_scope ? 50 : 35;
 
   if (data.total_impacts.length === 0) {
     doc.font('Helvetica').fontSize(11).fillColor(COLORS.textLight);
@@ -377,14 +428,16 @@ function drawImpactSummary(doc: PDFKit.PDFDocument, data: ReportData) {
   }
 
   // Table header
-  const colWidths = [220, 150, 125];
-  const headers = ['Impact Category', 'Value', 'Unit'];
+  const colWidths = perFu ? [180, 110, 120, 85] : [220, 150, 125];
+  const headers = perFu
+    ? ['Impact Category', 'Case total', 'Per functional unit', 'Unit']
+    : ['Impact Category', 'Value', 'Unit'];
 
   doc.rect(50, y, 495, 25).fill(COLORS.primary);
   doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.white);
   let x = 60;
   headers.forEach((header, i) => {
-    doc.text(header, x, y + 7, { width: colWidths[i] });
+    doc.text(header, x, y + 7, { width: colWidths[i], lineBreak: false, ellipsis: true });
     x += colWidths[i];
   });
   y += 25;
@@ -402,16 +455,23 @@ function drawImpactSummary(doc: PDFKit.PDFDocument, data: ReportData) {
     doc.rect(50, y, 495, 22).fill(bg);
 
     doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.text);
-    doc.text(impact.category_name, 60, y + 6, { width: colWidths[0] });
+    doc.text(impact.category_name, 60, y + 6, { width: colWidths[0], lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(9).fillColor(COLORS.text);
     const value = typeof impact.total_value === 'number'
       ? impact.total_value.toFixed(6)
       : String(impact.total_value);
-    doc.text(value, 60 + colWidths[0], y + 6, { width: colWidths[1] });
+    doc.text(value, 60 + colWidths[0], y + 6, { width: colWidths[1], lineBreak: false, ellipsis: true });
+    let unitX = 60 + colWidths[0] + colWidths[1];
+    if (perFu) {
+      doc.text((Number(impact.total_value) * scale).toPrecision(4), unitX, y + 6, {
+        width: colWidths[2],
+      });
+      unitX += colWidths[2];
+    }
 
     doc.font('Helvetica').fontSize(9).fillColor(COLORS.textLight);
-    doc.text(impact.unit, 60 + colWidths[0] + colWidths[1], y + 6, { width: colWidths[2] });
+    doc.text(impact.unit, unitX, y + 6, { width: colWidths[colWidths.length - 1], lineBreak: false, ellipsis: true });
 
     y += 22;
   });
@@ -453,7 +513,7 @@ function drawComponentBreakdown(doc: PDFKit.PDFDocument, data: ReportData) {
   doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.white);
   let x = 60;
   headers.forEach((header, i) => {
-    doc.text(header, x, y + 7, { width: colWidths[i] });
+    doc.text(header, x, y + 7, { width: colWidths[i], lineBreak: false, ellipsis: true });
     x += colWidths[i];
   });
   y += 25;
@@ -468,18 +528,18 @@ function drawComponentBreakdown(doc: PDFKit.PDFDocument, data: ReportData) {
     doc.rect(50, y, 495, 20).fill(bg);
 
     doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.text);
-    doc.text(result.component_name, 60, y + 5, { width: colWidths[0] - 10 });
+    doc.text(result.component_name, 60, y + 5, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.text);
-    doc.text(result.category_name, 60 + colWidths[0], y + 5, { width: colWidths[1] - 10 });
+    doc.text(result.category_name, 60 + colWidths[0], y + 5, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
 
     const val = typeof result.impact_value === 'number'
       ? result.impact_value.toFixed(6)
       : parseFloat(result.impact_value as string).toFixed(6);
-    doc.text(val, 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2] - 10 });
+    doc.text(val, 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2] - 10, lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.textLight);
-    doc.text(result.unit, 60 + colWidths[0] + colWidths[1] + colWidths[2], y + 5, { width: colWidths[3] });
+    doc.text(result.unit, 60 + colWidths[0] + colWidths[1] + colWidths[2], y + 5, { width: colWidths[3], lineBreak: false, ellipsis: true });
 
     y += 20;
   });
@@ -514,7 +574,7 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData) {
   doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.white);
   let x = 60;
   headers.forEach((header, i) => {
-    doc.text(header, x, y + 7, { width: colWidths[i] });
+    doc.text(header, x, y + 7, { width: colWidths[i], lineBreak: false, ellipsis: true });
     x += colWidths[i];
   });
   y += 25;
@@ -529,21 +589,21 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData) {
     doc.rect(50, y, 495, 20).fill(bg);
 
     doc.font('Helvetica-Bold').fontSize(8).fillColor(COLORS.text);
-    doc.text(flow.component_name, 60, y + 5, { width: colWidths[0] - 10 });
+    doc.text(flow.component_name, 60, y + 5, { width: colWidths[0] - 10, lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.text);
-    doc.text(flow.substance_name, 60 + colWidths[0], y + 5, { width: colWidths[1] - 10 });
+    doc.text(flow.substance_name, 60 + colWidths[0], y + 5, { width: colWidths[1] - 10, lineBreak: false, ellipsis: true });
 
     const dirColor = flow.direction === 'input' ? COLORS.blue : COLORS.red;
     doc.font('Helvetica-Bold').fontSize(8).fillColor(dirColor);
-    doc.text(flow.direction.toUpperCase(), 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2] });
+    doc.text(flow.direction.toUpperCase(), 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2], lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.text);
     const amount = typeof flow.amount === 'number' ? flow.amount.toFixed(4) : flow.amount;
-    doc.text(String(amount), 60 + colWidths[0] + colWidths[1] + colWidths[2], y + 5, { width: colWidths[3] });
+    doc.text(String(amount), 60 + colWidths[0] + colWidths[1] + colWidths[2], y + 5, { width: colWidths[3], lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.textLight);
-    doc.text(flow.unit, 60 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y + 5, { width: colWidths[4] });
+    doc.text(flow.unit, 60 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y + 5, { width: colWidths[4], lineBreak: false, ellipsis: true });
 
     y += 20;
   });
@@ -552,6 +612,31 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData) {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/** Info table whose rows grow to fit long values (goal statements, notes). */
+function drawWrappedInfoTable(
+  doc: PDFKit.PDFDocument,
+  rows: [string, string][],
+  startY: number,
+): number {
+  let y = startY;
+  rows.forEach(([label, value], index) => {
+    doc.font('Helvetica').fontSize(9);
+    const h = Math.max(22, doc.heightOfString(value, { width: 315 }) + 12);
+    if (y + h > 740) {
+      doc.addPage();
+      y = 50;
+    }
+    const bg = index % 2 === 0 ? COLORS.lightGray : COLORS.white;
+    doc.rect(50, y, 495, h).fill(bg);
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.textLight);
+    doc.text(label, 60, y + 6, { width: 160 });
+    doc.font('Helvetica').fontSize(9).fillColor(COLORS.text);
+    doc.text(value, 220, y + 6, { width: 315 });
+    y += h;
+  });
+  return y;
+}
 
 function drawSectionHeader(doc: PDFKit.PDFDocument, title: string, y: number) {
   doc.rect(0, y - 10, 595.28, 45).fill(COLORS.headerBg);
@@ -611,7 +696,7 @@ function drawImpactBarChart(
 
     // Value
     doc.font('Helvetica').fontSize(7).fillColor(COLORS.text);
-    doc.text(impact.total_value.toFixed(4), 185 + barWidth * 0.75 + 5, y + 5, { width: 100 });
+    doc.text(impact.total_value.toFixed(4), 185 + barWidth * 0.75 + 5, y + 5, { width: 100, lineBreak: false, ellipsis: true });
 
     y += barHeight + 8;
   });
@@ -625,7 +710,7 @@ function drawDataSources(doc: PDFKit.PDFDocument, data: ReportData) {
   if (!data.dataSources) return;
 
   doc.addPage();
-  drawSectionHeader(doc, '6. Data Sources', 50);
+  drawSectionHeader(doc, '6. Data Sources & Data Quality', 50);
 
   let y = 120;
   doc.font('Helvetica').fontSize(10).fillColor(COLORS.textLight);
@@ -677,6 +762,24 @@ function drawDataSources(doc: PDFKit.PDFDocument, data: ReportData) {
       doc.text(src, 70, y, { width: 470 });
       y += 14;
     }
+  }
+
+  // Data-quality statement frozen with the run (ISO 14044 4.2.3.6).
+  y += 15;
+  if (y > 680) { doc.addPage(); y = 50; }
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.primary);
+  doc.text('Data quality statement (ISO 14044 4.2.3.6)', 50, y);
+  y += 18;
+  const dqLines = data.data_quality?.statement ?? [
+    'Not recorded for this run (made before the data-quality statement was stored). Re-run to record it.',
+  ];
+  doc.font('Helvetica').fontSize(9);
+  for (const line of dqLines) {
+    const h = doc.heightOfString(line, { width: 470 });
+    if (y + h > 740) { doc.addPage(); y = 50; }
+    doc.circle(60, y + 4, 1.5).fill(COLORS.text);
+    doc.fillColor(COLORS.text).text(line, 70, y, { width: 470 });
+    y += h + 4;
   }
 }
 

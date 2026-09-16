@@ -5,7 +5,7 @@
 // Business logic (fetch / save / delete / create / run-assessment) is
 // preserved from the prior implementation.
 
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -19,6 +19,7 @@ import {
   componentsToTree,
   flattenTree,
   normalizeType,
+  rollupTree,
   type ComponentLike,
 } from '@/lib/case-tree-adapter'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
@@ -32,6 +33,16 @@ import {
   type InspectorEditFormData,
 } from '@/components/lcapix/case'
 import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
+import {
+  GoalScopeCard,
+  type GoalScopeSummary,
+} from '@/components/lcapix/case/goal-scope-card'
+import { PhaseStepper } from '@/components/lcapix/case/phase-stepper'
+import { ScaleDialog, type PendingScale } from '@/components/lcapix/case/scale-dialog'
+import { CaseNameDialog } from '@/components/lcapix/case/case-name-dialog'
+import { ISO_HELP } from '@/components/lcapix/iso-help'
+import { journeyPhases } from '@/lib/case-journey'
+import { LAYER_LABEL, type CaseLayer } from '@/lib/ingest/doc-types'
 
 // A typed 0 is a real cost ("this operation costs nothing"), distinct from an
 // empty field (unknown). `x || null` collapsed both to null, and the component
@@ -83,6 +94,9 @@ export default function CaseViewPage() {
   // Bumped when the component-create/edit modal reports a change, forcing the
   // fetch effect below to re-run so new nodes appear without a full reload.
   const [refreshKey, setRefreshKey] = useState(0)
+  // Duplicate asks for the copy's name before creating it.
+  const [dupOpen, setDupOpen] = useState(false)
+  const [dupBusy, setDupBusy] = useState(false)
   useEffect(() => {
     const handler = () => setRefreshKey((k) => k + 1)
     window.addEventListener('lcapix:components-changed', handler)
@@ -108,6 +122,73 @@ export default function CaseViewPage() {
     }
   }, [projectId])
 
+  // ---------- Case completeness (which layers present / missing) ----------
+  // Drives the "what to add next" strip and gates Run Assessment. Re-fetched on
+  // refreshKey so it tracks live edits (add a flow → strip and gate update).
+  type CompletenessReport = {
+    present: string[]
+    missing: Array<{ layer: string; label: string; suggestedDocs: string[] }>
+    score: number
+  }
+  const [completeness, setCompleteness] = useState<CompletenessReport | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/cases/${caseId}/completeness`)
+        const d = await r.json()
+        if (!cancelled && d?.success) setCompleteness(d.report ?? null)
+      } catch {
+        // completeness is advisory; a failure just hides the strip
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [caseId, refreshKey])
+
+  // A case can be assessed only if it has at least one impact-bearing flow
+  // layer (materials / energy / emissions / transport). Skeleton + costs alone
+  // characterize to nothing, so a run would return a misleading 0. This is the
+  // honest gate; tightening it to require specific layers (e.g. block until
+  // energy is present too) is a product decision — change IMPACT_LAYERS.
+  const IMPACT_LAYERS = ['materials', 'energy', 'emissions', 'transport']
+  const inventoryReady =
+    !completeness || completeness.present.some((l) => IMPACT_LAYERS.includes(l))
+
+  // ISO 14044 goal & scope (4.2.3.2): a run needs a functional unit, because a
+  // result that is not "per" anything cannot be interpreted or compared. The
+  // Goal & scope card reports what is saved; until it loads nothing is blocked.
+  const [goalScope, setGoalScope] = useState<GoalScopeSummary | null>(null)
+  const [goalOpenSignal, setGoalOpenSignal] = useState(0)
+  const fuMissing = !!goalScope && !goalScope.functionalUnit.trim()
+  const canRun = inventoryReady && !fuMissing
+
+  // Has this case been assessed yet? Moves the journey phase in the status panel
+  // from Inventory to Interpretation. Re-checked on refreshKey.
+  const [hasAssessment, setHasAssessment] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/cases/${caseId}/assessments`)
+        const d = await r.json()
+        // A run that produced no results (nothing to characterize) does not
+        // count as assessed.
+        const runs = (d?.assessments ?? []).filter(
+          (a: any) =>
+            (!a.status || a.status === 'completed') && Object.keys(a.impacts ?? {}).length > 0,
+        )
+        if (!cancelled) setHasAssessment(runs.length > 0)
+      } catch {
+        /* advisory — panel falls back to the Inventory phase */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [caseId, refreshKey])
+
   // ---------- UI state ----------
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [canvasView, setCanvasView] = useState<CanvasView>('Tree')
@@ -118,6 +199,10 @@ export default function CaseViewPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [editFormData, setEditFormData] = useState<EditFormData>({})
+  // A change to the product's quantity waits here until the user says what it
+  // means (scale the inputs, or the data already covers that many units).
+  const [pendingScale, setPendingScale] = useState<(PendingScale & { fd: EditFormData }) | null>(null)
+  const skipScaleCheck = useRef(false)
 
   // ---------- Fetch on mount (unchanged logic) ----------
   useEffect(() => {
@@ -213,23 +298,27 @@ export default function CaseViewPage() {
     [components, selectedNode],
   )
 
+  // Subtree totals per node — parents are pure sums (terminating-node model).
+  // Drives the Σ values in the detail strip and tells the inspector which
+  // selected nodes are roll-ups (no flow/cost editing of their own).
+  const rollups = useMemo(() => rollupTree(tree), [tree])
+  const selectedRollup = selectedNode ? rollups.get(selectedNode) ?? null : null
+
   // Candidate re-parent targets for the inspector. A node may be moved under
-  // any node of the tier DIRECTLY ABOVE its own (no level skipping — e.g. an
-  // Operation can only sit under a Subprocess, never directly under a Product),
-  // across any branch of the tree, or made independent. Self + descendants are
-  // excluded to prevent cycles.
+  // any COARSER node (levels may be skipped — an Operation can sit directly
+  // under a Product), across any branch of the tree, or made independent.
+  // Self + descendants are excluded to prevent cycles.
   const parentOptions = useMemo(() => {
     if (!selectedComponent) return []
-    // DB type -> required parent DB type (one tier up).
-    const REQUIRED_PARENT_DB: Record<string, string | null> = {
-      product: null,
-      machine_line: 'product',
-      subprocess: 'machine_line',
-      operation: 'subprocess',
-      elemental_task: 'operation',
+    const RANK_DB: Record<string, number> = {
+      product: 1,
+      machine_line: 2,
+      subprocess: 3,
+      operation: 4,
+      elemental_task: 5,
     }
-    const requiredParentDb = REQUIRED_PARENT_DB[selectedComponent.type as string]
-    if (!requiredParentDb) return []
+    const ownRank = RANK_DB[selectedComponent.type as string]
+    if (!ownRank || ownRank === 1) return []
 
     const descendants = new Set<string>()
     const stack = [selectedComponent.id]
@@ -247,7 +336,7 @@ export default function CaseViewPage() {
         (c) =>
           c.id !== selectedComponent.id &&
           !descendants.has(c.id) &&
-          (c.type as string) === requiredParentDb,
+          (RANK_DB[c.type as string] ?? 99) < ownRank,
       )
       .map((c) => {
         const tdef = HIERARCHY_TYPES.find(
@@ -271,6 +360,8 @@ export default function CaseViewPage() {
       capitalCostUSD: c.capitalCostUSD ?? undefined,
       parentId: c.parentId || undefined,
       laborCost: (c as any).laborCost ?? undefined,
+      laborHours: (c as any).laborHours ?? undefined,
+      laborOccupation: (c as any).laborOccupation ?? undefined,
       energyCost: (c as any).energyCost ?? undefined,
       transportationCost: (c as any).transportationCost ?? undefined,
       materialCost: (c as any).materialCost ?? undefined,
@@ -278,6 +369,9 @@ export default function CaseViewPage() {
       overheadCost: (c as any).overheadCost ?? undefined,
       currency: (c as any).currency || 'USD',
       costAllocationType: (c as any).costAllocationType ?? undefined,
+      allocationMethod: c.allocationMethod ?? 'none',
+      allocationFactor: c.allocationFactor ?? 1,
+      allocationNote: c.allocationNote ?? undefined,
     })
     setIsEditing(true)
     setIsCreating(false)
@@ -302,31 +396,34 @@ export default function CaseViewPage() {
   const [isRunning, setIsRunning] = useState(false)
   const handleRunAssessment = async () => {
     if (isRunning) return
+    if (!canRun) {
+      toast.error(
+        fuMissing
+          ? 'Set the functional unit first (Goal & scope), so the result is per something.'
+          : 'Nothing to assess yet — add at least one input or emission (materials, energy, or a direct output). A case with no flows would return 0.',
+      )
+      if (fuMissing) setGoalOpenSignal((s) => s + 1)
+      return
+    }
     setIsRunning(true)
     try {
       // Honor the same per-case method/region memory the run modal writes —
       // a quick-run that silently switched a US case back to Global made the
       // latest run non-comparable with its own history (live-caught: run 119).
+      // Nothing remembered: the server uses the study's scope (the project's
+      // method, the case's region).
       let remembered: { method?: string; region?: string } = {}
       try {
         remembered = JSON.parse(localStorage.getItem(`lcapix-run-prefs:${caseId}`) || '{}')
       } catch { /* corrupt prefs are ignorable */ }
-      const calcMethod = remembered.method || 'CML 2001'
-      const regionCode = remembered.region || 'Global'
       const res = await apiRequest(`/api/cases/${caseId}/assessments`, {
         method: 'POST',
         body: JSON.stringify({
           run_name: 'Assessment',
-          calculation_method: calcMethod,
-          region_code: regionCode,
+          ...(remembered.method ? { calculation_method: remembered.method } : {}),
+          ...(remembered.region ? { region_code: remembered.region } : {}),
         }),
       })
-      try {
-        localStorage.setItem(
-          `lcapix-run-prefs:${caseId}`,
-          JSON.stringify({ method: calcMethod, region: regionCode }),
-        )
-      } catch { /* storage may be unavailable; prefs are a convenience */ }
       if (!res.ok) {
         const msg = await res.text().catch(() => res.statusText)
         throw new Error(msg || `Assessment failed (${res.status})`)
@@ -377,6 +474,34 @@ export default function CaseViewPage() {
     router.push(`/project/${projectId}/case/${caseId}/component/new${query}`)
   }
 
+  // ---------- Rescale (product quantity changed, user chose what it means) ----------
+  const applyScale = async (mode: 'scale-inputs' | 'data-covers') => {
+    if (!pendingScale) return
+    const { from, to, fd } = pendingScale
+    setPendingScale(null)
+    try {
+      const r = await apiRequest(`/api/cases/${caseId}/scale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to, mode }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j?.error || 'Could not rescale the case')
+      toast.success(
+        mode === 'scale-inputs'
+          ? `Scaled ${j.flows_scaled ?? 0} inputs/outputs and every per-unit cost ×${Number((to / from).toPrecision(3))} to ${to} units`
+          : `Kept the inputs as entered; they now count as ${to} units`,
+      )
+      // Save the rest of the edited fields; the quantity is already set.
+      skipScaleCheck.current = true
+      await handleSaveComponent({ ...fd, mass: to })
+      window.dispatchEvent(new Event('lcapix:flows-changed'))
+      setRefreshKey((k) => k + 1)
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not rescale the case')
+    }
+  }
+
   // ---------- Save (preserved) ----------
   // Accepts an optional override merged over the current form state, so callers
   // (e.g. the cost "Apply" affordance) can apply-and-save in one action without
@@ -391,6 +516,29 @@ export default function CaseViewPage() {
       toast.error('Component name is required')
       return
     }
+    if (fd.processType !== COMPONENT_TYPES.PRODUCT && !fd.parentId) {
+      toast.error('Every step needs a parent. Pick one under Placement (only the product has none).')
+      return
+    }
+    if (
+      (fd.allocationMethod === 'physical' || fd.allocationMethod === 'economic') &&
+      !(Number(fd.allocationFactor) > 0 && Number(fd.allocationFactor) <= 1)
+    ) {
+      toast.error('Enter the share (0.1 to 100%) that belongs to this product, or set allocation to None')
+      return
+    }
+
+    // Changing the product's quantity rescales the case: ask first.
+    const current = components.find((c) => c.id === selectedNode)
+    if (isEditing && current?.type === COMPONENT_TYPES.PRODUCT && !skipScaleCheck.current) {
+      const from = Number(current.mass ?? 1) || 1
+      const to = Number(fd.mass ?? from)
+      if (to > 0 && to !== from) {
+        setPendingScale({ from, to, fd })
+        return
+      }
+    }
+    skipScaleCheck.current = false
 
     try {
       if (isEditing && selectedNode) {
@@ -413,6 +561,8 @@ export default function CaseViewPage() {
           opex: costOrNull(fd.operationalCostUSD),
           capex: costOrNull(fd.capitalCostUSD),
           labor_cost: costOrNull(fd.laborCost),
+          labor_hours: fd.laborHours ?? null,
+          labor_occupation: fd.laborOccupation || null,
           energy_cost: costOrNull(fd.energyCost),
           transportation_cost: costOrNull(fd.transportationCost),
           material_cost: costOrNull(fd.materialCost),
@@ -420,6 +570,10 @@ export default function CaseViewPage() {
           overhead_cost: costOrNull(fd.overheadCost),
           currency: fd.currency || 'USD',
           cost_allocation_type: fd.costAllocationType || 'manual',
+          allocation_method: fd.allocationMethod ?? null,
+          allocation_factor:
+            fd.allocationMethod === 'none' ? 1 : fd.allocationFactor ?? null,
+          allocation_note: fd.allocationNote ?? null,
         }
 
         const response = await apiRequest(`/api/components/${selectedNode}`, {
@@ -433,7 +587,13 @@ export default function CaseViewPage() {
         const componentsResponse = await apiRequest(`/api/cases/${caseId}/components`)
         const componentsData = await componentsResponse.json()
         if (componentsData.success && componentsData.components) {
-          setComponents(componentsData.components.map(transformComponentFromDB))
+          const transformed = componentsData.components.map(transformComponentFromDB)
+          setComponents(transformed)
+          // Re-fill the panel from what was just saved. It used to be cleared
+          // (setEditFormData({}) below), so every field went blank after Save
+          // and only came back when the step was selected again.
+          const saved = transformed.find((c: any) => String(c.id) === String(selectedNode))
+          if (saved) loadFormFor(saved)
         }
         toast.success('Component updated successfully')
       } else if (isCreating) {
@@ -485,15 +645,16 @@ export default function CaseViewPage() {
           const transformed = componentsData.components.map(transformComponentFromDB)
           setComponents(transformed)
           if (result.component?.component_id) {
-            setSelectedNode(String(result.component.component_id))
+            const newId = String(result.component.component_id)
+            setSelectedNode(newId)
+            const made = transformed.find((c: any) => String(c.id) === newId)
+            if (made) loadFormFor(made)
           }
         }
         toast.success('Component created successfully')
       }
 
-      setIsEditing(false)
       setIsCreating(false)
-      setEditFormData({})
     } catch (error: any) {
       console.error('Error saving component:', error)
       toast.error(error.message || 'Failed to save component')
@@ -721,32 +882,8 @@ export default function CaseViewPage() {
         <button
           className="btn btn-secondary btn-sm"
           type="button"
-          title="Deep-copy this case (tree, flows, costs) as a comparative what-if"
-          onClick={async () => {
-            try {
-              const r = await fetch(`/api/cases/${caseId}/duplicate`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(localStorage.getItem('auth_token')
-                    ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-                    : {}),
-                },
-                body: JSON.stringify({}),
-              })
-              const j = await r.json().catch(() => null)
-              if (r.ok && j?.case_id) {
-                toast.success(
-                  `Duplicated as "${j.case_name}" — ${j.components_copied} components, ${j.flows_copied} flows`,
-                )
-                router.push(`/project/${projectId}/case/${j.case_id}`)
-              } else {
-                toast.error(j?.error || 'Could not duplicate case')
-              }
-            } catch {
-              toast.error('Could not duplicate case')
-            }
-          }}
+          title="Copy this case (tree, flows, costs) as a what-if with one change"
+          onClick={() => setDupOpen(true)}
         >
           <Icon name="layers" size={14} /> Duplicate
         </button>
@@ -754,11 +891,234 @@ export default function CaseViewPage() {
           className="btn btn-primary btn-sm"
           type="button"
           onClick={handleRunAssessment}
-          disabled={isRunning}
+          disabled={isRunning || !canRun}
+          title={
+            fuMissing
+              ? 'Set the functional unit (Goal & scope) before running'
+              : !canRun
+                ? 'Add at least one input or emission before running'
+                : undefined
+          }
         >
           <Icon name="run" size={14} /> {isRunning ? 'Running…' : 'Run Assessment'}
         </button>
       </div>
+
+      {/* Status panel — the "where am I / what's blocking me / what's next"
+          orientation for a classroom user. Journey phase stepper + a plain
+          headline (blocked / ready / assessed) + the single next action + the
+          missing-layer checklist. Run is still gated on canRun. */}
+      {completeness &&
+        (() => {
+          // Phases reflect the data actually in the case: a run on half an
+          // inventory shows Impact as partial, never a free tick.
+          const phases = journeyPhases({
+            fuSet: goalScope ? !fuMissing : null,
+            present: completeness.present,
+            hasAssessment,
+          })
+          const partialRun = phases.find((p) => p.label === 'Impact')?.state === 'partial'
+          const addedLabels = completeness.present.map(
+            (l) => LAYER_LABEL[l as CaseLayer] ?? l,
+          )
+          const firstMissing = completeness.missing[0]
+          const status: 'blocked' | 'ready' | 'assessed' = !canRun
+            ? 'blocked'
+            : !hasAssessment
+              ? 'ready'
+              : 'assessed'
+          const accent =
+            status === 'blocked'
+              ? '#c0392b'
+              : status === 'assessed'
+                ? 'var(--accent, #4f8a6a)'
+                : 'var(--signal-info, #2563eb)'
+          const primary =
+            status === 'blocked' && fuMissing
+              ? {
+                  label: 'Set functional unit',
+                  run: false,
+                  onClick: () => setGoalOpenSignal((s) => s + 1),
+                }
+              : status === 'blocked'
+              ? {
+                  label: 'Add material inputs',
+                  run: false,
+                  onClick: () => router.push(`/project/${projectId}/import`),
+                }
+              : status === 'ready'
+                ? { label: 'Run assessment', run: true, onClick: handleRunAssessment }
+                : {
+                    label: 'View results',
+                    run: false,
+                    onClick: () =>
+                      router.push(`/project/${projectId}/case/${caseId}/results`),
+                  }
+          const missingPhrase = firstMissing
+            ? `${firstMissing.label}${
+                firstMissing.suggestedDocs[0]
+                  ? ` (from a ${firstMissing.suggestedDocs[0]})`
+                  : ' (enter it by hand on the step that uses it)'
+              }`
+            : null
+          return (
+            <div
+              className="card"
+              style={{ margin: '0 0 12px', padding: '12px 16px', borderLeft: `3px solid ${accent}` }}
+            >
+              {/* Phase stepper — restores the 5-phase orientation from project setup */}
+              <div style={{ marginBottom: 10 }}>
+                <PhaseStepper phases={phases} accent={accent} />
+              </div>
+              {/* Headline + what's blocking + the next action */}
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>
+                    {status === 'blocked'
+                      ? fuMissing
+                        ? 'Blocked — functional unit not set'
+                        : 'Blocked — nothing to assess yet'
+                      : status === 'ready'
+                        ? 'Ready to run'
+                        : partialRun
+                          ? 'Assessed on partial data'
+                          : 'Assessed'}{' '}
+                    <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}>
+                      · Data added: {addedLabels.length ? addedLabels.join(', ') : 'nothing yet'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    {status === 'blocked' && fuMissing ? (
+                      <>
+                        Every result is reported per functional unit (for example per bike, or per
+                        1,000 km of riding). Next: set it in Goal &amp; scope below.
+                      </>
+                    ) : status === 'blocked' ? (
+                      <>
+                        This case has no inputs or emissions, so an assessment would be 0.
+                        Next: add a material or energy input to a process step.
+                      </>
+                    ) : status === 'ready' ? (
+                      missingPhrase ? (
+                        <>
+                          You can run now (partial). To make it complete, next add{' '}
+                          <strong>{missingPhrase}</strong>.
+                        </>
+                      ) : (
+                        <>All the data is in. Next: run the assessment.</>
+                      )
+                    ) : missingPhrase ? (
+                      <>
+                        Results are in. To improve accuracy, add <strong>{missingPhrase}</strong>{' '}
+                        and re-run. Otherwise, interpret your results.
+                      </>
+                    ) : (
+                      <>Results are in and all the data is in. Next: interpret them.</>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={primary.onClick}
+                  disabled={primary.run && isRunning}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {primary.run && isRunning ? 'Running…' : primary.label} →
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => router.push(`/project/${projectId}/import`)}
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  <Icon name="file" size={13} /> Add a document
+                </button>
+              </div>
+              {/* Full missing checklist: goal & scope first, then inventory layers */}
+              {(fuMissing || completeness.missing.length > 0) && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {fuMissing && (
+                    <span className="chip" style={{ fontSize: 10.5 }}>
+                      To add: Functional unit → Goal &amp; scope
+                    </span>
+                  )}
+                  {completeness.missing.map((m) => (
+                    <span
+                      key={m.layer}
+                      className="chip"
+                      title={
+                        m.suggestedDocs.length
+                          ? `Comes from: ${m.suggestedDocs.join(' or ')}`
+                          : 'No document type for this yet: enter it by hand on the step that uses it.'
+                      }
+                      style={{ fontSize: 10.5 }}
+                    >
+                      To add: {m.label}
+                      {m.suggestedDocs.length ? ` → ${m.suggestedDocs[0]}` : ' (by hand)'}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+      <CaseNameDialog
+        open={dupOpen}
+        title="Duplicate this case"
+        initialName={`${currentCase.name} (copy)`}
+        confirmLabel="Duplicate"
+        help={ISO_HELP.caseCopyName}
+        busy={dupBusy}
+        onCancel={() => setDupOpen(false)}
+        onSubmit={async (name) => {
+          setDupBusy(true)
+          try {
+            const r = await fetch(`/api/cases/${caseId}/duplicate`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(localStorage.getItem('auth_token')
+                  ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
+                  : {}),
+              },
+              body: JSON.stringify({ case_name: name }),
+            })
+            const j = await r.json().catch(() => null)
+            if (r.ok && j?.case_id) {
+              toast.success(`Created "${j.case_name}": ${j.components_copied} nodes and ${j.flows_copied} flows copied`)
+              setDupOpen(false)
+              router.push(`/project/${projectId}/case/${j.case_id}`)
+            } else {
+              toast.error(j?.error || 'Could not duplicate case')
+            }
+          } catch {
+            toast.error('Could not duplicate case')
+          } finally {
+            setDupBusy(false)
+          }
+        }}
+      />
+
+      <ScaleDialog
+        pending={pendingScale}
+        unit={components.find((c) => c.type === COMPONENT_TYPES.PRODUCT)?.massUnit}
+        onChoose={applyScale}
+        onCancel={() => {
+          // Put the field back to the saved quantity so nothing looks changed.
+          if (pendingScale) setEditFormData((f) => ({ ...f, mass: pendingScale.from }))
+          setPendingScale(null)
+        }}
+      />
+
+      <GoalScopeCard
+        key={`goal-scope-${refreshKey}`}
+        projectId={projectId}
+        caseId={caseId}
+        openSignal={goalOpenSignal}
+        onChange={setGoalScope}
+      />
 
       {/* 3-pane */}
       <div
@@ -974,6 +1334,8 @@ export default function CaseViewPage() {
           <NodeDetailsStrip
             node={selectedFlatNode}
             totalComponents={components.length}
+            rolled={selectedRollup}
+            hasChildren={!!selectedRollup?.hasChildren}
           />
         </section>
 
@@ -1012,6 +1374,8 @@ export default function CaseViewPage() {
               onSave={selectedComponent ? () => handleSaveComponent() : undefined}
               onDelete={selectedComponent ? handleDeleteSelected : undefined}
               parentOptions={parentOptions}
+              hasChildren={!!selectedRollup?.hasChildren}
+              rolled={selectedRollup}
               onApplyCosts={
                 selectedComponent
                   ? (patch) => {

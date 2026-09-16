@@ -98,61 +98,16 @@ export async function POST(
       idMap.set(c.component_id, newId);
     }
 
-    // Also clone the latest completed assessment + its results so the comp
-    // case appears in Compare Cases / Analytics with real numbers. Scale
-    // values by 0.72 to simulate an improvement scenario (-28%).
-    const SCENARIO_SCALE = 0.72;
-    let clonedRunId: number | null = null;
-    try {
-      const latestRun = await queryOne<any>(
-        `SELECT * FROM assessment_runs
-          WHERE case_id = ? AND status = 'completed'
-          ORDER BY run_date DESC LIMIT 1`,
-        [sourceCaseId],
-      );
-      if (latestRun) {
-        clonedRunId = await insert(
-          `INSERT INTO assessment_runs
-           (case_id, run_name, calculation_method, status, executed_by, run_date)
-           VALUES (?, ?, ?, 'completed', ?, NOW())`,
-          [
-            targetCaseId,
-            `${latestRun.run_name ?? 'Cloned run'} (scenario)`,
-            latestRun.calculation_method ?? 'CML 2001',
-            userId,
-          ],
-        );
-        const srcResults = await query<any>(
-          `SELECT * FROM assessment_results WHERE run_id = ?`,
-          [latestRun.run_id],
-        );
-        for (const r of srcResults) {
-          const newComponentId =
-            r.component_id != null ? idMap.get(r.component_id) ?? null : null;
-          if (newComponentId == null) continue;
-          await insert(
-            `INSERT INTO assessment_results
-             (run_id, component_id, category_id, impact_value, unit, contribution_percentage)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-              clonedRunId,
-              newComponentId,
-              r.category_id,
-              Number(r.impact_value) * SCENARIO_SCALE,
-              r.unit,
-              r.contribution_percentage,
-            ],
-          );
-        }
-      }
-    } catch (e) {
-      console.warn('Assessment clone skipped:', (e as Error)?.message);
-    }
+    // A cloned case has NO results until someone runs it. This used to copy
+    // the source case's latest run and multiply every impact by 0.72 "to
+    // simulate an improvement scenario", which put numbers on screen that no
+    // calculation produced. A comparative case must earn its result from its
+    // own flows (change something, then run).
 
     return NextResponse.json({
       success: true,
       cloned: idMap.size,
-      clonedRunId,
+      clonedRunId: null,
     });
   } catch (error: any) {
     if (

@@ -33,6 +33,11 @@ import {
 import { useNotificationsStore } from '@/lib/notifications-store'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
 import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
+import { HelpTip } from '@/components/lcapix/help-tip'
+import { ISO_HELP, impactCategoryHelp } from '@/components/lcapix/iso-help'
+import { IsoRunSummary } from '@/components/lcapix/results/iso-run-summary'
+import type { GoalScope } from '@/lib/run-snapshot'
+import type { DataQualitySummary } from '@/lib/lca-engine'
 
 // Impact categories supported (preserved from prior page for unit lookup).
 const IMPACT_CATEGORIES: Record<string, { unit: string }> = {
@@ -71,6 +76,12 @@ interface FlowDetailRow {
   scope?: string
   /** Unit conversion the engine applied (e.g. "1 g = 0.001 kg") — snapshot runs only. */
   conversion?: string | null
+  /** Provenance tier of the factor (authoritative / industry_average / unverified / unknown). */
+  source_tier?: string | null
+  /** The factor's cited source. */
+  source?: string | null
+  /** Allocation share applied to this row, when < 1. */
+  allocation?: number | null
 }
 
 interface AssessmentResult {
@@ -87,9 +98,23 @@ interface AssessmentResult {
   algorithmSteps?: string[]
   /** Engine data-quality warnings frozen in the run snapshot. */
   warnings?: string[]
+  /** Region the run was computed with (canonical code, e.g. 'US'). */
+  regionCode?: string
+  /** Goal & scope frozen with the run (ISO 14044 4.2); null for older runs. */
+  goalScope?: GoalScope | null
+  /** Data-quality statement frozen with the run (ISO 14044 4.2.3.6). */
+  dataQuality?: DataQualitySummary | null
 }
 
 type FilterDir = 'all' | 'in' | 'out'
+
+// Provenance tier of a factor, as shown on hover in the flow table.
+const TIER_LABEL: Record<string, string> = {
+  authoritative: 'authoritative published source',
+  industry_average: 'industry average',
+  unverified: 'unverified legacy value',
+  unknown: 'no source recorded',
+}
 
 export default function ResultsPage() {
   const params = useParams()
@@ -120,6 +145,15 @@ export default function ResultsPage() {
   const [method, setMethod] = useState('CML 2001')
   const [region, setRegion] = useState('US Grid')
   const [flowFilter, setFlowFilter] = useState<FilterDir>('all')
+  // The pickers start at the displayed run's method and region, so "Re-run"
+  // repeats that run instead of silently switching to CML 2001 / US.
+  const latestRun = currentAssessment || assessmentResults[0]
+  useEffect(() => {
+    if (!latestRun) return
+    if (latestRun.calculation_method) setMethod(latestRun.calculation_method)
+    const rc = latestRun.regionCode
+    if (rc) setRegion(rc === 'US' ? 'US Grid' : rc === 'EU' ? 'EU Average' : rc)
+  }, [latestRun?.calculation_method, latestRun?.regionCode])
 
   // Fetch case + components (PRESERVED)
   useEffect(() => {
@@ -195,6 +229,9 @@ export default function ResultsPage() {
                 componentBreakdown: assessment.componentBreakdown || [],
                 flowDetail: assessment.flowDetail || [],
                 warnings: assessment.warnings || [],
+                regionCode: assessment.region_code ?? undefined,
+                goalScope: assessment.goal_scope ?? null,
+                dataQuality: assessment.data_quality ?? null,
               }),
             )
             setAssessmentResults(transformedAssessments)
@@ -257,6 +294,9 @@ export default function ResultsPage() {
       flowDetail: data.flowDetail || [],
       warnings: data.warnings || [],
       algorithmSteps: data.algorithm_steps || [],
+      regionCode: data.assessment?.region_code ?? undefined,
+      goalScope: data.goal_scope ?? null,
+      dataQuality: data.data_quality ?? null,
     }
   }
 
@@ -468,7 +508,13 @@ export default function ResultsPage() {
       impact: f.impact,
       scope: f.scope,
       conversion: f.conversion,
+      sourceTier: f.source_tier ?? null,
+      source: f.source ?? null,
+      allocation: f.allocation ?? null,
     }))
+  // The region the displayed run was computed with (not the selector, which
+  // only sets the next run), so "Global (fallback)" describes that run.
+  const runRegion = mostRecentAssessment?.regionCode ?? region
 
   // Historical runs — real if at least two with active-category values, else DEMO.
   const realRuns: RunTimelineRun[] = activeCat
@@ -504,6 +550,24 @@ export default function ResultsPage() {
 
   // KPIs — real component + category counts, plus optional run duration.
   const allComponents = currentCase.components || []
+  // Real case cost = the component cost columns (what the case-page Cost summary
+  // shows). The assessment RUN has no cost fields, so mostRecentAssessment.costs
+  // is always zero — feeding THAT to Magic Insights made it report "no costs"
+  // even when the case clearly has them. Sum the real component columns instead.
+  const numCost = (v: any) => Number(v ?? 0) || 0
+  const realCaseCost = allComponents.reduce(
+    (s: number, c: any) =>
+      s +
+      numCost(c.laborCost) +
+      numCost(c.energyCost) +
+      numCost(c.materialCost) +
+      numCost(c.overheadCost) +
+      numCost(c.equipmentCost) +
+      numCost(c.transportationCost) +
+      numCost(c.operationalCostUSD) +
+      numCost(c.capitalCostUSD),
+    0,
+  )
   const runDuration = mostRecentAssessment
     ? '—'
     : '—'
@@ -647,6 +711,13 @@ export default function ResultsPage() {
               <option value="ReCiPe Midpoint (H)">ReCiPe Midpoint (H)</option>
               <option value="TRACI 2.1">TRACI 2.1</option>
             </select>
+            <HelpTip label="What is an impact-assessment method?">
+              The method is the set of characterization factors that turns each input and
+              output into impact scores. CML 2001 (Leiden University) is common in Europe;
+              TRACI 2.1 is the US EPA method; ReCiPe Midpoint (H) uses the default
+              &quot;hierarchist&quot; perspective. Results from different methods cannot be
+              added or compared, so keep one method for every case you compare.
+            </HelpTip>
           </label>
 
           {/* Region selector */}
@@ -690,6 +761,7 @@ export default function ResultsPage() {
               <option value="EU Average">EU Average</option>
               <option value="Global">Global</option>
             </select>
+            <HelpTip label="What does the region change?">{ISO_HELP.region}</HelpTip>
           </label>
 
           <button
@@ -770,6 +842,16 @@ export default function ResultsPage() {
         />
 
 
+        {/* ISO 14044: goal & scope, per-functional-unit results, data quality */}
+        {mostRecentAssessment && (
+          <IsoRunSummary
+            goalScope={mostRecentAssessment.goalScope}
+            dataQuality={mostRecentAssessment.dataQuality}
+            impacts={mostRecentAssessment.impacts}
+            editHref={`/project/${projectId}/case/${caseId}`}
+          />
+        )}
+
         {/* Data-quality warnings frozen in the run snapshot */}
         {(mostRecentAssessment?.warnings?.length ?? 0) > 0 && (
           <div
@@ -805,6 +887,9 @@ export default function ResultsPage() {
             }}
           >
             <span style={{ fontSize: 14, fontWeight: 600 }}>Flow-level detail</span>
+            <HelpTip label="How do I read this table?" width={320}>
+              {ISO_HELP.flowTable}
+            </HelpTip>
             <span
               style={{
                 marginLeft: 8,
@@ -926,10 +1011,33 @@ export default function ResultsPage() {
               <div
                 className="mono"
                 style={{ textAlign: 'right', color: 'var(--text-tertiary)' }}
+                title={
+                  f.source
+                    ? `Source: ${f.source}${f.sourceTier ? ` (${TIER_LABEL[f.sourceTier] ?? f.sourceTier})` : ''}`
+                    : f.sourceTier
+                      ? TIER_LABEL[f.sourceTier]
+                      : undefined
+                }
               >
                 {fmtNum(f.factor, 3)}
+                {(f.sourceTier === 'unverified' || f.sourceTier === 'unknown') && (
+                  <span style={{ color: 'var(--signal-warn)' }}> !</span>
+                )}
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{f.scope || '—'}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                {f.scope ? (
+                  f.scope === 'Global' && runRegion !== 'Global' ? (
+                    <span title="No region-specific factor on file for this substance — the engine fell back to the Global factor. Your region choice was applied where a regional factor exists (e.g. electricity).">
+                      Global{' '}
+                      <span style={{ color: 'var(--signal-warn)' }}>(fallback)</span>
+                    </span>
+                  ) : (
+                    f.scope
+                  )
+                ) : (
+                  '—'
+                )}
+              </div>
               <div
                 className="mono"
                 style={{
@@ -939,6 +1047,15 @@ export default function ResultsPage() {
                 }}
               >
                 {fmtNum(f.impact, 2)}
+                {f.allocation != null && f.allocation < 1 && (
+                  <span
+                    title={`Allocated: ${Math.round(f.allocation * 100)}% of this process's burden is assigned to the product (ISO 14044 4.3.4)`}
+                    style={{ color: 'var(--text-tertiary)', fontSize: 10 }}
+                  >
+                    {' '}
+                    ×{Math.round(f.allocation * 100)}%
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -953,7 +1070,7 @@ export default function ResultsPage() {
               }}
             >
               {mostRecentAssessment
-                ? `No driver flows contribute to ${activeCat?.label ?? 'this category'}. Add input/output flows on a leaf component and re-run.`
+                ? `No driver flows contribute to ${activeCat?.label ?? 'this category'}. Add input/output flows on an operation and re-run.`
                 : 'Run an assessment to see flow-level detail.'}
             </div>
           )}
@@ -1011,7 +1128,31 @@ export default function ResultsPage() {
             unit: i.unit,
           })),
         }))}
-        totalCost={mostRecentAssessment?.costs?.total}
+        // Per-flow impacts, so the insight can name the lever by material
+        // (aluminum across six steps), not only by the step that books it.
+        materialBreakdown={(mostRecentAssessment?.flowDetail || []).map((f) => ({
+          category_name: f.category_name,
+          name: f.substance,
+          value: Number(f.impact) || 0,
+          step: f.component,
+          tier: f.source_tier ?? null,
+        }))}
+        totalCost={realCaseCost > 0 ? realCaseCost : undefined}
+        // Each step's own cost columns, so the trade-off view sets cost
+        // against impact step by step instead of guessing.
+        stepCosts={allComponents.map((c: any) => ({
+          id: String(c.id),
+          name: c.name,
+          labor: numCost(c.laborCost),
+          material: numCost(c.materialCost),
+          energy: numCost(c.energyCost),
+          other:
+            numCost(c.overheadCost) +
+            numCost(c.equipmentCost) +
+            numCost(c.transportationCost) +
+            numCost(c.operationalCostUSD) +
+            numCost(c.capitalCostUSD),
+        }))}
         initialCategory={activeKey}
         projectId={projectId}
         caseId={caseId}
@@ -1107,6 +1248,9 @@ function DashboardHero({
             >
               TOTAL IMPACT · {activeCat?.label.toUpperCase() || '—'}
             </span>
+            <HelpTip label="How do I read this number?" width={320}>
+              {ISO_HELP.readTotal}
+            </HelpTip>
             <span
               style={{ flex: 1 }}
             />
@@ -1315,6 +1459,7 @@ function DashboardHero({
             }}
           >
             IMPACT CATEGORIES
+            <HelpTip label="What are impact categories?">{ISO_HELP.categoriesOverview}</HelpTip>
           </div>
           <div
             style={{
@@ -1331,6 +1476,7 @@ function DashboardHero({
                 <button
                   key={c.key}
                   type="button"
+                  title={impactCategoryHelp(c.label)}
                   onClick={() => onSelectCategory(c.key)}
                   style={{
                     textAlign: 'left',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { canonicalizeRegion } from '@/lib/factor-selection';
 
 // GET /api/projects/[projectId] - Get single project details
 export async function GET(
@@ -75,7 +76,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const { project_name, description } = await request.json();
+    const body = await request.json();
+    const { project_name, description } = body;
 
     await execute(
       `UPDATE project
@@ -85,8 +87,73 @@ export async function PUT(
       [project_name ?? null, description ?? null, projectId]
     );
 
+    // ISO 14044 goal & scope (4.2) is study-level: every case in the project is
+    // an alternative measured against the same functional unit and boundary.
+    // Separate statement so an environment without migrate-014 can still
+    // rename a project; it only runs when one of these fields was sent.
+    const GOAL_FIELDS = ['goal_statement', 'functional_unit', 'system_boundary', 'boundary_notes'];
+    if (GOAL_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
+      const boundary = body.system_boundary ?? null;
+      if (
+        boundary !== null &&
+        !['cradle-to-gate', 'gate-to-gate', 'cradle-to-grave'].includes(boundary)
+      ) {
+        return NextResponse.json(
+          { error: 'system_boundary must be cradle-to-gate, gate-to-gate or cradle-to-grave' },
+          { status: 400 }
+        );
+      }
+      try {
+        await execute(
+          `UPDATE project
+           SET goal_statement = COALESCE(?, goal_statement),
+               functional_unit = COALESCE(?, functional_unit),
+               system_boundary = COALESCE(?, system_boundary),
+               boundary_notes = COALESCE(?, boundary_notes)
+           WHERE project_id = ?`,
+          [
+            body.goal_statement ?? null,
+            body.functional_unit ?? null,
+            boundary,
+            body.boundary_notes ?? null,
+            projectId,
+          ]
+        );
+      } catch (isoErr) {
+        console.warn('[project PUT] goal & scope columns missing (run migrate-014):', isoErr);
+        return NextResponse.json(
+          { error: 'Goal & scope fields are not available yet: the database needs migrate-014.' },
+          { status: 409 }
+        );
+      }
+    }
+
+    // The study's impact method and region (ISO 14044 4.2.3: LCIA methodology
+    // and geographical coverage are scope choices). Runs use them by default.
+    if (['lcia_method', 'region_code'].some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
+      const METHODS = ['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1'];
+      if (body.lcia_method != null && !METHODS.includes(body.lcia_method)) {
+        return NextResponse.json({ error: `lcia_method must be one of: ${METHODS.join(', ')}` }, { status: 400 });
+      }
+      try {
+        await execute(
+          `UPDATE project
+           SET lcia_method = COALESCE(?, lcia_method),
+               region_code = COALESCE(?, region_code)
+           WHERE project_id = ?`,
+          [body.lcia_method ?? null, body.region_code ? canonicalizeRegion(body.region_code) : null, projectId]
+        );
+      } catch (scopeErr) {
+        console.warn('[project PUT] method/region columns missing (run migrate-018):', scopeErr);
+        return NextResponse.json(
+          { error: 'Method and region are not available yet: the database needs migrate-018.' },
+          { status: 409 }
+        );
+      }
+    }
+
     const updatedProject = await queryOne(
-      `SELECT p.*, a.username as owner_username 
+      `SELECT p.*, a.username as owner_username
        FROM project p 
        LEFT JOIN account a ON p.owner_id = a.id 
        WHERE p.project_id = ?`,

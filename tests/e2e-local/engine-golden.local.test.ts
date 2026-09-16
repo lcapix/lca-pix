@@ -179,6 +179,60 @@ d('engine golden E2E (local DB, post-migration-009)', () => {
     expect(gwTotal.impact_value).toBeCloseTo(expected, 6);
   });
 
+  it('ISO 14044: a share on a parent scales everything below it, and the run grades its own data', async () => {
+    const [[line]]: any = await conn.query(
+      `SELECT component_id FROM component WHERE case_id = ? AND component_type = 'machine_line'`,
+      [caseId],
+    );
+    const expectedFull = 850 * steelGw + 120 * elecGwGlobal + 100 * gasGw + 190 * co2Gw;
+    try {
+      await conn.query(
+        `UPDATE component SET allocation_method = 'physical', allocation_factor = 0.5 WHERE component_id = ?`,
+        [line.component_id],
+      );
+      const result = await calculateCaseImpacts(caseId, conn as any, {
+        method: 'CML 2001',
+        regionCode: 'Global',
+      });
+      const gwTotal = result.total_impacts.find((t) => t.category_id === gwCategoryId)!;
+      expect(gwTotal.impact_value).toBeCloseTo(expectedFull * 0.5, 6);
+
+      const dq = result.data_quality!;
+      expect(dq.allocated_components).toBe(1);
+      expect(dq.excluded_flows).toBeGreaterThanOrEqual(1); // the 'bananas' flow
+      expect(dq.uncharacterized_examples).toContain('Steel, reinforced'); // steel OUTPUT
+      const text = dq.statement.join(' ');
+      expect(text).toContain('All factors are Global averages');
+      expect(text).toContain('50%');
+    } finally {
+      await conn.query(
+        `UPDATE component SET allocation_method = 'none', allocation_factor = 1 WHERE component_id = ?`,
+        [line.component_id],
+      );
+    }
+  });
+
+  it('warns when a parent node also carries flows of its own (terminating-node rule)', async () => {
+    const [[op]]: any = await conn.query(
+      `SELECT component_id FROM component WHERE case_id = ? AND component_type = 'operation'`,
+      [caseId],
+    );
+    const [ins]: any = await conn.query(
+      `INSERT INTO flows (component_id, substance_id, flow_type, quantity, unit, is_driver)
+       VALUES (?, ?, 'output', 1, 'kg', 1)`,
+      [op.component_id, co2Id],
+    );
+    try {
+      const result = await calculateCaseImpacts(caseId, conn as any, {
+        method: 'CML 2001',
+        regionCode: 'Global',
+      });
+      expect(result.warnings.some((w) => w.includes('has steps below it'))).toBe(true);
+    } finally {
+      await conn.query(`DELETE FROM flows WHERE flow_id = ?`, [ins.insertId]);
+    }
+  });
+
   it('audited values are live: CH4=28, elec US=0.350, elec Global=0.473, gas=1.877', async () => {
     expect(elecGwUS).toBeCloseTo(0.35, 9);
     expect(elecGwGlobal).toBeCloseTo(0.473, 9);

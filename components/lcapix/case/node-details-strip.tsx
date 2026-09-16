@@ -5,21 +5,44 @@
 
 import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
+import { HelpTip } from '@/components/lcapix/help-tip'
 
 export interface NodeDetailsStripProps {
   node: FlatCaseNode | null
   totalComponents: number
+  /** Subtree totals (this node + everything below). Parents are pure sums. */
+  rolled?: { cost: number; flows: number } | null
+  /** True when the node has children — a roll-up, not a terminating node. */
+  hasChildren?: boolean
 }
 
-export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProps) {
+// Hover definitions per tier (explanations are hover, not inline text).
+const TIER_HELP: Record<string, string> = {
+  Product:
+    'The finished thing being assessed. Its totals are the sum of every line, subprocess and operation below it.',
+  Machine: 'A production line or major stage — a roll-up of the subprocesses beneath it.',
+  Subprocess: 'A group of related steps, such as a work center — a roll-up of its operations.',
+  Operation:
+    'One processing step: a unit process in ISO 14044 terms. Its inputs (materials, energy), outputs (emissions) and costs (labor, machine time) are recorded here.',
+  Task: 'An optional finer sub-step of an operation, used only when you split an operation into parts.',
+}
+
+export function NodeDetailsStrip({
+  node,
+  totalComponents,
+  rolled = null,
+  hasChildren = false,
+}: NodeDetailsStripProps) {
   const t = node ? HIERARCHY_TYPES.find((h) => h.id === node.type) : null
   // Honest values only. This lightweight strip has the node's real flow count
   // and cost; it does NOT have per-node driver counts, impact, or flow detail,
   // so those show "—" rather than fabricated numbers. (Previously this used a
   // seed to invent a driver count + impact, and rendered DEMO_FLOWS as if they
-  // were real substances on the node.)
-  const costUsd = node?.cost ?? 0
-  const flowsCount = node?.flows ?? 0
+  // were real substances on the node.) For a roll-up node the values are the
+  // subtree totals, since its own value is by design zero.
+  const costUsd = Math.round(rolled?.cost ?? node?.cost ?? 0)
+  const flowsCount = rolled?.flows ?? node?.flows ?? 0
+  const sigma = hasChildren ? ' Σ' : ''
 
   return (
     <div
@@ -86,22 +109,23 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
               style={{
                 fontSize: 12,
                 color: 'var(--text-secondary)',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                minWidth: 0,
               }}
             >
-              {t?.label === 'Product' &&
-                'Top-level functional unit. Inherits region and method from the case.'}
-              {t?.label === 'Machine/Line' &&
-                'Equipment line aggregating downstream subprocesses.'}
-              {t?.label === 'Subprocess' &&
-                'Named operation stage — groups related elemental tasks.'}
-              {t?.label === 'Operation' &&
-                'Discrete processing step. Drives labor + energy demand.'}
-              {t?.label === 'Elemental Task' &&
-                'Leaf node — attaches drivers and environmental flows.'}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {hasChildren
+                  ? 'Roll-up node — its numbers are the totals of everything below it.'
+                  : t?.id === 'Operation'
+                    ? 'Unit process — its materials, energy, emissions and labor live here.'
+                    : t?.id === 'Task'
+                      ? 'Sub-step of an operation — its flows and costs live here.'
+                      : 'Terminating node — flows and costs attach here.'}
+              </span>
+              {t?.id && TIER_HELP[t.id] ? (
+                <HelpTip label={`What is a ${t.label}?`}>{TIER_HELP[t.id]}</HelpTip>
+              ) : null}
             </div>
           </>
         ) : (
@@ -145,11 +169,14 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
           minWidth: 0,
         }}
       >
-        <MetricMini label="Flows" value={node ? flowsCount : '—'} />
+        <MetricMini label={'Flows' + sigma} value={node ? flowsCount : '—'} />
         {/* All flows attached to a leaf are driver flows, so the driver count
             equals the flow count. (Impact still needs an assessment run.) */}
-        <MetricMini label="Drivers" value={node ? flowsCount : '—'} />
-        <MetricMini label="Cost" value={node ? '$' + costUsd : '—'} />
+        <MetricMini label={'Drivers' + sigma} value={node ? flowsCount : '—'} />
+        <MetricMini
+          label={'Cost' + sigma}
+          value={node ? '$' + costUsd.toLocaleString() : '—'}
+        />
         <MetricMini label="Impact" value={node ? '—' : '—'} unit="" />
       </div>
 
@@ -191,7 +218,15 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
         </div>
         {node ? (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-            {flowsCount > 0 ? (
+            {hasChildren ? (
+              <>
+                <span className="mono" style={{ color: 'var(--text-primary)' }}>
+                  {flowsCount}
+                </span>{' '}
+                flow{flowsCount === 1 ? '' : 's'} across the nodes below. Select a
+                process step below to view or edit its flows.
+              </>
+            ) : flowsCount > 0 ? (
               <>
                 <span className="mono" style={{ color: 'var(--text-primary)' }}>
                   {flowsCount}
@@ -200,7 +235,7 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
                 view and edit them.
               </>
             ) : (
-              'No flows on this node yet. Select it in the inspector to add input/output flows.'
+              'No flows on this node yet. Add its materials, energy or emissions in the inspector.'
             )}
           </div>
         ) : (

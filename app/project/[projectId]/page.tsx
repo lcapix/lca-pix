@@ -16,6 +16,7 @@ import {
   ZoomOut,
   Focus,
   ChevronDown,
+  Trash2,
 } from 'lucide-react'
 import { useProjectStore } from '@/lib/store'
 import { toast } from '@/hooks/use-toast'
@@ -35,6 +36,8 @@ import { componentsToTree } from '@/lib/case-tree-adapter'
 import { transformComponentFromDB } from '@/lib/data-transformers'
 import { pastelFor } from '@/lib/hierarchy-pastels'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
+import { CaseJourney, type CaseRunReadiness } from '@/components/lcapix/case/case-journey'
+import { CaseNameDialog } from '@/components/lcapix/case/case-name-dialog'
 
 // NOTE: AuthGuard + top nav are provided by app/project/layout.tsx
 // (AuthGuard → AppShell). Do not render AppTopBar here or we get a
@@ -44,14 +47,15 @@ import { AnimatedNumber } from '@/components/lcapix/animated-number'
 // results page's IMPACT_CATEGORIES (Global warming, Ozone depletion, Smog
 // formation, Freshwater ecotoxicity, Acidification). Was hardcoded to 6 here,
 // which disagreed with the results page (5) and looked like inconsistent data.
-const IMPACT_CATEGORY_COUNT = 5
 
 export default function ProjectPage() {
   const params = useParams()
   const router = useRouter()
   const projectId = params.projectId as string
 
-  const { deleteCase } = useProjectStore()
+  const { deleteCase, updateCase } = useProjectStore()
+  const [renameOpen, setRenameOpen] = useState(false)
+  const [renameBusy, setRenameBusy] = useState(false)
   const [project, setProject] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
@@ -61,6 +65,9 @@ export default function ProjectPage() {
   const [baseTree, setBaseTree] = useState<DemoTreeNode | null>(null)
   const [isSyncedFromBase, setIsSyncedFromBase] = useState(false)
   const [isRunningAssessment, setIsRunningAssessment] = useState(false)
+  // Same run gate as the case editor (functional unit + at least one input or
+  // emission), reported by the CaseJourney block for the selected case.
+  const [activeReadiness, setActiveReadiness] = useState<CaseRunReadiness | null>(null)
   const [caseImpact, setCaseImpact] = useState<{
     totalImpact: number | null
     unit: string
@@ -68,6 +75,9 @@ export default function ProjectPage() {
     impactByComponent: Record<string, number>
     contributors: Array<{ name: string; value: number; pct: number }>
     costs: { labor: number; energy: number; material: number; overhead: number; total: number } | null
+    /** Method of the latest run, and how many categories it reported. */
+    method?: string | null
+    categoryCount?: number
   } | null>(null)
 
   // Tree Modal State (preserved from previous implementation)
@@ -231,6 +241,40 @@ export default function ProjectPage() {
       return
     }
     let cancelled = false
+    // Cost summary from REAL component cost columns, never synthesized (the old
+    // fallback fabricated a $192/kg-CO2 breakdown; removed). Per unit of
+    // product: capex is a one-time investment, so it is not added in. No cost
+    // data → null, and the panel shows an honest empty state.
+    const loadCosts = async (): Promise<{
+      labor: number
+      energy: number
+      material: number
+      overhead: number
+      total: number
+    } | null> => {
+      try {
+        const cr = await apiRequest(`/api/cases/${activeCaseId}/components`)
+        const cd = await cr.json()
+        const comps: any[] = cd?.components || cd?.data || []
+        const num = (v: any) => Number(v ?? 0) || 0
+        const labor = comps.reduce((s, c) => s + num(c.labor_cost), 0)
+        const energy = comps.reduce((s, c) => s + num(c.energy_cost), 0)
+        const material = comps.reduce((s, c) => s + num(c.material_cost), 0)
+        const overhead = comps.reduce(
+          (s, c) =>
+            s +
+            num(c.overhead_cost) +
+            num(c.equipment_cost) +
+            num(c.transportation_cost) +
+            num(c.opex),
+          0,
+        )
+        const t = labor + energy + material + overhead
+        return t > 0 ? { labor, energy, material, overhead, total: t } : null
+      } catch {
+        return null
+      }
+    }
     ;(async () => {
       try {
         const ar = await apiRequest(`/api/cases/${activeCaseId}/assessments`)
@@ -239,13 +283,15 @@ export default function ProjectPage() {
           (a: any) => !a.status || a.status === 'completed',
         )
         if (!runs.length) {
+          // No run yet, but the case's cost columns are real data: show them.
+          const costs = await loadCosts()
           if (!cancelled)
             setCaseImpact({
               totalImpact: null,
               unit: 'kg CO₂-eq',
               contributors: [],
               impactByComponent: {},
-              costs: null,
+              costs,
             })
           return
         }
@@ -254,9 +300,11 @@ export default function ProjectPage() {
         const dd = await dr.json()
         if (cancelled || !dd?.success) return
         const results: any[] = dd.results || []
-        // Pick a focal category — prefer Global warming, else first.
-        const gw = results.filter((r) => r.category_name === 'Global warming')
-        const focal = gw.length ? gw : results
+        // Focal category: global warming. Never a sum across categories: they
+        // are in different units (and the name is "Global Warming" in the data).
+        const gw = results.filter((r) => /global warming|climate/i.test(String(r.category_name)))
+        const firstCat = results[0]?.category_name
+        const focal = gw.length ? gw : results.filter((r) => r.category_name === firstCat)
         const unit = focal[0]?.unit || 'kg CO₂-eq'
         const total = focal.reduce(
           (s, r) => s + Number(r.impact_value || 0),
@@ -279,40 +327,7 @@ export default function ProjectPage() {
           }))
           .sort((a, b) => b.value - a.value)
           .slice(0, 5)
-        // Cost summary from REAL component cost columns — never synthesized.
-        // (assessment_runs carries no cost fields, and the old fallback
-        // fabricated a $192/kg-CO2 breakdown; both removed. No cost data →
-        // costs stays null and the panel shows an honest empty state.)
-        let costs: {
-          labor: number
-          energy: number
-          material: number
-          overhead: number
-          total: number
-        } | null = null
-        try {
-          const cr = await apiRequest(`/api/cases/${activeCaseId}/components`)
-          const cd = await cr.json()
-          const comps: any[] = cd?.components || cd?.data || []
-          const num = (v: any) => Number(v ?? 0) || 0
-          const labor = comps.reduce((s, c) => s + num(c.labor_cost), 0)
-          const energy = comps.reduce((s, c) => s + num(c.energy_cost), 0)
-          const material = comps.reduce((s, c) => s + num(c.material_cost), 0)
-          const overhead = comps.reduce(
-            (s, c) =>
-              s +
-              num(c.overhead_cost) +
-              num(c.equipment_cost) +
-              num(c.transportation_cost) +
-              num(c.opex) +
-              num(c.capex),
-            0,
-          )
-          const t = labor + energy + material + overhead
-          if (t > 0) costs = { labor, energy, material, overhead, total: t }
-        } catch {
-          /* no cost data → honest empty state */
-        }
+        const costs = await loadCosts()
         if (!cancelled) {
           setCaseImpact({
             totalImpact: total,
@@ -320,6 +335,8 @@ export default function ProjectPage() {
             contributors,
             impactByComponent: Object.fromEntries(byComp),
             costs,
+            method: latest.calculation_method ?? null,
+            categoryCount: new Set(results.map((r) => r.category_name)).size,
           })
         }
       } catch {
@@ -380,14 +397,105 @@ export default function ProjectPage() {
     }
   }
 
-  const handleDeleteCase = (caseId: string) => {
+  const handleDeleteCase = async (caseId: string) => {
     if (
-      confirm('Are you sure you want to delete this case? This action cannot be undone.')
+      !confirm('Are you sure you want to delete this case? This action cannot be undone.')
     ) {
+      return
+    }
+    // This used to drop the case from the local store only and still report
+    // success, so the case came back on the next load. It now deletes for real.
+    try {
+      const res = await apiRequest(`/api/cases/${caseId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || `Delete failed (${res.status})`)
+      }
       deleteCase(caseId)
+      setProject((p: any) =>
+        p
+          ? { ...p, cases: (p.cases || []).filter((c: any) => String(c.id) !== String(caseId)) }
+          : p,
+      )
+      if (activeCaseId === caseId) setActiveCaseId(null)
       toast({
         title: 'Case deleted',
         description: 'The case has been removed from your project.',
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Could not delete case',
+        description: err?.message || 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleRenameCase = async (caseId: string, name: string) => {
+    setRenameBusy(true)
+    try {
+      const res = await apiRequest(`/api/cases/${caseId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ case_name: name }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || `Rename failed (${res.status})`)
+      }
+      updateCase(caseId, { name })
+      setProject((p: any) =>
+        p
+          ? {
+              ...p,
+              cases: (p.cases || []).map((c: any) =>
+                String(c.id) === String(caseId) ? { ...c, name } : c,
+              ),
+            }
+          : p,
+      )
+      setRenameOpen(false)
+      toast({ title: 'Case renamed', description: `Now called "${name}".` })
+    } catch (err: any) {
+      toast({
+        title: 'Could not rename case',
+        description: err?.message || 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
+  const handleDeleteProject = async () => {
+    // Owner-only, irreversible: removes the project and every case, component,
+    // flow, cost and assessment under it (DB foreign-key cascade). Unlike
+    // handleDeleteCase above (a local-store demo action), this hits the real
+    // DELETE endpoint so it actually persists.
+    const name = project?.name ?? 'this project'
+    if (
+      !confirm(
+        `Delete "${name}" and ALL of its cases, flows and assessments?\n\nThis cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    try {
+      const res = await apiRequest(`/api/projects/${projectId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || `Delete failed (${res.status})`)
+      }
+      toast({
+        title: 'Project deleted',
+        description: `"${name}" and all its cases have been removed.`,
+      })
+      router.push('/home')
+    } catch (err: any) {
+      toast({
+        title: 'Could not delete project',
+        description: err?.message || 'Something went wrong. Please try again.',
+        variant: 'destructive',
       })
     }
   }
@@ -713,14 +821,15 @@ export default function ProjectPage() {
               >
                 {project.name}
               </h1>
-              <span
-                className={
-                  'chip ' + (projectTypeLabel === 'comparative' ? 'chip-active' : '')
-                }
-                style={{ fontSize: 11 }}
-              >
-                {projectTypeLabel}
-              </span>
+              {projectTypeLabel === 'comparative' && (
+                <span
+                  className="chip chip-active"
+                  style={{ fontSize: 11 }}
+                  title="This project compares alternatives: every case is measured against the same functional unit"
+                >
+                  comparison
+                </span>
+              )}
             </div>
             {project.description && (
               <p
@@ -751,24 +860,42 @@ export default function ProjectPage() {
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => router.push(`/project/${projectId}/comparison`)}
+            disabled={cases.length < 2}
+            title={
+              cases.length < 2
+                ? 'Needs two cases. Duplicate a case, change one thing, run both, then compare.'
+                : 'Compare the cases of this project side by side'
+            }
           >
             <Icon name="layers" size={14} /> Compare Cases
           </button>
+          {/* Documents first: with no case yet, importing the routing is the
+              next step; building a case by hand is the fallback. */}
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className={`btn ${cases.length === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
             onClick={() => router.push(`/project/${projectId}/import`)}
-            title="Create a case from a real document (upload → review → apply)"
+            title="Build or extend a case from a real document (upload, review, apply)"
           >
             <Icon name="file" size={14} /> Import Data
           </button>
           <button
             data-tour="project-add-case"
             type="button"
-            className="btn btn-primary btn-sm"
+            className={`btn ${cases.length === 0 ? 'btn-secondary' : 'btn-primary'} btn-sm`}
             onClick={handleAddCase}
+            title="Create an empty case and build its steps by hand"
           >
             <Icon name="plus" size={14} /> Add Case
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleDeleteProject}
+            title="Delete this project and all of its cases (cannot be undone)"
+            style={{ color: '#c0392b' }}
+          >
+            <Trash2 size={14} /> Delete
           </button>
         </div>
 
@@ -791,17 +918,17 @@ export default function ProjectPage() {
                 value: String(cases.length),
                 note:
                   cases.length === 0
-                    ? 'Add a case to get started'
+                    ? 'Import your routing to create the first case'
                     : `${baseCases.length} base · ${comparativeCases.length} comparative`,
                 tone: cases.length > 0 ? 'brand' : 'neutral',
               },
               {
-                label: 'Components',
+                label: 'Steps',
                 value: String(componentCount),
                 note:
                   componentCount === 0
-                    ? 'Build a hierarchy in the editor'
-                    : `${driverCount} driver flow${driverCount === 1 ? '' : 's'}`,
+                    ? 'The routing builds them'
+                    : `${driverCount} input/output flow${driverCount === 1 ? '' : 's'}`,
                 tone: componentCount > 0 ? 'brand' : 'neutral',
               },
               {
@@ -1539,7 +1666,7 @@ export default function ProjectPage() {
                   marginBottom: 8,
                 }}
               >
-                GLOBAL WARMING · CML 2001
+                GLOBAL WARMING · {caseImpact?.method ?? project?.lciaMethod ?? 'CML 2001'}
               </div>
               <div
                 style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}
@@ -1582,9 +1709,9 @@ export default function ProjectPage() {
                   marginTop: 8,
                 }}
               >
-                <span className="mono">{componentCount}</span> components ·{' '}
-                <span className="mono">{IMPACT_CATEGORY_COUNT}</span> categories ·{' '}
-                <span className="mono">{driverCount}</span> drivers
+                <span className="mono">{componentCount}</span> steps ·{' '}
+                <span className="mono">{caseImpact?.categoryCount || '—'}</span> categories ·{' '}
+                <span className="mono">{driverCount}</span> flows
               </div>
             </div>
 
@@ -1733,17 +1860,42 @@ export default function ProjectPage() {
               )}
             </div>
 
+            {/* Where this case is in the ISO journey + what it already has */}
+            {activeCase && (
+              <CaseJourney
+                key={activeCase.id}
+                projectId={projectId}
+                caseId={activeCase.id}
+                onReadiness={setActiveReadiness}
+              />
+            )}
+
             {/* Actions */}
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 type="button"
                 className="btn btn-primary"
                 style={{ flex: 1, justifyContent: 'center' }}
-                disabled={isRunningAssessment || !activeCase}
+                disabled={
+                  isRunningAssessment ||
+                  !activeCase ||
+                  (activeReadiness !== null && !activeReadiness.canRun)
+                }
+                title={activeReadiness?.canRun === false ? activeReadiness.reason ?? undefined : undefined}
                 onClick={async () => {
                   if (!activeCase) return
                   setIsRunningAssessment(true)
                   try {
+                    // Same per-case method/region memory as the case page and
+                    // the run modal, so a run from here matches that history.
+                    let remembered: { method?: string; region?: string } = {}
+                    try {
+                      remembered = JSON.parse(
+                        localStorage.getItem(`lcapix-run-prefs:${activeCase.id}`) || '{}',
+                      )
+                    } catch {
+                      /* corrupt prefs are ignorable */
+                    }
                     const r = await apiRequest(
                       `/api/cases/${activeCase.id}/assessments`,
                       {
@@ -1751,7 +1903,10 @@ export default function ProjectPage() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           run_name: `${activeCase.name} run`,
-                          calculation_method: 'CML 2001',
+                          // Omitted when never chosen: the server uses the study's
+                          // method (project) and the case's region.
+                          ...(remembered.method ? { calculation_method: remembered.method } : {}),
+                          ...(remembered.region ? { region_code: remembered.region } : {}),
                         }),
                       },
                     )
@@ -1801,6 +1956,17 @@ export default function ProjectPage() {
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
+                  onClick={() => setRenameOpen(true)}
+                  aria-label="Rename case"
+                  title="Rename case"
+                >
+                  <Icon name="edit" size={14} />
+                </button>
+              )}
+              {activeCase && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
                   onClick={() => handleDeleteCase(activeCase.id)}
                   aria-label="Delete case"
                   title="Delete case"
@@ -1808,18 +1974,20 @@ export default function ProjectPage() {
                   <Icon name="x" size={14} />
                 </button>
               )}
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                aria-label="Download"
-                title="Download"
-              >
-                <Icon name="download" size={14} />
-              </button>
             </div>
           </div>
         </div>
       </div>
+
+      <CaseNameDialog
+        open={renameOpen && !!activeCase}
+        title="Rename case"
+        initialName={activeCase?.name ?? ''}
+        confirmLabel="Rename"
+        busy={renameBusy}
+        onCancel={() => setRenameOpen(false)}
+        onSubmit={(name) => activeCase && handleRenameCase(activeCase.id, name)}
+      />
 
       {/* Tree Visualization Modal — preserved verbatim from prior page */}
       <Dialog open={isTreeModalOpen} onOpenChange={setIsTreeModalOpen}>
@@ -2246,11 +2414,11 @@ function CaseTabs({
               <span className="mono">
                 {bc.componentCount ?? bc.components?.length ?? 0}
               </span>{' '}
-              comps
+              steps
             </span>
             <span>·</span>
             <span>
-              <span className="mono">{bc.driverCount ?? 0}</span> drivers
+              <span className="mono">{bc.driverCount ?? 0}</span> flows
             </span>
           </div>
         </button>
@@ -2431,12 +2599,12 @@ function CaseTabs({
               <span className="mono">
                 {compCase.componentCount ?? compCase.components?.length ?? 0}
               </span>{' '}
-              comps
+              steps
             </span>
             <span>·</span>
             <span>
               <span className="mono">{compCase.driverCount ?? 0}</span>{' '}
-              drivers
+              flows
             </span>
           </div>
         </div>

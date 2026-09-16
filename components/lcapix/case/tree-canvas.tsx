@@ -33,6 +33,20 @@ const NODE_H = 72
 const COL_W = NODE_W + 40   // horizontal gap between sibling columns
 const ROW_GAP = 80          // vertical gap between depth rows
 
+// Classroom legend: what each of the 5 hierarchy tiers means, top to bottom,
+// and where impacts vs costs attach. Teaches the process diagram in-context so
+// a student reading the tree knows what they are looking at.
+const TIER_GUIDE: Array<{ id: HierarchyNodeType; blurb: string }> = [
+  { id: 'Product', blurb: 'The finished thing you are assessing.' },
+  { id: 'Machine', blurb: 'A production line or major stage.' },
+  { id: 'Subprocess', blurb: 'A group of related steps (e.g. a work center).' },
+  {
+    id: 'Operation',
+    blurb: 'One processing step (a unit process). Its materials, energy, emissions & labor live here as exchanges.',
+  },
+  { id: 'Task', blurb: 'An optional finer sub-step — only when you split an operation.' },
+]
+
 export function TreeCanvas({ root, flat, selected, onSelect, view = 'Tree', highlightQuery }: TreeCanvasProps) {
   if (view === 'List') return <ListView flat={flat} selected={selected} onSelect={onSelect} />
   if (view === 'Graph') return <GraphView flat={flat} selected={selected} onSelect={onSelect} />
@@ -106,6 +120,26 @@ function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: Playgrou
     }
   }, [root])
 
+  // Roll costs and flow-counts UP the tree so every node shows its subtree
+  // total, not just its own value — otherwise a product / line / subprocess
+  // reads $0 because the values live on the operations below it.
+  const rollup = useMemo(() => {
+    const map = new Map<string, { cost: number; flows: number }>()
+    const visit = (n: CaseTreeNode): { cost: number; flows: number } => {
+      let cost = n.cost || 0
+      let flows = n.flows || 0
+      for (const c of n.children || []) {
+        const r = visit(c)
+        cost += r.cost
+        flows += r.flows
+      }
+      map.set(n.id, { cost, flows })
+      return { cost, flows }
+    }
+    visit(root)
+    return map
+  }, [root])
+
   // 2. Live positions map (so user can drag nodes)
   const [positions, setPositions] = useState<Record<string, NodePos>>(initialPositions)
 
@@ -169,6 +203,7 @@ function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: Playgrou
     oy: number
   } | null>(null)
   const [cursor, setCursor] = useState<'grab' | 'grabbing'>('grab')
+  const [legendOpen, setLegendOpen] = useState(true)
 
   // Wheel zoom — needs non-passive to preventDefault
   useEffect(() => {
@@ -419,12 +454,109 @@ function PlaygroundCanvas({ root, selected, onSelect, highlightQuery }: Playgrou
               <div
                 className="mono"
                 style={{ fontSize: 10, color: tone.text, opacity: 0.72 }}
+                title={
+                  (n.node.children?.length ?? 0) > 0
+                    ? 'Rolled-up total of everything below this node'
+                    : undefined
+                }
               >
-                {n.node.flows} flows · ${n.node.cost}
+                {(() => {
+                  const r = rollup.get(n.id) ?? { cost: n.node.cost, flows: n.node.flows }
+                  const hasKids = (n.node.children?.length ?? 0) > 0
+                  return `${hasKids ? 'Σ ' : ''}$${Math.round(r.cost).toLocaleString()}${
+                    r.flows > 0 ? ` · ${r.flows} flow${r.flows === 1 ? '' : 's'}` : ''
+                  }`
+                })()}
               </div>
             </div>
           )
         })}
+      </div>
+
+      {/* Hierarchy legend — teaches the 5 tiers + where impacts/costs attach */}
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: 16,
+          zIndex: 5,
+          width: legendOpen ? 252 : 'auto',
+          background: 'var(--surface-raised)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 8,
+          padding: legendOpen ? '10px 12px' : '6px 10px',
+          boxShadow: 'var(--shadow-sm)',
+          fontSize: 11,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontWeight: 600, fontSize: 11.5 }}>
+            Process hierarchy{legendOpen ? '' : ' · 5 tiers'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setLegendOpen((o) => !o)}
+            aria-label={legendOpen ? 'Hide legend' : 'Show legend'}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontSize: 13,
+              lineHeight: 1,
+            }}
+          >
+            {legendOpen ? '×' : '?'}
+          </button>
+        </div>
+        {legendOpen && (
+          <>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {TIER_GUIDE.map((t, i) => (
+                <div key={t.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span
+                    style={{
+                      marginTop: 2,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 3,
+                      background: colorFor(t.id),
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {i + 1}. {labelFor(t.id)}
+                    </div>
+                    <div style={{ color: 'var(--text-secondary)', lineHeight: 1.35 }}>
+                      {t.blurb}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                paddingTop: 8,
+                borderTop: '1px solid var(--border-subtle)',
+                color: 'var(--text-tertiary)',
+                lineHeight: 1.4,
+              }}
+            >
+              Impacts &amp; costs live on the lower tiers; each parent is the total of what
+              is below it.
+            </div>
+          </>
+        )}
       </div>
 
       {/* Zoom controls overlay */}

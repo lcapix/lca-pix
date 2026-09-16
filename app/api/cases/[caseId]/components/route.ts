@@ -32,7 +32,7 @@ export async function GET(
        FROM component c
        LEFT JOIN component parent ON c.parent_component_id = parent.component_id
        WHERE c.case_id = ?
-       ORDER BY c.component_type, c.created_at`,
+       ORDER BY c.component_type, c.created_at, c.component_id`,
       [caseId]
     );
 
@@ -123,9 +123,16 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid component type' }, { status: 400 });
     }
 
-    // Auto-determine hierarchy level from type if not provided
-    const levelMap: Record<string, number> = { product: 1, machine_line: 2, subprocess: 3, operation: 4, elemental_task: 5 };
-    const level = hierarchy_level || levelMap[component_type] || 1;
+    // hierarchy_level is the DEPTH in the tree (levels may be skipped, so the
+    // type no longer implies it): parent's level + 1, or 1 for a root.
+    let level = Number(hierarchy_level) || 1;
+    if (!hierarchy_level && parent_component_id) {
+      const parentRow = await queryOne<any>(
+        `SELECT hierarchy_level FROM component WHERE component_id = ? AND case_id = ?`,
+        [parent_component_id, caseId]
+      );
+      level = (Number(parentRow?.hierarchy_level) || 0) + 1;
+    }
 
     const componentId = await insert(
       `INSERT INTO component

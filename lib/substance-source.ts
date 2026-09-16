@@ -6,14 +6,14 @@
 // present, its `cas_number`) to the reference database that data is drawn from.
 //
 // Honesty notes:
-//  - The substance catalog in this app is populated from public openLCA +
-//    PubChem imports (see EnvironmentalFlowsEditor header). A CAS number is a
-//    PubChem-resolvable chemical identity, so when one is present we cite it.
-//  - The impact *factors* (per-unit characterization) come from databases like
-//    ecoinvent / GREET / IPCC. Those are category-dependent, so we label the
-//    reference database by category.
-//  - If a row carries an explicit `data_source` (e.g. joined from
-//    driver_impact_factors), that authoritative value wins.
+//  - A CAS number is a PubChem-resolvable chemical identity, so when one is
+//    present we cite it.
+//  - The impact factors cite their own sources (driver_impact_factors
+//    .source_reference: IAI, worldsteel, EPA WARM, EPA eGRID, Ember, US EPA
+//    TRACI 2.1 via LCIAfmt, openLCA method files). The substances API returns
+//    them as `data_source`, and that is the label. No database is ever guessed
+//    from the category: this library holds no ecoinvent data, and a label
+//    naming it would be a false attribution.
 
 export interface SubstanceLike {
   category?: string | null
@@ -33,17 +33,11 @@ export interface SubstanceSource {
   label: string
 }
 
-const CATEGORY_DATABASE: Record<string, string> = {
-  material: 'ecoinvent',
-  energy: 'ecoinvent / GREET',
-  emission: 'IPCC AR6 / ecoinvent',
-  waste: 'ecoinvent',
-  water: 'ecoinvent / AWARE',
-}
-
 export function substanceSource(s: SubstanceLike): SubstanceSource {
   const cas = s.cas_number?.trim()
-  const identity = cas ? `PubChem CAS ${cas}` : undefined
+  // "N/A", dashes and all-zero numbers (00000-00-0) are placeholders, not identities.
+  const identity =
+    cas && !/^(n\/?a|none|-+|[0-]+)$/i.test(cas) ? `PubChem CAS ${cas}` : undefined
 
   // Explicit, authoritative source always wins.
   const explicit = s.data_source?.trim()
@@ -55,8 +49,8 @@ export function substanceSource(s: SubstanceLike): SubstanceSource {
     }
   }
 
-  const cat = (s.category ?? s.substance_category ?? '').toString().toLowerCase()
-  const database = CATEGORY_DATABASE[cat] ?? 'ecoinvent'
+  // No recorded source: say so rather than name a database.
+  const database = 'factor source not recorded'
 
   return {
     database,

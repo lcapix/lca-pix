@@ -85,13 +85,19 @@ export async function PUT(
       capex,
       // ABC Costing - Detailed cost breakdown
       labor_cost,
+      labor_hours,
+      labor_occupation,
       energy_cost,
       transportation_cost,
       material_cost,
       equipment_cost,
       overhead_cost,
       currency,
-      cost_allocation_type
+      cost_allocation_type,
+      // ISO 14044 4.3.4 allocation of a multi-output unit process
+      allocation_method,
+      allocation_factor,
+      allocation_note
     } = body;
 
     // Whether the caller explicitly sent a parent. We must distinguish
@@ -156,6 +162,8 @@ export async function PUT(
     // was actually provided.
     const hasCostFields =
       labor_cost != null ||
+      labor_hours != null ||
+      labor_occupation != null ||
       energy_cost != null ||
       transportation_cost != null ||
       material_cost != null ||
@@ -168,6 +176,8 @@ export async function PUT(
         await execute(
           `UPDATE component
            SET labor_cost = COALESCE(?, labor_cost),
+               labor_hours = COALESCE(?, labor_hours),
+               labor_occupation = COALESCE(?, labor_occupation),
                energy_cost = COALESCE(?, energy_cost),
                transportation_cost = COALESCE(?, transportation_cost),
                material_cost = COALESCE(?, material_cost),
@@ -178,6 +188,8 @@ export async function PUT(
            WHERE component_id = ?`,
           [
             labor_cost ?? null,
+            labor_hours ?? null,
+            labor_occupation ?? null,
             energy_cost ?? null,
             transportation_cost ?? null,
             material_cost ?? null,
@@ -190,6 +202,61 @@ export async function PUT(
         );
       } catch (costErr) {
         console.warn('[component PUT] cost-column update skipped (schema lacks ABC cost columns):', costErr);
+      }
+    }
+
+    // The product's quantity IS the case's data basis (how many units the
+    // entered data make): whichever path changes it, keep the two equal.
+    if (body.quantity !== undefined && body.quantity !== null) {
+      try {
+        await execute(
+          `UPDATE case_table ct
+             JOIN component c ON c.case_id = ct.case_id
+              SET ct.modeled_output = c.quantity
+            WHERE c.component_id = ? AND c.parent_component_id IS NULL
+              AND c.component_type = 'product' AND c.quantity > 0`,
+          [componentId],
+        );
+      } catch (syncErr: any) {
+        if (syncErr?.code !== 'ER_BAD_FIELD_ERROR') throw syncErr; // no migrate-014
+      }
+    }
+
+    // ISO 14044 4.3.4 allocation of a multi-output unit process. Separate,
+    // best-effort statement (needs migrate-014) so a missing column never
+    // blocks a rename. The factor is the share of this unit process's burden
+    // assigned to the studied product: 0 < factor <= 1.
+    const hasAllocFields =
+      allocation_method != null || allocation_factor != null || allocation_note != null;
+    if (hasAllocFields) {
+      const af =
+        allocation_factor === '' || allocation_factor == null ? null : Number(allocation_factor);
+      if (af !== null && (!Number.isFinite(af) || af <= 0 || af > 1)) {
+        return NextResponse.json(
+          { error: 'allocation_factor must be greater than 0 and at most 1' },
+          { status: 400 },
+        );
+      }
+      if (
+        allocation_method != null &&
+        !['none', 'physical', 'economic', 'system_expansion'].includes(allocation_method)
+      ) {
+        return NextResponse.json(
+          { error: 'allocation_method must be none, physical, economic or system_expansion' },
+          { status: 400 },
+        );
+      }
+      try {
+        await execute(
+          `UPDATE component
+           SET allocation_method = COALESCE(?, allocation_method),
+               allocation_factor = COALESCE(?, allocation_factor),
+               allocation_note = COALESCE(?, allocation_note)
+           WHERE component_id = ?`,
+          [allocation_method ?? null, af, allocation_note ?? null, componentId],
+        );
+      } catch (allocErr) {
+        console.warn('[component PUT] allocation update skipped (run migrate-014):', allocErr);
       }
     }
 

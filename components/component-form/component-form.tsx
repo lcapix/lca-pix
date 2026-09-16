@@ -24,11 +24,13 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/api-client';
 
 import { useProjectStore, type ComponentNode } from '@/lib/store';
+import { pickMaterialRate } from '@/lib/integrations/reference-rates';
 import type { ProcessNode } from '@/types/component';
 import type { NodeType } from '@/lib/hierarchy';
 import {
   getTypeLabel,
   getRequiredParentType,
+  canParent,
   buildBreadcrumbPath,
 } from '@/lib/hierarchy';
 
@@ -229,7 +231,9 @@ export function ComponentForm({
   const suggestedParent = suggestedParentId
     ? processNodes.find((n) => n.id === suggestedParentId)
     : null;
-  const isProcessTypeLocked = isAddChildMode || (isEditMode && hasParent);
+  // Add-child mode fixes the PARENT, not the type: the new node may be any tier
+  // finer than its parent (levels can be skipped), so the type stays pickable.
+  const isProcessTypeLocked = isEditMode && hasParent;
 
   /* ------- eligible parent list -------
    * Any non-product node can be re-parented to ANY other node in the case
@@ -257,19 +261,17 @@ export function ComponentForm({
 
   const eligibleParents = React.useMemo(() => {
     if (!formData.processType || formData.processType === 'product') return [];
-    // Parent must be the tier directly above this node's tier (no level
-    // skipping), but it can be ANY node of that tier anywhere in the tree
-    // (cross-branch moves) — plus the "Independent" option in the UI. Exclude
-    // self + descendants to prevent cycles.
-    const requiredForm = getRequiredParentType(
-      formData.processType as unknown as NodeType,
-    );
-    if (!requiredForm) return [];
+    // Parent can be ANY coarser node anywhere in the tree (levels may be
+    // skipped) — plus the "Independent" option in the UI. Exclude self +
+    // descendants to prevent cycles.
     return processNodes.filter(
       (n) =>
         n.id !== editingId &&
         !descendantIds.has(n.id) &&
-        toFormType(n.type as unknown as string) === (requiredForm as unknown as string),
+        canParent(
+          toFormType(n.type as unknown as string) as unknown as NodeType,
+          formData.processType as unknown as NodeType,
+        ),
     );
   }, [formData.processType, processNodes, editingId, descendantIds]);
 
@@ -301,14 +303,9 @@ export function ComponentForm({
           next.processName = 'A component with this name already exists at this level.';
         }
       } else {
-        const roots = processNodes.filter((n) => !n.parentId && n.id !== editingId);
-        if (
-          roots.some(
-            (s) => s.name.toLowerCase() === formData.processName.toLowerCase().trim(),
-          )
-        ) {
-          next.processName = 'A component with this name already exists at the root level.';
-        }
+        // Only the product is a root; every other step belongs to the product
+        // system, so it must sit under something.
+        next.parentId = 'Pick the step this belongs under. Every step needs a parent; only the product has none.';
       }
     } else if (processType === 'product') {
       const existing = processNodes.filter(
@@ -442,8 +439,9 @@ export function ComponentForm({
     // the new component joins the tree instead of floating off on its own. The
     // user can still switch to "Independent" or a different parent. Product is
     // always a root, so it gets no parent.
-    let defaultParent = '';
-    if (v !== 'product') {
+    // In add-child mode the parent is fixed; keep it.
+    let defaultParent = isAddChildMode ? (suggestedParentId ?? '') : '';
+    if (v !== 'product' && !isAddChildMode) {
       const requiredForm = getRequiredParentType(v as unknown as NodeType);
       if (requiredForm) {
         const candidates = processNodes.filter(
@@ -554,14 +552,24 @@ export function ComponentForm({
                 // A case can only have one root Product: grey the option out
                 // ahead of time instead of erroring after the click
                 // (tool-review suggestion #2).
-                disabledTypes={
-                  mode === 'create' &&
-                  processNodes.some(
-                    (n) => toFormType(n.type as unknown as string) === 'product',
+                disabledTypes={(() => {
+                  const off: ComponentTypeValue[] = []
+                  // A case can only have one root Product.
+                  if (
+                    mode === 'create' &&
+                    processNodes.some((n) => toFormType(n.type as unknown as string) === 'product')
                   )
-                    ? ['product']
-                    : undefined
-                }
+                    off.push('product' as ComponentTypeValue)
+                  // Adding a child: only tiers finer than the chosen parent.
+                  if (isAddChildMode && suggestedParent) {
+                    const pType = toFormType(suggestedParent.type as unknown as string) as unknown as NodeType
+                    for (const t of ['product', 'machine', 'subprocess', 'operation', 'elemental'] as NodeType[]) {
+                      if (!canParent(pType, t) && !off.includes(t as unknown as ComponentTypeValue))
+                        off.push(t as unknown as ComponentTypeValue)
+                    }
+                  }
+                  return off.length ? off : undefined
+                })()}
               />
               {errors.processType && (
                 <p style={{ marginTop: 8, fontSize: 12, color: 'var(--signal-error)' }}>
@@ -595,23 +603,26 @@ export function ComponentForm({
                     lineHeight: 1.45,
                   }}
                 >
-                  Attaches to a valid parent one level up by default. Pick a
-                  different one, or make it independent.
+                  Every step needs a parent. It can be any higher-level step, so levels
+                  may be skipped: an operation can sit straight under the product when
+                  there is no line or subprocess.
                 </p>
                 <div style={{ position: 'relative' }}>
                   <select
                     className="input"
                     style={{ appearance: 'none', paddingRight: 32 }}
-                    value={formData.parentId || 'none'}
+                    value={formData.parentId || ''}
                     disabled={isAddChildMode}
                     onChange={(e) => {
                       const value = e.target.value;
                       parentTouchedRef.current = true;
-                      setFormData((p) => ({ ...p, parentId: value === 'none' ? '' : value }));
+                      setFormData((p) => ({ ...p, parentId: value }));
                       if (errors.parentId) setErrors((p) => ({ ...p, parentId: '' }));
                     }}
                   >
-                    <option value="none">Independent — no parent (top-level)</option>
+                    <option value="" disabled>
+                      Choose a parent…
+                    </option>
                     {eligibleParents.map((parent) => (
                       <option key={parent.id} value={parent.id}>
                         {parent.name} ({getTypeLabel(toFormType(parent.type as unknown as string) as unknown as NodeType)})
@@ -634,20 +645,6 @@ export function ComponentForm({
                 {errors.parentId && (
                   <p style={{ marginTop: 6, fontSize: 12, color: 'var(--signal-error)' }}>
                     {errors.parentId}
-                  </p>
-                )}
-                {!formData.parentId && !errors.parentId && (
-                  <p
-                    className="mono"
-                    style={{
-                      marginTop: 6,
-                      fontSize: 10,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.1em',
-                      color: 'var(--text-tertiary)',
-                    }}
-                  >
-                    Floating — can be re-parented later
                   </p>
                 )}
               </div>
@@ -868,6 +865,7 @@ export function ComponentForm({
               <div style={{ padding: '0 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <IntegrationSuggestPanel
                   componentType={formData.processType}
+                  nodeName={formData.processName}
                   quantity={formData.mass ?? 1}
                   region="US"
                   onApply={(suggestion) =>
@@ -1184,11 +1182,13 @@ interface SuggestPayload {
 
 function IntegrationSuggestPanel({
   componentType,
+  nodeName,
   quantity,
   region,
   onApply,
 }: {
   componentType: string;
+  nodeName?: string;
   quantity: number;
   region: string;
   onApply: (s: SuggestPayload) => void;
@@ -1261,24 +1261,34 @@ function IntegrationSuggestPanel({
         }
       }
       if (wants.material) {
-        // Metals-API uses 3-letter ISO-style codes (ALU, XCU, STL, etc.) — map
-        // common material names to those codes.
-        const METALS_SYMBOL: Record<string, string> = {
-          steel: 'STL', aluminum: 'ALU', copper: 'XCU',
-          zinc: 'ZNC', nickel: 'NIK', lead: 'LEA', tin: 'TIN',
-        };
-        const r = await fetch('/api/integrations/metals/fetch-price', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ symbol: METALS_SYMBOL.steel }),
-        });
-        if (r.ok) {
-          const d = await r.json();
-          const perKg = Number(d?.rate?.rateValue ?? d?.pricePerKg ?? 0);
-          if (perKg > 0) {
-            payload.material = Math.round(perKg * q * 100) / 100;
-            sources.push(`Metals-API $${perKg.toFixed(2)}/kg × ${q}`);
+        // Price the ACTUAL material named on the node, not a hardcoded metal.
+        // Metals-API uses 3-letter codes; a metal name maps to its code, and
+        // anything else falls back to the curated reference rate by name.
+        const METAL_SYMBOL: Array<[RegExp, string]> = [
+          [/alumin/i, 'ALU'], [/copper/i, 'XCU'], [/zinc|galvani/i, 'ZNC'],
+          [/nickel/i, 'NIK'], [/lead/i, 'LEA'], [/\btin\b/i, 'TIN'],
+          [/steel|iron/i, 'STL'],
+        ];
+        const metal = METAL_SYMBOL.find(([re]) => re.test(nodeName || ''));
+        if (metal) {
+          const r = await fetch('/api/integrations/metals/fetch-price', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ symbol: metal[1] }),
+          });
+          if (r.ok) {
+            const d = await r.json();
+            const perKg = Number(d?.rate?.rateValue ?? d?.pricePerKg ?? 0);
+            if (perKg > 0) {
+              payload.material = Math.round(perKg * q * 100) / 100;
+              sources.push(`Metals-API ${metal[1]} $${perKg.toFixed(2)}/kg × ${q}`);
+            }
           }
+        } else {
+          // Non-metal (plastic, glass, wood, …): curated USGS/market rate.
+          const mr = pickMaterialRate(nodeName);
+          payload.material = Math.round(mr.rate * q * 100) / 100;
+          sources.push(`${mr.label} $${mr.rate.toFixed(2)}/kg × ${q}`);
         }
       }
 
@@ -1298,8 +1308,9 @@ function IntegrationSuggestPanel({
           sources.push(`EIA fallback $0.130/kWh × 2 kWh × ${q}`);
         }
         if (wants.material) {
-          payload.material = Math.round(0.95 * q * 100) / 100;
-          sources.push(`Metals-API fallback $0.95/kg × ${q}`);
+          const mr = pickMaterialRate(nodeName);
+          payload.material = Math.round(mr.rate * q * 100) / 100;
+          sources.push(`${mr.label} (offline) $${mr.rate.toFixed(2)}/kg × ${q}`);
         }
       }
 
@@ -1372,11 +1383,12 @@ function IntegrationSuggestPanel({
               lineHeight: 1.5,
             }}
           >
-            Pulls live defaults from
+            Rough estimate from
             {wants.labor && ' BLS labor wages,'}
             {wants.energy && ' EIA energy prices,'}
-            {wants.material && ' Metals-API spot prices,'}
-            {' '}for region <code className="mono">{region}</code>.
+            {wants.material && ' Metals-API / USGS material prices,'}
+            {' '}for region <code className="mono">{region}</code>. Add the step&apos;s
+            flows, then the flow-based costing gives an exact figure.
           </div>
         </div>
         <button

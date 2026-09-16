@@ -8,7 +8,7 @@
 // product has).
 
 import type { IngestCost, IngestNode, ProcessModel } from './schema';
-import { validateProcessModel } from './schema';
+import { processModelWarnings, validateProcessModel } from './schema';
 import { convertQuantity } from '@/lib/units';
 
 // Unit conversions to the units LCAPIX factors actually use.
@@ -32,7 +32,20 @@ export interface CatalogSubstance {
   substance_id: number;
   substance_name: string;
   unit?: string | null;
+  /** 'resource', 'emission_air', 'emission_water', 'waste', or blank. */
+  category?: string | null;
   factor_count?: number;
+}
+
+/**
+ * An input (a material, energy or service the step consumes) is never an
+ * emission, so emission and waste substances are not candidates for it: a
+ * name that merely looks alike ("Argon" ~ "Acrolein") must not turn a gas
+ * input into a toxic air emission. Outputs may be either.
+ */
+function candidatesFor(direction: string, substances: CatalogSubstance[]): CatalogSubstance[] {
+  if (direction !== 'input') return substances;
+  return substances.filter((s) => !/^(emission|waste)/i.test(s.category ?? ''));
 }
 
 export interface SubstanceCandidate {
@@ -57,6 +70,11 @@ export interface MappedFlow {
   /** false when the flow's unit can't convert to the matched substance's factor
    *  unit — the flow would be HELD at apply. Surfaced in the review screen. */
   unit_compatible: boolean;
+  /** The line as the document names it (a BOM part) and any step it names. */
+  label?: string;
+  op_hint?: string;
+  /** Append mode: the existing step chosen for this line at review. */
+  attach_component_id?: number | null;
 }
 
 export interface IngestPlan {
@@ -128,10 +146,14 @@ export function convertIngestUnit(
   return { quantity: qty, unit, note: `NO CONVERSION RULE for '${unit}' — passed through` };
 }
 
+/** Lowest similarity accepted as a (low-confidence) match. */
+export const MATCH_ACCEPT = 0.7;
+
 /**
- * Best catalog matches by name similarity. Same scoring and 0.55 accept
- * threshold as the CLI; additionally returns the top alternatives so the
- * review screen can offer an override instead of a blind yes/no.
+ * Best catalog matches by name similarity. Same scoring as the CLI, with a
+ * stricter accept threshold (MATCH_ACCEPT); additionally returns the top
+ * alternatives so the review screen can offer an override instead of a blind
+ * yes/no.
  */
 export function matchSubstance(
   text: string,
@@ -152,7 +174,10 @@ export function matchSubstance(
     score: Math.round(score * 1000) / 1000,
     factor_count: s.factor_count,
   }));
-  if (!scored.length || scored[0].score < 0.55) {
+  // 0.70, not the CLI's 0.55: at 0.55 a short name matched whatever shared
+  // three letters ("Argon" → "Cast iron", "Electric motor" → "Electricity").
+  // Below it the line is shown unmatched, with the alternatives to pick from.
+  if (!scored.length || scored[0].score < MATCH_ACCEPT) {
     return { best: null, score: scored.length ? scored[0].score : 0, candidates };
   }
   return { best: scored[0].s, score: scored[0].score, candidates };
@@ -174,12 +199,18 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
   }
   plan.nodes = [...pm.nodes];
   plan.costs = [...pm.costs];
+  plan.review.push(...processModelWarnings(pm).map((w) => `STRUCTURE WARNING: ${w}`));
   for (const f of pm.flows) {
     const conv = convertIngestUnit(f.quantity, f.unit, f.substance_text);
-    const { best, score, candidates } = matchSubstance(f.substance_text, substances);
+    const { best, score, candidates } = matchSubstance(
+      f.substance_text,
+      candidatesFor(f.direction, substances)
+    );
     if (best === null) {
       plan.review.push(
-        `UNMATCHED SUBSTANCE: '${f.substance_text}' (${f.node}) — best score ${score.toFixed(2)}; ` +
+        // The document's own line name: in append mode f.node is only the
+        // connector's placeholder step, not where the line will go.
+        `UNMATCHED SUBSTANCE: '${f.substance_text}' (${f.label || f.node}) — best score ${score.toFixed(2)}; ` +
           'flow held back, NOT silently dropped'
       );
     }
@@ -207,7 +238,7 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
       if (factorUnit && !convertQuantity(1, conv.unit, factorUnit)) {
         unitCompatible = false;
         plan.review.push(
-          `UNIT MISMATCH: '${f.substance_text}' (${f.node}) is in '${conv.unit}' but ` +
+          `UNIT MISMATCH: '${f.substance_text}' (${f.label || f.node}) is in '${conv.unit}' but ` +
             `'${best.substance_name}' factors are in '${factorUnit}' — WILL BE HELD unless you ` +
             `pick a substance whose unit is compatible`
         );
@@ -226,6 +257,10 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
       conversion_note: conv.note,
       provenance: f.provenance ? `${f.provenance.doc} · ${f.provenance.locator}` : '',
       unit_compatible: unitCompatible,
+      label: f.label,
+      op_hint: f.op_hint,
+      // A connector that already knows the step (equipment → its work center).
+      attach_component_id: f.attach_component_id ?? undefined,
     });
   }
   return plan;

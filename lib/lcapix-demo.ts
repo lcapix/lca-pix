@@ -436,5 +436,5 @@ export const HIERARCHY_TYPES: readonly HierarchyTypeDef[] = [
   { id: 'Machine', label: 'Machine/Line', short: 'M', color: 'var(--chart-2)' },
   { id: 'Subprocess', label: 'Subprocess', short: 'S', color: 'var(--text-secondary)' },
   { id: 'Operation', label: 'Operation', short: 'O', color: 'var(--text-tertiary)' },
-  { id: 'Task', label: 'Elemental Task', short: 'T', color: 'var(--chart-5)' },
+  { id: 'Task', label: 'Task', short: 'T', color: 'var(--chart-5)' },
 ]

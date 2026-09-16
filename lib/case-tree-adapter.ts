@@ -96,6 +96,27 @@ export function componentsToTree(components: ComponentLike[]): CaseTreeNode | nu
     }
   })
 
+  // Steps in process order: by the step number a name starts with ("10.",
+  // "20."), then creation order (ids ascend). Components made in one import
+  // share a timestamp, so the list order alone is not the routing order.
+  const stepNo = (label: string) => {
+    const m = /^\s*(\d+(?:\.\d+)?)\b/.exec(label)
+    return m ? Number(m[1]) : Number.POSITIVE_INFINITY
+  }
+  const byProcessOrder = (a: CaseTreeNode, b: CaseTreeNode) => {
+    const firstStep = (n: CaseTreeNode): number =>
+      n.children?.length ? Math.min(...n.children.map(firstStep)) : stepNo(n.label)
+    const d = firstStep(a) - firstStep(b)
+    if (d !== 0 && Number.isFinite(d)) return d
+    return (Number(a.id) || 0) - (Number(b.id) || 0)
+  }
+  const sortTree = (n: CaseTreeNode) => {
+    n.children?.forEach(sortTree)
+    n.children?.sort(byProcessOrder)
+  }
+  roots.forEach(sortTree)
+  roots.sort(byProcessOrder)
+
   if (roots.length === 1) return roots[0]
 
   // Multi-root — wrap with a NEUTRAL synthetic container ('Root', rendered as
@@ -144,4 +165,39 @@ export function flattenTree(root: CaseTreeNode | null): FlatCaseNode[] {
     walk(root, 0)
   }
   return out
+}
+
+export interface NodeRollup {
+  /** This node's own cost plus everything below it. */
+  cost: number
+  /** This node's own flow count plus everything below it. */
+  flows: number
+  /** True when the node has children — a roll-up, not a terminating node. */
+  hasChildren: boolean
+}
+
+/**
+ * Subtree totals per node id. Under the terminating-node model the values live
+ * on the unit processes (usually operations) and every parent is a pure sum,
+ * so a product / line / subprocess should show the total of what is below it
+ * rather than its own (normally $0) value.
+ */
+export function rollupTree(root: CaseTreeNode | null): Map<string, NodeRollup> {
+  const map = new Map<string, NodeRollup>()
+  if (!root) return map
+  const visit = (n: CaseTreeNode): NodeRollup => {
+    const kids = n.children || []
+    let cost = n.cost || 0
+    let flows = n.flows || 0
+    for (const c of kids) {
+      const r = visit(c)
+      cost += r.cost
+      flows += r.flows
+    }
+    const v = { cost, flows, hasChildren: kids.length > 0 }
+    map.set(n.id, v)
+    return v
+  }
+  visit(root)
+  return map
 }

@@ -235,10 +235,13 @@ export default function AnalyticsPage() {
               })),
             })
           )
-          const totalScore = categories.reduce(
-            (sum: number, cat: any) => sum + cat.impact_value,
-            0
+          // The headline is the climate-change result. Impacts in different
+          // units (kg CO2e, kg SO2e, kg Sb eq) cannot be added into one score
+          // (ISO 14044 4.4); each category is compared on its own below.
+          const gwp = categories.find((cat: any) =>
+            /global warming|climate/i.test(cat.category_name)
           )
+          const totalScore = gwp ? gwp.impact_value : 0
 
           // Cost analysis — aggregate per-component costs for this case. LCAPIX's
           // whole point is cost ↔ impact together, so analytics must show cost
@@ -658,8 +661,9 @@ export default function AnalyticsPage() {
                       <div
                         className="eyebrow"
                         style={{ marginBottom: 6, fontSize: 10 }}
+                        title="Global warming result of the latest run. Other categories are in different units, so they are compared one by one below, never added together."
                       >
-                        TOTAL IMPACT
+                        CLIMATE CHANGE (GWP)
                       </div>
                       <div
                         style={{
@@ -687,7 +691,9 @@ export default function AnalyticsPage() {
                             color: 'var(--text-tertiary)',
                           }}
                         >
-                          {c.categories[0]?.unit || 'kg CO₂-eq'}
+                          {c.categories.find((cat) =>
+                            /global warming|climate/i.test(cat.category_name)
+                          )?.unit || 'kg CO₂-eq'}
                         </div>
                         {!isBase && delta !== null && (
                           <span

@@ -5,15 +5,17 @@
  *
  * Editorial form derived from the LCAPIX design system (botanical
  * atmosphere + white card + mono labels). The POST endpoint shape
- * (`{ project_name, description }`) is preserved unchanged; the
- * methodology + region fields are UI-only extras sent along for
- * forward compatibility — the backend ignores them today.
+ * (`{ project_name, description }`) is preserved unchanged; the study's
+ * scope (functional unit, boundary, impact method, region) is saved onto the
+ * new project with a PUT, and runs use the method and region by default.
  */
 
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Icon, SectionHeader, NumberedRail } from "@/components/lcapix"
+import { HelpTip } from "@/components/lcapix/help-tip"
+import { ISO_HELP } from "@/components/lcapix/iso-help"
 import { apiRequest } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 // Only the LCIA methods that actually have characterization factors loaded in
@@ -28,12 +30,13 @@ const METHODOLOGY_OPTIONS = [
 
 const METHODOLOGY_FROM_DEMO = [...METHODOLOGY_OPTIONS]
 
+// Regions with their own factors (electricity: EPA eGRID US, Ember EU-27,
+// Ember global). A region with no factors of its own would silently fall back
+// to Global, so it is not offered. Value = the engine's region code.
 const REGION_OPTIONS = [
-  "Global",
-  "North America",
-  "Europe",
-  "Asia Pacific",
-  "Latin America",
+  { value: "Global", label: "Global" },
+  { value: "US", label: "United States" },
+  { value: "EU", label: "Europe (EU-27)" },
 ] as const
 
 export default function NewProjectPage() {
@@ -43,7 +46,10 @@ export default function NewProjectPage() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [methodology, setMethodology] = useState<string>(METHODOLOGY_OPTIONS[0])
-  const [region, setRegion] = useState<string>(REGION_OPTIONS[0])
+  const [region, setRegion] = useState<string>(REGION_OPTIONS[0].value)
+  // ISO 14044 goal & scope, saved onto the project (study-level) after create.
+  const [functionalUnit, setFunctionalUnit] = useState("")
+  const [boundary, setBoundary] = useState<string>("cradle-to-gate")
   const [submitting, setSubmitting] = useState(false)
   const [nameError, setNameError] = useState("")
 
@@ -61,9 +67,6 @@ export default function NewProjectPage() {
         body: JSON.stringify({
           project_name: name.trim(),
           description: description.trim(),
-          // Forward-compatible extras (backend ignores today):
-          methodology,
-          region,
         }),
       })
       const data = await res.json()
@@ -76,11 +79,30 @@ export default function NewProjectPage() {
         data?.project_id ??
         null
       if (res.ok && data?.success && projectId != null) {
+        // Goal & scope is study-level (ISO 14044 4.2): save what was entered
+        // here onto the new project. Best-effort; it can be set on the case too.
+        await apiRequest(`/api/projects/${projectId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            ...(functionalUnit.trim()
+              ? { functional_unit: functionalUnit.trim(), system_boundary: boundary }
+              : {}),
+            // The goal typed here is the study's ISO 14044 4.2.2 goal statement
+            // (it also stays the project's description on cards).
+            ...(description.trim() ? { goal_statement: description.trim() } : {}),
+            lcia_method: methodology,
+            region_code: region,
+          }),
+        }).catch(() => undefined)
         toast({
           title: "Project created",
-          description: `"${name.trim()}" is ready.`,
+          description: `"${name.trim()}" is ready. Start by importing your process routing.`,
         })
-        router.push(`/project/${projectId}`)
+        // Guided intake: land on Import (routing pre-selected) so the first
+        // thing after creating a project is building the case skeleton from a
+        // real document, not staring at an empty project. ?first=1 tells the
+        // import page to default to the routing connector and show the nudge.
+        router.push(`/project/${projectId}/import?first=1`)
       } else {
         toast({
           title: "Could not create project",
@@ -214,12 +236,13 @@ export default function NewProjectPage() {
             {/* Description */}
             <div style={{ marginBottom: 32 }}>
               <label htmlFor="projectDescription" className="label">
-                Project Description
+                Goal of the study
+                <HelpTip label="What goes in the goal?">{ISO_HELP.goal}</HelpTip>
               </label>
               <textarea
                 id="projectDescription"
                 className="input"
-                placeholder="Define the boundaries and functional units of this assessment…"
+                placeholder="e.g., Which frame material gives the lower-carbon touring bike, and for whom the answer is written."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
@@ -234,6 +257,47 @@ export default function NewProjectPage() {
               />
             </div>
 
+            {/* Functional unit + boundary: ISO 14044 goal & scope, shared by every case */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 24,
+                marginBottom: 32,
+              }}
+            >
+              <div>
+                <label htmlFor="functionalUnit" className="label">
+                  Functional Unit
+                  <HelpTip label="What is a functional unit?">{ISO_HELP.functionalUnit}</HelpTip>
+                </label>
+                <input
+                  id="functionalUnit"
+                  className="input"
+                  placeholder="e.g., 1 touring bicycle, at the factory gate"
+                  value={functionalUnit}
+                  onChange={(e) => setFunctionalUnit(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="boundary" className="label">
+                  System Boundary
+                  <HelpTip label="What is a system boundary?">{ISO_HELP.systemBoundary}</HelpTip>
+                </label>
+                <select
+                  id="boundary"
+                  className="input"
+                  value={boundary}
+                  onChange={(e) => setBoundary(e.target.value)}
+                  style={{ appearance: "auto" }}
+                >
+                  <option value="cradle-to-gate">Cradle-to-gate</option>
+                  <option value="gate-to-gate">Gate-to-gate</option>
+                  <option value="cradle-to-grave">Cradle-to-grave</option>
+                </select>
+              </div>
+            </div>
+
             {/* Methodology + Region */}
             <div
               style={{
@@ -246,6 +310,14 @@ export default function NewProjectPage() {
               <div>
                 <label htmlFor="methodology" className="label">
                   Primary Methodology
+                  <HelpTip label="What is a methodology?">
+                    The impact-assessment method: the set of characterization factors that
+                    turns inputs and outputs into impact scores. CML 2001 (Leiden University)
+                    is common in Europe, TRACI 2.1 is the US EPA method, and ReCiPe Midpoint
+                    (H) uses the default &quot;hierarchist&quot; perspective. You can still
+                    choose the method each time you run an assessment; keep one method for
+                    every case you compare.
+                  </HelpTip>
                 </label>
                 <select
                   id="methodology"
@@ -264,6 +336,13 @@ export default function NewProjectPage() {
               <div>
                 <label htmlFor="region" className="label">
                   Regional Context
+                  <HelpTip label="What does the regional context do?">
+                    Where the product is made, part of the study&apos;s scope. Runs use it by
+                    default, and each case can be run for another region to compare. Today
+                    only electricity has region-specific factors (US: EPA eGRID, EU: Ember,
+                    Global: Ember); everything else uses the Global factor, marked &quot;Global
+                    (fallback)&quot; in the results.
+                  </HelpTip>
                 </label>
                 <select
                   id="region"
@@ -273,8 +352,8 @@ export default function NewProjectPage() {
                   style={{ appearance: "auto" }}
                 >
                   {REGION_OPTIONS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
+                    <option key={r.value} value={r.value}>
+                      {r.label}
                     </option>
                   ))}
                 </select>

@@ -15,17 +15,29 @@ export async function GET(request: NextRequest) {
     // the chosen method — the tool review's #1 bug was two near-identical
     // substances where only one had factors, and the other silently
     // contributed zero.
+    // data_source: the cited sources of the substance's factors (the text of
+    // source_reference before its first "(" or ","), so a flow's source label
+    // names where its numbers come from. Quarantined rows are not factors.
     let sql = `
       SELECT s.*,
              COALESCE(fc.methods_with_factors, '') AS methods_with_factors,
-             COALESCE(fc.factor_count, 0) AS factor_count
+             COALESCE(fc.factor_count, 0) AS factor_count,
+             fc.data_source AS data_source
       FROM substances s
       LEFT JOIN (
         SELECT substance_id,
                GROUP_CONCAT(DISTINCT method_name ORDER BY method_name SEPARATOR '|') AS methods_with_factors,
-               COUNT(*) AS factor_count
+               COUNT(*) AS factor_count,
+               SUBSTRING(
+                 GROUP_CONCAT(
+                   DISTINCT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(source_reference, ' (', 1), ',', 1))
+                   ORDER BY TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(source_reference, ' (', 1), ',', 1))
+                   SEPARATOR ' · '
+                 ),
+                 1, 160
+               ) AS data_source
         FROM driver_impact_factors
-        WHERE factor_value <> 0
+        WHERE factor_value <> 0 AND method_name NOT LIKE 'QUARANTINE%'
         GROUP BY substance_id
       ) fc ON fc.substance_id = s.substance_id`;
     const params: any[] = [];

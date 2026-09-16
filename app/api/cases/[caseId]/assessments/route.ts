@@ -3,7 +3,12 @@ import { query, insert, queryOne, execute, transaction } from '@/lib/db-helpers'
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
-import { buildRunSnapshot, parseRunSnapshot } from '@/lib/run-snapshot';
+import {
+  buildGoalScope,
+  buildRunSnapshot,
+  parseRunSnapshot,
+  type GoalScope,
+} from '@/lib/run-snapshot';
 
 // GET /api/cases/[caseId]/assessments
 export async function GET(
@@ -121,8 +126,13 @@ export async function GET(
               impact: r.impact,
               scope: r.scope,
               conversion: r.conversion,
+              source_tier: r.source_tier ?? null,
+              source: r.source ?? null,
+              allocation: r.allocation ?? null,
             })),
             warnings: snapshot.warnings,
+            goal_scope: snapshot.goal_scope ?? null,
+            data_quality: snapshot.data_quality ?? null,
             detail_source: 'snapshot' as const,
           };
         }
@@ -177,6 +187,8 @@ export async function GET(
           componentBreakdown,
           flowDetail,
           warnings: [],
+          goal_scope: null,
+          data_quality: null,
           detail_source: 'recomputed-legacy' as const,
         };
       })
@@ -218,10 +230,47 @@ export async function POST(
     }
 
     const { run_name, calculation_method, region_code } = await request.json();
-    const method = calculation_method || 'CML 2001';
+    // A run that names no method or region uses the study's scope: the
+    // project's LCIA method, the case's region (where the product is made),
+    // then the project's region, then CML 2001 / Global.
+    let scope: { method?: string | null; region?: string | null } = {};
+    if (!calculation_method || !region_code) {
+      try {
+        const row = await queryOne<any>(
+          `SELECT c.region_code AS case_region, p.lcia_method, p.region_code AS project_region
+             FROM case_table c JOIN project p ON p.project_id = c.project_id
+            WHERE c.case_id = ?`,
+          [caseId]
+        );
+        scope = { method: row?.lcia_method, region: row?.case_region || row?.project_region };
+      } catch {
+        try {
+          // Before migrate-018: the case's region only.
+          const row = await queryOne<any>(`SELECT region_code FROM case_table WHERE case_id = ?`, [caseId]);
+          scope = { region: row?.region_code };
+        } catch {
+          /* no region column: Global */
+        }
+      }
+    }
+    const method = calculation_method || scope.method || 'CML 2001';
     // Canonical zone code ('US Grid' → 'US'); stored on the run so results are
     // attributable to the region actually used, not the UI label.
-    const regionCode = canonicalizeRegion(region_code);
+    const regionCode = canonicalizeRegion(region_code || scope.region);
+
+    // Goal & scope in force for this run (ISO 14044 4.2), frozen into the
+    // snapshot. SELECT * reads whichever columns exist, so a database without
+    // migrate-014 still runs and the snapshot records the defaults.
+    let goalScope: GoalScope | null = null;
+    try {
+      const [projectRow, caseRow] = await Promise.all([
+        queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [caseData.project_id]),
+        queryOne<any>(`SELECT * FROM case_table WHERE case_id = ?`, [caseId]),
+      ]);
+      goalScope = buildGoalScope(projectRow, caseRow);
+    } catch (gsErr) {
+      console.warn('[assessments POST] could not read goal & scope:', gsErr);
+    }
 
     const result = await transaction(async (conn) => {
       // Create assessment run record
@@ -274,7 +323,7 @@ export async function POST(
         // Freeze what this run computed (per-flow contributions, factor
         // scopes, unit conversions, warnings) so results stay reproducible
         // after flows or factors change.
-        const snapshot = buildRunSnapshot(lcaResult, method, regionCode);
+        const snapshot = buildRunSnapshot(lcaResult, method, regionCode, goalScope);
 
         // Mark as completed
         await conn.query(
@@ -324,7 +373,7 @@ export async function POST(
     const warnings: string[] = [];
     if (result.lcaResult.summary.components_with_flows === 0) {
       warnings.push(
-        'No components in this case have any input/output flows yet. The assessment ran successfully but every impact is 0. Add at least one flow on a leaf component (Elemental Task) and re-run.',
+        'No process step in this case has any input or output flows yet. The assessment ran, but every impact is 0. Add at least one flow on an operation and re-run.',
       );
     }
     // Data-quality warnings from the engine (unit mismatches, exclusions).
@@ -340,6 +389,8 @@ export async function POST(
       ...(warnings.length ? { warnings } : {}),
       results,
       total_impacts: result.lcaResult.total_impacts,
+      goal_scope: goalScope,
+      data_quality: result.lcaResult.data_quality ?? null,
       algorithm_steps: result.lcaResult.algorithm_steps.map(step => step.step_description),
       component_breakdown: result.lcaResult.component_results.map(cr => ({
         component_id: cr.component_id,

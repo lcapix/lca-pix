@@ -7,14 +7,16 @@
  *
  * Slides:
  *   1. Title — project / case / method / date
- *   2. Total environmental impact by category (table)
- *   3. Top component contributors (table)
- *   4. Cost summary (opex / capex / total)
- *   5. Methodology & data sources (ISO 14040/14044 attribution)
+ *   2. Goal & scope (ISO 14044 4.2)
+ *   3. Total environmental impact by category, per functional unit when it differs (table)
+ *   4. Top component contributors (table)
+ *   5. Cost summary (opex / capex / total)
+ *   6. Methodology & data sources (ISO 14040/14044 attribution)
+ *   7. Data-quality statement (ISO 14044 4.2.3.6)
  */
 
 import PptxGenJS from 'pptxgenjs';
-import type { ReportData } from './pdf-generator';
+import { goalScopeRows, type ReportData } from './pdf-generator';
 
 const BRAND = {
   primary: '1A5632',
@@ -24,6 +26,17 @@ const BRAND = {
   headerBg: 'F0FDF4',
   white: 'FFFFFF',
   border: 'D1D5DB',
+}
+
+// Long bullet blocks overflowed fixed text boxes. PowerPoint honours
+// fit: 'shrink', but Keynote, Google Slides and Quick Look do not, so the font
+// also steps down with the amount of text.
+function fitSize(lines: string[], base: number): number {
+  const chars = lines.join(' ').length
+  if (chars > 1400) return base - 4
+  if (chars > 900) return base - 3
+  if (chars > 500) return base - 2
+  return base
 }
 
 function fmtNum(v: number, dp = 2): string {
@@ -56,7 +69,7 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
     fontSize: 14, color: BRAND.secondary, bold: true, charSpacing: 2,
   })
   title.addText(data.project.project_name, {
-    x: 0.6, y: 2.2, w: 12.1, h: 1.0,
+    x: 0.6, y: 2.2, w: 12.1, h: 1.0, fit: 'shrink',
     fontSize: 40, color: BRAND.primary, bold: true,
   })
   title.addText(
@@ -75,28 +88,54 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
     { x: 0.6, y: 6.7, w: 12.1, h: 0.4, fontSize: 11, color: BRAND.textLight, italic: true },
   )
 
-  // ─── Slide 2: Impact by category ────────────────────────────────────────────
+  // ─── Slide 2: Goal & scope (ISO 14044 4.2) ──────────────────────────────────
+  const scopeSlide = pptx.addSlide()
+  slideHeader(scopeSlide, 'Goal & scope (ISO 14044 4.2)')
+  scopeSlide.addTable(
+    goalScopeRows(data.goal_scope).map(([label, value], i) => [
+      cell(label, { bold: true, color: BRAND.textLight }, i),
+      cell(value, {}, i),
+    ]),
+    {
+      x: 0.6, y: 1.5, w: 12.1, colW: [3.2, 8.9],
+      border: { type: 'solid', color: BRAND.border, pt: 0.5 },
+      fontSize: 12, valign: 'middle', autoPage: true, autoPageSlideStartY: 1.2,
+    },
+  )
+
+  // ─── Slide 3: Impact by category ────────────────────────────────────────────
+  // Per functional unit (ISO 14044 4.3.3.2) when the case models a different
+  // amount of product than one functional unit needs.
+  const scale = data.goal_scope?.per_fu_scale ?? 1
+  const perFu = scale !== 1
   const impactSlide = pptx.addSlide()
   slideHeader(impactSlide, 'Environmental load by impact category')
   const impactRows: PptxGenJS.TableRow[] = [
-    headerRow(['Impact category', 'Total value', 'Unit']),
+    headerRow(
+      perFu
+        ? ['Impact category', 'Case total', 'Per functional unit', 'Unit']
+        : ['Impact category', 'Total value', 'Unit'],
+    ),
   ]
   const sortedImpacts = [...data.total_impacts].sort((a, b) => b.total_value - a.total_value)
   if (sortedImpacts.length === 0) {
-    impactRows.push([cell('No impact results in this run.', { colspan: 3, italic: true })])
+    impactRows.push([
+      cell('No impact results in this run.', { colspan: perFu ? 4 : 3, italic: true }),
+    ])
   } else {
     sortedImpacts.forEach((imp, i) => {
       impactRows.push([
-        cell(imp.category_name),
-        cell(fmtNum(imp.total_value, 4), { align: 'right' }),
-        cell(imp.unit, { color: BRAND.textLight }),
-      ], i)
+        cell(imp.category_name, {}, i),
+        cell(fmtNum(imp.total_value, 4), { align: 'right' }, i),
+        ...(perFu ? [cell(fmtNum(imp.total_value * scale, 4), { align: 'right', bold: true }, i)] : []),
+        cell(imp.unit, { color: BRAND.textLight }, i),
+      ])
     })
   }
   impactSlide.addTable(impactRows, {
-    x: 0.6, y: 1.5, w: 12.1, colW: [6.6, 3.0, 2.5],
+    x: 0.6, y: 1.5, w: 12.1, colW: perFu ? [5.1, 2.5, 2.5, 2.0] : [6.6, 3.0, 2.5],
     border: { type: 'solid', color: BRAND.border, pt: 0.5 },
-    fontSize: 13, valign: 'middle',
+    fontSize: 12, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.2,
   })
 
   // ─── Slide 3: Top contributors ──────────────────────────────────────────────
@@ -122,17 +161,17 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
   } else {
     ranked.forEach((c, i) => {
       contribRows.push([
-        cell(String(i + 1), { color: BRAND.textLight }),
-        cell(c.name),
-        cell(fmtNum(c.value, 3), { align: 'right' }),
-        cell(`${((c.value / grand) * 100).toFixed(1)}%`, { align: 'right', bold: true, color: BRAND.secondary }),
-      ], i)
+        cell(String(i + 1), { color: BRAND.textLight }, i),
+        cell(c.name, {}, i),
+        cell(fmtNum(c.value, 3), { align: 'right' }, i),
+        cell(`${((c.value / grand) * 100).toFixed(1)}%`, { align: 'right', bold: true, color: BRAND.secondary }, i),
+      ])
     })
   }
   contribSlide.addTable(contribRows, {
     x: 0.6, y: 1.5, w: 12.1, colW: [0.8, 7.3, 2.0, 2.0],
     border: { type: 'solid', color: BRAND.border, pt: 0.5 },
-    fontSize: 13, valign: 'middle',
+    fontSize: 12, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.2,
   })
 
   // ─── Slide 4: Cost summary ──────────────────────────────────────────────────
@@ -181,11 +220,22 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
   }
   methodSlide.addText(
     lines.map((t) => ({ text: t, options: { bullet: true, color: BRAND.text } })),
-    { x: 0.6, y: 1.5, w: 12.1, h: 3.0, fontSize: 15, lineSpacingMultiple: 1.4 },
+    { x: 0.6, y: 1.5, w: 12.1, h: 4.2, fontSize: fitSize(lines, 15), lineSpacingMultiple: 1.25, valign: 'top', fit: 'shrink' },
   )
   methodSlide.addText(
     'This assessment follows ISO 14040 / 14044 life-cycle-assessment principles. Results are indicative and depend on the inventory data and characterization factors of the selected method and region.',
     { x: 0.6, y: 5.8, w: 12.1, h: 1.0, fontSize: 11, color: BRAND.textLight, italic: true },
+  )
+
+  // ─── Slide 7: Data-quality statement (ISO 14044 4.2.3.6) ────────────────────
+  const dqSlide = pptx.addSlide()
+  slideHeader(dqSlide, 'Data quality (ISO 14044 4.2.3.6)')
+  const dqLines = data.data_quality?.statement ?? [
+    'Not recorded for this run (made before the data-quality statement was stored). Re-run to record it.',
+  ]
+  dqSlide.addText(
+    dqLines.map((t) => ({ text: t, options: { bullet: true, color: BRAND.text } })),
+    { x: 0.6, y: 1.5, w: 12.1, h: 5.2, fontSize: fitSize(dqLines, 14), lineSpacingMultiple: 1.2, valign: 'top', fit: 'shrink' },
   )
 
   // pptxgenjs returns ArrayBuffer/Uint8Array with nodebuffer; coerce to Buffer.

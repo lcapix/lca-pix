@@ -13,12 +13,14 @@ export async function GET(request: NextRequest) {
               a.username as owner_username,
               pm.permission_id,
               perm.permission_name,
-              COUNT(DISTINCT c.case_id) as case_count
+              COUNT(DISTINCT c.case_id) as case_count,
+              COUNT(DISTINCT comp.component_id) as component_count
        FROM project p
        LEFT JOIN project_members pm ON p.project_id = pm.project_id AND pm.user_id = ?
        LEFT JOIN permissions perm ON pm.permission_id = perm.permission_id
        LEFT JOIN account a ON p.owner_id = a.id
        LEFT JOIN case_table c ON p.project_id = c.project_id
+       LEFT JOIN component comp ON comp.case_id = c.case_id
        WHERE p.owner_id = ? OR pm.user_id = ?
        GROUP BY p.project_id, p.project_name, p.description, p.owner_id,
                 p.created_at, p.updated_at, a.username, pm.permission_id, perm.permission_name
