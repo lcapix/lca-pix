@@ -20,19 +20,26 @@ describe('POST /api/integrations/metals/fetch-price', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('401 unauth', async () => {
-    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
     const res = await POST(req({ symbol: 'ALU' }) as any);
     expect(res.status).toBe(401);
   });
 
+  it('403 for a non-admin, and nothing is fetched or written', async () => {
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await POST(req({ symbol: 'ALU' }) as any);
+    expect(res.status).toBe(403);
+    expect(rates.getOrFetchRate).not.toHaveBeenCalled();
+  });
+
   it('400 on invalid symbol', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ symbol: 'nope' }) as any);
     expect(res.status).toBe(400);
   });
 
   it('returns rate from cache via getOrFetchRate', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockResolvedValue({
       rateValue: 2.45, unit: '$/kg',
       source: 'Metals-API 2026-04-13', effectiveDate: '2026-04-13',
@@ -51,7 +58,7 @@ describe('POST /api/integrations/metals/fetch-price', () => {
   });
 
   it('500 on fetch failure, logs failed', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('metals api down'));
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 

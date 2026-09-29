@@ -10,13 +10,20 @@ describe('GET /api/integrations/log', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('401 when unauth', async () => {
-    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
     const res = await GET(new Request('http://t/') as any);
     expect(res.status).toBe(401);
   });
 
+  it('403 for a non-admin, and the log is not read', async () => {
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await GET(new Request('http://t/') as any);
+    expect(res.status).toBe(403);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it('returns logs with limit and source filter', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(db.query).mockResolvedValue([
       { log_id: 1, source: 'pubchem', action: 'enrich_all', records_affected: 40, status: 'success', executed_at: '2026-04-13', details: null },
     ] as any);
@@ -31,7 +38,7 @@ describe('GET /api/integrations/log', () => {
   });
 
   it('returns logs without source filter', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(db.query).mockResolvedValue([
       { log_id: 2, source: 'openlca', action: 'import_method', records_affected: 48, status: 'success', executed_at: '2026-04-13', details: null },
       { log_id: 1, source: 'pubchem', action: 'enrich_substance', records_affected: 1, status: 'success', executed_at: '2026-04-13', details: null },

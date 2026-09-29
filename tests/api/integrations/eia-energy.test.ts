@@ -20,19 +20,26 @@ describe('POST /api/integrations/eia/fetch-energy-price', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('401 when unauth', async () => {
-    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
     const res = await POST(req({ fuel: 'electricity', state: 'NY' }) as any);
     expect(res.status).toBe(401);
   });
 
+  it('403 for a non-admin, and nothing is fetched or written', async () => {
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await POST(req({ fuel: 'electricity', state: 'NY' }) as any);
+    expect(res.status).toBe(403);
+    expect(rates.getOrFetchRate).not.toHaveBeenCalled();
+  });
+
   it('400 when fuel is invalid', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ fuel: 'coal', state: 'NY' }) as any);
     expect(res.status).toBe(400);
   });
 
   it('fetches electricity rate and returns it', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockResolvedValue({
       rateValue: 0.128, unit: '$/kWh', source: 'EIA 2026-01', effectiveDate: '2026-01-01',
     });
@@ -49,7 +56,7 @@ describe('POST /api/integrations/eia/fetch-energy-price', () => {
   });
 
   it('fetches natural gas rate and returns it', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockResolvedValue({
       rateValue: 10.50, unit: '$/MCF', source: 'EIA 2026-01', effectiveDate: '2026-01-01',
     });
@@ -64,7 +71,7 @@ describe('POST /api/integrations/eia/fetch-energy-price', () => {
   });
 
   it('500 on fetch error, logs failure', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('EIA down'));
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 

@@ -1,7 +1,7 @@
 // app/api/integrations/electricity/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/auth';
+import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { syncZoneFactor } from '@/lib/integrations/electricity-maps/sync';
 import { logIntegration } from '@/lib/integrations/log';
 
@@ -16,9 +16,9 @@ const Body = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  let userId: number;
-  try { userId = await requireAuth(request); }
-  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  const guard = await guardAdmin(request);
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {

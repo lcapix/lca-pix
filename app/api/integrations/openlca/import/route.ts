@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
+import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { importFactorMethod } from '@/lib/integrations/openlca/import';
 import { logIntegration } from '@/lib/integrations/log';
 import { CML_2001_V4_FACTORS } from '@/lib/integrations/openlca/data/cml-2001-v4';
@@ -19,9 +20,9 @@ const Body = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  let userId: number;
-  try { userId = await requireAuth(request); }
-  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  const guard = await guardAdmin(request);
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
@@ -57,7 +58,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try { await requireAuth(request); }
+  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+
   return NextResponse.json({
     success: true,
     methods: Object.keys(SUPPORTED).map(name => ({

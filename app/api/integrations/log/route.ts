@@ -1,11 +1,11 @@
 // app/api/integrations/log/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { query } from '@/lib/db-helpers';
 
 export async function GET(request: NextRequest) {
-  try { await requireAuth(request); }
-  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  const guard = await guardAdmin(request);
+  if (guard.response) return guard.response;
 
   const sp = new URL(request.url).searchParams;
   const source = sp.get('source');

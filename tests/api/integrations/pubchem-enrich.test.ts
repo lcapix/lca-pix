@@ -20,13 +20,21 @@ describe('POST /api/integrations/pubchem/enrich', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('returns 401 when not authenticated', async () => {
-    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
     const res = await POST(mkRequest({}) as any);
     expect(res.status).toBe(401);
   });
 
+  it('403 for a non-admin, and nothing is enriched', async () => {
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await POST(mkRequest({}) as any);
+    expect(res.status).toBe(403);
+    expect(enrich.enrichAllSubstances).not.toHaveBeenCalled();
+    expect(enrich.enrichSubstance).not.toHaveBeenCalled();
+  });
+
   it('enriches a single substance when substance_id provided', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(enrich.enrichSubstance).mockResolvedValue({ status: 'enriched', cid: 297 });
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 
@@ -38,7 +46,7 @@ describe('POST /api/integrations/pubchem/enrich', () => {
   });
 
   it('enriches all when no substance_id', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(enrich.enrichAllSubstances).mockResolvedValue({
       enriched: 40, notFound: 2, failed: 0, total: 42,
     });

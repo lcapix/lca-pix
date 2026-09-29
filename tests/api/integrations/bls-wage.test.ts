@@ -20,25 +20,32 @@ describe('POST /api/integrations/bls/fetch-wage', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('401 when unauth', async () => {
-    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
     const res = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
     expect(res.status).toBe(401);
   });
 
+  it('403 for a non-admin, and nothing is fetched or written', async () => {
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
+    expect(res.status).toBe(403);
+    expect(rates.getOrFetchRate).not.toHaveBeenCalled();
+  });
+
   it('400 when occupation is not the right shape', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ occupation: 'invalid', state: 'NY' }) as any);
     expect(res.status).toBe(400);
   });
 
   it('400 when state is not 2 letters or US', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ occupation: '51-4121', state: 'LONGSTATE' }) as any);
     expect(res.status).toBe(400);
   });
 
   it('returns rate from getOrFetchRate on success', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockResolvedValue({
       rateValue: 28.15, unit: '$/hr', source: 'BLS 2024', effectiveDate: '2024-05-01',
     });
@@ -58,7 +65,7 @@ describe('POST /api/integrations/bls/fetch-wage', () => {
   });
 
   it('logs + returns 500 when fetch throws', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('BLS error 500'));
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 

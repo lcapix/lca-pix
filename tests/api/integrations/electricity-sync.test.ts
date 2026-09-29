@@ -20,19 +20,26 @@ describe('POST /api/integrations/electricity/sync', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('401 when unauth', async () => {
-    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
     const res = await POST(req({ zones: ['US-NY'] }) as any);
     expect(res.status).toBe(401);
   });
 
+  it('403 for a non-admin, and no zone is synced', async () => {
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await POST(req({ zones: ['US-NY'] }) as any);
+    expect(res.status).toBe(403);
+    expect(sync.syncZoneFactor).not.toHaveBeenCalled();
+  });
+
   it('400 on empty zones', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ zones: [] }) as any);
     expect(res.status).toBe(400);
   });
 
   it('syncs zones and returns results', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(sync.syncZoneFactor).mockResolvedValue({
       zone: 'US-NY', factorValue: 0.283, inserted: true,
       source: 'live', sourceRef: 'Electricity Maps API 2026-09-11',
@@ -48,7 +55,7 @@ describe('POST /api/integrations/electricity/sync', () => {
   });
 
   it('reports errors in per-zone results without aborting the whole call', async () => {
-    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(sync.syncZoneFactor)
       .mockResolvedValueOnce({ zone: 'US-NY', factorValue: 0.283, inserted: true, source: 'live', sourceRef: 'Electricity Maps API 2026-09-11' })
       .mockRejectedValueOnce(new Error('fetch failed'));

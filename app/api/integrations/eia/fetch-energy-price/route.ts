@@ -1,7 +1,7 @@
 // app/api/integrations/eia/fetch-energy-price/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/auth';
+import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { fetchElectricityPrice, fetchNaturalGasPrice } from '@/lib/integrations/eia/client';
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
 import { ENERGY_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
@@ -14,9 +14,9 @@ const Body = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  let userId: number;
-  try { userId = await requireAuth(request); }
-  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  const guard = await guardAdmin(request);
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
