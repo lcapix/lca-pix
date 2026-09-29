@@ -47,6 +47,13 @@ describe('POST /api/integrations/openlca/import', () => {
     expect(log.logIntegration).toHaveBeenCalled();
   });
 
+  it.each(['constructor', '__proto__', 'QUARANTINE: TRACI 2.1'])('400 on method %s, without importing', async (m) => {
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    const res = await POST(req({ method: m }) as any);
+    expect(res.status).toBe(400);
+    expect(imp.importFactorMethod).not.toHaveBeenCalled();
+  });
+
   it('400 on unknown method', async () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ method: 'NotARealMethod' }) as any);

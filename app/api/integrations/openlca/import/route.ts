@@ -4,19 +4,20 @@ import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { importFactorMethod } from '@/lib/integrations/openlca/import';
+import { SUPPORTED_METHODS, type SupportedMethod } from '@/lib/integrations/openlca/methods';
 import { logIntegration } from '@/lib/integrations/log';
 import { CML_2001_V4_FACTORS } from '@/lib/integrations/openlca/data/cml-2001-v4';
 import { RECIPE_MIDPOINT_H_FACTORS } from '@/lib/integrations/openlca/data/recipe-midpoint-h';
 import { TRACI_21_FACTORS } from '@/lib/integrations/openlca/data/traci-2.1';
 
-const SUPPORTED: Record<string, typeof CML_2001_V4_FACTORS> = {
+const SUPPORTED: Record<SupportedMethod, typeof CML_2001_V4_FACTORS> = {
   'CML 2001': CML_2001_V4_FACTORS,
   'ReCiPe Midpoint (H)': RECIPE_MIDPOINT_H_FACTORS,
   'TRACI 2.1': TRACI_21_FACTORS,
 };
 
 const Body = z.object({
-  method: z.string().min(1),
+  method: z.enum(SUPPORTED_METHODS),
 });
 
 export async function POST(request: NextRequest) {
@@ -26,16 +27,13 @@ export async function POST(request: NextRequest) {
 
   const parsed = Body.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+    return NextResponse.json({
+      error: `Unsupported method. Available: ${SUPPORTED_METHODS.join(', ')}`,
+    }, { status: 400 });
   }
 
   const methodName = parsed.data.method;
   const seeds = SUPPORTED[methodName];
-  if (!seeds) {
-    return NextResponse.json({
-      error: `Method "${methodName}" not supported. Available: ${Object.keys(SUPPORTED).join(', ')}`,
-    }, { status: 400 });
-  }
 
   try {
     const result = await importFactorMethod(methodName, seeds);
@@ -64,7 +62,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    methods: Object.keys(SUPPORTED).map(name => ({
+    methods: SUPPORTED_METHODS.map(name => ({
       name,
       seedCount: SUPPORTED[name].length,
     })),
