@@ -59,6 +59,24 @@ export function transformCaseFromDB(dbCase: any): Case {
 }
 
 /**
+ * The drivers column is JSON, but rows written by older paths hold plain text.
+ * One unparseable row used to throw here and send the user out of the case, so
+ * anything that is not a list of drivers reads as "no drivers".
+ */
+function parseDrivers(raw: unknown): string[] | undefined {
+  if (raw == null || raw === '') return undefined;
+  let value: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return Array.isArray(value) ? value.map(String) : undefined;
+}
+
+/**
  * Transform database component to frontend format
  */
 export function transformComponentFromDB(dbComponent: any): ComponentNode {
@@ -72,7 +90,7 @@ export function transformComponentFromDB(dbComponent: any): ComponentNode {
     processType: dbComponent.process_type || dbComponent.component_type || undefined,
     driverCategory: dbComponent.driver_category || undefined,
     selectedDriver: dbComponent.driver_type || undefined,
-    drivers: dbComponent.drivers ? (typeof dbComponent.drivers === 'string' ? JSON.parse(dbComponent.drivers) : dbComponent.drivers) : undefined,
+    drivers: parseDrivers(dbComponent.drivers),
     mass: dbComponent.quantity ? parseFloat(dbComponent.quantity) : undefined,
     massUnit: dbComponent.unit || undefined,
     // Real attached-flow count from the API (for canvas card "N flows").
