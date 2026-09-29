@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
+import {
+  parseFlowQuantity,
+  QUANTITY_ERROR,
+  findUsableSubstance,
+  SUBSTANCE_ERROR,
+} from '@/lib/flow-fields';
 
 // PUT /api/flows/[flowId] - Update flow
 export async function PUT(
@@ -35,26 +41,55 @@ export async function PUT(
     const body = await request.json();
     const substance_id = body.substance_id;
     const flow_type = body.flow_type ?? body.direction;
-    const quantity = body.quantity ?? body.amount;
+    const quantityProvided =
+      Object.prototype.hasOwnProperty.call(body, 'quantity') ||
+      Object.prototype.hasOwnProperty.call(body, 'amount');
+    const quantity = quantityProvided ? parseFlowQuantity(body.quantity ?? body.amount) : null;
     const unit = body.unit;
+
+    // FLOW-4: quantity is NOT NULL and must be a real, non-negative number.
+    if (quantityProvided && quantity === null) {
+      return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
+    }
+    if (flow_type != null && !['input', 'output'].includes(flow_type)) {
+      return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
+    }
+
+    // L3: a swap may only go to a library substance or the caller's own one.
+    let swappedTo: { default_unit?: string | null; substance_name?: string } | null = null;
+    if (substance_id != null) {
+      swappedTo = await findUsableSubstance(substance_id, userId);
+      if (!swappedTo) {
+        return NextResponse.json({ error: SUBSTANCE_ERROR }, { status: 400 });
+      }
+    }
 
     // Same save-time unit guard as flow creation: whichever unit this flow
     // ends up with must convert into the unit its substance's factors are
     // stored in, or the engine could only exclude the flow at run time.
-    if (unit) {
+    // A swap without a unit keeps the flow's current unit, which must still
+    // convert into the new substance's unit.
+    const effectiveUnit =
+      unit ||
+      (swappedTo
+        ? (await queryOne<any>(`SELECT unit FROM flows WHERE flow_id = ?`, [flowId]))?.unit
+        : null);
+    if (effectiveUnit) {
       const effectiveSubstanceId =
         substance_id ??
         (await queryOne<any>(`SELECT substance_id FROM flows WHERE flow_id = ?`, [flowId]))
           ?.substance_id;
       if (effectiveSubstanceId) {
-        const substanceRow = await queryOne<any>(
-          `SELECT unit AS default_unit, substance_name FROM substances WHERE substance_id = ?`,
-          [effectiveSubstanceId]
-        );
-        if (substanceRow?.default_unit && !convertQuantity(1, unit, substanceRow.default_unit)) {
+        const substanceRow =
+          swappedTo ??
+          (await queryOne<any>(
+            `SELECT unit AS default_unit, substance_name FROM substances WHERE substance_id = ?`,
+            [effectiveSubstanceId]
+          ));
+        if (substanceRow?.default_unit && !convertQuantity(1, effectiveUnit, substanceRow.default_unit)) {
           return NextResponse.json(
             {
-              error: `Unit '${unit}' cannot be converted to '${substanceRow.default_unit}', the unit ${substanceRow.substance_name}'s impact factors are stored in. Compatible units: ${compatibleUnits(substanceRow.default_unit).join(', ') || substanceRow.default_unit}.`,
+              error: `Unit '${effectiveUnit}' cannot be converted to '${substanceRow.default_unit}', the unit ${substanceRow.substance_name}'s impact factors are stored in. Compatible units: ${compatibleUnits(substanceRow.default_unit).join(', ') || substanceRow.default_unit}.`,
             },
             { status: 400 }
           );
@@ -69,8 +104,24 @@ export async function PUT(
            quantity = COALESCE(?, quantity),
            unit = COALESCE(?, unit)
        WHERE flow_id = ?`,
-      [substance_id ?? null, flow_type ?? null, quantity ?? null, unit ?? null, flowId]
+      [substance_id != null ? Number(substance_id) : null, flow_type ?? null, quantity, unit ?? null, flowId]
     );
+
+    // A quantity typed by hand is no longer the mass x distance a transport
+    // leg was computed from (TKM-2): drop the leg rather than keep two
+    // numbers that disagree.
+    if (quantityProvided) {
+      try {
+        await execute(
+          `UPDATE flows SET transport_mass_kg = NULL, transport_distance_km = NULL, transport_mode = NULL
+            WHERE flow_id = ? AND transport_mass_kg IS NOT NULL
+              AND ABS(transport_mass_kg / 1000 * transport_distance_km - quantity) > 0.000001 * GREATEST(1, ABS(quantity))`,
+          [flowId],
+        );
+      } catch (legErr: any) {
+        if (legErr?.code !== 'ER_BAD_FIELD_ERROR') throw legErr; // no migrate-022
+      }
+    }
 
     const updatedFlow = await queryOne(
       `SELECT f.*,
