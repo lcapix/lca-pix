@@ -1421,15 +1421,10 @@ function DashboardHero({
             >
               {activeCat?.unit ?? ''}
             </div>
-            {activeCat?.coverage && (
-              <span
-                className="chip"
-                style={{ fontSize: 10.5, padding: '2px 8px', color: '#b45309' }}
-                title={`Only ${activeCat.coverage.covered} of ${activeCat.coverage.total} inputs have a ${activeCat.label.toLowerCase()} factor (missing: ${activeCat.coverage.missing.join(', ')}), so this total covers part of the product.`}
-              >
-                covers {activeCat.coverage.covered} of {activeCat.coverage.total} inputs
-              </span>
-            )}
+            {/* The per-category coverage chips were removed from this screen on
+                2026-09-29 at Shreya's call: too much warning for the demo. The
+                engine still computes coverage and the data-quality statement
+                below still states it in words, which is what the report prints. */}
             {deltaPct != null && (
               <span
                 className="mono"
@@ -1640,17 +1635,6 @@ function DashboardHero({
                     }}
                   >
                     {c.label}
-                    {c.coverage && (
-                      <span
-                        className="chip"
-                        style={{ fontSize: 9.5, padding: '1px 6px', color: '#b45309' }}
-                        title={`Covers ${c.coverage.covered} of ${c.coverage.total} inputs. No ${c.label.toLowerCase()} factor for ${c.coverage.missing.join(', ')}${
-                          c.coverage.missing.length < c.coverage.total - c.coverage.covered ? ' and others' : ''
-                        }, so this total is incomplete.`}
-                      >
-                        partial
-                      </span>
-                    )}
                   </div>
                   <div
                     style={{
