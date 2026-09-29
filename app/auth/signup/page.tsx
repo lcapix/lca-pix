@@ -55,14 +55,14 @@ export default function SignupPage() {
     setErrors({})
 
     try {
-      // Call backend API — derive username from full name if provided, else from email
-      const username = fullName.trim() || email.split("@")[0]
+      // The server derives a unique username from the email; the name typed
+      // here is the person's full name.
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, email, password }),
+        body: JSON.stringify({ full_name: fullName.trim(), email, password }),
       })
 
       const data = await response.json()
@@ -78,7 +78,7 @@ export default function SignupPage() {
       // Update auth store
       const user = {
         id: data.user.id.toString(),
-        name: data.user.username,
+        name: fullName.trim() || data.user.username,
         email: data.user.email,
         createdAt: new Date(),
       }
