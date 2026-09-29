@@ -11,6 +11,7 @@
  */
 
 import { boundaryGaps, groupByStage, stageLabel, STAGES, type StageId } from '@/lib/life-cycle'
+import { fmtSig } from '../formatters'
 
 type Row = { component_name: string; life_cycle_stage?: string | null; value: number; flows: number }
 
@@ -104,7 +105,7 @@ export function StagePanel({
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {t.value.toPrecision(4).replace(/\.?0+$/, '')} ({(t.share * 100).toFixed(1)}%)
+            {fmtSig(t.value)} ({(t.share * 100).toFixed(1)}%)
           </span>
         </div>
       ))}
