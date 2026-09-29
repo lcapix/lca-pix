@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { convertQuantity, normalizeUnit, compatibleUnits } from '@/lib/units';
+import {
+  convertQuantity,
+  normalizeUnit,
+  compatibleUnits,
+  splitFactorUnit,
+  toFactorBasis,
+} from '@/lib/units';
 
 describe('normalizeUnit', () => {
   it('canonicalizes spellings and case', () => {
@@ -129,5 +135,112 @@ describe('E8 unit aliases', () => {
 
   it('collapses inner whitespace before lookup', () => {
     expect(normalizeUnit('  short   ton ')).toBe('short ton');
+  });
+});
+
+describe('splitFactorUnit', () => {
+  it('splits a per-unit factor label into numerator and denominator', () => {
+    expect(splitFactorUnit('kg CO2 eq / MMBtu')).toEqual({ numerator: 'kg CO2 eq', denominator: 'MMBtu' });
+    expect(splitFactorUnit('kg Sb eq/kWh')).toEqual({ numerator: 'kg Sb eq', denominator: 'kWh' });
+  });
+  it('has no denominator when the label is a bare reference unit', () => {
+    expect(splitFactorUnit('kg CO2 eq')).toEqual({ numerator: 'kg CO2 eq', denominator: null });
+    expect(splitFactorUnit('CTUeco')).toEqual({ numerator: 'CTUeco', denominator: null });
+    expect(splitFactorUnit(null)).toEqual({ numerator: '', denominator: null });
+    expect(splitFactorUnit('kg CO2 eq / ')).toEqual({ numerator: 'kg CO2 eq', denominator: null });
+  });
+});
+
+describe('toFactorBasis (E3 + E11: never a raw multiply)', () => {
+  it("identical units are used as-is even when the unit table does not know them ('p'/'p')", () => {
+    const r = toFactorBasis(4, 'p', 'p', 'kg CO2 eq');
+    expect(r).toEqual({ ok: true, quantity: 4, basisUnit: 'p' });
+  });
+
+  it('identical is case- and space-insensitive', () => {
+    const r = toFactorBasis(4, ' MMscfd', 'mmscfd', null);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.quantity).toBe(4);
+  });
+
+  it("1000 kg against an 'item' substance is refused (the E3 reproduction: was 3000 with no warning)", () => {
+    const r = toFactorBasis(1000, 'kg', 'item', 'kg CO2 eq');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/'kg'.*'item'/);
+  });
+
+  it('a recognized flow unit against an unrecognized, different substance unit is refused', () => {
+    const r = toFactorBasis(1000, 'kg', 'bundle', 'kg CO2 eq');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain("'bundle'");
+  });
+
+  it('an unrecognized flow unit is refused and named', () => {
+    const r = toFactorBasis(999, 'bananas', 'kWh', 'kg CO2 eq / kWh');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain("unrecognized unit 'bananas'");
+  });
+
+  it('a flow with no unit is refused, not assumed', () => {
+    for (const u of [null, '', '  ']) {
+      const r = toFactorBasis(5, u, 'kg', 'kg CO2 eq');
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toMatch(/no unit/);
+    }
+  });
+
+  it('converts within a family and records the conversion', () => {
+    const r = toFactorBasis(850000, 'g', 'kg', 'kg CO2 eq');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.quantity).toBeCloseTo(850, 9);
+      expect(r.basisUnit).toBe('kg');
+      expect(r.note).toContain('kg');
+    }
+  });
+
+  it('spelling variants of one unit need no conversion note', () => {
+    const r = toFactorBasis(3, 'kilogram', 'kg', 'kg CO2 eq');
+    expect(r).toEqual({ ok: true, quantity: 3, basisUnit: 'kg' });
+  });
+
+  it('E11: a factor denominator in the substance family is honoured (kWh flow → per-MMBtu factor)', () => {
+    const r = toFactorBasis(293.071, 'kWh', 'MMBtu', 'kg CO2 eq / MMBtu');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.quantity).toBeCloseTo(1, 9);
+      expect(r.basisUnit).toBe('MMBtu');
+    }
+  });
+
+  it('E11: a factor stated per tonne on a kg substance converts to the tonne', () => {
+    const r = toFactorBasis(500, 'kg', 'kg', 'kg CO2 eq / t');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.quantity).toBeCloseTo(0.5, 12);
+      expect(r.basisUnit).toBe('t');
+    }
+  });
+
+  it('E11: a factor stated per kg on an m3 substance is refused (Water/Wastewater rows)', () => {
+    const r = toFactorBasis(10, 'm3', 'm3', 'kg CO2 eq / kg');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/per 'kg'.*'m3'/);
+  });
+
+  it('E11: a per-kg factor on an MMBtu fuel is refused whatever the flow unit (the Wood clobber)', () => {
+    expect(toFactorBasis(1, 'MMBtu', 'MMBtu', 'kg CO2 eq / kg').ok).toBe(false);
+    expect(toFactorBasis(1, 'kg', 'MMBtu', 'kg CO2 eq / kg').ok).toBe(false);
+  });
+
+  it('E11: an unknown denominator must equal the substance unit to be used', () => {
+    expect(toFactorBasis(2, 'p', 'p', 'kg CO2 eq / p')).toEqual({ ok: true, quantity: 2, basisUnit: 'p' });
+    expect(toFactorBasis(2, 'kg', 'kg', 'kg CO2 eq / p').ok).toBe(false);
+  });
+
+  it('with no substance unit the factor denominator is the basis; with neither, refused', () => {
+    const r = toFactorBasis(2, 'kWh', null, 'kg CO2 eq / kWh');
+    expect(r).toEqual({ ok: true, quantity: 2, basisUnit: 'kWh' });
+    expect(toFactorBasis(2, 'kWh', null, 'kg CO2 eq').ok).toBe(false);
   });
 });

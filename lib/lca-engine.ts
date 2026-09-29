@@ -35,7 +35,7 @@
 
 import type { Connection, RowDataPacket } from 'mysql2/promise';
 import { canonicalizeRegion, selectBestScopeRows } from './factor-selection';
-import { convertQuantity, normalizeUnit } from './units';
+import { toFactorBasis } from './units';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -107,6 +107,8 @@ export interface DataQualitySummary {
   unit_conversions: number;
   /** Flows left out of a category because their unit could not be converted. */
   excluded_flows: number;
+  /** Flows skipped because their quantity is not a finite number. */
+  invalid_quantity_flows?: number;
   /** Components whose burden was allocated (allocation_factor < 1). */
   allocated_components: number;
   /** Flows no factor in the method characterizes (they add nothing). */
@@ -145,6 +147,8 @@ export interface ComponentImpactResult {
   warnings: string[];
   /** Flow × category pairs left out because the flow's unit could not be converted. */
   excluded_flows?: number;
+  /** Flows skipped because their quantity is not a finite number (NULL, '', 'abc'). */
+  invalid_quantity_flows?: number;
   /** Flows with at least one applicable factor (after the direction rule). */
   characterized_flow_ids?: number[];
   /** Allocation share applied to this component (ISO 14044 4.3.4), when < 1. */
@@ -292,6 +296,7 @@ export async function calculateComponentImpacts(
   // many flow × category pairs a unit problem left out.
   const characterized = new Set<number>();
   let excluded = 0;
+  const invalidQuantityFlows = new Set<number>();
   for (const row of selectedRows) {
     // Direction rule: 'embodied' factors describe PRODUCING a substance and
     // apply to input flows only (steel you buy, electricity you draw);
@@ -304,40 +309,45 @@ export async function calculateComponentImpacts(
     if (!row.factor_basis) untypedFactorSeen = true;
     characterized.add(row.flow_id);
 
-    const rawQuantity = parseFloat(row.quantity);
-    const factor = parseFloat(row.characterization_factor);
-    const flowUnit: string | null = row.flow_unit ?? null;
-    const factorUnit: string | null = row.substance_default_unit ?? null;
-
-    let quantityInFactorUnit = rawQuantity;
-    let conversionNote: string | undefined;
-
-    const flowNorm = normalizeUnit(flowUnit);
-    const factorNorm = normalizeUnit(factorUnit);
-
-    if (!flowUnit || !flowUnit.trim()) {
-      warnings.push(
-        `Flow ${row.flow_id} (${row.substance_name}): no unit recorded — assumed ${factorUnit ?? 'factor unit'}.`,
-      );
-    } else if (factorNorm && flowNorm && flowNorm !== factorNorm) {
-      const conv = convertQuantity(rawQuantity, flowUnit, factorUnit);
-      if (conv) {
-        quantityInFactorUnit = conv.quantity;
-        conversionNote = conv.note;
-      } else {
+    // E9: a quantity that is not a finite number (NULL, '', 'abc', NaN) is
+    // skipped and named. One NaN would otherwise turn the category total NaN.
+    const rawQuantity = finiteNumber(row.quantity);
+    if (rawQuantity === null) {
+      if (!invalidQuantityFlows.has(row.flow_id)) {
+        invalidQuantityFlows.add(row.flow_id);
         warnings.push(
-          `Flow ${row.flow_id} (${row.substance_name}): unit '${flowUnit}' cannot be converted to factor unit '${factorUnit}' — EXCLUDED from ${row.category_name}.`,
+          `Flow ${row.flow_id} (${row.substance_name}): quantity ${JSON.stringify(row.quantity ?? null)} is not a finite number — SKIPPED in every category.`,
         );
-        excluded++;
-        continue;
       }
-    } else if (flowUnit && !flowNorm) {
+      continue;
+    }
+    const factor = finiteNumber(row.characterization_factor);
+    if (factor === null) {
       warnings.push(
-        `Flow ${row.flow_id} (${row.substance_name}): unrecognized unit '${flowUnit}' — EXCLUDED from ${row.category_name}.`,
+        `Flow ${row.flow_id} (${row.substance_name}): the ${row.category_name} factor is not a finite number — SKIPPED from ${row.category_name}.`,
+      );
+      continue;
+    }
+
+    // E3 + E11: express the quantity in the unit the factor is stated per
+    // (the factor label's denominator, else the substance unit). Identical
+    // units pass as-is; convertible units are converted and recorded; every
+    // other case is EXCLUDED and reported. There is no raw-multiply fallback.
+    const basis = toFactorBasis(
+      rawQuantity,
+      row.flow_unit ?? null,
+      row.substance_default_unit ?? null,
+      row.factor_unit ?? null,
+    );
+    if (!basis.ok) {
+      warnings.push(
+        `Flow ${row.flow_id} (${row.substance_name}): ${basis.reason} — EXCLUDED from ${row.category_name}.`,
       );
       excluded++;
       continue;
     }
+    const quantityInFactorUnit = basis.quantity;
+    const conversionNote = basis.note;
 
     flowContributions.push({
       flow_id: row.flow_id,
@@ -457,8 +467,17 @@ export async function calculateComponentImpacts(
     driver_flows_count: new Set(flowContributions.map((f) => f.flow_id)).size,
     warnings,
     excluded_flows: excluded,
+    invalid_quantity_flows: invalidQuantityFlows.size,
     characterized_flow_ids: [...characterized],
   };
+}
+
+/** A number, or null when the value is not a finite number ('' and null included). */
+function finiteNumber(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v !== 'string' || v.trim() === '') return null;
+  const n = Number(v.trim());
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -860,6 +879,10 @@ export function summarizeDataQuality(
   const gw_share_by_tier = zero();
   for (const t of SOURCE_TIERS) gw_share_by_tier[t] = gwTotal > 0 ? gwMagnitude[t] / gwTotal : 0;
   const excluded_flows = componentResults.reduce((s, r) => s + (r.excluded_flows ?? 0), 0);
+  const invalid_quantity_flows = componentResults.reduce(
+    (s, r) => s + (r.invalid_quantity_flows ?? 0),
+    0,
+  );
   const allocated = componentResults.filter((r) => (r.allocation_factor ?? 1) < 1);
   const unchar = opts.uncharacterized ?? [];
   const uncharNames = [...new Set(unchar.map((u) => u.substance_name))];
@@ -931,6 +954,11 @@ export function summarizeDataQuality(
       `${excluded_flows} flow-category ${plural(excluded_flows, 'pair was', 'pairs were')} left out because the unit could not be converted (see warnings).`,
     );
   }
+  if (invalid_quantity_flows > 0) {
+    statement.push(
+      `${invalid_quantity_flows} ${plural(invalid_quantity_flows, 'flow was', 'flows were')} skipped because the quantity is not a number (see warnings).`,
+    );
+  }
   const partial = category_coverage.filter((c) => c.covered < c.total);
   for (const c of partial.slice(0, 3)) {
     statement.push(
@@ -960,6 +988,7 @@ export function summarizeDataQuality(
     regional_fallbacks,
     unit_conversions,
     excluded_flows,
+    invalid_quantity_flows,
     allocated_components: allocated.length,
     uncharacterized_flows: unchar.length,
     uncharacterized_examples: uncharNames.slice(0, 10),

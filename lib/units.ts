@@ -175,3 +175,106 @@ export function compatibleUnits(defaultUnit: string | null | undefined): string[
   }
   return Array.from(seen);
 }
+
+/** Two unit strings name the same unit when they match ignoring case and whitespace. */
+export function sameUnitString(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const k = (u: string) => u.toLowerCase().replace(/\s+/g, '');
+  return k(a) !== '' && k(a) === k(b);
+}
+
+/**
+ * Split a factor unit label into its reference unit (numerator) and the unit
+ * it is stated per (denominator): 'kg CO2 eq / MMBtu' → { 'kg CO2 eq', 'MMBtu' }.
+ * A bare label ('kg CO2 eq') has no denominator; the factor is then per the
+ * substance's own unit.
+ */
+export function splitFactorUnit(label: string | null | undefined): {
+  numerator: string;
+  denominator: string | null;
+} {
+  const s = (label ?? '').trim();
+  const i = s.indexOf('/');
+  if (i < 0) return { numerator: s, denominator: null };
+  const denominator = s.slice(i + 1).trim();
+  return { numerator: s.slice(0, i).trim(), denominator: denominator || null };
+}
+
+export type BasisResolution =
+  | { ok: true; quantity: number; basisUnit: string; note?: string }
+  | { ok: false; reason: string };
+
+/**
+ * Express a flow quantity in the unit its factor is stated per, or refuse.
+ *
+ * The factor's basis is its own denominator when the label has one
+ * ('kg CO2 eq / MMBtu'), otherwise the substance's unit. A denominator whose
+ * unit family differs from the substance's unit means the factor row was
+ * written for a different kind of quantity (a per-kg lumber factor on an MMBtu
+ * fuel): refused, never applied. Then:
+ *   - identical unit strings (ignoring case and spaces) → the quantity as-is,
+ *     even for units the table does not know ('p' and 'p');
+ *   - both units known and in one family → converted, with a note;
+ *   - anything else (unknown unit on either side, cross-family, no flow unit)
+ *     → refused with a reason. There is no raw-multiply fallback.
+ */
+export function toFactorBasis(
+  quantity: number,
+  flowUnit: string | null | undefined,
+  substanceUnit: string | null | undefined,
+  factorUnit: string | null | undefined,
+): BasisResolution {
+  const sub = substanceUnit?.trim() || null;
+  const { denominator } = splitFactorUnit(factorUnit);
+
+  let basis: string | null = sub;
+  if (denominator) {
+    if (!sub || sameUnitString(denominator, sub)) {
+      basis = sub ?? denominator;
+    } else {
+      const df = unitFamily(denominator);
+      const sf = unitFamily(sub);
+      if (df && sf && df === sf) {
+        basis = denominator;
+      } else {
+        return {
+          ok: false,
+          reason: `factor is stated per '${denominator}' (${df ?? 'unknown unit'}) but the substance is measured in '${sub}' (${sf ?? 'unknown unit'}); the factor row needs fixing`,
+        };
+      }
+    }
+  }
+  if (!basis) {
+    return { ok: false, reason: 'neither the substance nor the factor states a unit' };
+  }
+
+  const flow = flowUnit?.trim() || null;
+  if (!flow) {
+    return { ok: false, reason: `no unit recorded on the flow (factor is per '${basis}')` };
+  }
+  if (sameUnitString(flow, basis)) {
+    return { ok: true, quantity, basisUnit: basis };
+  }
+  const flowNorm = normalizeUnit(flow);
+  const basisNorm = normalizeUnit(basis);
+  if (!flowNorm) {
+    return { ok: false, reason: `unrecognized unit '${flow}' (factor is per '${basis}')` };
+  }
+  if (!basisNorm) {
+    return {
+      ok: false,
+      reason: `unit '${flow}' cannot be converted to '${basis}': '${basis}' is not in the unit table and the units differ`,
+    };
+  }
+  if (flowNorm === basisNorm) {
+    return { ok: true, quantity, basisUnit: basis };
+  }
+  const conv = convertQuantity(quantity, flow, basis);
+  if (!conv) {
+    return {
+      ok: false,
+      reason: `unit '${flow}' cannot be converted to factor unit '${basis}' (${unitFamily(flow)} vs ${unitFamily(basis)})`,
+    };
+  }
+  return { ok: true, quantity: conv.quantity, basisUnit: basis, note: conv.note };
+}
