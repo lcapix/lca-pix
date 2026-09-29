@@ -9,7 +9,7 @@ const http = require('http');
 
 const BASE_URL = 'http://localhost:3002';
 const TEST_EMAIL = 'demo@lcaproject.com';
-const TEST_PASSWORD = 'demo123';
+const TEST_PASSWORD = '<DEMO_PASSWORD>';
 
 // ANSI color codes
 const colors = {

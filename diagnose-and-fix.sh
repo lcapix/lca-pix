@@ -60,7 +60,7 @@ else
           --profile lca-pix \
           --document-name AWS-StartPortForwardingSessionToRemoteHost \
           --parameters '{
-            "host":["lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"],
+            "host":["<RDS_HOST>"],
             "portNumber":["3306"],
             "localPortNumber":["3307"]
           }' > /tmp/lca-tunnel.log 2>&1 &

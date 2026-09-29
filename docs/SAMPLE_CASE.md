@@ -8,7 +8,7 @@ Everything below was executed live against production on **2026-07-07** using th
 account, so the IDs and numbers are real — you can open the links and see them.
 
 - **App:** https://lcapix.vercel.app  (alias of `lca-project-v3.vercel.app`)
-- **Test login:** `lcapix50@gmail.com` / `Lcapix@guerry123`
+- **Test login:** `lcapix50@gmail.com` / `<TEST_ACCOUNT_PASSWORD>`
 - **Methodology used:** CML 2001 · region NC
 
 ---
@@ -35,7 +35,7 @@ mug's cradle-to-gate footprint from **6.09 → 3.75 kg CO₂ eq**, a **~38% redu
 BASE="https://lcapix.vercel.app"
 TOKEN=$(curl -s -X POST $BASE/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"lcapix50@gmail.com","password":"Lcapix@guerry123"}' \
+  -d '{"email":"lcapix50@gmail.com","password":"<TEST_ACCOUNT_PASSWORD>"}' \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 echo "$TOKEN"   # a JWT starting with eyJ
 ```
@@ -227,7 +227,7 @@ View: [/project/38/analytics](https://lcapix.vercel.app/project/38/analytics)
 set -euo pipefail
 BASE="https://lcapix.vercel.app"
 TOKEN=$(curl -s -X POST $BASE/api/auth/login -H "Content-Type: application/json" \
-  -d '{"email":"lcapix50@gmail.com","password":"Lcapix@guerry123"}' \
+  -d '{"email":"lcapix50@gmail.com","password":"<TEST_ACCOUNT_PASSWORD>"}' \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 auth=(-H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json")
 jid(){ python3 -c "import json,sys;print(json.load(sys.stdin)$1)"; }

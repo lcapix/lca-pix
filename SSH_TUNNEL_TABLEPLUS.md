@@ -22,7 +22,7 @@ aws ec2-instance-connect send-ssh-public-key \
 Open a new terminal and run:
 
 ```bash
-ssh -i ~/.ssh/id_rsa -N -L 3307:lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306 ubuntu@35.170.250.110
+ssh -i ~/.ssh/id_rsa -N -L 3307:<RDS_HOST>:3306 ubuntu@35.170.250.110
 ```
 
 This creates a tunnel:
@@ -42,7 +42,7 @@ Now in TablePlus, use these settings:
 | **Host** | `127.0.0.1` ⚠️ (localhost, not RDS hostname) |
 | **Port** | `3307` ⚠️ (local tunnel port, not 3306) |
 | **User** | `lcaadmin` |
-| **Password** | `EP76017fLefZ8?d!ezTHsN[kA()X` |
+| **Password** | `<DB_PASSWORD>` |
 | **Database** | `lca_v3` |
 
 ## ✅ Connect!
@@ -71,10 +71,10 @@ TablePlus has built-in SSH tunneling. Instead of manual tunnel:
    - **SSH User:** `ubuntu`
    - **SSH Key:** Browse to your `~/.ssh/id_rsa` or EC2 key
 3. Fill database details as normal:
-   - **Host:** `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com`
+   - **Host:** `<RDS_HOST>`
    - **Port:** `3306`
    - **User:** `lcaadmin`
-   - **Password:** `EP76017fLefZ8?d!ezTHsN[kA()X`
+   - **Password:** `<DB_PASSWORD>`
    - **Database:** `lca_v3`
 
 This is easier - TablePlus handles the tunnel for you!

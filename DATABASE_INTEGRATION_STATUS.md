@@ -181,7 +181,7 @@ router.push(`/project/${projectId}/case/${data.case.case_id}`)
 
 ### ✅ Tested & Working
 1. **Login Flow**
-   - Email: `john@lcaproject.com` / Password: `password123`
+   - Email: `john@lcaproject.com` / Password: `<DEMO_PASSWORD>`
    - Returns JWT token
    - Stored in localStorage
    - ✅ Working
@@ -300,7 +300,7 @@ useEffect(() => {
 ## ✅ WHAT'S WORKING NOW
 
 **User can:**
-1. Login with john@lcaproject.com / password123
+1. Login with john@lcaproject.com / <DEMO_PASSWORD>
 2. See "Electric Vehicle Manufacturing" project from database on home page
 3. Create new project → Saves to database
 4. Logout → Clears localStorage cache

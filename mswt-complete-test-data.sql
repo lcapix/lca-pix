@@ -36,7 +36,7 @@ INSERT INTO account (username, email, password_hash, created_at)
 VALUES (
   'daniel.lerner',
   'daniel.lerner@lcaproject.com',
-  -- Password: 'LCA2025!' (hashed with bcrypt)
+  -- Password: '<DEMO_PASSWORD>' (hashed with bcrypt)
   '$2a$10$YourHashedPasswordHere123456789012345678901234567890123456',
   NOW()
 );

@@ -11,7 +11,7 @@ This document shows the exact test data that will be created in the LCA database
 ```
 Username: john_doe
 Email: john@lcaproject.com
-Password: password123
+Password: <DEMO_PASSWORD>
 Account Type: user
 ```
 

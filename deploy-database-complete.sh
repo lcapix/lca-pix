@@ -3,10 +3,10 @@
 const mysql = require('mysql2/promise');
 
 const DB_CONFIG = {
-  host: 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
+  host: '<RDS_HOST>',
   port: 3306,
   user: 'lcaadmin',
-  password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+  password: '<DB_PASSWORD>',
   multipleStatements: true
 };
 

@@ -11,7 +11,7 @@ echo "✅ Test 1: Login"
 echo "----------------"
 LOGIN_RESP=$(curl -s -X POST $BASE_URL/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"password123"}')
+  -d '{"email":"john@lcaproject.com","password":"<DEMO_PASSWORD>"}')
 echo "$LOGIN_RESP"
 echo ""
 
@@ -54,5 +54,5 @@ echo "🌐 Application URL: http://$EC2_IP:3000"
 echo ""
 echo "🔐 Test Login Credentials:"
 echo "   Email: john@lcaproject.com"
-echo "   Password: password123"
+echo "   Password: <DEMO_PASSWORD>"
 echo ""

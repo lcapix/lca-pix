@@ -4,7 +4,7 @@ const dbConfig = {
   host: process.env.DATABASE_HOST || '127.0.0.1',
   port: process.env.DATABASE_PORT || 3307,
   user: process.env.DATABASE_USER || 'lcaadmin',
-  password: process.env.DATABASE_PASSWORD || 'EP76017fLefZ8?d!ezTHsN[kA()X',
+  password: process.env.DATABASE_PASSWORD || '<DB_PASSWORD>',
   database: process.env.DATABASE_NAME || 'lca_v3',
   waitForConnections: true,
   connectionLimit: 10,

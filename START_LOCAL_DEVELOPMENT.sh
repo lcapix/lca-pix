@@ -99,7 +99,7 @@ echo ""
 # ============================================================================
 echo "🔒 Starting SSH tunnel to AWS RDS database..."
 echo "   Local port: 3307"
-echo "   Remote: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306"
+echo "   Remote: <RDS_HOST>:3306"
 echo ""
 
 # Start tunnel in background
@@ -108,7 +108,7 @@ nohup aws ssm start-session \
     --profile lca-pix \
     --document-name AWS-StartPortForwardingSessionToRemoteHost \
     --parameters '{
-      "host":["lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"],
+      "host":["<RDS_HOST>"],
       "portNumber":["3306"],
       "localPortNumber":["3307"]
     }' > tunnel.log 2>&1 &
@@ -245,7 +245,7 @@ echo "   Mode:       Development"
 echo ""
 echo "👤 Default Login:"
 echo "   Email:      lcapix50@gmail.com"
-echo "   Password:   Lcapix@guerry123"
+echo "   Password:   <TEST_ACCOUNT_PASSWORD>"
 echo ""
 echo "📊 TablePlus Connection:"
 echo "   Host:       127.0.0.1"

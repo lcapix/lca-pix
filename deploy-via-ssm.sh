@@ -34,7 +34,7 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
 
 DB_USERNAME=$(echo "$SECRET_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['username'])")
 DB_PASSWORD=$(echo "$SECRET_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['password'])")
-DB_ENDPOINT="lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"
+DB_ENDPOINT="<RDS_HOST>"
 
 echo "Creating database lca_v3..."
 mysql -h "$DB_ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS lca_v3 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"

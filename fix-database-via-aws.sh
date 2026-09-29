@@ -15,7 +15,7 @@ PROFILE="lca-pix"
 DB_INSTANCE="lca-dev-db-small"
 DB_NAME="lca_v3"
 DB_USER="lcaadmin"
-DB_PASSWORD="EP76017fLefZ8?d!ezTHsN[kA()X"
+DB_PASSWORD="<DB_PASSWORD>"
 
 # Colors for output
 GREEN='\033[0;32m'

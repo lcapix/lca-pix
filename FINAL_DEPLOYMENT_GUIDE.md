@@ -71,7 +71,7 @@ aws secretsmanager get-secret-value \
     --output text
 
 # Copy the password from the output above, then connect:
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
       -P 3306 \
       -u lcaadmin \
       -p
@@ -230,7 +230,7 @@ pm2 start npm --name "lca-app" -- start
 
 2. **Configure Environment Variables:**
 ```bash
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin

@@ -539,7 +539,7 @@ handleRunComparison(
 
 **Credentials**:
 - Email: `ec2user@example.com`
-- Password: `password123`
+- Password: `<DEMO_PASSWORD>`
 - Google: `lcapix50@gmail.com`
 
 ---

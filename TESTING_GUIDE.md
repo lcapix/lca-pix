@@ -19,7 +19,7 @@ Both should show processes running.
 
 **Login**:
 - Email: `john@lcaproject.com`
-- Password: `password123`
+- Password: `<DEMO_PASSWORD>`
 
 **Expected**: Should see "Electric Vehicle Manufacturing" from database
 
@@ -94,7 +94,7 @@ Should see: `✅ Database connected successfully`
 # Login to get token
 TOKEN=$(curl -s -X POST "http://localhost:3002/api/auth/login/" \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"password123"}' | \
+  -d '{"email":"john@lcaproject.com","password":"<DEMO_PASSWORD>"}' | \
   jq -r '.token')
 
 # Fetch projects

@@ -62,7 +62,7 @@ After clicking "Over SSH", you'll see these NEW fields appear:
 The original MySQL fields should still show:
 
 1. **Host/IP:**
-   - `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com`
+   - `<RDS_HOST>`
    - ⚠️ Keep the RDS hostname (NOT 127.0.0.1)
 
 2. **Port:**
@@ -73,7 +73,7 @@ The original MySQL fields should still show:
    - `lcaadmin`
 
 4. **Password:**
-   - `EP76017fLefZ8?d!ezTHsN[kA()X`
+   - `<DB_PASSWORD>`
 
 5. **Database:**
    - `lca_v3`

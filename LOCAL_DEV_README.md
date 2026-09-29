@@ -56,13 +56,13 @@ Runs on http://localhost:3002
 
 ### Default Credentials
 - **Email**: lcapix50@gmail.com
-- **Password**: Lcapix@guerry123
+- **Password**: <TEST_ACCOUNT_PASSWORD>
 
 ### Database Connection (TablePlus)
 - **Host**: 127.0.0.1
 - **Port**: 3307
 - **User**: lcaadmin
-- **Password**: EP76017fLefZ8?d!ezTHsN[kA()X
+- **Password**: <DB_PASSWORD>
 - **Database**: lca_v3
 
 ---
@@ -177,10 +177,10 @@ DATABASE_HOST=127.0.0.1
 DATABASE_PORT=3307
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
-DATABASE_PASSWORD=EP76017fLefZ8?d!ezTHsN[kA()X
+DATABASE_PASSWORD=<DB_PASSWORD>
 
 # JWT Authentication
-JWT_SECRET=gupexcV3UjhhUswZxPn2CY+sogsiwVKaiz9kzCbv0qw=
+JWT_SECRET=<JWT_SECRET>
 
 # Google OAuth
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=...

@@ -30,7 +30,7 @@ The application is showing **4 cached projects** from localStorage instead of th
 1. Click your profile icon (top right corner)
 2. Click **"Sign out"**
    - This now automatically clears localStorage (updated in code)
-3. Login again: `john@lcaproject.com` / `password123`
+3. Login again: `john@lcaproject.com` / `<DEMO_PASSWORD>`
 4. Should see only 1 project: "Electric Vehicle Manufacturing"
 
 ### **Method 3: Clear All Site Data**

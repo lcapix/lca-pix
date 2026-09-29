@@ -5,9 +5,9 @@ echo "=== LCA v3 Database Deployment Script ==="
 echo "Starting database schema deployment..."
 
 # Database credentials
-DB_HOST="lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"
+DB_HOST="<RDS_HOST>"
 DB_USER="lcaadmin"
-DB_PASS='EP76017fLefZ8?d!ezTHsN[kA()X'
+DB_PASS='<DB_PASSWORD>'
 DB_NAME="lca_v3"
 
 # Install MySQL client if not present

@@ -22,8 +22,8 @@ SELECT CASE
   ELSE 'Need to create john_doe'
 END as status;
 
--- Create john_doe user (password: password123)
--- Password hash for 'password123' using bcrypt
+-- Create john_doe user (password: <DEMO_PASSWORD>)
+-- Password hash for '<DEMO_PASSWORD>' using bcrypt
 INSERT INTO users (email, name, password_hash, created_at, updated_at)
 SELECT
   'john@lcaproject.com',
@@ -80,7 +80,7 @@ WHERE p.project_id IN (6, 7);
 -- STEP 6: Show login instructions
 SELECT '=== NEXT STEPS ===' as step;
 SELECT CONCAT(
-  'LOGIN AS: ', u.email, ' (Password: password123)'
+  'LOGIN AS: ', u.email, ' (Password: <DEMO_PASSWORD>)'
 ) as instruction
 FROM users u
 WHERE u.user_id = (SELECT owner_id FROM project WHERE project_id = 6 LIMIT 1);

@@ -366,7 +366,7 @@ All extracted data meets these criteria:
 ### Option 1: Execute Full Script
 
 ```bash
-mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' \
   lca_v3 < /Users/kavishpandit/Desktop/lca/lca\ project\ v3/mswt-project-setup.sql
 ```
 
@@ -374,7 +374,7 @@ mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
 
 ```bash
 # Connect to database
-mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3
+mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' lca_v3
 
 # Then paste sections of SQL manually
 ```
@@ -510,13 +510,13 @@ VALUES (
 
 1. **Backup Database**
    ```bash
-   mysqldump -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+   mysqldump -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' \
      lca_v3 > lca_v3_backup_$(date +%Y%m%d).sql
    ```
 
 2. **Execute SQL Script**
    ```bash
-   mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+   mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' \
      lca_v3 < mswt-project-setup.sql
    ```
 

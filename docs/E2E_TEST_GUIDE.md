@@ -4,7 +4,7 @@
 > Each step is testable from both the **UI** and the **API**. Real bugs found while writing this guide are flagged inline as **🐛 BUG**.
 
 **Last tested:** June 2, 2026 against Vercel production
-**Test account:** `lcapix50@gmail.com` / `Lcapix@guerry123`
+**Test account:** `lcapix50@gmail.com` / `<TEST_ACCOUNT_PASSWORD>`
 **Sample data:** "E2E Coffee Mug LCA" — a small ceramic mug, simple enough to trace through every screen.
 
 ---
@@ -31,7 +31,7 @@
 
 ### UI
 1. Visit https://lca-project-v3.vercel.app/auth/login
-2. Email: `lcapix50@gmail.com`  Password: `Lcapix@guerry123`
+2. Email: `lcapix50@gmail.com`  Password: `<TEST_ACCOUNT_PASSWORD>`
 3. Click **Log in** → should land on `/home`
 
 ### API
@@ -39,7 +39,7 @@
 BASE="https://lca-project-v3.vercel.app"
 TOKEN=$(curl -s -X POST $BASE/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"lcapix50@gmail.com","password":"Lcapix@guerry123"}' \
+  -d '{"email":"lcapix50@gmail.com","password":"<TEST_ACCOUNT_PASSWORD>"}' \
   | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 echo "$TOKEN"
 ```

@@ -12,7 +12,7 @@ DB_HOST="127.0.0.1"
 DB_PORT="3307"
 DB_NAME="lca_v3"
 DB_USER="lcaadmin"
-DB_PASS="EP76017fLefZ8?d!ezTHsN[kA()X"
+DB_PASS="<DB_PASSWORD>"
 
 # Check if tunnel is running
 if ! lsof -ti:3307 > /dev/null 2>&1; then

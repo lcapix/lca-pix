@@ -478,11 +478,11 @@ Calculation: 15.5 kWh × 0.5 = 7.75 kg CO2-eq
 
 ```env
 # Database Connection
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
-DATABASE_PASSWORD=EP76017fLefZ8?d!ezTHsN[kA()X
+DATABASE_PASSWORD=<DB_PASSWORD>
 
 # AWS Configuration
 AWS_REGION=us-east-1
@@ -758,9 +758,9 @@ npm install mysql2
 node -e "
 const mysql = require('mysql2/promise');
 mysql.createConnection({
-  host: 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
+  host: '<RDS_HOST>',
   user: 'lcaadmin',
-  password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+  password: '<DB_PASSWORD>',
   database: 'lca_v3'
 }).then(() => console.log('✅ Connected')).catch(err => console.error('❌', err));
 "
@@ -771,12 +771,12 @@ mysql.createConnection({
 # 1. Sign up
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+  -d '{"username":"testuser","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 
 # 2. Login
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+  -d '{"email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 
 # 3. Create Project (use token from step 2)
 curl -X POST http://localhost:3000/api/projects \

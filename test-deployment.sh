@@ -36,7 +36,7 @@ echo "✅ Test 2: Create New User (Signup)"
 echo "------------------------------------"
 SIGNUP_RESPONSE=$(curl -s -X POST $BASE_URL/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123"}')
+  -d '{"username":"testuser","email":"test@example.com","password":"<DEMO_PASSWORD>"}')
 
 echo "Response: $SIGNUP_RESPONSE"
 
@@ -52,7 +52,7 @@ echo "✅ Test 3: Login with Test User"
 echo "--------------------------------"
 LOGIN_RESPONSE=$(curl -s -X POST $BASE_URL/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"password123"}')
+  -d '{"email":"john@lcaproject.com","password":"<DEMO_PASSWORD>"}')
 
 echo "Response: $LOGIN_RESPONSE"
 
@@ -64,9 +64,9 @@ if [ -z "$TOKEN" ]; then
   echo "⚠️  Make sure test data was created in database"
   echo ""
   echo "Run this in EC2:"
-  echo "mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \\"
+  echo "mysql -h <RDS_HOST> \\"
   echo "  -u lcaadmin \\"
-  echo "  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \\"
+  echo "  -p'<DB_PASSWORD>' \\"
   echo "  lca_v3 < create-test-data.sql"
   exit 1
 fi
@@ -137,7 +137,7 @@ echo "1. Open browser and go to: $BASE_URL"
 echo ""
 echo "2. Login Credentials:"
 echo "   Email: john@lcaproject.com"
-echo "   Password: password123"
+echo "   Password: <DEMO_PASSWORD>"
 echo ""
 echo "3. Test Checklist:"
 echo "   [ ] Homepage loads without errors"
@@ -156,15 +156,15 @@ echo "   [ ] Refresh page - still there?"
 echo "   [ ] Verify in database (see command below)"
 echo ""
 echo "5. Verify in Database (run in EC2):"
-echo "   mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \\"
+echo "   mysql -h <RDS_HOST> \\"
 echo "     -u lcaadmin \\"
-echo "     -p'EP76017fLefZ8?d!ezTHsN[kA()X' \\"
+echo "     -p'<DB_PASSWORD>' \\"
 echo "     lca_v3 -e \"SELECT * FROM project;\""
 echo ""
 echo "📧 Ready to share with PM?"
 echo "========================="
 echo "Send them:"
 echo "  - URL: $BASE_URL"
-echo "  - Login: john@lcaproject.com / password123"
+echo "  - Login: john@lcaproject.com / <DEMO_PASSWORD>"
 echo "  - Documents: TEST_DATA_FOR_PM_REVIEW.md"
 echo ""

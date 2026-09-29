@@ -27,12 +27,12 @@ SELECT '' AS '';
 SELECT '📋 STEP 1: Creating test users...' AS '';
 
 -- Test User 1: Regular user
--- Password: demo123 (hashed with bcrypt, cost 10)
+-- Password: <DEMO_PASSWORD> (hashed with bcrypt, cost 10)
 INSERT IGNORE INTO account (id, username, email, password_hash, account_type, is_active) VALUES
 (1000, 'demo_user', 'demo@lcaproject.com', '$2b$10$YgZ8kQrVK3xGHX0JdZ8Z3.Qj9XqK0YZK8xqK0YZK8xqK0YZK8xqK0', 'user', TRUE);
 
 -- Test User 2: Admin user
--- Password: admin123
+-- Password: <DEMO_ADMIN_PASSWORD>
 INSERT IGNORE INTO account (id, username, email, password_hash, account_type, is_active) VALUES
 (1001, 'admin_user', 'admin@lcaproject.com', '$2b$10$YgZ8kQrVK3xGHX0JdZ8Z3.Qj9XqK0YZK8xqK0YZK8xqK0YZK8xqK1', 'admin', TRUE);
 
@@ -380,7 +380,7 @@ FROM assessment_results WHERE run_id >= 5000 AND run_id <= 5003;
 SELECT '' AS '';
 SELECT '🔑 TEST LOGIN CREDENTIALS:' AS '';
 SELECT '   Email: demo@lcaproject.com' AS '';
-SELECT '   Password: demo123' AS '';
+SELECT '   Password: <DEMO_PASSWORD>' AS '';
 SELECT '' AS '';
 SELECT '📁 PROJECT IDS:' AS '';
 SELECT '   2000: Electric Vehicle Battery Production' AS '';

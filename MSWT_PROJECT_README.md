@@ -12,7 +12,7 @@
 ### 1. Execute the SQL Setup Script
 
 ```bash
-mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' \
   lca_v3 < mswt-project-setup.sql
 ```
 
@@ -166,7 +166,7 @@ Host:     127.0.0.1
 Port:     3307
 Database: lca_v3
 User:     lcaadmin
-Password: EP76017fLefZ8?d!ezTHsN[kA()X
+Password: <DB_PASSWORD>
 ```
 
 ---

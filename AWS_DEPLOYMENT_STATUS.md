@@ -74,7 +74,7 @@ pm2 save
 - **Engine:** MySQL 8.0.42
 - **Storage:** 20GB (gp2)
 - **Multi-AZ:** Yes → Changing to No
-- **Endpoint:** lca-dev-db.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+- **Endpoint:** <RDS_HOST>
 - **Port:** 3306
 - **Status:** ⏳ Backing up (before downgrade)
 - **Backup:** lca-dev-db-backup-before-downgrade-20251012-053621
@@ -287,14 +287,14 @@ aws s3 ls --profile lca-pix
 ### Database Connection
 ```bash
 # MySQL CLI
-mysql -h lca-dev-db.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
       -P 3306 \
       -u lcaadmin \
       -p \
       lca_v3
 
 # Connection String for Application
-mysql://lcaadmin:[PASSWORD]@lca-dev-db.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306/lca_v3
+mysql://lcaadmin:[PASSWORD]@<RDS_HOST>:3306/lca_v3
 ```
 
 ### EC2 SSH
@@ -306,7 +306,7 @@ ssh -i lca-dev-keypair.pem ec2-user@35.170.250.110
 ### Environment Variables for Application
 ```bash
 # .env.production
-DATABASE_HOST=lca-dev-db.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin

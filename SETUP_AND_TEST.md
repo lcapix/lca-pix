@@ -24,11 +24,11 @@ cp .env.local.example .env.local
 
 Your `.env.local` should contain:
 ```env
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
-DATABASE_PASSWORD=EP76017fLefZ8?d!ezTHsN[kA()X
+DATABASE_PASSWORD=<DB_PASSWORD>
 JWT_SECRET=your-random-secret-key-change-this
 NODE_ENV=development
 ```
@@ -44,10 +44,10 @@ const mysql = require('mysql2/promise');
 async function testConnection() {
   try {
     const connection = await mysql.createConnection({
-      host: 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
+      host: '<RDS_HOST>',
       port: 3306,
       user: 'lcaadmin',
-      password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+      password: '<DB_PASSWORD>',
       database: 'lca_v3'
     });
 
@@ -112,7 +112,7 @@ curl -X POST http://localhost:3000/api/auth/signup \
   -d '{
     "username": "john_doe",
     "email": "john@example.com",
-    "password": "password123"
+    "password": "<DEMO_PASSWORD>"
   }'
 ```
 
@@ -139,7 +139,7 @@ curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "john@example.com",
-    "password": "password123"
+    "password": "<DEMO_PASSWORD>"
   }'
 ```
 
@@ -194,10 +194,10 @@ const mysql = require('mysql2/promise');
 
 async function check() {
   const conn = await mysql.createConnection({
-    host: 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
+    host: '<RDS_HOST>',
     port: 3306,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3'
   });
 

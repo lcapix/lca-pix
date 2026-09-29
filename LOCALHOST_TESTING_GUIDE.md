@@ -40,7 +40,7 @@ http://localhost:3002
 #### **Test 2: Email/Password Login**
 - [ ] Navigate to http://localhost:3002/auth/login
 - [ ] Enter email: `ec2user@example.com`
-- [ ] Enter password: `password123`
+- [ ] Enter password: `<DEMO_PASSWORD>`
 - [ ] Click "Sign in"
 - [ ] Should redirect to `/home`
 
@@ -121,7 +121,7 @@ http://localhost:3002
    - Open TablePlus
    - Connect to existing connection: `localhost:3307`
    - Username: `lcaadmin`
-   - Password: `EP76017fLefZ8?d!ezTHsN[kA()X`
+   - Password: `<DB_PASSWORD>`
    - Database: `lca_v3`
 
 3. **Run Migration:**
@@ -151,8 +151,8 @@ http://localhost:3002
 
 | Email | Password | Account Type | Created |
 |-------|----------|--------------|---------|
-| ec2user@example.com | password123 | user | Pre-existing |
-| test@example.com | password123 | user | Pre-existing |
+| ec2user@example.com | <DEMO_PASSWORD> | user | Pre-existing |
+| test@example.com | <DEMO_PASSWORD> | user | Pre-existing |
 
 ### **Google OAuth**
 - Account: lcapix50@gmail.com

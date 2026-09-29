@@ -56,7 +56,7 @@ echo "   4. Execute the entire script"
 echo "   5. Verify all changes applied successfully"
 echo ""
 echo "Alternatively, execute via command line:"
-echo "   mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -P 3306 -u lcaadmin -p lca_v3 < migrate-schema-updates.sql"
+echo "   mysql -h <RDS_HOST> -P 3306 -u lcaadmin -p lca_v3 < migrate-schema-updates.sql"
 echo ""
 
 read -p "Press ENTER once you've executed the migration script manually..."

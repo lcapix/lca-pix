@@ -41,7 +41,7 @@ echo "Step 5: Starting SSM tunnel to RDS database..."
 aws ssm start-session \
   --target i-055b91c4baf230251 \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"],"portNumber":["3306"],"localPortNumber":["3307"]}' \
+  --parameters '{"host":["<RDS_HOST>"],"portNumber":["3306"],"localPortNumber":["3307"]}' \
   --region us-east-1 \
   --profile lca-pix &
 
@@ -69,7 +69,7 @@ const mysql = require('mysql2/promise');
       host: '127.0.0.1',
       port: 3307,
       user: 'lcaadmin',
-      password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+      password: '<DB_PASSWORD>',
       database: 'lca_v3'
     });
     console.log('   ✅ Database connection successful!');
@@ -104,7 +104,7 @@ echo "Application running at: http://localhost:3002"
 echo ""
 echo "Login credentials:"
 echo "  Email: lcapix50@gmail.com"
-echo "  Password: Lcapix@guerry123"
+echo "  Password: <TEST_ACCOUNT_PASSWORD>"
 echo ""
 echo "To stop everything, run:"
 echo "  kill $SSM_PID $DEV_PID"

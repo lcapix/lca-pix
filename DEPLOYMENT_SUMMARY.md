@@ -102,7 +102,7 @@
 
 **Method 2: Via MySQL CLI**
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -P 3306 -u lcaadmin -p lca_v3 < migrate-schema-updates.sql
 ```
 

@@ -44,7 +44,7 @@
 
 - [ ] **Run SQL script**:
   ```bash
-  mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 < create-test-data.sql
+  mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 < create-test-data.sql
   ```
 - [ ] **Verify**: `mysql ... -e "SELECT COUNT(*) FROM account; SELECT COUNT(*) FROM project;"`
 - [ ] **Expected**: 1 user, 1 project, 5 components, 4 flows
@@ -60,11 +60,11 @@ Replace `EC2_IP` with your actual IP:
 - [ ] **Test homepage**: `curl http://EC2_IP:3000/`
 - [ ] **Test signup**: 
   ```bash
-  curl -X POST http://EC2_IP:3000/api/auth/signup -H "Content-Type: application/json" -d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+  curl -X POST http://EC2_IP:3000/api/auth/signup -H "Content-Type: application/json" -d '{"username":"testuser","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
   ```
 - [ ] **Test login**:
   ```bash
-  curl -X POST http://EC2_IP:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"john@lcaproject.com","password":"password123"}'
+  curl -X POST http://EC2_IP:3000/api/auth/login -H "Content-Type: application/json" -d '{"email":"john@lcaproject.com","password":"<DEMO_PASSWORD>"}'
   ```
 - [ ] **Save token from login**: ___________________
 - [ ] **Test get projects**:
@@ -81,7 +81,7 @@ Replace `EC2_IP` with your actual IP:
 
 - [ ] **Open**: `http://EC2_IP:3000`
 - [ ] **Homepage loads** (no errors)
-- [ ] **Login works**: john@lcaproject.com / password123
+- [ ] **Login works**: john@lcaproject.com / <DEMO_PASSWORD>
 - [ ] **Can see project**: Electric Vehicle Manufacturing
 - [ ] **Can see cases**: Baseline Production + Renewable Energy
 - [ ] **Can see components**: 5-level hierarchy
@@ -105,7 +105,7 @@ Replace `EC2_IP` with your actual IP:
 
 - [ ] **Check database**:
   ```bash
-  mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 -e "SELECT * FROM project;"
+  mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 -e "SELECT * FROM project;"
   ```
 - [ ] **Your new project is in database** ✅
 
@@ -126,7 +126,7 @@ The LCA application is deployed and ready for validation!
 
 🔐 Login:
    Email: john@lcaproject.com
-   Password: password123
+   Password: <DEMO_PASSWORD>
 
 📊 Test Data:
    - 1 Project: Electric Vehicle Manufacturing
@@ -186,7 +186,7 @@ aws ec2 authorize-security-group-ingress --group-id sg-054e4fe65b9baf76a --proto
 ### Database connection fails?
 ```bash
 # Test from EC2:
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' -e "SELECT 1;"
+mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' -e "SELECT 1;"
 ```
 
 ### Frontend shows Zustand data?

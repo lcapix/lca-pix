@@ -10,7 +10,7 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
 DB_PASSWORD=$(echo "$SECRET_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['password'])")
 
 echo "Testing connection to lca-dev-db-small..."
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
       -P 3306 \
       -u lcaadmin \
       -p"$DB_PASSWORD" \

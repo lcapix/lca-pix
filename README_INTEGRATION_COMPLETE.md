@@ -101,10 +101,10 @@ cat > test-db-connection.js << 'EOF'
 const mysql = require('mysql2/promise');
 async function test() {
   const conn = await mysql.createConnection({
-    host: 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
+    host: '<RDS_HOST>',
     port: 3306,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3'
   });
   console.log('✅ Connected!');
@@ -132,12 +132,12 @@ Server starts at `http://localhost:3000`
 # Sign up
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"john","email":"john@example.com","password":"password123"}'
+  -d '{"username":"john","email":"john@example.com","password":"<DEMO_PASSWORD>"}'
 
 # Login
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@example.com","password":"password123"}'
+  -d '{"email":"john@example.com","password":"<DEMO_PASSWORD>"}'
 
 # Get user info (use token from login)
 curl -X GET http://localhost:3000/api/auth/me \
@@ -376,11 +376,11 @@ After authentication works, create:
 
 ### **Database Credentials**
 ```
-Host: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+Host: <RDS_HOST>
 Port: 3306
 Database: lca_v3
 Username: lcaadmin
-Password: EP76017fLefZ8?d!ezTHsN[kA()X
+Password: <DB_PASSWORD>
 ```
 
 ### **Key Files**

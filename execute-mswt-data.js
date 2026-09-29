@@ -29,7 +29,7 @@ const CONFIG = {
   USER_CREDENTIALS: {
     username: 'daniel.lerner',
     email: 'daniel.lerner@lcaproject.com',
-    password: 'LCA2025!',
+    password: '<DEMO_PASSWORD>',
     fullName: 'Daniel Lerner'
   }
 };

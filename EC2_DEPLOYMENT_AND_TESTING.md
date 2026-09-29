@@ -56,11 +56,11 @@ cp create-test-data.sql ~/ec2-deploy/
 
 # Create .env.production file (with RDS credentials)
 cat > ~/ec2-deploy/.env.production <<'EOF'
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
-DATABASE_PASSWORD=EP76017fLefZ8?d!ezTHsN[kA()X
+DATABASE_PASSWORD=<DB_PASSWORD>
 JWT_SECRET=your-super-secret-jwt-key-change-in-production-xyz123
 JWT_EXPIRES_IN=7d
 NODE_ENV=production
@@ -177,15 +177,15 @@ pm2 save
 
 ```bash
 # Create test data in RDS
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   lca_v3 < create-test-data.sql
 
 # Verify data was created
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   lca_v3 -e "
 SELECT 'SUMMARY:' AS '';
 SELECT COUNT(*) as users FROM account;
@@ -222,12 +222,12 @@ curl http://$EC2_IP:3000/
 # Test 2: Signup new user
 curl -X POST http://$EC2_IP:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+  -d '{"username":"testuser","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 
 # Test 3: Login with test data user
 RESPONSE=$(curl -s -X POST http://$EC2_IP:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"password123"}')
+  -d '{"email":"john@lcaproject.com","password":"<DEMO_PASSWORD>"}')
 
 echo "$RESPONSE"
 
@@ -271,7 +271,7 @@ http://YOUR_EC2_IP:3000
 1. **Homepage loads** ✅
 2. **Login page** - Try logging in:
    - Email: `john@lcaproject.com`
-   - Password: `password123`
+   - Password: `<DEMO_PASSWORD>`
 3. **Dashboard** - Should show projects
 4. **Project view** - Click "Electric Vehicle Manufacturing"
 5. **Cases** - Should see 2 cases (Baseline + Renewable)
@@ -297,9 +297,9 @@ http://YOUR_EC2_IP:3000
 
 ```bash
 # In EC2 Session Manager
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   lca_v3 -e "SELECT * FROM project;"
 ```
 
@@ -318,7 +318,7 @@ Your new project should be there! ✅
 
 📧 Test Login Credentials:
    Email: john@lcaproject.com
-   Password: password123
+   Password: <DEMO_PASSWORD>
 
 📊 Test Data Available:
    - Project: Electric Vehicle Manufacturing
@@ -420,9 +420,9 @@ npm start
 **Database connection issues?**
 ```bash
 # Test MySQL connection from EC2
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   -e "SELECT 1;"
 ```
 
@@ -487,7 +487,7 @@ The LCA application is now deployed and ready for testing!
 
 **Access:**
 - URL: http://[EC2_IP]:3000
-- Login: john@lcaproject.com / password123
+- Login: john@lcaproject.com / <DEMO_PASSWORD>
 
 **What to Test:**
 1. Navigate through "Electric Vehicle Manufacturing" project

@@ -8,9 +8,9 @@ echo "Database Data Verification"
 echo "=========================================="
 echo ""
 
-DB_HOST="lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"
+DB_HOST="<RDS_HOST>"
 DB_USER="lcaadmin"
-DB_PASS='EP76017fLefZ8?d!ezTHsN[kA()X'
+DB_PASS='<DB_PASSWORD>'
 DB_NAME="lca_v3"
 
 GREEN='\033[0;32m'
@@ -144,7 +144,7 @@ else
     echo "To verify data, paste this in EC2 Session Manager terminal:"
     echo ""
     cat <<'EOCMD'
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 -e "
+mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 -e "
 SELECT 'USERS:' AS ''; SELECT * FROM account;
 SELECT 'PROJECTS:' AS ''; SELECT * FROM project;
 SELECT 'CASES:' AS ''; SELECT * FROM case_table;

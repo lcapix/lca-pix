@@ -88,7 +88,7 @@ cd "/Users/kavishpandit/Desktop/lca/lca project v3"
 **Then test frontend in browser:**
 
 1. Open: `http://YOUR_EC2_IP:3000` (shown in output)
-2. Login: `john@lcaproject.com` / `password123`
+2. Login: `john@lcaproject.com` / `<DEMO_PASSWORD>`
 3. Check:
    - Can see "Electric Vehicle Manufacturing" project
    - Can navigate component hierarchy
@@ -114,7 +114,7 @@ The LCA application is deployed and ready for validation!
 
 🔐 Login:
    Email: john@lcaproject.com
-   Password: password123
+   Password: <DEMO_PASSWORD>
 
 📊 Test Data Available:
    - 1 Project: Electric Vehicle Manufacturing
@@ -183,9 +183,9 @@ npm install --production --legacy-peer-deps
 
 **Test connection from EC2:**
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   -e "SELECT 1;"
 ```
 

@@ -3,7 +3,7 @@
 ## ✅ COMPLETED TASKS
 
 ### 1. Database Deployment
-- ✅ **RDS Instance**: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+- ✅ **RDS Instance**: <RDS_HOST>
 - ✅ **Database Name**: lca_v3
 - ✅ **13 Tables Deployed**:
   - account
@@ -143,12 +143,12 @@ npm run dev
 # Signup
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+  -d '{"username":"testuser","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 
 # Login
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+  -d '{"email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 ```
 
 3. **Test Complete Flow** (see API_DOCUMENTATION.md for full example)
@@ -164,7 +164,7 @@ curl -X POST http://localhost:3000/api/auth/login \
 ## 🔐 CREDENTIALS
 
 ### Database
-- Host: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+- Host: <RDS_HOST>
 - Port: 3306
 - Database: lca_v3
 - Username: lcaadmin

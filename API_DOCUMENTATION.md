@@ -505,12 +505,12 @@ All endpoints return errors in this format:
 # 1. Sign up
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"test","email":"test@example.com","password":"password123"}'
+  -d '{"username":"test","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 
 # 2. Login and get token
 TOKEN=$(curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}' \
+  -d '{"email":"test@example.com","password":"<DEMO_PASSWORD>"}' \
   | jq -r '.token')
 
 # 3. Create project

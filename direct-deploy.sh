@@ -1,9 +1,9 @@
 #!/bin/bash
 export PATH="/opt/homebrew/opt/mysql-client/bin:$PATH"
 
-DB_HOST="lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"
+DB_HOST="<RDS_HOST>"
 DB_USER="lcaadmin"
-DB_PASS='EP76017fLefZ8?d!ezTHsN[kA()X'
+DB_PASS='<DB_PASSWORD>'
 
 echo "Testing connection to $DB_HOST..."
 mysql -h "$DB_HOST" -P 3306 -u "$DB_USER" -p"$DB_PASS" -e "SELECT 1 as test;" --connect-timeout=30

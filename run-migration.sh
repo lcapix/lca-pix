@@ -30,7 +30,7 @@ echo "✅ Database credentials retrieved"
 echo ""
 
 # Database connection details
-DB_HOST="lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"
+DB_HOST="<RDS_HOST>"
 DB_USER="lcaadmin"
 DB_NAME="lca_v3"
 MIGRATION_FILE="migrate-add-driver-columns.sql"

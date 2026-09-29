@@ -7,7 +7,7 @@ Since the local machine cannot connect to RDS (it's in a private VPC), we have t
 Run this in **EC2 Session Manager terminal**:
 
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 <<'EOSQL'
+mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 <<'EOSQL'
 -- 1. Create test user
 INSERT INTO account (username, email, password_hash, account_type) VALUES
 ('john_doe', 'john@lcaproject.com', '$2b$10$xQZ8JYvZ8n3KQZ8JYvZ8JeX8JYvZ8JYvZ8JYvZ8JYvZ8JYvZ8JYvZ', 'user');
@@ -129,7 +129,7 @@ See [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md) for deployment instructions.
 After running Option 1, verify with:
 
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 -e "
+mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 -e "
 SELECT 'USERS:' AS ''; SELECT id, username, email FROM account;
 SELECT '' AS '';
 SELECT 'PROJECTS:' AS ''; SELECT project_id, project_name, description FROM project;
@@ -148,7 +148,7 @@ SELECT 'RESULTS:' AS ''; SELECT ar.result_id, c.component_name, ic.category_name
 
 ## What This Creates
 
-- **1 Test User**: john@lcaproject.com (password hash is for "password123")
+- **1 Test User**: john@lcaproject.com (password hash is for "<DEMO_PASSWORD>")
 - **1 Project**: Electric Vehicle Manufacturing
 - **2 Cases**: 
   - Baseline Production (with full hierarchy and flows)

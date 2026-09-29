@@ -110,7 +110,7 @@ This session addressed multiple critical issues preventing the comparison and an
 Navigate to: http://localhost:3002/auth/login
 Login with:
   Email: ec2user@example.com
-  Password: password123
+  Password: <DEMO_PASSWORD>
 → Receives JWT token, stored in localStorage
 ```
 
@@ -264,7 +264,7 @@ node check-assessments.js
 
 **Credentials**:
 - Email: `ec2user@example.com`
-- Password: `password123`
+- Password: `<DEMO_PASSWORD>`
 - OR Google: `lcapix50@gmail.com`
 
 ---
@@ -312,7 +312,7 @@ node check-assessments.js
 
 2. **Log Back In**:
    - Email: ec2user@example.com
-   - Password: password123
+   - Password: <DEMO_PASSWORD>
    - Get fresh JWT token
 
 3. **Test Full Flow**:

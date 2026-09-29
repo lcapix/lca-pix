@@ -26,7 +26,7 @@ cd "/Users/kavishpandit/Desktop/lca/lca project v3"
 
 3. **Test in browser:**
 - Go to http://localhost:3002
-- Login with: `john@lcaproject.com` / `password123`
+- Login with: `john@lcaproject.com` / `<DEMO_PASSWORD>`
 - You should see "Electric Vehicle Manufacturing" from database
 - Click "Create your first project" button
 - Fill in name and description

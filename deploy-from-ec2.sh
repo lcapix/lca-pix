@@ -53,7 +53,7 @@ SECRET_JSON=$(aws secretsmanager get-secret-value \
 
 DB_USERNAME=$(echo "$SECRET_JSON" | grep -o '"username":"[^"]*"' | cut -d'"' -f4)
 DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*"' | cut -d'"' -f4)
-DB_ENDPOINT="lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"
+DB_ENDPOINT="<RDS_HOST>"
 
 echo "Creating database..."
 mysql -h "$DB_ENDPOINT" -u "$DB_USERNAME" -p"$DB_PASSWORD" << 'EOF'
@@ -145,5 +145,5 @@ echo "  ✅ DEPLOYMENT COMPLETE!"
 echo "============================================================================"
 echo ""
 echo "Database successfully deployed to:"
-echo "  lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306/lca_v3"
+echo "  <RDS_HOST>:3306/lca_v3"
 echo ""

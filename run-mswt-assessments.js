@@ -13,7 +13,7 @@ const CONFIG = {
   API_BASE_URL: 'http://localhost:3002',
   USER_CREDENTIALS: {
     email: 'daniel.lerner@lcaproject.com',
-    password: 'LCA2025!'
+    password: '<DEMO_PASSWORD>'
   },
   CASES: [
     { id: 121, name: 'MSWT Base Case' },

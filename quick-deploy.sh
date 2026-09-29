@@ -64,11 +64,11 @@ cp create-test-data.sql $DEPLOY_DIR/
 
 # Create .env.production
 cat > $DEPLOY_DIR/.env.production <<EOF
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
-DATABASE_PASSWORD=EP76017fLefZ8?d!ezTHsN[kA()X
+DATABASE_PASSWORD=<DB_PASSWORD>
 JWT_SECRET=your-super-secret-jwt-key-change-in-production-xyz123
 JWT_EXPIRES_IN=7d
 NODE_ENV=production
@@ -130,10 +130,10 @@ echo ""
 echo "3. Access your app at: http://$EC2_IP:3000"
 echo ""
 echo "4. Create test data:"
-echo "   mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \\"
+echo "   mysql -h <RDS_HOST> \\"
 echo "     -u lcaadmin \\"
-echo "     -p'EP76017fLefZ8?d!ezTHsN[kA()X' \\"
+echo "     -p'<DB_PASSWORD>' \\"
 echo "     lca_v3 < create-test-data.sql"
 echo ""
-echo "5. Test login: john@lcaproject.com / password123"
+echo "5. Test login: john@lcaproject.com / <DEMO_PASSWORD>"
 echo ""

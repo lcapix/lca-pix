@@ -368,7 +368,7 @@ echo -e "${GREEN}===============================================================
 echo ""
 echo -e "${BLUE}🔑 Login Credentials:${NC}"
 echo "   Email: demo@lcaproject.com"
-echo "   Password: demo123"
+echo "   Password: <DEMO_PASSWORD>"
 echo ""
 echo -e "${BLUE}📁 Test Data Includes:${NC}"
 echo "   • 2 Users (demo + admin)"

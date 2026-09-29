@@ -36,7 +36,7 @@ async function runMigration() {
     host: '127.0.0.1',
     port: 3307,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3',
     multipleStatements: true
   });

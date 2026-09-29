@@ -35,7 +35,7 @@
 
 ### Step 1: Create Cases to Compare
 1. Go to http://localhost:3002
-2. Login: `lcapix50@gmail.com` / `Lcapix@guerry123`
+2. Login: `lcapix50@gmail.com` / `<TEST_ACCOUNT_PASSWORD>`
 3. Navigate to a project
 4. Create 2-10 cases with different scenarios
 5. For each case, add environmental flows (Data tab)
