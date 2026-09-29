@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { planPlacement } from '@/lib/component-tree';
+import {
+  BadRequest,
+  COMPONENT_TYPES,
+  nonNegative,
+  parseStage,
+  parseCostColumns,
+  loadCaseTree,
+  updateExistingColumns,
+} from '@/lib/component-fields';
 
 // GET /api/cases/[caseId]/components - Get all components for a case (hierarchy)
 export async function GET(
@@ -30,7 +40,8 @@ export async function GET(
       `SELECT c.*,
               parent.component_name as parent_component_name
        FROM component c
-       LEFT JOIN component parent ON c.parent_component_id = parent.component_id
+       LEFT JOIN component parent
+         ON c.parent_component_id = parent.component_id AND parent.case_id = c.case_id
        WHERE c.case_id = ?
        ORDER BY c.component_type, c.created_at, c.component_id`,
       [caseId]
@@ -94,10 +105,10 @@ export async function POST(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const body = await request.json();
     const {
       component_name,
       component_type,
-      hierarchy_level,
       parent_component_id,
       component_description,
       description: descriptionField,
@@ -109,8 +120,7 @@ export async function POST(
       unit,
       opex,
       capex,
-      life_cycle_stage
-    } = await request.json();
+    } = body;
 
     if (!component_name || !component_type) {
       return NextResponse.json(
@@ -119,20 +129,44 @@ export async function POST(
       );
     }
 
-    const validTypes = ['product', 'machine_line', 'subprocess', 'operation', 'elemental_task'];
-    if (!validTypes.includes(component_type)) {
+    if (!COMPONENT_TYPES.includes(component_type)) {
       return NextResponse.json({ error: 'Invalid component type' }, { status: 400 });
     }
 
-    // hierarchy_level is the DEPTH in the tree (levels may be skipped, so the
-    // type no longer implies it): parent's level + 1, or 1 for a root.
-    let level = Number(hierarchy_level) || 1;
-    if (!hierarchy_level && parent_component_id) {
-      const parentRow = await queryOne<any>(
-        `SELECT hierarchy_level FROM component WHERE component_id = ? AND case_id = ?`,
-        [parent_component_id, caseId]
-      );
-      level = (Number(parentRow?.hierarchy_level) || 0) + 1;
+    // Validate everything before inserting. hierarchy_level is the DEPTH in
+    // the tree (levels may be skipped by type), so it is derived from the
+    // parent, which must be a step of THIS case (M1: a foreign id used to be
+    // stored and its name echoed back).
+    let level = 1;
+    let stage: string | null | undefined;
+    let costs: Array<[string, unknown]> = [];
+    let qty: number | null;
+    let opexValue: number | null;
+    let capexValue: number | null;
+    const parentId =
+      parent_component_id === null || parent_component_id === undefined || parent_component_id === ''
+        ? null
+        : Number(parent_component_id);
+    try {
+      if (typeof component_name !== 'string' || !component_name.trim() || component_name.length > 200) {
+        throw new BadRequest('Component name must be 1 to 200 characters');
+      }
+      if (parentId !== null) {
+        if (!Number.isInteger(parentId)) throw new BadRequest('parent_component_id must be a step id');
+        const plan = planPlacement(await loadCaseTree(caseId), null, parentId);
+        if (!plan.ok) throw new BadRequest(plan.error);
+        level = plan.level;
+      }
+      stage = parseStage(body);
+      costs = parseCostColumns(body);
+      qty = nonNegative('quantity', quantity);
+      opexValue = nonNegative('opex', opex);
+      capexValue = nonNegative('capex', capex);
+    } catch (e) {
+      if (e instanceof BadRequest) {
+        return NextResponse.json({ error: e.message }, { status: 400 });
+      }
+      throw e;
     }
 
     const componentId = await insert(
@@ -142,7 +176,7 @@ export async function POST(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         caseId,
-        parent_component_id ?? null,
+        parentId,
         component_name,
         component_type,
         level,
@@ -151,19 +185,19 @@ export async function POST(
         driver_category ?? null,
         driver_type ?? null,
         drivers ? (typeof drivers === 'string' ? drivers : JSON.stringify(drivers)) : null,
-        quantity ?? 1.0,
+        qty ?? 1.0,
         unit ?? 'unit',
-        opex ?? null,
-        capex ?? null
+        opexValue,
+        capexValue,
       ]
     );
 
     // Its own statement, so a database without migrate-022 can still create a
     // step; it simply has no stage and reads as production.
-    if (life_cycle_stage) {
+    if (stage) {
       try {
         await execute('UPDATE component SET life_cycle_stage = ? WHERE component_id = ?', [
-          life_cycle_stage,
+          stage,
           componentId,
         ]);
       } catch (stageErr: any) {
@@ -172,10 +206,14 @@ export async function POST(
       }
     }
 
+    // Costs entered on the create form (they used to be dropped here).
+    await updateExistingColumns(componentId, costs, 'component POST');
+
     const newComponent = await queryOne(
       `SELECT c.*, parent.component_name as parent_component_name
        FROM component c
-       LEFT JOIN component parent ON c.parent_component_id = parent.component_id
+       LEFT JOIN component parent
+         ON c.parent_component_id = parent.component_id AND parent.case_id = c.case_id
        WHERE c.component_id = ?`,
       [componentId]
     );
