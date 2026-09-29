@@ -2,13 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { guardAdmin } from '@/lib/integrations/admin-guard';
-import { enrichSubstance, enrichAllSubstances } from '@/lib/integrations/pubchem/enrich';
+import {
+  enrichSubstance, enrichAllSubstances, ENRICH_DEFAULT_LIMIT, ENRICH_MAX_LIMIT,
+} from '@/lib/integrations/pubchem/enrich';
 import { logIntegration } from '@/lib/integrations/log';
 
 const Body = z.object({
   substance_id: z.number().int().positive().optional(),
   only_missing: z.boolean().optional(),
-  limit: z.number().int().positive().max(500).optional(),
+  limit: z.number().int().positive().max(ENRICH_MAX_LIMIT).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const summary = await enrichAllSubstances({
       onlyMissing: parsed.data.only_missing ?? true,
-      limit: parsed.data.limit,
+      limit: parsed.data.limit ?? ENRICH_DEFAULT_LIMIT,
     });
     await logIntegration({
       source: 'pubchem', action: 'enrich_all',

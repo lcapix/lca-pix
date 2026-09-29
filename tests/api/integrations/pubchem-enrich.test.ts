@@ -45,6 +45,22 @@ describe('POST /api/integrations/pubchem/enrich', () => {
     expect(body.result.status).toBe('enriched');
   });
 
+  it('passes a bounded default limit when none is given', async () => {
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(enrich.enrichAllSubstances).mockResolvedValue({ enriched: 0, notFound: 0, failed: 0, total: 0 });
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
+    await POST(mkRequest({}) as any);
+    expect(enrich.enrichAllSubstances).toHaveBeenCalledWith(expect.objectContaining({ limit: 50 }));
+  });
+
+  it('400 when limit is over 500', async () => {
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    const res = await POST(mkRequest({ limit: 501 }) as any);
+    expect(res.status).toBe(400);
+    expect(enrich.enrichAllSubstances).not.toHaveBeenCalled();
+  });
+
   it('enriches all when no substance_id', async () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(enrich.enrichAllSubstances).mockResolvedValue({
