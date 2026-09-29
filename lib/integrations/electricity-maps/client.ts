@@ -31,10 +31,16 @@ export async function fetchCarbonIntensity(zone: string): Promise<CarbonIntensit
     throw new Error(`Electricity Maps error ${res.status} for zone ${zone}`);
   }
   const body = await res.json();
+  // A missing reading comes back as null; null / 1000 is 0, which would be
+  // written as a zero-carbon grid. Refuse anything that is not a real number.
+  const g = body?.carbonIntensity;
+  if (typeof g !== 'number' || !Number.isFinite(g) || g < 0) {
+    throw new Error(`Electricity Maps returned no carbon intensity for zone ${zone}`);
+  }
   return {
     zone: body.zone,
-    carbonIntensity_gCO2eq_per_kWh: body.carbonIntensity,
-    carbonIntensity_kgCO2eq_per_kWh: body.carbonIntensity / 1000,
+    carbonIntensity_gCO2eq_per_kWh: g,
+    carbonIntensity_kgCO2eq_per_kWh: g / 1000,
     datetime: body.datetime,
     updatedAt: body.updatedAt,
   };

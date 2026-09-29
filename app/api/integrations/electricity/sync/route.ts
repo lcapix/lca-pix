@@ -3,14 +3,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { syncZoneFactor } from '@/lib/integrations/electricity-maps/sync';
+import { SYNC_ZONES, isSyncZone } from '@/lib/integrations/electricity-maps/zones';
+import { SUPPORTED_METHODS } from '@/lib/integrations/openlca/methods';
 import { logIntegration } from '@/lib/integrations/log';
 
 // Accept either `zones: string[]` (the batch interface) OR a single `zone: string`
 // (convenient for one-off lookups from the UI / curl).
+// The zone becomes geographic_scope on a shared factor row: only zones with a
+// curated reference value are accepted.
+const Zone = z.string().refine(isSyncZone, {
+  message: `Zone must be one of: ${SYNC_ZONES.join(', ')}`,
+});
+
 const Body = z.object({
-  zones: z.array(z.string().min(1)).min(1).max(20).optional(),
-  zone: z.string().min(1).optional(),
-  method: z.string().optional(),
+  zones: z.array(Zone).min(1).max(20).optional(),
+  zone: Zone.optional(),
+  method: z.enum(SUPPORTED_METHODS).optional(),
 }).refine(b => Boolean(b.zones?.length) || Boolean(b.zone), {
   message: 'Provide either `zone` (string) or `zones` (string[])',
 });
@@ -39,13 +47,17 @@ export async function POST(request: NextRequest) {
       results.push({ zone, error: e.message });
     }
   }
-  const successful = results.filter(r => 'inserted' in r).length;
+  const written = results.filter(r => r.inserted === true).length;
+  const allFailed = results.length > 0 && failed === results.length;
   await logIntegration({
     source: 'electricity_maps', action: 'sync_zones',
-    recordsAffected: successful,
+    recordsAffected: written,
     executedBy: userId,
-    status: failed === 0 ? 'success' : failed < results.length ? 'partial' : 'failed',
+    status: failed === 0 ? 'success' : allFailed ? 'failed' : 'partial',
     details: { zones: zonesToFetch, results },
   });
+  if (allFailed) {
+    return NextResponse.json({ success: false, error: 'No zone could be synced', results }, { status: 502 });
+  }
   return NextResponse.json({ success: true, results });
 }
