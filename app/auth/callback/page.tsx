@@ -8,16 +8,19 @@ import { useToast } from "@/hooks/use-toast"
 /**
  * OAuth callback landing page.
  *
- * The /api/auth/google server route handles the OAuth code exchange and sets
- * two cookies (auth_token and user_data), then redirects here. This client
- * page promotes those cookies into:
+ * /api/auth/google finishes the code exchange, leaves the JWT in an httpOnly
+ * `auth_token` cookie that lives 2 minutes, and redirects here. This page asks
+ * POST /api/auth/google/session for that token once (the response clears the
+ * cookie), then promotes it into:
  *   - localStorage.auth_token / localStorage.user — used by lib/api-client for
  *     Authorization headers
  *   - the Zustand auth store (lcapix-auth) — used by AuthGuard to decide if a
  *     route is accessible
  *
- * Without this sync step, /home mounts with isAuthenticated=false and the
- * AuthGuard bounces the user straight back to /auth/login.
+ * The token is never readable from document.cookie. Older builds left a
+ * JS-readable 7-day `auth_token` and `user_data`; the server clears them in the
+ * same response and this page expires any it can see, so revisiting
+ * /auth/callback after logout cannot sign the previous user back in.
  *
  * Why the Suspense wrapper: useSearchParams forces the page off the static
  * prerender path. Wrapping the consumer in <Suspense> tells Next.js it's
@@ -47,63 +50,61 @@ function CallbackInner() {
     if (ran.current) return
     ran.current = true
 
-    const readCookie = (name: string): string | null => {
-      const match = document.cookie
-        .split("; ")
-        .find((c) => c.startsWith(`${name}=`))
-      if (!match) return null
-      return decodeURIComponent(match.slice(name.length + 1))
+    const expireLegacyCookies = () => {
+      for (const name of ["auth_token", "user_data"]) {
+        document.cookie = `${name}=; Max-Age=0; path=/`
+      }
     }
 
-    try {
-      const token = readCookie("auth_token")
-      const rawUser = readCookie("user_data")
-
-      if (!token || !rawUser) {
-        throw new Error(
-          "Missing auth cookies after OAuth callback. Try signing in again."
-        )
-      }
-
-      const parsed = JSON.parse(rawUser) as {
-        id: number | string
-        username: string
-        email: string
-      }
-
-      localStorage.setItem("auth_token", token)
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          id: parsed.id,
-          username: parsed.username,
-          email: parsed.email,
+    ;(async () => {
+      try {
+        const res = await fetch("/api/auth/google/session", {
+          method: "POST",
+          credentials: "same-origin",
+          cache: "no-store",
         })
-      )
+        expireLegacyCookies()
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.token || !data?.user) {
+          throw new Error("Could not finish Google sign-in. Try signing in again.")
+        }
 
-      login({
-        id: String(parsed.id),
-        name: parsed.username,
-        email: parsed.email,
-        createdAt: new Date(),
-      })
+        const { token, user } = data as {
+          token: string
+          user: { id: number | string; username: string; email: string }
+        }
 
-      toast({
-        title: "Welcome!",
-        description: "Signed in with Google.",
-      })
+        localStorage.setItem("auth_token", token)
+        localStorage.setItem(
+          "user",
+          JSON.stringify({ id: user.id, username: user.username, email: user.email })
+        )
 
-      router.replace(next)
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "OAuth sign-in failed."
-      toast({
-        title: "Sign-in failed",
-        description: message,
-        variant: "destructive",
-      })
-      router.replace("/auth/login?error=oauth_sync_failed")
-    }
+        login({
+          id: String(user.id),
+          name: user.username,
+          email: user.email,
+          createdAt: new Date(),
+        })
+
+        toast({
+          title: "Welcome!",
+          description: "Signed in with Google.",
+        })
+
+        router.replace(next)
+      } catch (err) {
+        expireLegacyCookies()
+        const message =
+          err instanceof Error ? err.message : "OAuth sign-in failed."
+        toast({
+          title: "Sign-in failed",
+          description: message,
+          variant: "destructive",
+        })
+        router.replace("/auth/login?error=oauth_sync_failed")
+      }
+    })()
   }, [login, next, router, toast])
 
   return <Spinner />
