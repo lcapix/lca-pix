@@ -153,3 +153,43 @@ describe("E11: the factor's own denominator is checked", () => {
     expect(r.impacts[0].impact_value).toBeCloseTo(950, 9);
   });
 });
+
+describe('E10 reporting nits', () => {
+  it('total_flows_processed counts flows, not flow × category pairs', async () => {
+    const r = await run([
+      gwRow({ flow_id: 1, substance_name: 'Electricity', flow_unit: 'kWh', substance_default_unit: 'kWh' }),
+      gwRow({
+        flow_id: 1, substance_name: 'Electricity', flow_unit: 'kWh', substance_default_unit: 'kWh',
+        category_id: 3, category_name: 'Acidification', factor_unit: 'kg SO2 eq',
+      }),
+      gwRow({ flow_id: 2, substance_name: 'Steel' }),
+    ]);
+    expect(r.flow_contributions).toHaveLength(3);
+    expect(r.total_flows_processed).toBe(2);
+  });
+
+  it('category coverage counts inputs only (an emission output is not a missing input)', () => {
+    const c = (over: Record<string, unknown>) => ({
+      flow_id: 1, substance_id: 1, substance_name: 'x', cas_number: null, flow_type: 'input' as const,
+      quantity: 1, unit: 'kg', characterization_factor: 1, impact_contribution: 1,
+      category_id: 1, category_name: 'Global Warming', geographic_scope: 'Global', ...over,
+    });
+    const dq = summarizeDataQuality([
+      {
+        component_id: 1, component_name: 'Step', component_type: 'operation', hierarchy_level: 4,
+        impacts: [], total_flows_processed: 3, driver_flows_count: 3, warnings: [],
+        flow_contributions: [
+          c({ flow_id: 1, substance_name: 'Aluminum' }),
+          c({ flow_id: 2, substance_name: 'Electricity' }),
+          c({ flow_id: 2, substance_name: 'Electricity', category_id: 3, category_name: 'Acidification' }),
+          c({ flow_id: 3, substance_name: 'Carbon dioxide', flow_type: 'output' }),
+        ] as any,
+      },
+    ]);
+    const acid = dq.category_coverage.find((x) => x.category === 'Acidification')!;
+    expect(acid).toMatchObject({ covered: 1, total: 2, missing_examples: ['Aluminum'] });
+    const gw = dq.category_coverage.find((x) => x.category === 'Global Warming')!;
+    expect(gw).toMatchObject({ covered: 2, total: 2 });
+    expect(dq.statement.join(' ')).toContain('Acidification covers 1 of 2 inputs');
+  });
+});

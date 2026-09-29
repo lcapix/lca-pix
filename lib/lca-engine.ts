@@ -114,8 +114,8 @@ export interface DataQualitySummary {
   /** Flows no factor in the method characterizes (they add nothing). */
   uncharacterized_flows: number;
   /**
-   * Per impact category: how many of the characterized flows have a factor in
-   * THAT category. A category whose factors cover only some inputs still prints
+   * Per impact category: how many of the characterized INPUT flows have a
+   * factor in THAT category (outputs are not counted on either side). A category whose factors cover only some inputs still prints
    * a total, and without this it reads as if the whole product were counted.
    */
   category_coverage: Array<{
@@ -140,7 +140,9 @@ export interface ComponentImpactResult {
   life_cycle_stage?: string | null;
   impacts: CategoryImpact[];
   flow_contributions: FlowContribution[];
+  /** Distinct flows evaluated: flows with at least one factor row in the method. */
   total_flows_processed: number;
+  /** Distinct flows that contributed to at least one category. */
   driver_flows_count: number;
   /** Data-quality problems that excluded or altered contributions (unit
    * mismatches, missing units). Never empty silently — surfaced to the run. */
@@ -463,7 +465,9 @@ export async function calculateComponentImpacts(
     hierarchy_level: component.hierarchy_level,
     impacts,
     flow_contributions: flowContributions,
-    total_flows_processed: flowContributions.length,
+    // Flows the engine evaluated (at least one factor row in this method),
+    // counted once each however many categories they have factors in.
+    total_flows_processed: new Set(flowsData.map((r) => r.flow_id)).size,
     driver_flows_count: new Set(flowContributions.map((f) => f.flow_id)).size,
     warnings,
     excluded_flows: excluded,
@@ -846,20 +850,25 @@ export function summarizeDataQuality(
   /** Substances that actually had a factor for the requested region. */
   const regionalSubstances = new Set<string>();
   let unit_conversions = 0;
-  // flow ids seen per category, and the flows seen at all, so a category can be
-  // told "you cover 5 of the 26 inputs this run characterized".
-  const flowsByCategory = new Map<string, Set<number>>();
-  const allCharacterizedFlows = new Set<number>();
+  // Input flows seen per category, and all characterized inputs, so a category
+  // can be told "you cover 5 of the 26 inputs this run characterized".
+  // Outputs are left out on both sides: an emission characterizes only the
+  // categories it acts in (CO2 has no acidification factor), so counting it as
+  // a missing input would overstate the gap.
+  const inputsByCategory = new Map<string, Set<number>>();
+  const allCharacterizedInputs = new Set<number>();
   const substanceByFlow = new Map<number, string>();
 
   for (const r of componentResults) {
     for (const c of r.flow_contributions) {
       contributions++;
-      allCharacterizedFlows.add(c.flow_id);
       substanceByFlow.set(c.flow_id, c.substance_name);
-      const seen = flowsByCategory.get(c.category_name) ?? new Set<number>();
-      seen.add(c.flow_id);
-      flowsByCategory.set(c.category_name, seen);
+      const seen = inputsByCategory.get(c.category_name) ?? new Set<number>();
+      if (c.flow_type !== 'output') {
+        allCharacterizedInputs.add(c.flow_id);
+        seen.add(c.flow_id);
+      }
+      inputsByCategory.set(c.category_name, seen);
       const tier = c.source_tier ?? classifyFactorSource(c.factor_source);
       by_tier[tier]++;
       if (/global warming|climate change/i.test(c.category_name)) {
@@ -887,14 +896,15 @@ export function summarizeDataQuality(
   const unchar = opts.uncharacterized ?? [];
   const uncharNames = [...new Set(unchar.map((u) => u.substance_name))];
 
-  const category_coverage = [...flowsByCategory.entries()]
+  const category_coverage = [...inputsByCategory.entries()]
+    .filter(() => allCharacterizedInputs.size > 0)
     .map(([category, seen]) => {
-      const missing = [...allCharacterizedFlows].filter((id) => !seen.has(id));
+      const missing = [...allCharacterizedInputs].filter((id) => !seen.has(id));
       const names = [...new Set(missing.map((id) => substanceByFlow.get(id) ?? 'unnamed flow'))];
       return {
         category,
         covered: seen.size,
-        total: allCharacterizedFlows.size,
+        total: allCharacterizedInputs.size,
         missing_examples: names.slice(0, 5),
       };
     })
@@ -1017,41 +1027,4 @@ export function formatAlgorithmSteps(steps: AlgorithmStep[]): string[] {
 
     return message;
   });
-}
-
-/**
- * Validate flow contributions
- *
- * Ensures all flow contributions have valid characterization factors
- * and positive quantities. Returns list of validation issues.
- *
- * @param contributions - Flow contributions to validate
- * @returns Array of validation error messages (empty if valid)
- */
-export function validateFlowContributions(
-  contributions: FlowContribution[]
-): string[] {
-  const errors: string[] = [];
-
-  for (const contrib of contributions) {
-    if (contrib.quantity <= 0) {
-      errors.push(
-        `Flow ${contrib.flow_id} (${contrib.substance_name}) has non-positive quantity: ${contrib.quantity}`
-      );
-    }
-
-    if (contrib.characterization_factor === 0) {
-      errors.push(
-        `Flow ${contrib.flow_id} (${contrib.substance_name}) has zero characterization factor for ${contrib.category_name}`
-      );
-    }
-
-    if (isNaN(contrib.impact_contribution)) {
-      errors.push(
-        `Flow ${contrib.flow_id} (${contrib.substance_name}) has invalid impact contribution (NaN)`
-      );
-    }
-  }
-
-  return errors;
 }
