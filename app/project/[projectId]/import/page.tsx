@@ -19,6 +19,7 @@ import { Icon } from '@/components/lcapix'
 import type { IngestPlan, MappedFlow, SubstanceCandidate } from '@/lib/ingest/maplca'
 import { placeableSteps, suggestPlacement } from '@/lib/ingest/placement'
 import { LIVE_DOC_TYPES, getDocType, LAYER_LABEL } from '@/lib/ingest/doc-types'
+import { SAMPLE_DOCS } from '@/lib/ingest/sample-docs'
 
 function authHeaders(json = true): Record<string, string> {
   const h: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {}
@@ -60,65 +61,6 @@ const COLUMN_ROLES: Array<[string, string]> = [
 const rolesFor = (connector: string): Array<[string, string]> =>
   connector === 'bom' ? COLUMN_ROLES : COLUMN_ROLES.filter(([v]) => v === 'ignore' || v === 'note')
 
-// Bundled sample documents so a classroom user with no file of their own can
-// still walk the whole flow. Inlined (not fetched) so they work offline and on
-// Vercel. The header row doubles as the downloadable blank template.
-// The three together are one demo product (a touring bike from a small US
-// frame shop), each shaped like the real export it stands for:
-//  - routing: an ERP routing (department, work center, setup / run hours,
-//    base quantity for the batch oven);
-//  - bom: an Oracle-style BOM (qty per, UOM, unit weight, unit cost, and the
-//    Op Seq that says which step consumes each line, bulk consumables in kg);
-//  - equipment: a maintenance asset register (rated power, typical load),
-//    joined to the routing on the work center.
-const SAMPLE_DOCS: Record<string, { filename: string; content: string }> = {
-  routing: {
-    filename: 'sample-routing.csv',
-    content: `Op No,Operation,Department,Work Center,Setup Hrs,Run Hrs,Base Qty,Tooling
-10,Cut & miter frame tubes,Fabrication,SAW-01 Cold saw,0.5,0.3,1,Tube miter jig
-20,TIG weld main triangle,Fabrication,WLD-01 TIG weld cell,1.0,0.8,1,Frame fixture A
-30,Weld dropouts & bosses,Fabrication,WLD-01 TIG weld cell,0.4,0.5,1,Dropout jig
-40,Powder coat frame,Finishing,PNT-01 Powder booth,0.6,0.4,1,Spray gun
-50,Cure coating,Finishing,OVN-01 Cure oven,0.2,0.8,2,Frame rack
-60,Build & true wheels,Assembly,WHL-01 Wheel bench,0.3,0.6,1,Truing stand
-70,Final assembly,Assembly,ASM-01 Assembly bench,0.5,1.0,1,Torque tools
-80,QA & pack,Assembly,PCK-01 Pack station,0.2,0.3,1,Box sealer`,
-  },
-  bom: {
-    filename: 'sample-bom.csv',
-    content: `Item,Description,Material,Qty Per,UOM,Unit Weight (kg),Unit Cost,Op Seq
-FT-6061,Frame tube set 6061-T6,Aluminum,1,ea,2.2,85.00,10
-FR-4043-A,TIG filler rod ER4043 (main triangle),Aluminum,0.03,kg,,9.50,20
-AR-TIG-A,Argon shielding gas (main triangle),Argon,0.18,kg,,,20
-FR-4043-B,TIG filler rod ER4043 (dropouts and bosses),Aluminum,0.01,kg,,9.50,30
-AR-TIG-B,Argon shielding gas (dropouts and bosses),Argon,0.06,kg,,,30
-PC-HYB,Powder coat epoxy-polyester hybrid,Epoxy resin,0.045,kg,,12.00,40
-WH-F700,Front wheel 700c (rim hub spokes),Aluminum,1,ea,0.96,45.00,60
-WH-R700,Rear wheel 700c (rim hub spokes),Aluminum,1,ea,1.11,55.00,60
-TR-37,Tire 37-622 wired,Rubber,2,ea,0.74,15.00,60
-TB-700,Inner tube 700c,Rubber,2,ea,0.15,4.00,60
-FK-4130,Fork 4130 steel,Steel,1,ea,1.02,40.00,70
-CH-9,Chain 9-speed 116 links,Steel,1,ea,0.277,18.00,70
-CK-110,Crankset triple,Aluminum,1,ea,0.769,45.00,70
-HB-44,Handlebar 44 cm 6061-T6,Aluminum,1,ea,0.322,22.00,70
-SD-B17,Saddle,Plastic,1,ea,0.52,15.00,70
-PD-520,Pedals (pair),Aluminum,1,pr,0.38,12.00,70
-BC-MD,Brake caliper mechanical disc,Aluminum,2,ea,0.154,30.00,70
-BR-160,Brake rotor 160 mm,Stainless Steel,2,ea,0.133,15.00,70
-DT-9,Derailleurs and shift levers,Aluminum,1,set,0.926,60.00,70
-OC-AL,"Other aluminum parts (stem, seatpost, racks), by difference",Aluminum,1,set,1.23,60.00,70
-OC-ST,"Other steel parts (cassette, headset, bottom bracket, cables), by difference",Steel,1,set,1.23,45.00,70
-BX-54,Bike box corrugated 54x8x28 in,Cardboard,1,ea,3.36,6.00,80`,
-  },
-  equipment: {
-    filename: 'sample-equipment-list.csv',
-    content: `Asset ID,Description,Work Center,Rated power (kW),Typical load (%)
-EQ-101,Cold saw 275 mm,SAW-01 Cold saw,1.1,50
-EQ-201,AC/DC TIG welder 210 A,WLD-01 TIG weld cell,5.6,8
-EQ-301,Cartridge powder booth fan,PNT-01 Powder booth,5.6,75
-EQ-401,Electric batch cure oven (2 frames),OVN-01 Cure oven,5.0,62`,
-  },
-}
 
 export default function ImportPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params)
@@ -156,12 +98,22 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   // student can fill in their own data in the shape we expect.
   // Read the document before trusting what came out of it: opens the sample
   // CSV in a new tab, rows and all.
+  // Browsers block a pop-up to a blob: URL, so the sample opens in a panel
+  // here instead of a new tab.
   const viewSample = (conn: string) => {
     const sample = SAMPLE_DOCS[conn]
     if (!sample) return
-    const url = URL.createObjectURL(new Blob([sample.content], { type: 'text/plain' }))
-    window.open(url, '_blank', 'noopener')
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    setSampleView({ conn, filename: sample.filename, content: sample.content })
+  }
+  const downloadSample = (conn: string) => {
+    const sample = SAMPLE_DOCS[conn]
+    if (!sample) return
+    const url = URL.createObjectURL(new Blob([sample.content], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = sample.filename
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
   const downloadTemplate = (conn: string) => {
     const s = SAMPLE_DOCS[conn]
@@ -185,6 +137,8 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   const [caseName, setCaseName] = useState('')
   const [edits, setEdits] = useState<Record<number, FlowEdit>>({})
   const [error, setError] = useState<string | null>(null)
+  // The sample document shown in a panel (View sample).
+  const [sampleView, setSampleView] = useState<{ conn: string; filename: string; content: string } | null>(null)
   const [idHints, setIdHints] = useState<string[]>([])
   const [applied, setApplied] = useState<any>(null)
 
@@ -521,6 +475,25 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
       }
       setPhase('done')
       toast.success(appending ? 'Document added to the case' : `Case created: ${d.case_name}`)
+
+      // Keep the document with the case. The importer reads it once and would
+      // otherwise drop it, which leaves a person unable to look back at the
+      // routing or BOM the numbers came from (Reference pane in the editor).
+      if (d.case_id && file) {
+        try {
+          const docForm = new FormData()
+          docForm.append('file', file)
+          docForm.append('doc_type', connector)
+          await fetch(`/api/cases/${d.case_id}/documents`, {
+            method: 'POST',
+            headers: authHeaders(false), // let the browser set the multipart boundary
+            body: docForm,
+          })
+        } catch {
+          // A case without its document is still a usable case; do not fail
+          // the import over the copy kept for reading.
+        }
+      }
       // Pull the case completeness so the checklist shows what is still missing.
       try {
         const cr = await fetch(`/api/cases/${d.case_id}/completeness`, { headers: authHeaders() })
@@ -810,7 +783,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                     type="button"
                     className="btn btn-ghost btn-sm"
                     onClick={() => viewSample(connector)}
-                    title="Open the sample document itself in a new tab, so you can read what is being ingested"
+                    title="Read the sample document itself, so you can see what is being ingested"
                   >
                     View sample
                   </button>
@@ -1403,6 +1376,85 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
           </div>
         )}
       </div>
+
+      {/* The sample document itself, so nobody has to guess what is ingested. */}
+      {sampleView && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Sample document ${sampleView.filename}`}
+          onClick={() => setSampleView(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 60,
+            background: 'rgba(0,0,0,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: 'min(900px, 100%)', maxHeight: '82vh', padding: '18px 20px', display: 'flex', flexDirection: 'column' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
+              <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>{sampleView.filename}</span>
+              <span className="chip" style={{ fontSize: 10 }}>
+                {getDocType(sampleView.conn)?.label ?? sampleView.conn}
+              </span>
+              <div style={{ flex: 1 }} />
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSampleView(null)}>
+                Close
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10, lineHeight: 1.5 }}>
+              {getDocType(sampleView.conn)?.provides ?? 'This is the document the importer reads.'}
+            </div>
+            <pre
+              className="mono"
+              style={{
+                flex: 1,
+                overflow: 'auto',
+                margin: 0,
+                padding: '12px 14px',
+                borderRadius: 8,
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--surface-raised)',
+                fontSize: 11.5,
+                lineHeight: 1.55,
+                whiteSpace: 'pre',
+              }}
+            >
+              {sampleView.content}
+            </pre>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  loadSample(sampleView.conn)
+                  setSampleView(null)
+                }}
+              >
+                Load this sample
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadSample(sampleView.conn)}>
+                Download it
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => navigator.clipboard?.writeText(sampleView.content)}
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthGuard>
   )
 }

@@ -97,7 +97,9 @@ export async function PUT(
       // ISO 14044 4.3.4 allocation of a multi-output unit process
       allocation_method,
       allocation_factor,
-      allocation_note
+      allocation_note,
+      // Which life-cycle stage this step belongs to (migrate-022)
+      life_cycle_stage
     } = body;
 
     // Whether the caller explicitly sent a parent. We must distinguish
@@ -154,6 +156,18 @@ export async function PUT(
         componentId
       ]
     );
+
+    if (life_cycle_stage !== undefined) {
+      try {
+        await execute('UPDATE component SET life_cycle_stage = ? WHERE component_id = ?', [
+          life_cycle_stage || null,
+          componentId,
+        ]);
+      } catch (stageErr: any) {
+        if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
+        console.warn('[component PUT] life_cycle_stage missing (run migrate-022)');
+      }
+    }
 
     // Optional ABC cost-breakdown columns. These were added by a later
     // migration and may not exist in every environment's `component` table.

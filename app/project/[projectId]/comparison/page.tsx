@@ -390,6 +390,36 @@ export default function ComparisonPage() {
               </div>
             )}
 
+            {/* Where to go after reading the comparison. */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                flexWrap: 'wrap',
+                padding: '10px 14px',
+                marginBottom: 16,
+                borderRadius: 8,
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--surface-raised)',
+                fontSize: 12.5,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Next</span>
+              <Link href={`/project/${projectId}`} className="btn btn-ghost btn-sm">
+                Duplicate the base to test another change
+              </Link>
+              {base?.run && (
+                <Link href={`/project/${projectId}/case/${base.caseId}/results`} className="btn btn-ghost btn-sm">
+                  Export a report
+                </Link>
+              )}
+              <span style={{ color: 'var(--text-tertiary)' }}>
+                Change one thing per copy, so each difference has one cause.
+              </span>
+            </div>
+
             {/* Analysis */}
             <div
               style={{

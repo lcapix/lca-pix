@@ -204,6 +204,69 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
     { x: 0.6, y: 4.2, w: 12.1, h: 0.8, fontSize: 12, color: BRAND.textLight, italic: true },
   )
 
+  // ─── Interpretation: the author's reading, then what the run itself says ────
+  const interpSlide = pptx.addSlide()
+  slideHeader(interpSlide, 'Interpretation')
+
+  const headline =
+    data.total_impacts.find((t) => /global warming|climate/i.test(t.category_name)) ?? data.total_impacts[0]
+  const byStep = new Map<string, number>()
+  if (headline) {
+    for (const r of data.results) {
+      if (r.category_name !== headline.category_name) continue
+      byStep.set(r.component_name, (byStep.get(r.component_name) ?? 0) + (Number(r.impact_value) || 0))
+    }
+  }
+  const stepTotal = [...byStep.values()].reduce((a, b) => a + b, 0)
+  const interpLines: string[] = []
+  interpLines.push(
+    data.interpretation?.trim() ||
+      'Interpretation not written yet: name what drives the result, how far the data can be trusted, and what you would change first.',
+  )
+  if (headline) {
+    ;[...byStep.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .forEach(([name, v]) => {
+        const share = stepTotal > 0 ? ` (${((v / stepTotal) * 100).toFixed(1)}%)` : ''
+        interpLines.push(`${name}: ${fmtNum(v)} ${headline.unit}${share}`)
+      })
+  }
+  interpSlide.addText(
+    interpLines.map((t, i) => ({
+      text: t,
+      options: { bullet: i > 0, color: i === 0 ? BRAND.text : BRAND.textLight, bold: i === 0 },
+    })),
+    { x: 0.6, y: 1.5, w: 12.1, h: 5.2, fontSize: fitSize(interpLines, 15), lineSpacingMultiple: 1.25, valign: 'top', fit: 'shrink' },
+  )
+
+  // ─── Assumptions and limitations ────────────────────────────────────────────
+  const limitLines: string[] = []
+  if (data.assumptions?.trim()) limitLines.push(data.assumptions.trim())
+  if (data.goal_scope?.system_boundary) {
+    limitLines.push(`Boundary: ${data.goal_scope.system_boundary}. Anything outside it is not counted.`)
+  }
+  for (const c of data.data_quality?.category_coverage ?? []) {
+    if (c.covered < c.total) {
+      limitLines.push(
+        `${c.category} covers ${c.covered} of ${c.total} inputs, so that total is incomplete.`,
+      )
+    }
+  }
+  if (data.data_quality?.uncharacterized_flows) {
+    limitLines.push(
+      `${data.data_quality.uncharacterized_flows} flow(s) have no factor in this method and add nothing.`,
+    )
+  }
+  if (limitLines.length) {
+    const limitSlide = pptx.addSlide()
+    slideHeader(limitSlide, 'Assumptions & limitations')
+    limitSlide.addText(
+      limitLines.map((t) => ({ text: t, options: { bullet: true, color: BRAND.text } })),
+      { x: 0.6, y: 1.5, w: 12.1, h: 5.2, fontSize: fitSize(limitLines, 14), lineSpacingMultiple: 1.2, valign: 'top', fit: 'shrink' },
+    )
+  }
+
   // ─── Slide 5: Methodology & data sources ────────────────────────────────────
   const methodSlide = pptx.addSlide()
   slideHeader(methodSlide, 'Methodology & data sources')

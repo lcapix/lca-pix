@@ -77,6 +77,23 @@ export async function PUT(
     const body = await request.json();
     const { case_name, description, case_type } = body;
 
+    if (case_name !== undefined && case_name !== null) {
+      if (!String(case_name).trim()) {
+        return NextResponse.json({ error: 'Case name is required' }, { status: 400 });
+      }
+      const clash = await queryOne<any>(
+        `SELECT case_id FROM case_table
+          WHERE project_id = ? AND case_id <> ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+        [caseData.project_id, caseId, case_name]
+      );
+      if (clash) {
+        return NextResponse.json(
+          { error: `This project already has a case called "${String(case_name).trim()}". Pick another name.` },
+          { status: 409 }
+        );
+      }
+    }
+
     await execute(
       `UPDATE case_table
        SET case_name = COALESCE(?, case_name),
@@ -91,6 +108,55 @@ export async function PUT(
     // Goal, functional unit and boundary are study-level (PUT /api/projects).
     // Separate statement so an environment without migrate-014 can still
     // rename a case; it only runs when one of these fields was sent.
+    // The student's own reading of the result and what they assumed: ISO 14044's
+    // reporting clause expects both, and they are printed in the report. Kept in
+    // its own statement so a database without migrate-021 still saves the rest.
+    const WRITEUP_FIELDS = ['interpretation', 'assumptions', 'learning_state'] as const;
+    const writeup = WRITEUP_FIELDS.filter((k) => Object.prototype.hasOwnProperty.call(body, k));
+    if (writeup.length) {
+      const sets = writeup.map((k) => `${k} = ?`).join(', ');
+      const values = writeup.map((k) => {
+        const v = (body as any)[k];
+        if (k === 'learning_state') return v === null || v === undefined ? null : JSON.stringify(v);
+        return v === null || v === undefined ? null : String(v).slice(0, 20000);
+      });
+      try {
+        await execute(`UPDATE case_table SET ${sets} WHERE case_id = ?`, [...values, caseId]);
+      } catch (writeErr: any) {
+        if (writeErr?.code !== 'ER_BAD_FIELD_ERROR') throw writeErr;
+        // Saying "saved" when nothing was written is worse than failing: the
+        // student would lose their interpretation and never know.
+        console.warn('[case PUT] write-up columns missing (run migrate-021)');
+        return NextResponse.json(
+          {
+            error:
+              'Your write-up could not be saved: the database needs migration 021. Nothing else was changed.',
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    // The hand-in flag (migrate-022). Its own statement so a database without
+    // the column still saves everything else.
+    if (Object.prototype.hasOwnProperty.call(body, 'is_final')) {
+      const final = body.is_final ? 1 : 0;
+      try {
+        await execute(
+          'UPDATE case_table SET is_final = ?, finalized_at = ' +
+            (final ? 'CURRENT_TIMESTAMP' : 'NULL') +
+            ' WHERE case_id = ?',
+          [final, caseId],
+        );
+      } catch (finalErr: any) {
+        if (finalErr?.code !== 'ER_BAD_FIELD_ERROR') throw finalErr;
+        return NextResponse.json(
+          { error: 'Marking a hand-in needs migration 022. Nothing else was changed.' },
+          { status: 409 },
+        );
+      }
+    }
+
     const REF_FIELDS = ['reference_flow', 'reference_flow_unit', 'modeled_output'];
     if (REF_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
       const num = (v: unknown): number | null =>

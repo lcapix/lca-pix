@@ -234,10 +234,23 @@ export async function POST(request: NextRequest) {
         costs[0]?.provenance?.doc || String(flows[0]?.provenance ?? '').split(' · ')[0] || 'uploaded document';
       // A short, readable description; the import notes were shown at review
       // and each step keeps its own [source: …] provenance.
+      // Two cases with the same name cannot be told apart later. The user did
+      // not type this name (it comes from the document), so number it instead
+      // of failing the import.
+      let uniqueName = caseName;
+      for (let n = 2; n < 50; n++) {
+        const [[taken]]: any = await conn.query(
+          `SELECT case_id FROM case_table
+            WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+          [projectId, uniqueName]
+        );
+        if (!taken) break;
+        uniqueName = `${caseName} (${n})`;
+      }
       const [caseIns]: any = await conn.query(
         `INSERT INTO case_table (project_id, case_name, case_type, description)
          VALUES (?, ?, 'base', ?)`,
-        [projectId, caseName, `Built from ${sourceDoc}.`.slice(0, 1000)]
+        [projectId, uniqueName, `Built from ${sourceDoc}.`.slice(0, 1000)]
       );
       const caseId = caseIns.insertId;
       // The case is made where the study says (project region), until changed.
@@ -369,14 +382,14 @@ export async function POST(request: NextRequest) {
         ]);
       }
 
-      return { caseId, components: idByName.size, applied, held, costNodes: costByNode.size };
+      return { caseId, caseName: uniqueName, components: idByName.size, applied, held, costNodes: costByNode.size };
     });
 
     return NextResponse.json(
       {
         success: true,
         case_id: result.caseId,
-        case_name: caseName,
+        case_name: result.caseName,
         components_created: result.components,
         flows_applied: result.applied,
         flows_held_for_review: result.held,

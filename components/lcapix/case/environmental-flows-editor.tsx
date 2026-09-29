@@ -20,6 +20,7 @@ import { compatibleUnits } from '@/lib/units'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { toast } from 'sonner'
+import { ProcessLibrary } from '@/components/lcapix/case/process-library'
 
 interface FlowRow {
   flow_id: number
@@ -41,6 +42,9 @@ interface Substance {
   /** '|'-joined method names that have non-zero factors for this substance. */
   methods_with_factors?: string
   factor_count?: number
+  /** Set when this substance is a version of another (migrate-022). */
+  variant_of?: number | null
+  variant_label?: string | null
 }
 
 /** Small badge: green when the substance has impact factors, loud when not —
@@ -84,15 +88,20 @@ export function EnvironmentalFlowsEditor({
   componentId,
   componentName = '',
   componentType = '',
+  studyMethod,
 }: {
   componentId: string
   componentName?: string
   componentType?: string
+  /** The study's LCIA method, used as the default for a hand-added factor. */
+  studyMethod?: string
 }) {
   const [flows, setFlows] = useState<FlowRow[]>([])
   const [substances, setSubstances] = useState<Substance[]>([])
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
+  // The process library: what a step of this kind consumes, in driver units.
+  const [libraryOpen, setLibraryOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   // In-place edit of an existing row's quantity/unit — a what-if is
   // "duplicate the case, tweak a few quantities, re-run"; without this the
@@ -114,6 +123,21 @@ export function EnvironmentalFlowsEditor({
   // Add-form state
   const [search, setSearch] = useState('')
   const [substanceId, setSubstanceId] = useState<number | null>(null)
+  // Adding a substance by hand: no library has everything, and picking
+  // something "close enough" models the wrong material silently.
+  const [addingSubstance, setAddingSubstance] = useState(false)
+  const [newSub, setNewSub] = useState({
+    name: '',
+    kind: 'input' as 'input' | 'emission',
+    unit: 'kg',
+    method: 'TRACI 2.1',
+    impactCategory: 'Global Warming',
+    factorValue: '',
+    source: '',
+  })
+  const [subError, setSubError] = useState<string | null>(null)
+  const [subBusy, setSubBusy] = useState(false)
+  const [impactCategories, setImpactCategories] = useState<Array<{ category_name: string; unit?: string }>>([])
   const [dir, setDir] = useState<'input' | 'output'>('input')
   const [qty, setQty] = useState('')
   const [unit, setUnit] = useState('kg')
@@ -160,13 +184,59 @@ export function EnvironmentalFlowsEditor({
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    if (!addingSubstance || impactCategories.length) return
+    ;(async () => {
+      try {
+        const r = await fetch('/api/impact-categories', { headers: authHeaders() })
+        const d = await r.json().catch(() => ({}))
+        const list = (d?.categories ?? d?.impact_categories ?? d?.data ?? []) as any[]
+        setImpactCategories(list.map((c) => ({ category_name: c.category_name, unit: c.unit })))
+      } catch {
+        /* the form still works: the name is validated server-side */
+      }
+    })()
+  }, [addingSubstance, impactCategories.length])
+
+  useEffect(() => {
+    if (studyMethod) setNewSub((n) => ({ ...n, method: studyMethod }))
+  }, [studyMethod])
+
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase()
     const base = q
       ? substances.filter((s) => s.substance_name?.toLowerCase().includes(q))
       : substances
-    return base.slice(0, 8)
+    // Versions of a matched material (recycled aluminium, EAF steel) are shown
+    // right under their parent, so "switch to recycled" is something you can
+    // see rather than something you have to know exists.
+    const byId = new Map(substances.map((x) => [x.substance_id, x]))
+    const out: typeof base = []
+    const seen = new Set<number>()
+    const push = (x: (typeof base)[number]) => {
+      if (x && !seen.has(x.substance_id)) {
+        seen.add(x.substance_id)
+        out.push(x)
+      }
+    }
+    for (const m of base) {
+      const parent = m.variant_of ? byId.get(m.variant_of) : m
+      push(parent ?? m)
+      for (const v of substances) if (v.variant_of && v.variant_of === (parent ?? m).substance_id) push(v)
+      if (out.length >= 10) break
+    }
+    return out.slice(0, 10)
   }, [search, substances])
+
+  /** Versions of whatever is selected, for the one-line switcher under the picker. */
+  const versionsOfSelected = useMemo(() => {
+    const cur = substances.find((x) => x.substance_id === substanceId)
+    if (!cur) return []
+    const familyId = cur.variant_of ?? cur.substance_id
+    return substances.filter(
+      (x) => (x.variant_of ?? x.substance_id) === familyId && x.substance_id !== cur.substance_id,
+    )
+  }, [substances, substanceId])
 
   // Suggested flows from the public substance catalog, tailored to this node.
   // Quantities are process-specific so we never invent them — only the
@@ -256,6 +326,14 @@ export function EnvironmentalFlowsEditor({
           flow_type: dir,
           quantity: Number(qty),
           unit: unit.trim() || 'kg',
+          // A leg is entered as mass x distance but stored as tonne-km, which
+          // cannot be read back (finding #70). Keep the two numbers with it.
+          ...(isTransportLeg && legTkm != null
+            ? {
+                transport_mass_kg: Number(legMassT) * 1000,
+                transport_distance_km: Number(legKm),
+              }
+            : {}),
         }),
       })
       if (r.ok) {
@@ -449,20 +527,53 @@ export function EnvironmentalFlowsEditor({
                           (cur?.category ? s.category === cur.category : !/emission|waste/.test(s.category ?? '')) &&
                           (!units.length || units.includes(s.unit ?? '')))
                     )
+                    // Variants of the same material (EAF steel, recycled
+                    // aluminum) come first and are labelled as versions of it,
+                    // so "switch to recycled" is one choice rather than a hunt
+                    // through the whole catalog.
+                    const familyOf = (x: (typeof options)[number]) =>
+                      (x as any).variant_of ?? x.substance_id
+                    const family = cur ? familyOf(cur) : null
+                    const variants = options.filter((s) => family != null && familyOf(s) === family)
+                    const others = options.filter((s) => !variants.includes(s))
+                    const optionLabel = (s: (typeof options)[number]) =>
+                      (s as any).variant_label
+                        ? `${s.substance_name} — ${(s as any).variant_label}`
+                        : s.substance_name
+
                     return options.length > 1 ? (
                       <select
                         className="input"
                         value={editing.substanceId}
                         onChange={(e) => setEditing({ ...editing, substanceId: Number(e.target.value) })}
-                        title="Swap the material: same flow, another substance with impact data"
+                        title="Swap the material: a version of the same material, or another substance with impact data"
                         aria-label="Swap substance"
-                        style={{ width: 150, fontSize: 12, padding: '3px 6px' }}
+                        style={{ width: 170, fontSize: 12, padding: '3px 6px' }}
                       >
-                        {options.map((s) => (
-                          <option key={s.substance_id} value={s.substance_id}>
-                            {s.substance_name}
-                          </option>
-                        ))}
+                        {variants.length > 1 ? (
+                          <optgroup label="Versions of this material">
+                            {variants.map((s) => (
+                              <option key={s.substance_id} value={s.substance_id}>
+                                {optionLabel(s)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : (
+                          variants.map((s) => (
+                            <option key={s.substance_id} value={s.substance_id}>
+                              {optionLabel(s)}
+                            </option>
+                          ))
+                        )}
+                        {others.length > 0 && (
+                          <optgroup label="Other materials">
+                            {others.map((s) => (
+                              <option key={s.substance_id} value={s.substance_id}>
+                                {optionLabel(s)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     ) : null
                   })()}
@@ -701,8 +812,22 @@ export function EnvironmentalFlowsEditor({
                       }}
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+                        {s.variant_of ? '↳ ' : ''}
                         {s.substance_name}
                         <FactorCoverageBadge s={s} />
+                        {s.variant_label && (
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              padding: '1px 5px',
+                              borderRadius: 999,
+                              background: 'color-mix(in oklab, var(--brand-primary) 12%, transparent)',
+                              color: 'var(--brand-primary)',
+                            }}
+                          >
+                            {s.variant_label}
+                          </span>
+                        )}
                       </span>
                       {s.category ? (
                         <span style={{ color: 'var(--text-tertiary)', fontSize: 10 }}> · {s.category}</span>
@@ -724,6 +849,245 @@ export function EnvironmentalFlowsEditor({
                     </button>
                   ))
                 )}
+              </div>
+            )}
+            {substanceId && versionsOfSelected.length > 0 && (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: '6px 8px',
+                  borderRadius: 6,
+                  background: 'color-mix(in oklab, var(--brand-primary) 6%, transparent)',
+                  fontSize: 11,
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                <span style={{ marginRight: 6 }}>Versions of this material:</span>
+                {versionsOfSelected.map((v) => (
+                  <button
+                    key={v.substance_id}
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ padding: '1px 6px', fontSize: 11 }}
+                    title={`Switch to ${v.substance_name}${v.variant_label ? ` (${v.variant_label})` : ''}`}
+                    onClick={() => {
+                      setSubstanceId(v.substance_id)
+                      if (v.unit) setUnit(v.unit)
+                    }}
+                  >
+                    {v.variant_label || v.substance_name}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!substanceId && !addingSubstance && !libraryOpen && (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginTop: 6, padding: '2px 0', fontSize: 11.5 }}
+                  onClick={() => {
+                    setSubError(null)
+                    setNewSub((n) => ({ ...n, name: search.trim() || n.name }))
+                    setAddingSubstance(true)
+                  }}
+                >
+                  Not in the list? Add a substance
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ marginTop: 6, padding: '2px 0', fontSize: 11.5 }}
+                  onClick={() => setLibraryOpen(true)}
+                  title="Pick the kind of process this step is: the library lists what it consumes and in which unit"
+                >
+                  Don't know what to add? Use the process library
+                </button>
+              </div>
+            )}
+            {libraryOpen && (
+              <ProcessLibrary
+                componentId={componentId}
+                onAdded={() => {
+                  loadFlows()
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('lcapix:components-changed'))
+                  }
+                }}
+                onClose={() => setLibraryOpen(false)}
+              />
+            )}
+            {addingSubstance && (
+              <div
+                style={{
+                  marginTop: 8,
+                  padding: 10,
+                  borderRadius: 8,
+                  border: '1px solid color-mix(in oklab, var(--brand-primary) 35%, transparent)',
+                  background: 'var(--surface-base)',
+                  display: 'grid',
+                  gap: 8,
+                }}
+              >
+                <div className="label" style={{ fontSize: 11 }}>
+                  Add a substance
+                  <HelpTip label="When should I add one?">
+                    Add a material, fuel or emission the catalog does not have, rather than picking
+                    something close and modelling the wrong thing. It is yours alone, and its factor
+                    counts as unverified data until you replace the source with a published one.
+                  </HelpTip>
+                </div>
+                <input
+                  className="input"
+                  placeholder="Name, e.g. Cork, expanded"
+                  value={newSub.name}
+                  onChange={(e) => setNewSub({ ...newSub, name: e.target.value })}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <label style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                    What is it?
+                    <select
+                      className="input"
+                      value={newSub.kind}
+                      onChange={(e) => setNewSub({ ...newSub, kind: e.target.value as 'input' | 'emission' })}
+                      style={{ marginTop: 2 }}
+                    >
+                      <option value="input">Something you buy or use</option>
+                      <option value="emission">Something released</option>
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                    Measured in
+                    <input
+                      className="input"
+                      placeholder="kg, kWh, MJ, m3, tkm"
+                      value={newSub.unit}
+                      onChange={(e) => setNewSub({ ...newSub, unit: e.target.value })}
+                      style={{ marginTop: 2 }}
+                    />
+                  </label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <label style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                    Method
+                    <select
+                      className="input"
+                      value={newSub.method}
+                      onChange={(e) => setNewSub({ ...newSub, method: e.target.value })}
+                      style={{ marginTop: 2 }}
+                    >
+                      {['TRACI 2.1', 'CML 2001', 'ReCiPe Midpoint (H)'].map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                    Impact category
+                    <select
+                      className="input"
+                      value={newSub.impactCategory}
+                      onChange={(e) => setNewSub({ ...newSub, impactCategory: e.target.value })}
+                      style={{ marginTop: 2 }}
+                    >
+                      {(impactCategories.length
+                        ? impactCategories.map((c) => c.category_name)
+                        : ['Global Warming']
+                      ).map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                  Factor, per {newSub.unit || 'unit'}
+                  <input
+                    className="input"
+                    type="number"
+                    step="any"
+                    placeholder="e.g. 1.6"
+                    value={newSub.factorValue}
+                    onChange={(e) => setNewSub({ ...newSub, factorValue: e.target.value })}
+                    style={{ marginTop: 2 }}
+                  />
+                </label>
+                <label style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                  Where it comes from
+                  <input
+                    className="input"
+                    placeholder="e.g. Amorim ICB EPD 2023, cradle-to-gate"
+                    value={newSub.source}
+                    onChange={(e) => setNewSub({ ...newSub, source: e.target.value })}
+                    style={{ marginTop: 2 }}
+                  />
+                </label>
+                {subError && (
+                  <div role="alert" style={{ fontSize: 11.5, color: '#b45309', lineHeight: 1.45 }}>
+                    {subError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={subBusy}
+                    onClick={async () => {
+                      setSubBusy(true)
+                      setSubError(null)
+                      try {
+                        const catUnit = impactCategories.find(
+                          (c) => c.category_name === newSub.impactCategory,
+                        )?.unit
+                        const r = await fetch('/api/substances', {
+                          method: 'POST',
+                          headers: authHeaders(),
+                          body: JSON.stringify({
+                            ...newSub,
+                            factorUnit: catUnit ? `${catUnit} / ${newSub.unit}` : undefined,
+                          }),
+                        })
+                        const d = await r.json().catch(() => ({}))
+                        if (!r.ok || !d?.substance) {
+                          setSubError(d?.error || 'Could not add the substance.')
+                        } else {
+                          setSubstances((list) => [...list, d.substance])
+                          setSubstanceId(d.substance.substance_id)
+                          setUnit(d.substance.unit || newSub.unit)
+                          setSearch('')
+                          setAddingSubstance(false)
+                          setNewSub({
+                            name: '',
+                            kind: 'input',
+                            unit: 'kg',
+                            method: studyMethod || 'TRACI 2.1',
+                            impactCategory: 'Global Warming',
+                            factorValue: '',
+                            source: '',
+                          })
+                        }
+                      } catch {
+                        setSubError('Could not add the substance.')
+                      } finally {
+                        setSubBusy(false)
+                      }
+                    }}
+                  >
+                    {subBusy ? 'Adding…' : 'Add and use it'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setAddingSubstance(false)
+                      setSubError(null)
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
             {/* Source database for the chosen substance — answers

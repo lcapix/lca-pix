@@ -69,6 +69,8 @@ export interface ComponentNode {
   /** Labor multiplicands: laborCost = laborHours × the SOC wage rate. */
   laborHours?: number
   laborOccupation?: string
+  /** Life-cycle stage this step belongs to (migrate-022); undefined = production. */
+  lifeCycleStage?: string | null
   /** ISO 14044 4.3.4 allocation of a multi-output unit process. */
   allocationMethod?: 'none' | 'physical' | 'economic' | 'system_expansion'
   /** Share (0..1] of this unit process's burden assigned to the product. */

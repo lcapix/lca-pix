@@ -169,15 +169,16 @@ export function NodeDetailsStrip({
           minWidth: 0,
         }}
       >
+        {/* Two tiles showing the same number taught that flows and drivers are
+            different counts of different things. They are not: every flow on a
+            leaf is a driver flow, so the second tile is gone and the remaining
+            ones each say something the other does not. */}
         <MetricMini label={'Flows' + sigma} value={node ? flowsCount : '—'} />
-        {/* All flows attached to a leaf are driver flows, so the driver count
-            equals the flow count. (Impact still needs an assessment run.) */}
-        <MetricMini label={'Drivers' + sigma} value={node ? flowsCount : '—'} />
         <MetricMini
           label={'Cost' + sigma}
           value={node ? '$' + costUsd.toLocaleString() : '—'}
         />
-        <MetricMini label="Impact" value={node ? '—' : '—'} unit="" />
+        <MetricMini label="Impact" value="—" unit="" />
       </div>
 
       <div

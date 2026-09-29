@@ -546,7 +546,9 @@ export default function AnalyticsPage() {
               }}
             >
               {hasRealData
-                ? `Comparing ${assessmentData.length} case${assessmentData.length === 1 ? '' : 's'} · completed assessments`
+                ? assessmentData.length === 1
+                  ? '1 assessed case · duplicate it and change one thing to compare'
+                  : `Comparing ${assessmentData.length} assessed cases`
                 : 'No assessments yet · run one to populate analytics'}
             </div>
           </div>

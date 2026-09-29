@@ -14,6 +14,7 @@ export function CaseNameDialog({
   confirmLabel,
   help,
   busy = false,
+  error,
   onSubmit,
   onCancel,
 }: {
@@ -24,6 +25,8 @@ export function CaseNameDialog({
   /** Why the name matters, shown on hover next to the field. */
   help?: ReactNode
   busy?: boolean
+  /** Server message shown under the field, e.g. the name is already taken. */
+  error?: string | null
   onSubmit: (name: string) => void
   onCancel: () => void
 }) {
@@ -87,6 +90,11 @@ export function CaseNameDialog({
           }}
           style={{ width: '100%', marginTop: 4 }}
         />
+        {error && (
+          <div role="alert" style={{ fontSize: 12, color: '#b45309', marginTop: 6, lineHeight: 1.45 }}>
+            {error}
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>
             Cancel

@@ -30,6 +30,7 @@ const US_STATES = [
   'WI','WY',
 ]
 import { EnvironmentalFlowsEditor } from '@/components/lcapix/case/environmental-flows-editor'
+import { STAGES, stageOf } from '@/lib/life-cycle'
 
 export interface InspectorEditFormData {
   processName?: string
@@ -47,6 +48,8 @@ export interface InspectorEditFormData {
   materialCost?: number
   equipmentCost?: number
   overheadCost?: number
+  /** Which life-cycle stage this step belongs to. */
+  lifeCycleStage?: string | null
   /** ISO 14044 4.3.4: share of this node's burden that belongs to the product. */
   allocationMethod?: 'none' | 'physical' | 'economic' | 'system_expansion'
   allocationFactor?: number
@@ -69,6 +72,8 @@ export interface InspectorFlow {
 
 export interface InspectorPanelProps {
   node: FlatCaseNode | null
+  /** The study's LCIA method, used as the default when a substance is added by hand. */
+  studyMethod?: string
   editFormData?: InspectorEditFormData
   onChange?: (patch: Partial<InspectorEditFormData>) => void
   onSave?: () => void
@@ -112,6 +117,7 @@ const COST_HELP: Record<string, string> = {
 
 export function InspectorPanel({
   node,
+  studyMethod,
   editFormData,
   onChange,
   onSave,
@@ -318,6 +324,7 @@ export function InspectorPanel({
             componentId={node.id}
             componentName={node.label ?? ''}
             componentType={(node.type as string) ?? ''}
+            studyMethod={studyMethod}
           />
         ) : flows.length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 0' }}>
@@ -479,6 +486,29 @@ export function InspectorPanel({
         </div>
         )}
       </InspectorSection>
+
+      {controlled && node.type !== 'Product' && (
+        <InspectorSection title="Life-cycle stage" defaultOpen={false}>
+          <div style={{ padding: '4px 0 8px' }}>
+            <select
+              className="input"
+              style={{ height: 30, fontSize: 12, width: '100%' }}
+              value={stageOf(editFormData!.lifeCycleStage)}
+              onChange={(e) => onChange!({ lifeCycleStage: e.target.value })}
+              title="Which stage of the product's life this step belongs to. The results and the report split by this, and the boundary in Goal & scope says which stages a reader should expect."
+            >
+              {STAGES.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.label}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 6, lineHeight: 1.5 }}>
+              {STAGES.find((st) => st.id === stageOf(editFormData!.lifeCycleStage))?.hint}
+            </div>
+          </div>
+        </InspectorSection>
+      )}
 
       {controlled && node.type !== 'Product' && (
         <InspectorSection

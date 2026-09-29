@@ -44,8 +44,22 @@ export async function POST(request: NextRequest) {
     const userId = await requireAuth(request);
     const { project_name, description } = await request.json();
 
-    if (!project_name) {
+    if (!project_name || !String(project_name).trim()) {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
+    }
+
+    // One name, one project. Two studies with the same name are impossible to
+    // tell apart in the project list, in a comparison and in an export.
+    const clash = await queryOne<any>(
+      `SELECT project_id FROM project
+        WHERE owner_id = ? AND LOWER(TRIM(project_name)) = LOWER(TRIM(?)) LIMIT 1`,
+      [userId, project_name]
+    );
+    if (clash) {
+      return NextResponse.json(
+        { error: `You already have a project called "${String(project_name).trim()}". Pick another name.` },
+        { status: 409 }
+      );
     }
 
     const projectId = await insert(

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, insert, queryOne } from '@/lib/db-helpers';
+import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 
 // GET /api/cases/[caseId]/components - Get all components for a case (hierarchy)
@@ -108,7 +108,8 @@ export async function POST(
       quantity,
       unit,
       opex,
-      capex
+      capex,
+      life_cycle_stage
     } = await request.json();
 
     if (!component_name || !component_type) {
@@ -156,6 +157,20 @@ export async function POST(
         capex ?? null
       ]
     );
+
+    // Its own statement, so a database without migrate-022 can still create a
+    // step; it simply has no stage and reads as production.
+    if (life_cycle_stage) {
+      try {
+        await execute('UPDATE component SET life_cycle_stage = ? WHERE component_id = ?', [
+          life_cycle_stage,
+          componentId,
+        ]);
+      } catch (stageErr: any) {
+        if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
+        console.warn('[component POST] life_cycle_stage missing (run migrate-022)');
+      }
+    }
 
     const newComponent = await queryOne(
       `SELECT c.*, parent.component_name as parent_component_name

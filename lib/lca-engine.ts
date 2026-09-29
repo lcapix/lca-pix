@@ -81,7 +81,7 @@ export type SourceTier = 'authoritative' | 'industry_average' | 'unverified' | '
 export function classifyFactorSource(ref?: string | null): SourceTier {
   const s = (ref ?? '').toLowerCase();
   if (!s.trim()) return 'unknown';
-  if (/legacy pack|not yet verified|zeroed|quarantin|no published source|not yet cited/.test(s)) {
+  if (/legacy pack|not yet verified|zeroed|quarantin|no published source|not yet cited|user-entered/.test(s)) {
     return 'unverified';
   }
   // An industry-association average, or a declaration past its validity date,
@@ -111,6 +111,17 @@ export interface DataQualitySummary {
   allocated_components: number;
   /** Flows no factor in the method characterizes (they add nothing). */
   uncharacterized_flows: number;
+  /**
+   * Per impact category: how many of the characterized flows have a factor in
+   * THAT category. A category whose factors cover only some inputs still prints
+   * a total, and without this it reads as if the whole product were counted.
+   */
+  category_coverage: Array<{
+    category: string;
+    covered: number;
+    total: number;
+    missing_examples: string[];
+  }>;
   /** Up to 10 substance names of those flows, for the statement. */
   uncharacterized_examples: string[];
   /** Plain-language statement lines for the results page and report. */
@@ -122,6 +133,9 @@ export interface ComponentImpactResult {
   component_name: string;
   component_type: string;
   hierarchy_level: number;
+  /** Life-cycle stage of this step (migrate-022). Null on older databases,
+   *  which are read as production. */
+  life_cycle_stage?: string | null;
   impacts: CategoryImpact[];
   flow_contributions: FlowContribution[];
   total_flows_processed: number;
@@ -487,7 +501,7 @@ export async function calculateCaseImpacts(
   try {
     [components] = await connection.query<RowDataPacket[]>(
       `SELECT component_id, component_name, component_type, hierarchy_level,
-              parent_component_id, allocation_factor
+              parent_component_id, allocation_factor, life_cycle_stage
        FROM component
        WHERE case_id = ?
        ORDER BY hierarchy_level, component_id`,
@@ -495,14 +509,27 @@ export async function calculateCaseImpacts(
     );
   } catch (err: any) {
     if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
-    [components] = await connection.query<RowDataPacket[]>(
-      `SELECT component_id, component_name, component_type, hierarchy_level,
-              parent_component_id
-       FROM component
-       WHERE case_id = ?
-       ORDER BY hierarchy_level, component_id`,
-      [caseId]
-    );
+    // Older database: try without the stage, then without allocation either.
+    try {
+      [components] = await connection.query<RowDataPacket[]>(
+        `SELECT component_id, component_name, component_type, hierarchy_level,
+                parent_component_id, allocation_factor
+         FROM component
+         WHERE case_id = ?
+         ORDER BY hierarchy_level, component_id`,
+        [caseId]
+      );
+    } catch (err2: any) {
+      if (err2?.code !== 'ER_BAD_FIELD_ERROR') throw err2;
+      [components] = await connection.query<RowDataPacket[]>(
+        `SELECT component_id, component_name, component_type, hierarchy_level,
+                parent_component_id
+         FROM component
+         WHERE case_id = ?
+         ORDER BY hierarchy_level, component_id`,
+        [caseId]
+      );
+    }
   }
   const allocation = effectiveAllocation(components as any[]);
 
@@ -582,7 +609,7 @@ export async function calculateCaseImpacts(
     // carries only its allocated share into this product's result.
     const share = allocation.get(comp.component_id) ?? 1;
     if (share < 1) applyAllocation(result, share);
-    componentResults.push(result);
+    componentResults.push({ ...result, life_cycle_stage: (comp as any).life_cycle_stage ?? null });
 
     totalFlowsProcessed += result.total_flows_processed;
     totalDriverFlows += result.driver_flows_count;
@@ -797,11 +824,23 @@ export function summarizeDataQuality(
   const regional = region.toLowerCase() !== 'global';
   let contributions = 0;
   let regional_fallbacks = 0;
+  /** Substances that actually had a factor for the requested region. */
+  const regionalSubstances = new Set<string>();
   let unit_conversions = 0;
+  // flow ids seen per category, and the flows seen at all, so a category can be
+  // told "you cover 5 of the 26 inputs this run characterized".
+  const flowsByCategory = new Map<string, Set<number>>();
+  const allCharacterizedFlows = new Set<number>();
+  const substanceByFlow = new Map<number, string>();
 
   for (const r of componentResults) {
     for (const c of r.flow_contributions) {
       contributions++;
+      allCharacterizedFlows.add(c.flow_id);
+      substanceByFlow.set(c.flow_id, c.substance_name);
+      const seen = flowsByCategory.get(c.category_name) ?? new Set<number>();
+      seen.add(c.flow_id);
+      flowsByCategory.set(c.category_name, seen);
       const tier = c.source_tier ?? classifyFactorSource(c.factor_source);
       by_tier[tier]++;
       if (/global warming|climate change/i.test(c.category_name)) {
@@ -810,6 +849,8 @@ export function summarizeDataQuality(
       }
       if (regional && (c.geographic_scope ?? 'Global').toLowerCase() === 'global') {
         regional_fallbacks++;
+      } else if (regional) {
+        regionalSubstances.add(c.substance_name);
       }
       if (c.unit_conversion) unit_conversions++;
     }
@@ -822,6 +863,19 @@ export function summarizeDataQuality(
   const allocated = componentResults.filter((r) => (r.allocation_factor ?? 1) < 1);
   const unchar = opts.uncharacterized ?? [];
   const uncharNames = [...new Set(unchar.map((u) => u.substance_name))];
+
+  const category_coverage = [...flowsByCategory.entries()]
+    .map(([category, seen]) => {
+      const missing = [...allCharacterizedFlows].filter((id) => !seen.has(id));
+      const names = [...new Set(missing.map((id) => substanceByFlow.get(id) ?? 'unnamed flow'))];
+      return {
+        category,
+        covered: seen.size,
+        total: allCharacterizedFlows.size,
+        missing_examples: names.slice(0, 5),
+      };
+    })
+    .sort((a, b) => a.category.localeCompare(b.category));
 
   const pct = (x: number) => (x > 0 && x < 0.01 ? '<1%' : `${Math.round(x * 100)}%`);
   const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
@@ -851,6 +905,18 @@ export function summarizeDataQuality(
       statement.push(
         `${regional_fallbacks} of ${contributions} contributions use a Global factor because no ${region} factor exists, so geographic representativeness is limited for them.`,
       );
+      // Which ones the region did change. Without this the reader assumes the
+      // whole model is regional, when in practice it is the grid and little else.
+      const regionalNames = [...regionalSubstances].sort();
+      if (regionalNames.length) {
+        statement.push(
+          `Only ${listed(regionalNames, 4)} used a ${region} factor; every other factor is the same in every region.`,
+        );
+      } else {
+        statement.push(
+          `Nothing in this run has a ${region} factor: the region changed no number in this result.`,
+        );
+      }
     } else {
       statement.push(`Every contribution uses a ${region} factor.`);
     }
@@ -863,6 +929,14 @@ export function summarizeDataQuality(
   if (excluded_flows > 0) {
     statement.push(
       `${excluded_flows} flow-category ${plural(excluded_flows, 'pair was', 'pairs were')} left out because the unit could not be converted (see warnings).`,
+    );
+  }
+  const partial = category_coverage.filter((c) => c.covered < c.total);
+  for (const c of partial.slice(0, 3)) {
+    statement.push(
+      `${c.category} covers ${c.covered} of ${c.total} inputs: ${listed(c.missing_examples, 3)} ${
+        c.missing_examples.length === 1 ? 'has' : 'have'
+      } no ${c.category.toLowerCase()} factor, so that total is incomplete.`,
     );
   }
   if (unchar.length > 0) {
@@ -889,6 +963,7 @@ export function summarizeDataQuality(
     allocated_components: allocated.length,
     uncharacterized_flows: unchar.length,
     uncharacterized_examples: uncharNames.slice(0, 10),
+    category_coverage,
     statement,
   };
 }

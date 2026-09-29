@@ -27,6 +27,7 @@ export interface CompareDataQuality {
   allocated_components: number
   uncharacterized_flows: number
   uncharacterized_examples: string[]
+  category_coverage?: Array<{ category: string; covered: number; total: number; missing_examples: string[] }>
   statement: string[]
 }
 

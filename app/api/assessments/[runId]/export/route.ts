@@ -66,15 +66,22 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // 2. Get all components for the case
-    const components = await query<any>(
+    // 2. Get all components for the case. The life-cycle stage comes along so
+    // the report can split the result by stage; a database without migrate-022
+    // falls back and every step reads as production.
+    const componentSql = (withStage: boolean) =>
       `SELECT component_id, component_name, component_type, hierarchy_level,
-              quantity, unit, opex, capex
+              quantity, unit, opex, capex${withStage ? ', life_cycle_stage' : ''}
        FROM component
        WHERE case_id = ?
-       ORDER BY hierarchy_level, component_id`,
-      [assessment.case_id]
-    );
+       ORDER BY hierarchy_level, component_id`;
+    let components: any[];
+    try {
+      components = await query<any>(componentSql(true), [assessment.case_id]);
+    } catch (stageErr: any) {
+      if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
+      components = await query<any>(componentSql(false), [assessment.case_id]);
+    }
 
     // 3. Get assessment results
     const results = await query<any>(
@@ -161,10 +168,26 @@ export async function GET(
     // (ISO 14044 clause 5 reporting).
     const snapshot = parseRunSnapshot(assessment.run_snapshot);
 
+    // The author's own interpretation and assumptions (ISO 14044 5.1). Asked
+    // for separately and tolerantly: a database that has not run migration 021
+    // still exports a report, just without these two sections filled in.
+    let writeup: { interpretation?: string | null; assumptions?: string | null } = {};
+    try {
+      writeup =
+        (await queryOne<any>(
+          'SELECT interpretation, assumptions FROM case_table WHERE case_id = ?',
+          [assessment.case_id],
+        )) ?? {};
+    } catch (err: any) {
+      if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
+    }
+
     // 7. Build report data
     const reportData: ReportData = {
       goal_scope: snapshot?.goal_scope ?? null,
       data_quality: snapshot?.data_quality ?? null,
+      interpretation: writeup.interpretation ?? null,
+      assumptions: writeup.assumptions ?? null,
       project: {
         project_id: assessment.project_id,
         project_name: assessment.project_name,
@@ -208,6 +231,85 @@ export async function GET(
     };
 
     const safeName = assessment.project_name.replace(/[^a-zA-Z0-9]/g, '_');
+
+    // 7a0. Row-level CSV: the inventory as the engine computed it, one line per
+    // flow x category, with the factor, its source and the arithmetic. This is
+    // what a student pastes into a write-up or checks in a spreadsheet, and
+    // what a reviewer asks for when they doubt a number.
+    if (format === 'csv') {
+      const esc = (v: unknown) => {
+        const t = v === null || v === undefined ? '' : String(v);
+        return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+      };
+      const stageByStep = new Map<string, string | null>(
+        (components as any[]).map((c) => [c.component_name, c.life_cycle_stage ?? null]),
+      );
+
+      const header = [
+        `# LCAPIX assessment run ${runId}`,
+        `# Project: ${reportData.project.project_name}`,
+        `# Case: ${reportData.case_info.case_name}`,
+        `# Method: ${methodName}; Region: ${regionCode}`,
+        `# Functional unit: ${reportData.goal_scope?.functional_unit ?? 'not set'}`,
+        `# Exported: ${new Date().toISOString()}`,
+      ].join('\n');
+
+      const columns = [
+        'step',
+        'life_cycle_stage',
+        'substance',
+        'direction',
+        'amount_entered',
+        'unit_entered',
+        'unit_conversion',
+        'factor',
+        'factor_scope',
+        'factor_source',
+        'source_tier',
+        'allocation',
+        'impact_category',
+        'impact_value',
+      ];
+
+      const rows = (snapshot?.flow_detail ?? []).map((f) =>
+        [
+          f.component,
+          stageByStep.get(f.component) ?? '',
+          f.substance,
+          f.dir === 'IN' ? 'input' : 'output',
+          f.amount,
+          f.unit,
+          f.conversion ?? '',
+          f.factor,
+          f.scope,
+          f.source ?? '',
+          f.source_tier ?? '',
+          f.allocation ?? '',
+          f.category_name,
+          f.impact,
+        ]
+          .map(esc)
+          .join(','),
+      );
+
+      // A run made before snapshots exist has no flow detail; say so in the
+      // file rather than handing back an empty table.
+      const body = rows.length
+        ? [header, columns.join(','), ...rows].join('\n')
+        : [
+            header,
+            '# This run was made before flow-level detail was recorded. Re-run the assessment to export its rows.',
+            columns.join(','),
+          ].join('\n');
+
+      return new NextResponse(body, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="LCAPIX_inventory_${safeName}_${runId}.csv"`,
+        },
+      });
+    }
 
     // 7a. PowerPoint export — generate and stream a .pptx deck.
     if (format === 'pptx' || format === 'ppt') {

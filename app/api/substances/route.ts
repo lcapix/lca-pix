@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db-helpers';
+import { query, queryOne, insert } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
+import { validateCustomSubstance } from '@/lib/substances/custom';
 
 // GET /api/substances - Get all substances
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request);
+    const userId = await requireAuth(request);
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
@@ -47,9 +48,22 @@ export async function GET(request: NextRequest) {
       params.push(category);
     }
 
-    sql += ` ORDER BY s.substance_name`;
+    const ordered = (base: string) => `${base} ORDER BY s.substance_name`;
 
-    const substances = await query(sql, params);
+    let substances;
+    try {
+      // Hand-added substances belong to the person who added them; the library
+      // (is_custom = 0) is everyone's.
+      const ownFilter = category ? ` AND` : ` WHERE`;
+      substances = await query(ordered(`${sql}${ownFilter} (s.is_custom = 0 OR s.created_by = ?)`), [
+        ...params,
+        userId,
+      ]);
+    } catch (e: any) {
+      // A database without migrate-020 has no is_custom column.
+      if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e;
+      substances = await query(ordered(sql), params);
+    }
 
     return NextResponse.json({ success: true, substances });
   } catch (error: any) {
@@ -58,5 +72,102 @@ export async function GET(request: NextRequest) {
     }
     console.error('Get substances error:', error);
     return NextResponse.json({ error: 'Failed to fetch substances' }, { status: 500 });
+  }
+}
+
+// POST /api/substances — add a substance by hand, with the one factor that
+// makes it usable. No library has everything: a student modelling cork, hemp
+// or a supplier-specific alloy must be able to enter it rather than pick
+// something "close enough" and quietly model the wrong material.
+//
+// The factor is stored with a "User-entered" source, so `classifyFactorSource`
+// grades it unverified and the run's data-quality statement counts it there.
+// The substance is visible only to the account that added it.
+export async function POST(request: NextRequest) {
+  try {
+    const userId = await requireAuth(request);
+    const body = await request.json().catch(() => ({}));
+
+    const checked = validateCustomSubstance(body);
+    if (!checked.ok || !checked.value) {
+      return NextResponse.json({ error: checked.errors.join(' '), errors: checked.errors }, { status: 400 });
+    }
+    const v = checked.value;
+
+    const existing = await queryOne<any>(
+      `SELECT substance_id, substance_name FROM substances
+        WHERE LOWER(TRIM(substance_name)) = LOWER(TRIM(?)) LIMIT 1`,
+      [v.name]
+    );
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: `"${existing.substance_name}" is already in the catalog. Search for it in the picker instead of adding it twice.`,
+          substance_id: existing.substance_id,
+        },
+        { status: 409 }
+      );
+    }
+
+    const category = await queryOne<any>(
+      `SELECT category_id FROM impact_categories WHERE category_name = ? LIMIT 1`,
+      [v.impactCategory]
+    );
+    if (!category) {
+      return NextResponse.json({ error: `No impact category called "${v.impactCategory}".` }, { status: 400 });
+    }
+
+    let substanceId: number;
+    try {
+      substanceId = await insert(
+        `INSERT INTO substances (substance_name, category, unit, cas_number, is_custom, created_by)
+         VALUES (?, ?, ?, ?, 1, ?)`,
+        [v.name, v.category, v.unit, v.casNumber, userId]
+      );
+    } catch (e: any) {
+      // Before migrate-020 there is nowhere to record who added it.
+      if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e;
+      substanceId = await insert(
+        `INSERT INTO substances (substance_name, category, unit, cas_number) VALUES (?, ?, ?, ?)`,
+        [v.name, v.category, v.unit, v.casNumber]
+      );
+    }
+
+    await insert(
+      `INSERT INTO driver_impact_factors
+         (substance_id, category_id, method_name, factor_value, unit,
+          geographic_scope, source_reference, factor_basis)
+       VALUES (?, ?, ?, ?, ?, 'Global', ?, ?)`,
+      [
+        substanceId,
+        category.category_id,
+        v.method,
+        v.factorValue,
+        v.factorUnit,
+        v.sourceReference,
+        v.factorBasis,
+      ]
+    );
+
+    const substance = await queryOne<any>(`SELECT * FROM substances WHERE substance_id = ?`, [substanceId]);
+    return NextResponse.json(
+      {
+        success: true,
+        substance,
+        note: `Added for ${v.method}, ${v.impactCategory}. It counts as unverified data until you replace the source with a published one.`,
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    if (
+      error.message === 'Unauthorized' ||
+      error.message === 'No authentication token provided' ||
+      error.message === 'Invalid or expired token' ||
+      error.message === 'User account not found or inactive'
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    console.error('Create substance error:', error);
+    return NextResponse.json({ error: 'Failed to add the substance' }, { status: 500 });
   }
 }

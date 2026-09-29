@@ -100,6 +100,7 @@ export function transformComponentFromDB(dbComponent: any): ComponentNode {
     costAllocationType: dbComponent.cost_allocation_type || undefined,
 
     // ISO 14044 4.3.4 allocation (migrate-014).
+    lifeCycleStage: dbComponent.life_cycle_stage ?? null,
     allocationMethod: dbComponent.allocation_method || 'none',
     allocationFactor:
       dbComponent.allocation_factor != null ? Number(dbComponent.allocation_factor) : 1,
@@ -163,6 +164,7 @@ export function transformComponentToDB(component: Partial<ComponentNode>) {
     cost_allocation_type: component.costAllocationType || 'manual',
 
     // ISO 14044 4.3.4 allocation
+    life_cycle_stage: component.lifeCycleStage ?? null,
     allocation_method: component.allocationMethod ?? null,
     allocation_factor: component.allocationFactor ?? null,
     allocation_note: component.allocationNote ?? null,

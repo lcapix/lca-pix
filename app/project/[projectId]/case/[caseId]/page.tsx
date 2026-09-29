@@ -43,6 +43,8 @@ import { CaseNameDialog } from '@/components/lcapix/case/case-name-dialog'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { journeyPhases } from '@/lib/case-journey'
 import { LAYER_LABEL, type CaseLayer } from '@/lib/ingest/doc-types'
+import { ReferencePane } from '@/components/lcapix/case/reference-pane'
+import { LessonRail } from '@/components/lcapix/case/lesson-rail'
 
 // A typed 0 is a real cost ("this operation costs nothing"), distinct from an
 // empty field (unknown). `x || null` collapsed both to null, and the component
@@ -97,6 +99,7 @@ export default function CaseViewPage() {
   // Duplicate asks for the copy's name before creating it.
   const [dupOpen, setDupOpen] = useState(false)
   const [dupBusy, setDupBusy] = useState(false)
+  const [dupError, setDupError] = useState<string | null>(null)
   useEffect(() => {
     const handler = () => setRefreshKey((k) => k + 1)
     window.addEventListener('lcapix:components-changed', handler)
@@ -104,6 +107,47 @@ export default function CaseViewPage() {
   }, [])
   // Fetched once for the breadcrumb so it reads "<project name>" instead of "Project".
   const [projectName, setProjectName] = useState<string>('')
+  // The document a person types their quantities from, kept open beside the
+  // editor. Remembered per case so it survives a reload mid-build.
+  const [referenceOpen, setReferenceOpen] = useState(false)
+
+  // Guided lessons. Opened by ?learn=1 (the build-by-hand path) or the Learn
+  // button; progress lives on the case, so an instructor sees it next to the
+  // model the student built.
+  const [learnOpen, setLearnOpen] = useState(false)
+  const [learningState, setLearningState] = useState<unknown>(null)
+  const [hasWriteUp, setHasWriteUp] = useState(false)
+  const [topStep, setTopStep] = useState<string | null>(null)
+  const [hasComparableCase, setHasComparableCase] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('learn') === '1') {
+      setLearnOpen(true)
+      setReferenceOpen(true)
+    }
+  }, [])
+
+  // A sibling case that has been run is what makes lesson 5 (compare) possible.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/projects/${projectId}/cases`)
+        const d = await r.json().catch(() => ({}))
+        const others = (d?.cases ?? []).filter(
+          (c: any) => String(c.case_id) !== String(caseId) && Number(c.run_count ?? 0) > 0,
+        )
+        if (!cancelled) setHasComparableCase(others.length > 0)
+      } catch {
+        /* advisory only */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, caseId, refreshKey])
+  const [studyMethod, setStudyMethod] = useState<string | undefined>(undefined)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -112,6 +156,7 @@ export default function CaseViewPage() {
         const d = await r.json()
         if (!cancelled && d?.success) {
           setProjectName(d.project?.project_name ?? '')
+          setStudyMethod(d.project?.lcia_method ?? undefined)
         }
       } catch {
         // breadcrumb falls back to 'Project'
@@ -180,6 +225,20 @@ export default function CaseViewPage() {
             (!a.status || a.status === 'completed') && Object.keys(a.impacts ?? {}).length > 0,
         )
         if (!cancelled) setHasAssessment(runs.length > 0)
+
+        // Which step actually carried the most climate impact, for the reveal
+        // after a prediction. Newest run, headline category.
+        const newest = runs[0]
+        const climateKey = Object.keys(newest?.impacts ?? {}).find((k) =>
+          /global warming|climate/i.test(k),
+        )
+        if (newest && climateKey) {
+          const ranked = (newest.components ?? [])
+            .map((c: any) => ({ name: c.component_name, v: Number(c.impacts?.[climateKey] ?? 0) }))
+            .filter((c: any) => c.v > 0)
+            .sort((a: any, b: any) => b.v - a.v)
+          if (!cancelled) setTopStep(ranked[0]?.name ?? null)
+        }
       } catch {
         /* advisory — panel falls back to the Inventory phase */
       }
@@ -228,6 +287,8 @@ export default function CaseViewPage() {
 
           setCurrentCase({ ...transformedCase, components: transformedComponents })
           setComponents(transformedComponents)
+          setLearningState(caseData.case.learning_state ?? null)
+          setHasWriteUp(!!String(caseData.case.interpretation ?? '').trim())
         } else {
           toast.error('Case not found')
           router.push(`/project/${projectId}`)
@@ -880,6 +941,24 @@ export default function CaseViewPage() {
           <Icon name="refresh" size={14} /> Reset
         </button>
         <button
+          className={learnOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
+          type="button"
+          title="Five short lessons that follow the ISO phases, done on this case"
+          onClick={() => setLearnOpen((v) => !v)}
+          aria-pressed={learnOpen}
+        >
+          <Icon name="target" size={14} /> Learn
+        </button>
+        <button
+          className={referenceOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
+          type="button"
+          title="Open the document you are reading your quantities from"
+          onClick={() => setReferenceOpen((v) => !v)}
+          aria-pressed={referenceOpen}
+        >
+          <Icon name="file" size={14} /> Reference
+        </button>
+        <button
           className="btn btn-secondary btn-sm"
           type="button"
           title="Copy this case (tree, flows, costs) as a what-if with one change"
@@ -1071,9 +1150,14 @@ export default function CaseViewPage() {
         confirmLabel="Duplicate"
         help={ISO_HELP.caseCopyName}
         busy={dupBusy}
-        onCancel={() => setDupOpen(false)}
+        error={dupError}
+        onCancel={() => {
+          setDupOpen(false)
+          setDupError(null)
+        }}
         onSubmit={async (name) => {
           setDupBusy(true)
+          setDupError(null)
           try {
             const r = await fetch(`/api/cases/${caseId}/duplicate`, {
               method: 'POST',
@@ -1091,10 +1175,10 @@ export default function CaseViewPage() {
               setDupOpen(false)
               router.push(`/project/${projectId}/case/${j.case_id}`)
             } else {
-              toast.error(j?.error || 'Could not duplicate case')
+              setDupError(j?.error || 'Could not duplicate case')
             }
           } catch {
-            toast.error('Could not duplicate case')
+            setDupError('Could not duplicate case')
           } finally {
             setDupBusy(false)
           }
@@ -1120,13 +1204,34 @@ export default function CaseViewPage() {
         onChange={setGoalScope}
       />
 
+      {learnOpen && (
+        <LessonRail
+          caseId={caseId}
+          initialState={learningState}
+          facts={{
+            functionalUnitSet: !!goalScope && !fuMissing,
+            layers: completeness?.present ?? [],
+            hasRun: hasAssessment,
+            hasComparableCase,
+            hasWriteUp,
+          }}
+          steps={components
+            .filter((c) => c.type === 'operation' || c.type === 'subprocess')
+            .map((c) => c.name)}
+          topStep={topStep}
+          onClose={() => setLearnOpen(false)}
+        />
+      )}
+
       {/* 3-pane */}
       <div
         className="case-panes"
         style={{
           flex: 1,
           display: 'grid',
-          gridTemplateColumns: '220px minmax(400px, 1fr) 340px',
+          gridTemplateColumns: referenceOpen
+            ? '220px minmax(320px, 1fr) 340px 420px'
+            : '220px minmax(400px, 1fr) 340px',
           minHeight: 0,
           overflow: 'hidden',
         }}
@@ -1365,6 +1470,7 @@ export default function CaseViewPage() {
           ) : (
             <InspectorPanel
               node={selectedFlatNode}
+              studyMethod={studyMethod}
               editFormData={selectedComponent ? editFormData : undefined}
               onChange={
                 selectedComponent
@@ -1388,6 +1494,10 @@ export default function CaseViewPage() {
             />
           )}
         </aside>
+
+        {referenceOpen && (
+          <ReferencePane caseId={caseId} onClose={() => setReferenceOpen(false)} />
+        )}
       </div>
     </div>
   )

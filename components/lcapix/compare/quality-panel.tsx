@@ -75,6 +75,24 @@ const ROWS: Row[] = [
       ),
   },
   {
+    label: 'Categories covering only part of the product',
+    help: 'An impact category whose factors exist for only some inputs still prints a total. These are the categories where that happens, with how many inputs they cover.',
+    value: (c) => {
+      const partial = (c.dataQuality?.category_coverage ?? []).filter((x) => x.covered < x.total)
+      if (!c.dataQuality) return '—'
+      if (!partial.length) return 'none'
+      return (
+        <>
+          {partial.map((x) => (
+            <div key={x.category} style={{ whiteSpace: 'normal' }}>
+              {x.category}: {x.covered} of {x.total}
+            </div>
+          ))}
+        </>
+      )
+    },
+  },
+  {
     label: 'Exchanges left out (unit mismatch)',
     help: "Exchanges whose unit could not be converted to the factor's unit, so they were left out and flagged.",
     value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.excluded_flows) : '—'),

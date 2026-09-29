@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, insert, queryOne } from '@/lib/db-helpers';
+import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 
@@ -134,6 +134,22 @@ export async function POST(
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [componentId, substance_id, flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
     );
+
+    // What a transport leg was computed from (migrate-022). Its own statement,
+    // so a database without the columns still records the flow itself.
+    const legMass = Number(body.transport_mass_kg);
+    const legKm = Number(body.transport_distance_km);
+    if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > 0) {
+      try {
+        await execute(
+          'UPDATE flows SET transport_mass_kg = ?, transport_distance_km = ?, transport_mode = ? WHERE flow_id = ?',
+          [legMass, legKm, body.transport_mode ?? null, flowId],
+        );
+      } catch (legErr: any) {
+        if (legErr?.code !== 'ER_BAD_FIELD_ERROR') throw legErr;
+        console.warn('[flow POST] transport columns missing (run migrate-022)');
+      }
+    }
 
     const newFlow = await queryOne(
       `SELECT f.*,

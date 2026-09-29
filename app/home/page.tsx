@@ -240,6 +240,32 @@ export default function HomePage() {
     })
   }
 
+  // The worked example, built in this account on demand.
+  const [loadingExample, setLoadingExample] = useState(false)
+  const handleLoadExample = async () => {
+    setLoadingExample(true)
+    try {
+      const res = await apiRequest('/api/example-project', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.project_id) {
+        toast({
+          title: 'Could not build the example',
+          description: data?.error ?? 'Unknown error',
+        })
+        return
+      }
+      toast({
+        title: data.existed ? 'You already have the example' : 'Example ready',
+        description: 'Quantities in it are illustrative; the factors and their sources are real.',
+      })
+      router.push(`/project/${data.project_id}`)
+    } catch (e: any) {
+      toast({ title: 'Could not build the example', description: e?.message ?? 'Unknown error' })
+    } finally {
+      setLoadingExample(false)
+    }
+  }
+
   const handleNewProject = () => {
     try {
       router.push('/project/new')
@@ -585,11 +611,14 @@ export default function HomePage() {
                   orientation="horizontal"
                   eyebrow="ISO 14040 · 5 PHASES"
                 />
-                {/* CTA strip */}
+                {/* CTA strip. An empty first screen teaches nothing, so the
+                    worked example sits beside "create your own". */}
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
                     paddingTop: 8,
                   }}
                 >
@@ -598,6 +627,14 @@ export default function HomePage() {
                     onClick={handleNewProject}
                   >
                     <Icon name="plus" size={14} /> Create your first project
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-lg"
+                    onClick={handleLoadExample}
+                    disabled={loadingExample}
+                    title="A three-step steel bracket you can take apart: illustrative quantities, real factors"
+                  >
+                    {loadingExample ? 'Building…' : 'Open the worked example'}
                   </button>
                 </div>
                 {/* Trust strip — authority cues, calm and monochrome */}

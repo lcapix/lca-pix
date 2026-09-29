@@ -143,6 +143,56 @@ describe('summarizeDataQuality (ISO 14044 4.2.3.6)', () => {
     expect(text).toContain('Welding 40%');
   });
 
+  it('names which substances the region actually changed, not just the fallbacks', () => {
+    // The real shape of a regional run: electricity has a US factor, every
+    // material is a global average. A reader should not infer that choosing US
+    // regionalized the model.
+    const dq = summarizeDataQuality(
+      [
+        comp('Cutting', [
+          contribution({ flow_id: 1, substance_name: 'Electricity', geographic_scope: 'US', impact_contribution: 4 }),
+          contribution({ flow_id: 2, substance_name: 'Aluminum', geographic_scope: 'Global', impact_contribution: 80 }),
+          contribution({ flow_id: 3, substance_name: 'Steel', geographic_scope: 'Global', impact_contribution: 16 }),
+        ]),
+      ],
+      { region: 'US' },
+    )
+    const text = dq.statement.join(' ')
+    expect(text).toContain('2 of 3 contributions use a Global factor')
+    expect(text).toContain('Only Electricity used a US factor')
+    expect(text).not.toContain('Aluminum used a US factor')
+  })
+
+  it('says plainly when a chosen region changed nothing at all', () => {
+    const dq = summarizeDataQuality(
+      [comp('Cutting', [contribution({ flow_id: 1, substance_name: 'Aluminum', geographic_scope: 'Global' })])],
+      { region: 'EU' },
+    )
+    expect(dq.statement.join(' ')).toContain('the region changed no number in this result')
+  })
+
+  it('says which categories cover only some of the inputs', () => {
+    // The bike's shape: every input has a climate factor, only electricity has
+    // an acidification one. The acidification total must not read as complete.
+    const dq = summarizeDataQuality([
+      comp('Cut', [
+        contribution({ flow_id: 1, substance_name: 'Aluminum', impact_contribution: 70 }),
+        contribution({ flow_id: 2, substance_name: 'Electricity', impact_contribution: 1 }),
+        contribution({ flow_id: 2, substance_name: 'Electricity', impact_contribution: 0.007, category_name: 'Acidification' }),
+      ]),
+      comp('Pack', [contribution({ flow_id: 3, substance_name: 'Cardboard', impact_contribution: 3 })]),
+    ]);
+    const gw = dq.category_coverage.find((c) => c.category === 'Global Warming')!;
+    const acid = dq.category_coverage.find((c) => c.category === 'Acidification')!;
+    expect(gw).toMatchObject({ covered: 3, total: 3, missing_examples: [] });
+    expect(acid).toMatchObject({ covered: 1, total: 3 });
+    expect(acid.missing_examples).toEqual(['Aluminum', 'Cardboard']);
+    const text = dq.statement.join(' ');
+    expect(text).toContain('Acidification covers 1 of 3 inputs');
+    expect(text).toContain('so that total is incomplete');
+    expect(text).not.toContain('Global Warming covers');
+  });
+
   it('says so when nothing was characterized', () => {
     const text = summarizeDataQuality([]).statement.join(' ');
     expect(text).toContain('nothing to grade');

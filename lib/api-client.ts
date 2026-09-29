@@ -43,10 +43,14 @@ export async function apiRequest(
   // Get token from localStorage
   const token = typeof window !== 'undefined' ? localStorage.getItem("auth_token") : null
 
-  // Build headers
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...fetchOptions.headers,
+  // Build headers. A FormData body must set its own Content-Type: the browser
+  // adds the multipart boundary, and forcing application/json here makes the
+  // server unable to parse the upload at all.
+  const isFormData =
+    typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData
+  const headers: Record<string, string> = {
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    ...(fetchOptions.headers as Record<string, string> | undefined),
   }
 
   // Add Authorization header if token exists and auth is required

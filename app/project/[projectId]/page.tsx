@@ -56,6 +56,7 @@ export default function ProjectPage() {
   const { deleteCase, updateCase } = useProjectStore()
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameBusy, setRenameBusy] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
   const [project, setProject] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null)
@@ -433,6 +434,7 @@ export default function ProjectPage() {
 
   const handleRenameCase = async (caseId: string, name: string) => {
     setRenameBusy(true)
+    setRenameError(null)
     try {
       const res = await apiRequest(`/api/cases/${caseId}`, {
         method: 'PUT',
@@ -457,11 +459,7 @@ export default function ProjectPage() {
       setRenameOpen(false)
       toast({ title: 'Case renamed', description: `Now called "${name}".` })
     } catch (err: any) {
-      toast({
-        title: 'Could not rename case',
-        description: err?.message || 'Something went wrong. Please try again.',
-        variant: 'destructive',
-      })
+      setRenameError(err?.message || 'Something went wrong. Please try again.')
     } finally {
       setRenameBusy(false)
     }
@@ -869,8 +867,16 @@ export default function ProjectPage() {
           >
             <Icon name="layers" size={14} /> Compare Cases
           </button>
-          {/* Documents first: with no case yet, importing the routing is the
-              next step; building a case by hand is the fallback. */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => router.push(`/project/${projectId}/class`)}
+            title="Who can open this project, and how far each case got"
+          >
+            <Icon name="target" size={14} /> Class
+          </button>
+          {/* Two ways to start a case, offered as equals: read it from a
+              document, or build it by hand. */}
           <button
             type="button"
             className={`btn ${cases.length === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
@@ -1577,8 +1583,11 @@ export default function ProjectPage() {
                       >
                         ${cost.toLocaleString()}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        operational + capital
+                      <div
+                        style={{ fontSize: 11, color: 'var(--text-tertiary)' }}
+                        title="Labour, energy, material, transport, equipment and overhead where a case carries them; otherwise the operational and capital figures entered on the component."
+                      >
+                        activity-based, rolled up
                       </div>
                     </div>
 
@@ -1598,8 +1607,11 @@ export default function ProjectPage() {
                       >
                         {flows}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        substance · energy
+                      <div
+                        style={{ fontSize: 11, color: 'var(--text-tertiary)' }}
+                        title="Inputs and outputs attached to this node and everything below it"
+                      >
+                        inputs and outputs
                       </div>
                     </div>
 
@@ -1985,7 +1997,11 @@ export default function ProjectPage() {
         initialName={activeCase?.name ?? ''}
         confirmLabel="Rename"
         busy={renameBusy}
-        onCancel={() => setRenameOpen(false)}
+        error={renameError}
+        onCancel={() => {
+          setRenameOpen(false)
+          setRenameError(null)
+        }}
         onSubmit={(name) => activeCase && handleRenameCase(activeCase.id, name)}
       />
 

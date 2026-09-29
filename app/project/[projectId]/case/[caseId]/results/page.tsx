@@ -8,6 +8,7 @@
 // CategoryBarChart + top-contributors, flow table with direction filter,
 // and historical-runs timeline.
 
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useMemo, useState, useEffect } from 'react'
 import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react'
@@ -32,12 +33,14 @@ import {
 } from '@/components/lcapix'
 import { useNotificationsStore } from '@/lib/notifications-store'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
+import { WriteUpCard } from '@/components/lcapix/case/write-up-card'
 import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import { ISO_HELP, impactCategoryHelp } from '@/components/lcapix/iso-help'
 import { IsoRunSummary } from '@/components/lcapix/results/iso-run-summary'
 import type { GoalScope } from '@/lib/run-snapshot'
 import type { DataQualitySummary } from '@/lib/lca-engine'
+import { StagePanel } from '@/components/lcapix/results/stage-panel'
 
 // Impact categories supported (preserved from prior page for unit lookup).
 const IMPACT_CATEGORIES: Record<string, { unit: string }> = {
@@ -53,6 +56,8 @@ interface APIComponentBreakdown {
   component_id: number
   component_name: string
   component_type: string
+  /** Life-cycle stage of the step (migrate-022); null reads as production. */
+  life_cycle_stage?: string | null
   flows_processed: number
   impacts: Array<{
     category_id: number
@@ -145,15 +150,34 @@ export default function ResultsPage() {
   const [method, setMethod] = useState('CML 2001')
   const [region, setRegion] = useState('US Grid')
   const [flowFilter, setFlowFilter] = useState<FilterDir>('all')
+  // The study's own method and region (goal & scope), used until this case has
+  // a run of its own.
+  // The author's own interpretation and assumptions, kept on the case and
+  // printed in the exported report (ISO 14044 5.1).
+  const [writeUp, setWriteUp] = useState<{
+    interpretation: string
+    assumptions: string
+    isFinal: boolean
+  }>({ interpretation: '', assumptions: '', isFinal: false })
+  const [studyMethod, setStudyMethod] = useState<string | null>(null)
+  const [studyRegion, setStudyRegion] = useState<string | null>(null)
+  const regionToPicker = (rc: string) => (rc === 'US' ? 'US Grid' : rc === 'EU' ? 'EU Average' : rc)
   // The pickers start at the displayed run's method and region, so "Re-run"
-  // repeats that run instead of silently switching to CML 2001 / US.
+  // repeats that run instead of silently switching to something else. A case
+  // that has never been run starts at the STUDY's method and region, so a fresh
+  // copy is not offered CML 2001 when the study is TRACI 2.1 (which would make
+  // it incomparable with the base).
   const latestRun = currentAssessment || assessmentResults[0]
   useEffect(() => {
-    if (!latestRun) return
-    if (latestRun.calculation_method) setMethod(latestRun.calculation_method)
-    const rc = latestRun.regionCode
-    if (rc) setRegion(rc === 'US' ? 'US Grid' : rc === 'EU' ? 'EU Average' : rc)
-  }, [latestRun?.calculation_method, latestRun?.regionCode])
+    if (latestRun) {
+      if (latestRun.calculation_method) setMethod(latestRun.calculation_method)
+      const rc = latestRun.regionCode
+      if (rc) setRegion(regionToPicker(rc))
+      return
+    }
+    if (studyMethod) setMethod(studyMethod)
+    if (studyRegion) setRegion(regionToPicker(studyRegion))
+  }, [latestRun?.calculation_method, latestRun?.regionCode, latestRun, studyMethod, studyRegion])
 
   // Fetch case + components (PRESERVED)
   useEffect(() => {
@@ -182,14 +206,21 @@ export default function ResultsPage() {
             }
 
             setCurrentCase(transformedCase)
+            setWriteUp({
+              interpretation: caseData.case.interpretation ?? '',
+              assumptions: caseData.case.assumptions ?? '',
+              isFinal: !!caseData.case.is_final,
+            })
           }
         }
         // Also fetch the parent project to populate the breadcrumb correctly
         try {
           const projRes = await apiRequest(`/api/projects/${projectId}`)
           const projData = await projRes.json()
-          if (projData?.success && projData?.project?.project_name) {
-            setProjectName(projData.project.project_name)
+          if (projData?.success && projData?.project) {
+            if (projData.project.project_name) setProjectName(projData.project.project_name)
+            if (projData.project.lcia_method) setStudyMethod(projData.project.lcia_method)
+            if (projData.project.region_code) setStudyRegion(projData.project.region_code)
           }
         } catch {}
       } catch (error) {
@@ -337,8 +368,8 @@ export default function ResultsPage() {
   // deck. The server route (/api/assessments/{runId}/export) builds the full
   // report; we fetch it with auth and trigger a download. Falls back to
   // window.print() only when there's no completed run to export yet.
-  const [exporting, setExporting] = useState<null | 'pdf' | 'pptx'>(null)
-  const handleExport = async (format: 'pdf' | 'pptx') => {
+  const [exporting, setExporting] = useState<null | 'pdf' | 'pptx' | 'csv'>(null)
+  const handleExport = async (format: 'pdf' | 'pptx' | 'csv') => {
     const runId = mostRecentAssessment?.run_id
     if (!runId) {
       if (typeof window !== 'undefined') window.print()
@@ -360,7 +391,8 @@ export default function ResultsPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `LCAPIX_Report_${currentCase?.name?.replace(/[^a-zA-Z0-9]/g, '_') ?? runId}.${format}`
+      const stem = format === 'csv' ? 'LCAPIX_inventory' : 'LCAPIX_Report'
+      a.download = `${stem}_${currentCase?.name?.replace(/[^a-zA-Z0-9]/g, '_') ?? runId}.${format}`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -428,13 +460,23 @@ export default function ResultsPage() {
 
   // Category items for the chip row + CategoryBarChart. Prefer real data,
   // fall back to the canonical IMPACT_CATEGORIES ordering.
+  const coverageByCategory = new Map(
+    (mostRecentAssessment?.dataQuality?.category_coverage ?? []).map((c) => [c.category, c]),
+  )
   const categoryItems: CategoryBarChartItem[] = impactEntries.length
-    ? impactEntries.map(([name, imp]) => ({
-        key: name,
-        label: name,
-        value: imp.value,
-        unit: imp.unit,
-      }))
+    ? impactEntries.map(([name, imp]) => {
+        const cov = coverageByCategory.get(name)
+        return {
+          key: name,
+          label: name,
+          value: imp.value,
+          unit: imp.unit,
+          coverage:
+            cov && cov.covered < cov.total
+              ? { covered: cov.covered, total: cov.total, missing: cov.missing_examples }
+              : undefined,
+        }
+      })
     : Object.entries(IMPACT_CATEGORIES).map(([name, info]) => ({
         key: name,
         label: name,
@@ -783,6 +825,14 @@ export default function ResultsPage() {
             {exporting === 'pptx' ? 'Exporting…' : 'Export PPT'}
           </button>
           <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => handleExport('csv')}
+            disabled={exporting !== null}
+            title="Every flow of this run as a spreadsheet row: amount, factor, its source and the impact"
+          >
+            {exporting === 'csv' ? 'Exporting…' : 'Export rows (CSV)'}
+          </button>
+          <button
             type="button"
             className={`btn btn-secondary btn-sm ${magicPulse ? 'bell-pulse' : ''}`}
             onClick={() => setMagicPulse(false) || setMagicOpen(true)}
@@ -841,6 +891,41 @@ export default function ResultsPage() {
           lastRunLabel={lastRunLabel}
         />
 
+        {/* Where a first-time user goes next, in one line. */}
+        {mostRecentAssessment && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+              padding: '10px 14px',
+              marginBottom: 20,
+              borderRadius: 8,
+              border: '1px solid var(--border-subtle)',
+              background: 'var(--surface-raised)',
+              fontSize: 12.5,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Next</span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setMagicOpen(true)}
+              title="A plain-language read of what drives this result"
+            >
+              See what drives it
+            </button>
+            <Link href={`/project/${projectId}/case/${caseId}`} className="btn btn-ghost btn-sm">
+              Duplicate and change one thing
+            </Link>
+            <Link href={`/project/${projectId}/comparison`} className="btn btn-ghost btn-sm">
+              Compare cases
+            </Link>
+            <span style={{ color: 'var(--text-tertiary)' }}>or export the report above.</span>
+          </div>
+        )}
 
         {/* ISO 14044: goal & scope, per-functional-unit results, data quality */}
         {mostRecentAssessment && (
@@ -849,6 +934,45 @@ export default function ResultsPage() {
             dataQuality={mostRecentAssessment.dataQuality}
             impacts={mostRecentAssessment.impacts}
             editHref={`/project/${projectId}/case/${caseId}`}
+          />
+        )}
+
+        {/* Where the impact falls across the product's life, and whether the
+            study covers the boundary it declares. */}
+        {mostRecentAssessment && (() => {
+          const headline =
+            Object.entries(mostRecentAssessment.impacts).find(([k]) =>
+              /global warming|climate/i.test(k),
+            ) ?? Object.entries(mostRecentAssessment.impacts)[0]
+          if (!headline) return null
+          const [categoryName, headlineValue] = headline
+          const rows = (mostRecentAssessment.componentBreakdown ?? []).map((c) => ({
+            component_name: c.component_name,
+            life_cycle_stage: c.life_cycle_stage ?? null,
+            value:
+              Number(
+                (c.impacts ?? []).find((i) => i.category_name === categoryName)?.impact_value ?? 0,
+              ) || 0,
+            flows: Number(c.flows_processed ?? 0),
+          }))
+          return (
+            <StagePanel
+              categoryName={categoryName}
+              unit={headlineValue?.unit ?? ''}
+              rows={rows}
+              boundary={mostRecentAssessment.goalScope?.system_boundary ?? null}
+              editHref={`/project/${projectId}/case/${caseId}`}
+            />
+          )
+        })()}
+
+        {/* The part only the author can write; both print in the report. */}
+        {mostRecentAssessment && (
+          <WriteUpCard
+            caseId={caseId}
+            initialInterpretation={writeUp.interpretation}
+            initialAssumptions={writeUp.assumptions}
+            initialFinal={writeUp.isFinal}
           />
         )}
 
@@ -1169,12 +1293,12 @@ export default function ResultsPage() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DashboardHeroProps {
-  activeCat: { key: string; label: string; value?: number; unit?: string } | null
+  activeCat: CategoryBarChartItem | null
   totalImpactDisplay: string
   flagshipGlow?: boolean
   contributors: Array<{ id: string; name: string; value: number; pct: number }>
   usingDemoContributors?: boolean
-  categoryItems: Array<{ key: string; label: string; value?: number; unit?: string }>
+  categoryItems: CategoryBarChartItem[]
   activeKey: string
   onSelectCategory: (k: string) => void
   deltaPct: number | null
@@ -1297,6 +1421,15 @@ function DashboardHero({
             >
               {activeCat?.unit ?? ''}
             </div>
+            {activeCat?.coverage && (
+              <span
+                className="chip"
+                style={{ fontSize: 10.5, padding: '2px 8px', color: '#b45309' }}
+                title={`Only ${activeCat.coverage.covered} of ${activeCat.coverage.total} inputs have a ${activeCat.label.toLowerCase()} factor (missing: ${activeCat.coverage.missing.join(', ')}), so this total covers part of the product.`}
+              >
+                covers {activeCat.coverage.covered} of {activeCat.coverage.total} inputs
+              </span>
+            )}
             {deltaPct != null && (
               <span
                 className="mono"
@@ -1501,9 +1634,23 @@ function DashboardHero({
                       fontWeight: isActive ? 600 : 500,
                       color: 'var(--text-primary)',
                       marginBottom: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
                     }}
                   >
                     {c.label}
+                    {c.coverage && (
+                      <span
+                        className="chip"
+                        style={{ fontSize: 9.5, padding: '1px 6px', color: '#b45309' }}
+                        title={`Covers ${c.coverage.covered} of ${c.coverage.total} inputs. No ${c.label.toLowerCase()} factor for ${c.coverage.missing.join(', ')}${
+                          c.coverage.missing.length < c.coverage.total - c.coverage.covered ? ' and others' : ''
+                        }, so this total is incomplete.`}
+                      >
+                        partial
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{

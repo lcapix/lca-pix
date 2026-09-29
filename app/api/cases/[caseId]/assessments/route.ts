@@ -71,12 +71,15 @@ export async function GET(
           };
         });
 
-        // Get component breakdown
-        const componentResults = await query(
+        // Get component breakdown. The life-cycle stage rides along so the
+        // results screen can split a run by stage; a database without
+        // migrate-022 falls back below and every step reads as production.
+        const breakdownSql = (withStage: boolean) =>
           `SELECT
             c.component_id,
             c.component_name,
             c.process_type as component_type,
+            ${withStage ? 'c.life_cycle_stage,' : ''}
             COUNT(DISTINCT ar.result_id) as flows_processed,
             JSON_ARRAYAGG(
               JSON_OBJECT(
@@ -90,15 +93,24 @@ export async function GET(
            JOIN component c ON ar.component_id = c.component_id
            JOIN impact_categories ic ON ar.category_id = ic.category_id
            WHERE ar.run_id = ?
-           GROUP BY c.component_id, c.component_name, c.process_type`,
-          [assessment.run_id]
-        );
+           GROUP BY c.component_id, c.component_name, c.process_type${
+             withStage ? ', c.life_cycle_stage' : ''
+           }`;
+
+        let componentResults: any[];
+        try {
+          componentResults = await query(breakdownSql(true), [assessment.run_id]);
+        } catch (stageErr: any) {
+          if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
+          componentResults = await query(breakdownSql(false), [assessment.run_id]);
+        }
 
         // Parse JSON impacts for each component
         const componentBreakdown = (componentResults as any[]).map(comp => ({
           component_id: comp.component_id,
           component_name: comp.component_name,
           component_type: comp.component_type,
+          life_cycle_stage: comp.life_cycle_stage ?? null,
           flows_processed: comp.flows_processed,
           impacts: typeof comp.impacts === 'string' ? JSON.parse(comp.impacts) : comp.impacts
         }));

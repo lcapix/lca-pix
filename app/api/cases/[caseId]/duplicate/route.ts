@@ -73,6 +73,18 @@ export async function POST(
     try { body = await request.json(); } catch { /* empty body is fine */ }
     const askedName = typeof body.case_name === 'string' ? body.case_name.trim().slice(0, 255) : '';
     const newName: string = askedName || `${sourceCase.case_name} (Copy)`;
+
+    const clash = await queryOne<any>(
+      `SELECT case_id FROM case_table
+        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+      [sourceCase.project_id, newName]
+    );
+    if (clash) {
+      return NextResponse.json(
+        { error: `This project already has a case called "${newName}". Name the copy after the change you are about to make.` },
+        { status: 409 }
+      );
+    }
     const newType: string = ['base', 'comparative'].includes(body.case_type)
       ? body.case_type
       : 'comparative';

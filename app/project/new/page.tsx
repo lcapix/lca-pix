@@ -96,14 +96,15 @@ export default function NewProjectPage() {
         }).catch(() => undefined)
         toast({
           title: "Project created",
-          description: `"${name.trim()}" is ready. Start by importing your process routing.`,
+          description: `"${name.trim()}" is ready. Choose how you want to build the first case.`,
         })
-        // Guided intake: land on Import (routing pre-selected) so the first
-        // thing after creating a project is building the case skeleton from a
-        // real document, not staring at an empty project. ?first=1 tells the
-        // import page to default to the routing connector and show the nudge.
-        router.push(`/project/${projectId}/import?first=1`)
+        // Two ways in, offered as equals: build the model by hand, or read it
+        // from a document. Landing straight on Import taught that an LCA starts
+        // with a file, which is not what a student needs to learn first.
+        router.push(`/project/${projectId}/start`)
       } else {
+        // A name clash (409) belongs next to the name field, not only in a toast.
+        if (res.status === 409 && data?.error) setNameError(data.error)
         toast({
           title: "Could not create project",
           description: data?.error || "Unknown error. Please try again.",
@@ -219,13 +220,12 @@ export default function NewProjectPage() {
               />
               {nameError && (
                 <p
-                  className="mono"
+                  role="alert"
                   style={{
                     marginTop: 8,
-                    fontSize: 11,
+                    fontSize: 12,
+                    lineHeight: 1.45,
                     color: "var(--signal-error, #c0392b)",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
                   }}
                 >
                   {nameError}
@@ -427,8 +427,7 @@ export default function NewProjectPage() {
             color: "var(--text-tertiary)",
           }}
         >
-          LCAPIX © 2024 · Privacy Policy · Terms of Service · Documentation ·
-          API Status
+          LCAPIX · Privacy Policy · Terms of Service · Documentation · API Status
         </footer>
       </div>
     </div>
