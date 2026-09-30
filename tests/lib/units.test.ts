@@ -3,8 +3,10 @@ import {
   convertQuantity,
   normalizeUnit,
   compatibleUnits,
+  sameUnit,
   splitFactorUnit,
   toFactorBasis,
+  unitProblem,
 } from '@/lib/units';
 
 describe('normalizeUnit', () => {
@@ -158,9 +160,14 @@ describe('toFactorBasis (E3 + E11: never a raw multiply)', () => {
   });
 
   it('identical is case- and space-insensitive', () => {
-    const r = toFactorBasis(4, ' MMscfd', 'mmscfd', null);
+    const r = toFactorBasis(4, ' Pallet', 'pallet ', 'kg CO2 eq');
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.quantity).toBe(4);
+  });
+
+  it("but a flipped m/M is a flipped magnitude, never 'the same unit' ('Mt' vs 'mt', 'MMscfd' vs 'mmscfd')", () => {
+    expect(toFactorBasis(4, 'Mt', 'mt', 'kg CO2 eq').ok).toBe(false);
+    expect(toFactorBasis(4, 'MMscfd', 'mmscfd', 'kg CO2 eq').ok).toBe(false);
   });
 
   it("1000 kg against an 'item' substance is refused (the E3 reproduction: was 3000 with no warning)", () => {
@@ -242,5 +249,63 @@ describe('toFactorBasis (E3 + E11: never a raw multiply)', () => {
     const r = toFactorBasis(2, 'kWh', null, 'kg CO2 eq / kWh');
     expect(r).toEqual({ ok: true, quantity: 2, basisUnit: 'kWh' });
     expect(toFactorBasis(2, 'kWh', null, 'kg CO2 eq').ok).toBe(false);
+  });
+});
+
+describe('one normalisation for every spelling (parser-differential review)', () => {
+  it('Unicode and operator variants normalise to one key', () => {
+    for (const u of ['m³', 'm^3', 'M3', 'ｍ３', ' m 3 '.replace(/ /g, '')]) expect(normalizeUnit(u)).toBe('m3');
+    for (const u of ['t·km', 't⋅km', 't∙km', 't×km', 't * km', 'tonne - km', 'ｔｋｍ']) expect(normalizeUnit(u)).toBe('tkm');
+    for (const u of ['kg·km', 'kg⋅km', 'kg × km']) expect(normalizeUnit(u)).toBe('kg*km');
+    expect(normalizeUnit('ft²')).toBe('ft2');
+    expect(normalizeUnit('ft³')).toBe('ft3');
+    expect(normalizeUnit('ｋｇ')).toBe('kg');
+    expect(normalizeUnit('kg\u00a0')).toBe('kg');
+    expect(normalizeUnit('short\u00a0ton')).toBe('short ton');
+  });
+
+  it('the case of an SI m/M prefix is significant: mg/Mg, mL/ML, MWh/mWh, MJ/mJ', () => {
+    expect(normalizeUnit('mg')).toBe('mg');
+    expect(normalizeUnit('Mg')).toBeNull(); // megagram (= t) or milligram: 10^9 apart
+    expect(normalizeUnit('MG')).toBeNull();
+    expect(normalizeUnit('mL')).toBe('mL');
+    expect(normalizeUnit('ml')).toBe('mL');
+    expect(normalizeUnit('ML')).toBeNull(); // megalitre or millilitre
+    expect(normalizeUnit('MWh')).toBe('MWh');
+    expect(normalizeUnit('MWH')).toBe('MWh');
+    expect(normalizeUnit('mwh')).toBeNull(); // literally milliwatt-hour
+    expect(normalizeUnit('MJ')).toBe('MJ');
+    expect(normalizeUnit('mj')).toBeNull();
+    expect(convertQuantity(1, 'ML', 'L')).toBeNull();
+    expect(convertQuantity(1, 'Mg', 'kg')).toBeNull();
+  });
+
+  it('ambiguous spellings say why', () => {
+    expect(unitProblem('ton')).toMatch(/short ton or a metric ton/);
+    expect(unitProblem('Mg')).toMatch(/megagram|milli/);
+    expect(unitProblem('ML')).toMatch(/megalit|milli/);
+    expect(unitProblem('kg')).toBeNull();
+    expect(unitProblem('bananas')).toMatch(/unrecognized/);
+  });
+
+  it('sameUnit: identical strings are always the same unit, whatever they mean', () => {
+    expect(sameUnit('Mg', 'Mg')).toBe(true);
+    expect(sameUnit('p', 'P')).toBe(true);
+    expect(sameUnit('ML', 'ml')).toBe(false);
+    expect(sameUnit('Mt', 'mt')).toBe(false);
+    expect(sameUnit('', '')).toBe(false);
+  });
+
+  it('convertQuantity is the identity for identical unknown units, so the API validator accepts what the engine accepts', () => {
+    expect(convertQuantity(4, 'p', 'p')).toMatchObject({ quantity: 4, factor: 1 });
+    expect(convertQuantity(4, 'Mg', 'Mg')).toMatchObject({ quantity: 4, factor: 1 });
+    expect(convertQuantity(4, 'p', 'kg')).toBeNull();
+  });
+
+  it('every canonical spelling the unit table produces is itself accepted and maps to itself', () => {
+    const canon = new Set<string>();
+    for (const fam of ['kg', 'kWh', 'm3', 'tkm', 'h', 'm2', 'units']) for (const c of compatibleUnits(fam)) canon.add(c);
+    expect(canon.size).toBeGreaterThan(30);
+    for (const c of canon) expect(normalizeUnit(c)).toBe(c);
   });
 });
