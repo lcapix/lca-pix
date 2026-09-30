@@ -132,7 +132,7 @@ describe('upload type', () => {
 });
 
 describe('PDF page cap', () => {
-  async function pdfWithPages(n: number): Promise<Uint8Array> {
+  async function pdfWithPages(n: number): Promise<Uint8Array<ArrayBuffer>> {
     const doc = new PDFDocument({ autoFirstPage: false, compress: false });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
@@ -143,7 +143,10 @@ describe('PDF page cap', () => {
     }
     doc.end();
     await done;
-    return new Uint8Array(Buffer.concat(chunks));
+    const buf = Buffer.concat(chunks);
+    const out = new Uint8Array(new ArrayBuffer(buf.length));
+    out.set(buf);
+    return out;
   }
 
   it('reads the first 200 pages of a 205-page PDF and stops', async () => {
