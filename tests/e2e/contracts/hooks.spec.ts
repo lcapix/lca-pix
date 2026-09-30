@@ -53,6 +53,19 @@ test.describe('test ids', () => {
     // Nodes carry data-node-id (guardrails §5).
     await expect(page.getByTestId('tree-canvas-stage').locator('[data-node-id]')).toHaveCount(4);
   });
+
+  // Graph ("Plot") view: nodes are 54 px tall (components/lcapix/case/graph-view.tsx:29,
+  // used at :293) but hold three rows, so the flex column squeezes the name row
+  // (overflow hidden) to 2 px and no node shows its name. They also carry
+  // data-node, not the data-node-id guardrails §5 asks of every canvas node (:286).
+  test('Graph view nodes show their names and carry data-node-id', async ({ page }) => {
+    test.fail(true, 'Graph nodes clip their names to 2 px and have data-node instead of data-node-id');
+    await openCase(page, seed().example.projectId, seed().example.baseCaseId);
+    await page.getByRole('button', { name: /^(Graph|Plot)$/ }).click();
+    const name = page.getByText('20. Weld tab', { exact: true }).last();
+    await expect.poll(async () => (await name.boundingBox())?.height ?? 0, { timeout: 5_000 }).toBeGreaterThan(10);
+    await expect(page.locator('[data-node-id]')).toHaveCount(4, { timeout: 5_000 });
+  });
 });
 
 test.describe('accessible names (guardrails §4)', () => {
