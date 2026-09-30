@@ -47,6 +47,8 @@ export default function ClassPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [owner, setOwner] = useState<{ username: string | null; email: string | null } | null>(null)
   const [canManage, setCanManage] = useState(false)
+  // Only the owner may grant the admin role; the API refuses anyone else (403).
+  const [canManageAdmins, setCanManageAdmins] = useState(false)
   const [cases, setCases] = useState<CaseProgress[]>([])
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
@@ -64,6 +66,7 @@ export default function ClassPage() {
       setMembers(Array.isArray(md?.members) ? md.members : [])
       setOwner(md?.owner ?? null)
       setCanManage(!!md?.canManage)
+      setCanManageAdmins(!!md?.canManageAdmins)
       setCases(Array.isArray(pd?.cases) ? pd.cases : [])
     } finally {
       setLoading(false)
@@ -189,7 +192,7 @@ export default function ClassPage() {
             <select style={input} value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="viewer">Viewer, can read</option>
               <option value="editor">Editor, can change</option>
-              <option value="admin">Admin, can share</option>
+              {canManageAdmins && <option value="admin">Admin, can share</option>}
             </select>
             <button type="button" className="btn btn-primary btn-sm" onClick={add} disabled={adding}>
               {adding ? 'Adding…' : 'Add'}
