@@ -117,9 +117,11 @@ const sideOf = (f: InventoryFlow): FlowSide => ({
 const keyOf = (path: string[]) => path.join(' › ')
 const subKey = (f: InventoryFlow) => `${f.substance.trim().toLowerCase()}|${f.dir}`
 
-/** Quantity of b expressed in a's unit, or null when the units do not convert. */
+/**
+ * Quantity of b expressed in a's unit, or null when the units do not convert.
+ * lib/units decides, as the engine does: 'Mg' is not 'mg', 'm³' is 'm3'.
+ */
 function inUnitOf(a: InventoryFlow, b: InventoryFlow): number | null {
-  if (a.unit.trim().toLowerCase() === b.unit.trim().toLowerCase()) return b.quantity
   return convertQuantity(b.quantity, b.unit, a.unit)?.quantity ?? null
 }
 

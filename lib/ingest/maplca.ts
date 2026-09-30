@@ -9,24 +9,18 @@
 
 import type { IngestCost, IngestNode, ProcessModel } from './schema';
 import { processModelWarnings, validateProcessModel } from './schema';
-import { convertQuantity } from '@/lib/units';
+import { convertQuantity, normalizeUnit, unitFamily, unitProblem } from '@/lib/units';
 
-// Unit conversions to the units LCAPIX factors actually use.
-// [from_unit, substance_hint, to_unit, factor, note] — hint rules first.
-const UNIT_CONVERSIONS: Array<[string, string | null, string, number, string]> = [
-  ['mmbtu', 'natural gas', 'm3', 28.263, '1 MMBtu = 28.263 m3 natural gas (EIA heat content)'],
-  // Other fuels (coal, LPG, fuel oil, wood) stay in MMBtu — their substances now
-  // carry per-MMBtu factors (migrate-011), so no conversion is needed. (Was
-  // MMBtu→kWh, which then failed against the fuels' mass-based factors.)
-  ['mmbtu', null, 'MMBtu', 1.0, ''],
-  ['lbs', null, 'kg', 0.45359237, '1 lb = 0.45359 kg'],
-  ['lb', null, 'kg', 0.45359237, '1 lb = 0.45359 kg'],
-  ['tgal', null, 'm3', 3.785411784, '1 thousand US gal = 3.7854 m3'],
-  ['gal', null, 'm3', 0.003785411784, '1 US gal = 0.0037854 m3'],
-  ['kwh', null, 'kWh', 1.0, ''],
-  ['kg', null, 'kg', 1.0, ''],
-  ['m3', null, 'm3', 1.0, ''],
-];
+// Unit handling at mapping time reads every spelling through lib/units, the
+// same reader the engine uses, so 'Mg' is never taken for 'mg' and 'm³' is m3.
+// Masses go to kg and volumes to m3 (the bases most factors are stated per);
+// other known units keep their canonical name, and the engine converts them
+// to the factor's unit later. The one substance-specific rule is the heat
+// content of natural gas: its factor is per m3, the documents say MMBtu.
+// Other fuels (coal, LPG, fuel oil, wood) stay in MMBtu: their substances carry
+// per-MMBtu factors (migrate-011).
+const NATURAL_GAS_M3_PER_MMBTU = 28.263;
+const FAMILY_TARGET: Partial<Record<string, string>> = { mass: 'kg', volume: 'm3' };
 
 export interface CatalogSubstance {
   substance_id: number;
@@ -131,19 +125,26 @@ export function convertIngestUnit(
   unit: string,
   substanceText: string
 ): { quantity: number; unit: string; note: string } {
-  const key = unit.trim().toLowerCase();
-  const hint = substanceText.trim().toLowerCase();
-  for (const [u, h, toU, f, note] of UNIT_CONVERSIONS) {
-    if (u === key && h !== null && hint.includes(h)) {
-      return { quantity: qty * f, unit: toU, note };
-    }
+  const canonical = normalizeUnit(unit);
+  if (!canonical) {
+    // Unknown or ambiguous: never guessed, flagged for review.
+    return {
+      quantity: qty,
+      unit,
+      note: `NO CONVERSION RULE for '${unit}' (${unitProblem(unit)}) — passed through`,
+    };
   }
-  for (const [u, h, toU, f, note] of UNIT_CONVERSIONS) {
-    if (u === key && h === null) {
-      return { quantity: qty * f, unit: toU, note };
-    }
+  if (canonical === 'MMBtu' && substanceText.trim().toLowerCase().includes('natural gas')) {
+    return {
+      quantity: qty * NATURAL_GAS_M3_PER_MMBTU,
+      unit: 'm3',
+      note: `1 MMBtu = ${NATURAL_GAS_M3_PER_MMBTU} m3 natural gas (EIA heat content)`,
+    };
   }
-  return { quantity: qty, unit, note: `NO CONVERSION RULE for '${unit}' — passed through` };
+  const target = FAMILY_TARGET[unitFamily(unit) ?? ''] ?? canonical;
+  const conv = convertQuantity(qty, unit, target);
+  if (!conv) return { quantity: qty, unit, note: `NO CONVERSION RULE for '${unit}' — passed through` };
+  return { quantity: conv.quantity, unit: conv.toUnit, note: conv.factor === 1 ? '' : conv.note };
 }
 
 /** Lowest similarity accepted as a (low-confidence) match. */
