@@ -3,8 +3,17 @@ import { createHash } from 'crypto';
 import { NextRequest } from 'next/server';
 import bcrypt from 'bcrypt';
 import { GET } from '@/app/api/auth/google/route';
+import { POST as login } from '@/app/api/auth/login/route';
 import * as db from '@/lib/db-helpers';
-import { OAUTH_ONLY_PASSWORD_HASH, passwordFingerprint, verifyToken } from '@/lib/auth';
+import { MemoryRateLimitStore, setRateLimitStore } from '@/lib/rate-limit';
+import {
+  AuthError,
+  createToken,
+  OAUTH_ONLY_PASSWORD_HASH,
+  passwordFingerprint,
+  requireAuth,
+  verifyToken,
+} from '@/lib/auth';
 
 vi.mock('@/lib/db-helpers');
 
@@ -167,18 +176,119 @@ describe('GET /api/auth/google', () => {
       expect(db.insert).not.toHaveBeenCalled();
     });
 
-    it('does not link Google to an existing password account (pre-hijack)', async () => {
+    /**
+     * One account row shared by the Google route, requireAuth and the login
+     * route: SELECTs read it, the takeover UPDATE writes it.
+     */
+    function fakeAccountTable(row: Record<string, any>) {
+      vi.spyOn(console, 'info').mockImplementation(() => {});
+      vi.mocked(db.queryOne).mockImplementation(async (sql: string, p?: any[]) => {
+        if (/FROM account WHERE (email|id) = \?/.test(sql) && (p?.[0] === row.email || p?.[0] === row.id)) {
+          return { ...row } as any;
+        }
+        return null;
+      });
+      vi.mocked(db.execute).mockImplementation(async (sql: string, p?: any[]) => {
+        if (/UPDATE account SET password_hash = \? WHERE id = \?/.test(sql) && p?.[1] === row.id) {
+          row.password_hash = p[0];
+          return 1;
+        }
+        return 0;
+      });
+      return row;
+    }
+
+    function bearer(token: string) {
+      return new Request('http://t/api/projects', { headers: { Authorization: `Bearer ${token}` } });
+    }
+
+    it('takes over a password account when Google verifies the email: marker set, old sessions and password dead', async () => {
       vi.stubGlobal('fetch', googleFetch());
-      const hash = await bcrypt.hash('attacker-pw1', 4);
-      vi.mocked(db.queryOne).mockResolvedValue({
-        id: 9, username: 'ceo', email: 'jo@corp.com', password_hash: hash,
-        account_type: 'user', is_active: 1,
-      } as any);
+      setRateLimitStore(new MemoryRateLimitStore());
+      const attackerHash = await bcrypt.hash('attacker-pw1', 4);
+      const row = fakeAccountTable({
+        id: 9, username: 'ceo', email: 'jo@corp.com', password_hash: attackerHash,
+        account_type: 'user', is_active: 1, company: 'Acme', onboarded_at: new Date(),
+      });
+      // A session the pre-registered password holder already has.
+      const before = createToken({ id: 9, email: 'jo@corp.com' }, attackerHash);
+      await expect(requireAuth(bearer(before))).resolves.toBe(9);
+
       const { state, cookie } = await beginFlow();
       const res = await callback({ code: 'c', state }, cookie);
-      expect(errorOf(res)).toBe('use_password_login');
-      expect(cookies(res).auth_token?.value ?? '').toBe('');
+
+      expect(new URL(res.headers.get('location')!).pathname).toBe('/auth/callback');
+      expect(row.password_hash).toBe(OAUTH_ONLY_PASSWORD_HASH);
+      const handoff = cookies(res).auth_token.value;
+      expect(verifyToken(handoff)?.id).toBe(9);
+      await expect(requireAuth(bearer(handoff))).resolves.toBe(9);
+      // Every session issued before the takeover is revoked.
+      await expect(requireAuth(bearer(before))).rejects.toBeInstanceOf(AuthError);
+      // The pre-set password no longer logs in.
+      const pw = await login(new Request('http://t/api/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.9' },
+        body: JSON.stringify({ email: 'jo@corp.com', password: 'attacker-pw1' }),
+      }) as any);
+      expect(pw.status).toBe(401);
+    });
+
+    it('signs in an account made by the old Google flow (random bcrypt hash) and converts it', async () => {
+      vi.stubGlobal('fetch', googleFetch());
+      const randomHash = await bcrypt.hash('9f2c4e7a1b3d5f60', 4);
+      const row = fakeAccountTable({
+        id: 12, username: 'jo', email: 'jo@corp.com', password_hash: randomHash,
+        account_type: 'user', is_active: 1, company: null, onboarded_at: null,
+      });
+      const { state, cookie } = await beginFlow();
+      const res = await callback({ code: 'c', state }, cookie);
+      const loc = new URL(res.headers.get('location')!);
+      expect(loc.pathname).toBe('/auth/callback');
+      expect(loc.searchParams.get('next')).toBe('/auth/onboarding');
+      expect(row.password_hash).toBe(OAUTH_ONLY_PASSWORD_HASH);
+      expect(verifyToken(cookies(res).auth_token.value)?.pv).toBe(passwordFingerprint(OAUTH_ONLY_PASSWORD_HASH));
       expect(db.insert).not.toHaveBeenCalled();
+    });
+
+    it('an unverified Google email never takes over an account', async () => {
+      vi.stubGlobal('fetch', googleFetch({ verified: false }));
+      const hash = await bcrypt.hash('owner-pw-123', 4);
+      const row = fakeAccountTable({
+        id: 9, username: 'ceo', email: 'jo@corp.com', password_hash: hash, account_type: 'user', is_active: 1,
+      });
+      const { state, cookie } = await beginFlow();
+      const res = await callback({ code: 'c', state }, cookie);
+      expect(errorOf(res)).toBe('google_email_unverified');
+      expect(row.password_hash).toBe(hash);
+      expect(db.execute).not.toHaveBeenCalled();
+      expect(cookies(res).auth_token?.value ?? '').toBe('');
+    });
+
+    it('refuses an inactive password account and leaves its hash alone', async () => {
+      vi.stubGlobal('fetch', googleFetch());
+      const hash = await bcrypt.hash('owner-pw-123', 4);
+      const row = fakeAccountTable({
+        id: 9, username: 'ceo', email: 'jo@corp.com', password_hash: hash, account_type: 'user', is_active: 0,
+      });
+      const { state, cookie } = await beginFlow();
+      const res = await callback({ code: 'c', state }, cookie);
+      expect(errorOf(res)).toBe('account_inactive');
+      expect(row.password_hash).toBe(hash);
+      expect(db.execute).not.toHaveBeenCalled();
+      expect(cookies(res).auth_token?.value ?? '').toBe('');
+    });
+
+    it('does not rewrite an account that is already Google-only (its sessions stay valid)', async () => {
+      vi.stubGlobal('fetch', googleFetch());
+      fakeAccountTable({
+        id: 3, username: 'jo', email: 'jo@corp.com', password_hash: OAUTH_ONLY_PASSWORD_HASH,
+        account_type: 'user', is_active: 1, company: 'Acme', onboarded_at: new Date(),
+      });
+      const earlier = createToken({ id: 3, email: 'jo@corp.com' }, OAUTH_ONLY_PASSWORD_HASH);
+      const { state, cookie } = await beginFlow();
+      await callback({ code: 'c', state }, cookie);
+      expect(db.execute).not.toHaveBeenCalled();
+      await expect(requireAuth(bearer(earlier))).resolves.toBe(3);
     });
 
     it('refuses an inactive Google account', async () => {

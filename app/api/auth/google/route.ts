@@ -9,10 +9,15 @@
  * different `state` is refused before the code is exchanged (login CSRF). The
  * code exchange carries the PKCE verifier. Then:
  *   - the Google email must be verified;
- *   - an existing account is only signed in if it was created by Google sign-in
- *     (password_hash is OAUTH_ONLY_PASSWORD_HASH) and is active. A password
- *     account with the same email is NOT linked: the user is sent back to log
- *     in with the password (an attacker could have pre-registered the address);
+ *   - an inactive account is refused and left unchanged;
+ *   - an active account that still has a password hash is TAKEN OVER (owner
+ *     decision, audit follow-up 9): Google has proved the caller owns the
+ *     address, so password_hash becomes OAUTH_ONLY_PASSWORD_HASH. A password
+ *     someone pre-registered for the address stops working, and every token
+ *     issued before (pv = fingerprint of the old hash) is rejected by
+ *     requireAuth. This is also how accounts made by the old Google flow
+ *     (random bcrypt hashes) sign in again;
+ *   - an account that is already Google-only is signed in as it is;
  *   - a new account gets a unique username and no password.
  *
  * Hand-off: the JWT goes to /auth/callback in an httpOnly `auth_token` cookie
@@ -29,7 +34,7 @@ import {
   isPasswordLogin,
   OAUTH_ONLY_PASSWORD_HASH,
 } from '@/lib/auth';
-import { insert, queryOne } from '@/lib/db-helpers';
+import { execute, insert, queryOne } from '@/lib/db-helpers';
 import { setAuthHandoffCookie } from '../cookies';
 
 const STATE_COOKIE = 'google_oauth';
@@ -100,8 +105,17 @@ async function resolveAccount(
 ): Promise<{ user: any } | { error: string }> {
   const existing = await queryOne<any>('SELECT * FROM account WHERE email = ?', [googleUser.email]);
   if (existing) {
-    if (isPasswordLogin(existing.password_hash)) return { error: 'use_password_login' };
     if (!existing.is_active) return { error: 'account_inactive' };
+    if (isPasswordLogin(existing.password_hash)) {
+      // Take over: the verified Google identity owns this address. Replacing
+      // the hash kills the password and, through pv, every existing session.
+      await execute('UPDATE account SET password_hash = ? WHERE id = ?', [
+        OAUTH_ONLY_PASSWORD_HASH,
+        existing.id,
+      ]);
+      console.info('[google-oauth] account %d switched to Google sign-in; earlier sessions revoked', existing.id);
+      return { user: { ...existing, password_hash: OAUTH_ONLY_PASSWORD_HASH } };
+    }
     return { user: existing };
   }
 
