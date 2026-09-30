@@ -44,10 +44,6 @@ const LOGIN_ERRORS: Record<string, LoginError> = {
     title: "Google email not verified",
     description: "Your Google account's email address isn't verified. Verify it with Google, or sign up with email and password.",
   },
-  use_password_login: {
-    title: "Log in with your password",
-    description: "An account with this email already exists and uses a password. Log in with your email and password.",
-  },
   account_inactive: {
     title: "Account inactive",
     description: "This account is inactive. Please contact support.",

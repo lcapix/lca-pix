@@ -47,7 +47,6 @@ describe('Login page ?error= handling (L8)', () => {
   it.each([
     ['oauth_state_mismatch', /expired|again/i],
     ['google_email_unverified', /verif/i],
-    ['use_password_login', /password/i],
     ['account_inactive', /inactive/i],
     ['google_cancelled', /cancel/i],
     ['session_expired', /session/i],
