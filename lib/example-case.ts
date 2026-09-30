@@ -85,13 +85,10 @@ export const EXAMPLE_STEPS: ExampleStep[] = [
         unit: 'kWh',
         note: 'Illustrative: welder power x arc-on minutes.',
       },
-      {
-        substance: 'Argon',
-        direction: 'input',
-        quantity: 0.02,
-        unit: 'm3',
-        note: 'Illustrative: gas flow rate x arc-on minutes. Argon has no climate factor, which the data-quality statement will tell you.',
-      },
+      // No shielding-gas flow: the library has no argon (and no sourced
+      // factor for it), and the honesty rule above says every substance here
+      // is a real library row. The example used to name 'Argon', which every
+      // build skipped (skipped_substances ['Argon']).
     ],
   },
   {
@@ -114,6 +111,5 @@ export const EXAMPLE_STEPS: ExampleStep[] = [
 /** What the example is meant to teach, shown once when it is loaded. */
 export const EXAMPLE_POINTS = [
   'The steel dwarfs the shop: a purchased material usually carries the result.',
-  'Argon has no climate factor in this method, so it adds nothing and the run says so.',
   'Change one quantity, run it again, and compare the two runs.',
 ];

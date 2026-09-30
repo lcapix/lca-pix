@@ -237,7 +237,7 @@ flowchart TD
 
 | # | Screen | Action | API | DB | Expected |
 |---|---|---|---|---|---|
-| F4b.1 | `/home` with **0 projects** | Click **Open the worked example** (the button shows "Building…" while running) | `POST /api/example-project` (no body) | R `project`, `substances`; W `project` (+ `lcia_method` `TRACI 2.1`, `region_code` `US`, goal), `case_table`, `component` (product "Painted steel bracket" + 3 operations with stages), `flows` (Steel 0.8 kg, Electricity 0.05/0.12/0.4 kWh, Argon 0.02 m3) | **200** `{project_id, case_id, points, skipped_substances}`, then navigates to `/project/:id`. A repeat call returns 200 with `existed:true`. |
+| F4b.1 | `/home` with **0 projects** | Click **Open the worked example** (the button shows "Building…" while running) | `POST /api/example-project` (no body) | R `project`, `substances`; W `project` (+ `lcia_method` `TRACI 2.1`, `region_code` `US`, goal), `case_table`, `component` (product "Painted steel bracket" + 3 operations with stages), `flows` (Steel 0.8 kg, Electricity 0.05/0.12/0.4 kWh; library substances only) | **200** `{project_id, case_id, points, skipped_substances}`, then navigates to `/project/:id`. A repeat call returns 200 with `existed:true`. |
 | F4b.2 | workspace → editor | Open the case | as F5/F9 | — | **Target:** the project FU is "1 painted steel bracket, at the factory gate", cradle-to-gate, reference flow 1 bracket, so **Run is enabled**. **Today:** the route writes FU and boundary to `case_table`, which throws `ER_BAD_FIELD_ERROR`; the error is swallowed and the reference flow isn't written either, so Run stays disabled with "Set the functional unit (Goal & scope) before running" (PROJ-1). |
 
 **Success criteria:**
