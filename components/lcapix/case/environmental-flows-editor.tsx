@@ -149,19 +149,40 @@ export function EnvironmentalFlowsEditor({
   const [legMassT, setLegMassT] = useState('')
   const [legKm, setLegKm] = useState('')
 
+  // Only the newest load may land (FLOW-6): switching steps quickly used to
+  // show, and let you edit, the previous step's flows when its response came
+  // back last. A failed load says so instead of "No flows yet".
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const loadSeq = useRef(0)
   const loadFlows = useCallback(async () => {
+    const seq = ++loadSeq.current
     setLoading(true)
     try {
       const r = await fetch(`/api/components/${componentId}/flows`, { headers: authHeaders() })
       const d = await r.json().catch(() => ({}))
-      setFlows(Array.isArray(d?.flows) ? d.flows : [])
+      if (seq !== loadSeq.current) return
+      if (!r.ok || !Array.isArray(d?.flows)) {
+        setLoadError(`Could not load this step's flows (${d?.error || `error ${r.status}`}).`)
+        setFlows([])
+        return
+      }
+      setLoadError(null)
+      setFlows(d.flows)
+    } catch {
+      if (seq !== loadSeq.current) return
+      setLoadError("Could not load this step's flows (network error).")
+      setFlows([])
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [componentId])
 
   useEffect(() => {
     loadFlows()
+    // Anything still in flight belongs to a step this editor no longer shows.
+    return () => {
+      loadSeq.current++
+    }
   }, [loadFlows])
 
   const onFlowsChangeRef = useRef(onFlowsChange)
@@ -301,6 +322,25 @@ export function EnvironmentalFlowsEditor({
       .slice(0, 6)
   }, [substances, flows, componentName, componentType])
 
+  /**
+   * Pick a substance for the add form. A transport leg belongs to the
+   * substance it was entered for (TKM-4): switching substance clears the leg,
+   * and the tonne-km it produced, so it cannot carry over onto steel.
+   */
+  const pickSubstance = (s: Substance | null) => {
+    const prev = substances.find((x) => x.substance_id === substanceId)
+    const prevWasLeg =
+      !!prev &&
+      ((prev.unit || '').toLowerCase() === 'tkm' || /transport|freight|haul/i.test(prev.substance_name || ''))
+    if ((s?.substance_id ?? null) !== substanceId) {
+      if (prevWasLeg || legMassT !== '' || legKm !== '') setQty('')
+      setLegMassT('')
+      setLegKm('')
+    }
+    setSubstanceId(s?.substance_id ?? null)
+    if (s?.unit) setUnit(s.unit)
+  }
+
   const resetForm = () => {
     setAdding(false)
     setSearch('')
@@ -316,7 +356,7 @@ export function EnvironmentalFlowsEditor({
   // the user to fill — it's specific to their process and can't be inferred.
   const applySuggestion = (s: { sub: Substance; dir: 'input' | 'output'; unit: string }) => {
     setAdding(true)
-    setSubstanceId(s.sub.substance_id)
+    pickSubstance(s.sub)
     setSearch(s.sub.substance_name)
     setDir(s.dir)
     setUnit(s.unit)
@@ -358,6 +398,8 @@ export function EnvironmentalFlowsEditor({
         const body = await r.json().catch(() => null)
         toast.error(body?.error || 'Could not add flow')
       }
+    } catch {
+      toast.error('Could not add flow (network error). Nothing was saved.')
     } finally {
       setSaving(false)
     }
@@ -396,24 +438,33 @@ export function EnvironmentalFlowsEditor({
         const body = await r.json().catch(() => null)
         toast.error(body?.error || 'Could not update flow')
       }
+    } catch {
+      toast.error('Could not update flow (network error). Nothing was saved.')
     } finally {
       setEditSaving(false)
     }
   }
 
   async function deleteFlow(flowId: number) {
-    const r = await fetch(`/api/flows/${flowId}`, {
-      method: 'DELETE',
-      headers: authHeaders(),
-    })
-    if (r.ok) {
-      toast.success('Flow deleted')
-      await loadFlows()
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('lcapix:components-changed'))
+    const f = flows.find((x) => x.flow_id === flowId)
+    if (!confirm(`Delete the ${f?.substance_name ?? 'flow'} line from this step?`)) return
+    try {
+      const r = await fetch(`/api/flows/${flowId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      })
+      if (r.ok) {
+        toast.success('Flow deleted')
+        await loadFlows()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('lcapix:components-changed'))
+        }
+      } else {
+        const body = await r.json().catch(() => null)
+        toast.error(body?.error || 'Could not delete flow')
       }
-    } else {
-      toast.error('Could not delete flow')
+    } catch {
+      toast.error('Could not delete flow (network error).')
     }
   }
 
@@ -425,10 +476,34 @@ export function EnvironmentalFlowsEditor({
     !!selectedSubstance &&
     ((selectedSubstance.unit || '').toLowerCase() === 'tkm' ||
       /transport|freight|haul/i.test(selectedSubstance.substance_name || ''))
-  const legTkm =
-    legMassT && legKm && !isNaN(Number(legMassT)) && !isNaN(Number(legKm))
-      ? Number(legMassT) * Number(legKm)
-      : null
+  // A leg needs both numbers, each above 0 (TKM-1); t × km, without float
+  // noise (0.1 × 3 is 0.3, not 0.30000000000000004).
+  const legNumber = (v: string) => {
+    const n = v.trim() === '' ? NaN : Number(v)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+  const tkmOf = (massT: string, km: string) => {
+    const t = legNumber(massT)
+    const d = legNumber(km)
+    return t != null && d != null ? Number((t * d).toPrecision(12)) : null
+  }
+  const legTkm = tkmOf(legMassT, legKm)
+  const legInUse = isTransportLeg && (legMassT !== '' || legKm !== '')
+  const legInvalid =
+    legInUse &&
+    ((legMassT !== '' && legNumber(legMassT) == null) || (legKm !== '' && legNumber(legKm) == null))
+  /** Quantity follows the leg while it is used; an unusable leg leaves it empty. */
+  const setLeg = (massT: string, km: string) => {
+    setLegMassT(massT)
+    setLegKm(km)
+    const tkm = tkmOf(massT, km)
+    if (tkm != null) {
+      setQty(String(tkm))
+      setUnit('tkm')
+    } else {
+      setQty('')
+    }
+  }
 
   return (
     <div>
@@ -436,6 +511,18 @@ export function EnvironmentalFlowsEditor({
       {loading ? (
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 0' }}>
           Loading flows…
+        </div>
+      ) : loadError ? (
+        <div role="alert" style={{ fontSize: 12, color: 'var(--signal-error)', padding: '4px 0' }}>
+          {loadError}{' '}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ padding: '0 4px', fontSize: 12 }}
+            onClick={() => loadFlows()}
+          >
+            Try again
+          </button>
         </div>
       ) : flows.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 0' }}>
@@ -779,7 +866,7 @@ export function EnvironmentalFlowsEditor({
               value={selectedSubstance ? selectedSubstance.substance_name : search}
               onChange={(e) => {
                 setSearch(e.target.value)
-                setSubstanceId(null)
+                pickSubstance(null)
               }}
             />
             {!substanceId && (
@@ -803,10 +890,7 @@ export function EnvironmentalFlowsEditor({
                     <button
                       key={s.substance_id}
                       type="button"
-                      onClick={() => {
-                        setSubstanceId(s.substance_id)
-                        if (s.unit) setUnit(s.unit)
-                      }}
+                      onClick={() => pickSubstance(s)}
                       style={{
                         display: 'block',
                         width: '100%',
@@ -879,10 +963,7 @@ export function EnvironmentalFlowsEditor({
                     className="btn btn-ghost btn-sm"
                     style={{ padding: '1px 6px', fontSize: 11 }}
                     title={`Switch to ${v.substance_name}${v.variant_label ? ` (${v.variant_label})` : ''}`}
-                    onClick={() => {
-                      setSubstanceId(v.substance_id)
-                      if (v.unit) setUnit(v.unit)
-                    }}
+                    onClick={() => pickSubstance(v)}
                   >
                     {v.variant_label || v.substance_name}
                   </button>
@@ -1143,13 +1224,9 @@ export function EnvironmentalFlowsEditor({
                   <input
                     className="input"
                     type="number"
+                    min={0}
                     value={legMassT}
-                    onChange={(e) => {
-                      setLegMassT(e.target.value)
-                      const t = Number(e.target.value)
-                      const km = Number(legKm)
-                      if (t && km) { setQty(String(t * km)); setUnit('tkm') }
-                    }}
+                    onChange={(e) => setLeg(e.target.value, legKm)}
                     placeholder="e.g. 1.2"
                   />
                 </div>
@@ -1158,13 +1235,9 @@ export function EnvironmentalFlowsEditor({
                   <input
                     className="input"
                     type="number"
+                    min={0}
                     value={legKm}
-                    onChange={(e) => {
-                      setLegKm(e.target.value)
-                      const km = Number(e.target.value)
-                      const t = Number(legMassT)
-                      if (t && km) { setQty(String(t * km)); setUnit('tkm') }
-                    }}
+                    onChange={(e) => setLeg(legMassT, e.target.value)}
                     placeholder="e.g. 450"
                   />
                 </div>
@@ -1172,6 +1245,11 @@ export function EnvironmentalFlowsEditor({
                   = {legTkm != null ? legTkm.toLocaleString() : '—'} tkm
                 </div>
               </div>
+              {legInvalid && (
+                <div role="alert" style={{ fontSize: 11, color: 'var(--signal-error)', marginTop: 6 }}>
+                  Mass and distance must both be above 0.
+                </div>
+              )}
             </div>
           )}
 
@@ -1201,6 +1279,10 @@ export function EnvironmentalFlowsEditor({
                 type="number"
                 value={qty}
                 onChange={(e) => setQty(e.target.value)}
+                // While the leg is used, quantity IS mass x distance (TKM-2):
+                // a hand-typed tkm would disagree with the stored leg.
+                readOnly={legInUse}
+                title={legInUse ? 'Worked out from the mass and distance above' : undefined}
                 placeholder="0.0"
               />
             </div>
@@ -1228,7 +1310,7 @@ export function EnvironmentalFlowsEditor({
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              disabled={!substanceId || !qty || saving}
+              disabled={!substanceId || !qty || saving || legInvalid}
               onClick={saveFlow}
               style={{ fontSize: 11 }}
             >
