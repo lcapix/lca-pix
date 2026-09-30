@@ -27,7 +27,7 @@
  */
 import { NextResponse } from 'next/server';
 import { checkProjectAccess, type ProjectPermission } from '@/lib/auth';
-import { queryOne } from '@/lib/db-helpers';
+import { query, queryOne } from '@/lib/db-helpers';
 
 // The messages requireAuth has always thrown. Matched as well as the AuthError
 // type so a plain Error with one of them (older code, test mocks) is still 401.
@@ -154,6 +154,22 @@ export async function reachableCasesFilter(
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(alias)) throw new Error(`reachableCasesFilter: bad alias ${alias}`);
   if (!(await casesRestrictedFor(userId, projectId))) return { sql: '', params: [] };
   return { sql: ` AND ${alias}.created_by = ?`, params: [userId] };
+}
+
+/**
+ * The ids among `caseIds` (cases of `projectId`) that `userId` cannot reach:
+ * [] when nothing is hidden from them. For records that name several cases
+ * at once (legacy saved comparisons): hide the record if any id is returned.
+ */
+export async function unreachableCaseIds(userId: number, projectId: number, caseIds: number[]): Promise<number[]> {
+  const ids = [...new Set(caseIds.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (!ids.length || !(await casesRestrictedFor(userId, projectId))) return [];
+  const own = await query<any>(
+    `SELECT case_id FROM case_table WHERE project_id = ? AND created_by = ? AND case_id IN (${ids.map(() => '?').join(',')})`,
+    [projectId, userId, ...ids]
+  );
+  const reachable = new Set(own.map((r: any) => Number(r.case_id)));
+  return ids.filter((id) => !reachable.has(id));
 }
 
 /**

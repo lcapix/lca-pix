@@ -13,6 +13,7 @@ import {
   isAuthError,
   projectAccessDenied,
   reachableCasesFilter,
+  unreachableCaseIds,
 } from '@/lib/route-guard';
 
 vi.mock('@/lib/auth', async (importOriginal) => ({
@@ -211,6 +212,31 @@ describe('list filtering: casesRestrictedFor / reachableCasesFilter', () => {
     caseRow({ createdBy: null, ownOnly: true });
     memberWithRole('editor');
     await expect(reachableCasesFilter(CALLER, 7, 'c; DROP TABLE x')).rejects.toThrow();
+  });
+});
+
+describe('unreachableCaseIds (saved comparisons that name several cases)', () => {
+  it('setting off: nothing is hidden, without asking which cases the caller made', async () => {
+    caseRow({ createdBy: null, ownOnly: false });
+    memberWithRole('editor');
+    expect(await unreachableCaseIds(CALLER, 7, [3, 4])).toEqual([]);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('setting on: the ids an editor did not create', async () => {
+    caseRow({ createdBy: null, ownOnly: true });
+    memberWithRole('editor');
+    vi.mocked(db.query).mockResolvedValue([{ case_id: 3 }] as any);
+    expect(await unreachableCaseIds(CALLER, 7, [3, 4, 4, 9])).toEqual([4, 9]);
+    const [sql, params] = vi.mocked(db.query).mock.calls[0];
+    expect(sql).toMatch(/created_by = \?/);
+    expect(params).toEqual([7, CALLER, 3, 4, 9]);
+  });
+
+  it('setting on: nothing is hidden from an admin', async () => {
+    caseRow({ createdBy: null, ownOnly: true });
+    memberWithRole('admin');
+    expect(await unreachableCaseIds(CALLER, 7, [3, 4])).toEqual([]);
   });
 });
 
