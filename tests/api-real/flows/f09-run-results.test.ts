@@ -69,20 +69,22 @@ describe('F9 run an assessment -> results', () => {
     expect(one.json.results_source).toBe('snapshot');
   });
 
-  // BUG (app/api/cases/[caseId]/assessments/route.ts GET orders by run_date
-  // only; run_date has one-second precision): two runs in the same second come
-  // back oldest first, and the results page, which shows assessments[0] as
-  // "LATEST RUN", shows the older one. The compare route already breaks the
-  // tie with run_id DESC. Low severity.
-  it.fails('lists the newest run first even when two runs share a second', async () => {
+  // BUG (app/api/cases/[caseId]/assessments/route.ts:102 orders by run_date
+  // only; run_date has one-second precision): runs made in the same second
+  // come back in no defined order (oldest first on MySQL 9.6), and the results
+  // page, which shows assessments[0] as "LATEST RUN", can show an older one.
+  // The compare route already breaks the tie with run_id DESC. Low severity.
+  it.fails('lists the newest run first even when runs share a second', async () => {
     const t = w.users.owner.token;
-    const a = await api.post(`/api/cases/${w.P.base.id}/assessments`, { token: t, json: {} });
-    const b = await api.post(`/api/cases/${w.P.base.id}/assessments`, { token: t, json: {} });
-    // Two clicks inside one second: make the tie deterministic.
-    await sql('UPDATE assessment_runs SET run_date = ? WHERE run_id IN (?, ?)', ['2026-09-30 12:00:00', a.json.run_id, b.json.run_id]);
-    await sql('UPDATE assessment_runs SET run_date = ? WHERE case_id = ? AND run_id NOT IN (?, ?)', ['2026-09-30 11:00:00', w.P.base.id, a.json.run_id, b.json.run_id]);
+    const ids: number[] = [];
+    for (let i = 0; i < 5; i++) ids.push((await api.post(`/api/cases/${w.P.base.id}/assessments`, { token: t, json: {} })).json.run_id);
+    // Clicks inside one second: make the tie deterministic, and older runs older.
+    await sql('UPDATE assessment_runs SET run_date = ? WHERE case_id = ?', ['2026-09-30 11:00:00', w.P.base.id]);
+    await sql(`UPDATE assessment_runs SET run_date = ? WHERE run_id IN (${ids.map(() => '?').join(',')})`, ['2026-09-30 12:00:00', ...ids]);
     const list = await api.get(`/api/cases/${w.P.base.id}/assessments`, { token: t });
-    expect(list.json.assessments[0].run_id).toBe(b.json.run_id);
+    // Five tied runs: newest first means run_id descending (an arbitrary
+    // order matches that by chance once in 120 tries).
+    expect(list.json.assessments.slice(0, 5).map((a: any) => a.run_id)).toEqual([...ids].reverse());
   });
 
   it('400 for an unknown method (RUN-6 fixed) and a non-string field; 403 for a viewer', async () => {
