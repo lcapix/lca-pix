@@ -174,10 +174,14 @@ export async function PUT(
 
     // The hand-in flag (migrate-022). Its own statement so a database without
     // the column still saves everything else.
-    // A project has one hand-in (WRITE-1): marking this case clears the flag
-    // on the project's other cases in the same transaction, so a new hand-in
-    // replaces the previous one. The project row is locked first, so two
-    // hand-ins marked at the same moment cannot both stay.
+    // One hand-in per author in a project (WRITE-1): marking this case clears
+    // the flag on the other cases the same author made in the project, in the
+    // same transaction, so a new hand-in replaces their previous one. Other
+    // authors' hand-ins stay (a class project with "members see only their own
+    // cases" holds one per student). Cases made before migrate-032 carry the
+    // owner as author (its backfill); without the column the whole project is
+    // one author. The project row is locked first, so two hand-ins marked at
+    // the same moment cannot both stay.
     if (Object.prototype.hasOwnProperty.call(body, 'is_final')) {
       const final = body.is_final ? 1 : 0;
       try {
@@ -186,10 +190,13 @@ export async function PUT(
             await conn.query('SELECT project_id FROM project WHERE project_id = ? FOR UPDATE', [
               caseData.project_id,
             ]);
+            // SELECT * so a database without created_by still answers.
+            const [[self]]: any = await conn.query('SELECT * FROM case_table WHERE case_id = ?', [caseId]);
+            const byAuthor = self && Object.prototype.hasOwnProperty.call(self, 'created_by');
             await conn.query(
               `UPDATE case_table SET is_final = 0, finalized_at = NULL
-                WHERE project_id = ? AND case_id <> ? AND is_final = 1`,
-              [caseData.project_id, caseId],
+                WHERE project_id = ? AND case_id <> ? AND is_final = 1${byAuthor ? ' AND created_by <=> ?' : ''}`,
+              [caseData.project_id, caseId, ...(byAuthor ? [self.created_by] : [])],
             );
           }
           await conn.query(

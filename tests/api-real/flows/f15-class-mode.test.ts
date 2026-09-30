@@ -5,7 +5,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
-import { sqlOne } from '../support/db';
+import { sql, sqlOne } from '../support/db';
 import { LESSONS } from '@/lib/lessons';
 import { addFlow, addMember, createCase, createComponent, createProject, runAssessment, substanceId } from '../support/world';
 import { createUser, type TestUser } from '../support/users';
@@ -92,9 +92,10 @@ describe('F15 class mode', () => {
     expect(await sqlOne('SELECT is_final, finalized_at FROM case_table WHERE case_id = ?', [caseId])).toEqual({ is_final: 0, finalized_at: null });
   });
 
-  // WRITE-1 (fixed): a project has one hand-in. Marking a case as the hand-in
-  // clears the flag (and finalized_at) on the project's other cases in the
-  // same transaction, so the latest hand-in replaces the previous one.
+  // WRITE-1 (fixed): one hand-in per author in a project. Marking a case as
+  // the hand-in clears the flag (and finalized_at) on the same author's other
+  // cases in the project, in one transaction, so the latest replaces the
+  // previous one.
   it('a second hand-in in the same project replaces the first (WRITE-1)', async () => {
     const second = await createCase(student, pid, 'Second attempt', 'comparative');
     expect((await api.put(`/api/cases/${caseId}`, { token: student.token, json: { is_final: true } })).status).toBe(200);
@@ -103,5 +104,23 @@ describe('F15 class mode', () => {
     expect(Number(finals.n)).toBe(1);
     expect(await sqlOne('SELECT is_final, finalized_at FROM case_table WHERE case_id = ?', [caseId])).toEqual({ is_final: 0, finalized_at: null });
     expect((await sqlOne('SELECT is_final FROM case_table WHERE case_id = ?', [second])).is_final).toBe(1);
+  });
+
+  it("in a shared class project, one student's hand-in never clears another's (WRITE-1 with isolation)", async () => {
+    const [teacher, a, b] = await Promise.all(['f15teacher', 'f15studentA', 'f15studentB'].map((l) => createUser(l)));
+    const cls = await createProject(teacher, `Class ${teacher.id}`);
+    expect((await api.put(`/api/projects/${cls}`, { token: teacher.token, json: { members_see_own_cases: true } })).status).toBe(200);
+    await addMember(teacher, cls, a, 'editor');
+    await addMember(teacher, cls, b, 'editor');
+    const a1 = await createCase(a, cls, 'A first try');
+    const a2 = await createCase(a, cls, 'A second try');
+    const b1 = await createCase(b, cls, 'B only try');
+    const handIn = async (u: TestUser, id: number) =>
+      expect((await api.put(`/api/cases/${id}`, { token: u.token, json: { is_final: true } })).status).toBe(200);
+    await handIn(a, a1);
+    await handIn(b, b1);
+    await handIn(a, a2);
+    const finals = await sql<{ case_id: number }>('SELECT case_id FROM case_table WHERE project_id = ? AND is_final = 1 ORDER BY case_id', [cls]);
+    expect(finals.map((r) => Number(r.case_id))).toEqual([a2, b1]);
   });
 });
