@@ -132,3 +132,46 @@ describe('mapModel', () => {
     expect(plan.review.every((r) => r.startsWith('STRUCTURE:'))).toBe(true)
   })
 })
+
+// ING-1: quantities were rounded to 3 decimals, so anything below 0.0005
+// became exactly 0 and was stored as a zero flow.
+describe('mapModel keeps full precision', () => {
+  const ROW: Record<string, unknown> = {
+    ID: 'TS0001',
+    FY: 2024,
+    PRODUCTS: 'Electroplated parts',
+    PRODLEVEL: 1200000,
+    EC_plant_usage: 2500000,
+    EC_plant_cost: 210000,
+    E2_plant_usage: 4200,
+    W4_plant_usage: 90000,
+  }
+  it.each([0.0004, 0.00012345, 1.23456789])('keeps %s kg as entered', (q) => {
+    const pm = structureItac([ROW], 'TS0001', 'ITAC.xlsx')
+    pm.flows.push({
+      node: 'Electricity consumption FY2024',
+      substance_text: 'Trichloroethylene vapor degreaser',
+      direction: 'input',
+      quantity: q,
+      unit: 'kg',
+    })
+    const plan = mapModel(pm, CATALOG)
+    const flow = plan.flows.find((f) => f.substance_text.includes('Trichloroethylene'))!
+    expect(flow.quantity).toBe(q)
+  })
+
+  it('keeps a converted small quantity instead of rounding it to 0', () => {
+    const pm = structureItac([ROW], 'TS0001', 'ITAC.xlsx')
+    pm.flows.push({
+      node: 'Electricity consumption FY2024',
+      substance_text: 'Trichloroethylene vapor degreaser',
+      direction: 'input',
+      quantity: 0.001,
+      unit: 'lb',
+    })
+    const plan = mapModel(pm, CATALOG)
+    const flow = plan.flows.find((f) => f.substance_text.includes('Trichloroethylene'))!
+    expect(flow.unit).toBe('kg')
+    expect(flow.quantity).toBeCloseTo(0.00045359237, 12)
+  })
+})

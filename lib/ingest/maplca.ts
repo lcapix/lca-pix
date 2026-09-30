@@ -252,7 +252,9 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
       match_score: Math.round(score * 1000) / 1000,
       candidates,
       direction: f.direction,
-      quantity: Math.round(conv.quantity * 1000) / 1000,
+      // Full precision (ING-1): rounding to 3 decimals turned anything below
+      // 0.0005 into a stored zero flow. Display rounding belongs to the UI.
+      quantity: conv.quantity,
       unit: conv.unit,
       conversion_note: conv.note,
       provenance: f.provenance ? `${f.provenance.doc} · ${f.provenance.locator}` : '',
