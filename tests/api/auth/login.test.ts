@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import { POST } from '@/app/api/auth/login/route';
 import * as db from '@/lib/db-helpers';
 import { MemoryRateLimitStore, setRateLimitStore } from '@/lib/rate-limit';
-import { OAUTH_ONLY_PASSWORD_HASH, verifyToken } from '@/lib/auth';
+import { OAUTH_ONLY_PASSWORD_HASH, passwordFingerprint, verifyToken } from '@/lib/auth';
 
 vi.mock('@/lib/db-helpers');
 
@@ -42,6 +42,13 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(verifyToken(body.token)?.id).toBe(11);
+  });
+
+  it('the token carries pv, the fingerprint of the stored password hash (revocation)', async () => {
+    vi.mocked(db.queryOne).mockResolvedValue(user() as any);
+    const res = await POST(req({ email: 'jo@corp.com', password: 'Sup3r-secret' }) as any);
+    const body = await res.json();
+    expect(verifyToken(body.token)?.pv).toBe(passwordFingerprint(HASH));
   });
 
   it('unknown email: uniform 401 after a real bcrypt compare', async () => {

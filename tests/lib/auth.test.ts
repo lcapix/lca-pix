@@ -19,7 +19,7 @@ const SECRET = process.env.JWT_SECRET as string;
 
 describe('verifyToken (I4: algorithm pinned to HS256)', () => {
   it('accepts a token the app signed', () => {
-    const t = createToken({ id: 7, email: 'a@b.co' });
+    const t = createToken({ id: 7, email: 'a@b.co' }, OAUTH_ONLY_PASSWORD_HASH);
     expect(verifyToken(t)?.id).toBe(7);
     expect(jwt.decode(t, { complete: true })?.header.alg).toBe('HS256');
   });

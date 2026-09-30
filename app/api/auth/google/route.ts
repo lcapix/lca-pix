@@ -201,11 +201,10 @@ export async function GET(request: NextRequest) {
     const needsOnboarding = !user.onboarded_at || !user.company;
     const nextPath = needsOnboarding ? '/auth/onboarding' : '/home';
 
-    const token = createToken({
-      id: user.id,
-      email: user.email,
-      account_type: user.account_type,
-    });
+    const token = createToken(
+      { id: user.id, email: user.email, account_type: user.account_type },
+      user.password_hash
+    );
 
     const callbackUrl = new URL('/auth/callback', request.url);
     callbackUrl.searchParams.set('next', nextPath);

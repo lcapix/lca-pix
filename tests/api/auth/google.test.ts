@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server';
 import bcrypt from 'bcrypt';
 import { GET } from '@/app/api/auth/google/route';
 import * as db from '@/lib/db-helpers';
-import { OAUTH_ONLY_PASSWORD_HASH, verifyToken } from '@/lib/auth';
+import { OAUTH_ONLY_PASSWORD_HASH, passwordFingerprint, verifyToken } from '@/lib/auth';
 
 vi.mock('@/lib/db-helpers');
 
@@ -206,6 +206,7 @@ describe('GET /api/auth/google', () => {
       expect(loc.searchParams.get('next')).toBe('/home');
       const c = cookies(res);
       expect(verifyToken(c.auth_token.value)?.id).toBe(3);
+      expect(verifyToken(c.auth_token.value)?.pv).toBe(passwordFingerprint(OAUTH_ONLY_PASSWORD_HASH));
       expect(c.auth_token.attrs).toContain('httponly');
       expect(c.auth_token.attrs).toContain('max-age=120');
       expect(c.auth_token.attrs).toContain('path=/');
