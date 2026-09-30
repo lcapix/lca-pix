@@ -175,6 +175,45 @@ The `db-tests` job in `.github/workflows/deploy.yml` runs on pull requests only:
 
 The job is not a dependency of `deploy`. To make it block merges, mark it required in branch protection.
 
+## API suite (`pnpm test:api`)
+
+`pnpm test:api` (`vitest.api.config.ts`) runs `tests/api-real/**`: the API, authorization and security tests against a real database. It reuses this suite's global setup, so it builds a fresh `lcapix_t_*` database the same way, runs every file one at a time against it, and drops it pass or fail. It takes about 40 s locally.
+
+- **No server.** A test imports a route module and calls its exported handler with a `NextRequest` (headers, JSON or multipart body, cookies, client IP) and a `params` Promise, the way Next calls it. `tests/api-real/support/api.ts` finds the route file for a concrete URL the way the App Router does.
+- **Only outbound network is mocked.** `support/outbound.ts` replaces `fetch` with fixtures for BLS, EIA, Metals-API, Electricity Maps, PubChem, Google (token, userinfo) and the Hugging Face router (an SSE stream that starts with role-only, reasoning-only and keep-alive events). A request to any other host fails the test that made it. `security/error-leaks.test.ts` is the one file that also wraps `@/lib/db-helpers`, to force database errors.
+- **Accounts are real.** `support/users.ts` signs up through `POST /api/auth/signup`, so tokens carry `pv`. SQL (throwaway database only) makes a platform admin, deactivates an account or changes a password hash. `support/world.ts` builds the standard world of TEST_PLAN §2.3 through the API.
+- **Every error body is scanned.** `support/http.ts` fails the test when a 4xx/5xx body contains an SQL error code or keyword, the word mysql, a stack frame, a source path with a line number or an RDS host.
+- **Limits.** A fresh in-memory rate-limit store before each test; `RATE_LIMIT_STORE=memory`; no upstream API keys unless a test sets one.
+
+| Folder | What |
+|---|---|
+| `authz/matrix.test.ts` | Generated from `docs/flows/flows.yaml` `permissions:`: 69 rows × 7 roles, plus a deactivated account, a revoked token and a wrong-secret token on every signed-in row (673 cells). A 404 for a non-member must be byte-identical to the missing-id 404; a refused write must leave every writable table's `CHECKSUM` unchanged. |
+| `authz/route-coverage.test.ts` | Every exported handler in `app/api/**/route.ts` has a row, and every row a handler. |
+| `authz/cross-tenant.test.ts` | Every id-bearing row replayed with the other tenant's ids (404, no names, no writes), and body-borne ids: parent step, substance, source case, attach step, run override, legacy case ids, document and member ids. |
+| `flows/f01…f19` | USER_FLOWS F1–F19 at the API level, in the order the UI calls the routes. F19 (the tour) is client-only; its file checks the reads behind the tour's pages. |
+| `security/*` | JWT refusal, Google OAuth, login enumeration, rate limits, upload size and type, CSV formula injection, SQL-injection fuzz over every path and query parameter, mass assignment, oversized and malformed input, error leakage, logout cookies, security headers. |
+
+Known bugs are tests too: each is an `it.fails` whose comment names the bug and the file and line that cause it, so the suite goes red when a fix lands and the marker must flip. To see why each one fails today, turn them into plain tests for one run: `grep -rl "it.fails(" tests/api-real | xargs sed -i '' 's/it\.fails(/it(/'`, run `pnpm test:api`, then `git checkout -- tests/api-real`.
+
+Known bugs at `2009f63` (38 `it.fails`):
+
+| Bug | Severity | Test | Cause |
+|---|---|---|---|
+| Ingest apply writes another user's private `substance_id` into the caller's case (L3, ingest twin of FLOW-5); the name then shows in the case's flows | Medium | `authz/cross-tenant.test.ts` › ingest/apply | `app/api/ingest/apply/route.ts:169` and `:301` read substances with no `is_custom = 0 OR created_by = ?` scope |
+| Ingest preview offers other users' private substances as matches and candidates (ING-9, L3) | Medium | `authz/cross-tenant.test.ts` › ingest/preview | `app/api/ingest/preview/route.ts:285-294` builds the match catalog from every substance |
+| Run creation returns `details: error.message` on a 500 (L1) | Medium | `security/error-leaks.test.ts` › R23 | `app/api/cases/[caseId]/assessments/route.ts:525` (and `:462` for engine failures) |
+| Strings longer than their column answer 500 (or a misleading 409 "needs migrate-014") instead of 400: project name/description, functional unit, case name, reference flow unit, duplicate and import case names, component unit/process type/description, flow driver description, profile fields (PROF-1), ingest node names | Medium | `security/oversized-input.test.ts` (16 rows), `flows/f18-profile.test.ts`, `flows/f13-import.test.ts` | no length check before the write; each row names its line |
+| Malformed JSON answers 500 instead of 400 on 11 write routes | Low | `security/oversized-input.test.ts` › malformed JSON (11 rows) | an unguarded `await request.json()` inside the route's try; each row names its line |
+| A cost, quantity or scale target larger than its DECIMAL column, or a non-finite scale target (1e309 → Infinity), answers 500 | Low | `flows/f08-costs.test.ts`, `security/oversized-input.test.ts` › numbers | `lib/component-fields.ts:32-37` accepts any finite number; `app/api/cases/[caseId]/scale/route.ts:46-47` checks only `> 0` |
+| Replaying a scale request scales the inventory again (COST-7) | Low | `flows/f08-costs.test.ts` › COST-7 | `app/api/cases/[caseId]/scale/route.ts:53` uses the client's from/to, not the stored quantity |
+| Two cases in one project can both be the hand-in (WRITE-1) | Low | `flows/f15-class-mode.test.ts` › WRITE-1 | `app/api/cases/[caseId]/route.ts:139-147` sets `is_final` on one case only |
+| Runs made in the same second are listed in no defined order, so "latest run" can be an older one | Low | `flows/f09-run-results.test.ts` | `app/api/cases/[caseId]/assessments/route.ts:102` orders by `run_date` only |
+| The worked example always skips its argon flow | Low | `flows/f04-project-example.test.ts` › argon | `lib/example-case.ts:89` names "Argon", which no migration seeds |
+
+Fixed on this branch, each with its own test: the export route's `details: error.message` on a 500 (`security/error-leaks.test.ts` › R42), `lib/integrations/admin-guard.ts` mapping auth failures with `isAuthError` (`tests/integrations/admin-guard.test.ts`), the stale `RATE_LIMITS` comment (`tests/lib/rate-limit-wiring.test.ts`), and the class page offering the Admin role to non-owners (`tests/app/class-page.test.tsx`).
+
+Useful switches: `API_TESTS_VERBOSE=1` keeps the routes' console output; `DB_TESTS_KEEP=1` keeps the database. CI runs the suite in the `api-tests` job (pull requests, MySQL 8.0), next to `db-tests`.
+
 ## Differences from TEST_PLAN §4
 
 - Databases are named `lcapix_t_*`, not `lca_test_*`.

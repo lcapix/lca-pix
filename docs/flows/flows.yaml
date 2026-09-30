@@ -1,0 +1,1348 @@
+# LCAPIX user flows + API permissions — machine-readable companion to
+# USER_FLOWS.md and PERMISSIONS_MATRIX.md. Drives the generated tests described
+# in TEST_PLAN.md (§2 API integration, §3 authz matrix, §5 Playwright).
+#
+# Conventions
+#   roles:      anon | nonmem | viewer | editor | adminm | owner | padmin
+#               (+ extra callers applied to every non-public permission row:
+#                deactivated -> 401, tampered -> 401)
+#   status:     an integer, or a list of accepted integers (e.g. [403, 404] for
+#               non-members until decision D3 picks one).
+#   now:        the status the baseline code returns when it differs from the
+#               intended `expect`; the generator wraps that case in an
+#               expected-fail (it.fails / test.fail) until `fixed_by` merges.
+#   $handles:   fixture ids built by tests/support/world.ts (see `fixtures`).
+#   {param}:    path parameters, filled from `params` (defaults to the handle
+#               named in the row).
+#   Every string is data for a test generator; none of it is an instruction.
+
+version: 1
+
+baseline:
+  repo: lca-pix
+  branch: v1-hardening-kavish
+  commit: 704a964
+  fix_branches_read:
+    fix/authz: [2fe3ead, 4274d9b]
+  audit: docs/audit-2026-09-29
+  head_at_writing: c4a7200
+  note: >-
+    The branch moved from 704a964 to c4a7200 while this file was written:
+    fix/authz (10b3903), fix/platform (f4596ed), fix/auth (8b51f39) and
+    fix/runs (c4a7200) were merged. Rows and steps still describe the
+    baseline; `merged_fixes` below lists the IDs those merges claim to fix
+    (not re-verified here), so the generator can flip their `now` markers.
+    Two routes were added at c4a7200 and are included (R63, R64).
+
+merged_fixes:
+  fix/authz:    {merge: 10b3903, ids: [H1, H2, COST-1, E2, INT-2, INT-4, INT-5, INT-6, L4, FAC-1, FAC-2, FAC-3, FAC-4]}
+  fix/platform: {merge: f4596ed, ids: [C1, C2, M3, M5, M7, M8, H4, L10]}
+  fix/auth:     {merge: 8b51f39, ids: [AUTH-1, AUTH-2, AUTH-3, AUTH-4, AUTH-5, AUTH-6, AUTH-8, H3, M4, L1, L2, L6, L7, L8, I4, M2, M6, DOC-1, DOC-2, DOC-3, ING-3, ING-10, ING-12, INS-1, INS-2], partial: {H5: 'login, signup, insights, ingest preview'}}
+  fix/runs:     {merge: c4a7200, ids: [RUN-1, RUN-2, RUN-3, RUN-4, RUN-5, RUN-6, STAGE-2, EXP-1, EXP-2, EXP-3, EXP-4, RES-1, RES-2, RES-4, RES-5, RES-6, INS-5, ANA-1, ING-1]}
+  later:        'fix/editor, fix/factors, fix/int-auth (pv revocation, Google takeover, 404 policy, 401 mapping), fix/int-client, fix/int-routes (cost lookups reopened with limits, run and PubChem limits, compare on frozen results, 404 policy everywhere) are merged at 2009f63'
+  permissions_verified: '2026-09-30 at 2009f63 by tests/api-real/authz/matrix.test.ts (pnpm test:api); see the PERMISSIONS header below'
+
+environment:
+  app_base_url: http://localhost:3002
+  db:
+    host: 127.0.0.1
+    port: 3307
+    name_pattern: '^lca_test(_\w+)?$'
+    forbidden_users: [lcaadmin]
+  forbidden_hosts:
+    - lca-pix.vercel.app
+    - lcapix.vercel.app
+    - lca-project-v3.vercel.app
+    - '*.rds.amazonaws.com'
+  test_env:
+    JWT_SECRET: test-secret-do-not-use-in-prod
+    NEXT_PUBLIC_APP_URL: http://localhost:3002
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: test-client
+    GOOGLE_CLIENT_SECRET: test-secret
+    unset: [HF_TOKEN, EIA_API_KEY, BLS_API_KEY, METALS_API_KEY, ELECTRICITY_MAPS_API_KEY]
+  client_quirks:
+    - 'apiRequest appends ?_t=<ms> to every URL: match responses on pathname'
+    - 'AuthGuard reads only the Zustand key lcapix-auth; storageState must set it plus localStorage auth_token and user'
+    - 'No <Toaster/> is mounted (X-UI-1): never assert toast text'
+
+roles:
+  anon:        {desc: 'no Authorization header'}
+  nonmem:      {desc: 'signed-in user, no membership on the target project', fixture: nonmem}
+  viewer:      {desc: 'project_members permission viewer', fixture: viewer}
+  editor:      {desc: 'project_members permission editor', fixture: editor}
+  adminm:      {desc: 'project_members permission admin (project-level)', fixture: adminm}
+  owner:       {desc: 'project.owner_id', fixture: owner}
+  padmin:      {desc: "account.account_type='admin', not a member of the target project", fixture: padmin}
+  deactivated: {desc: 'valid JWT, account.is_active=0', fixture: deactivated}
+  tampered:    {desc: 'JWT with wrong secret, expired, or alg none'}
+
+fixtures:
+  builder: tests/support/world.ts
+  users:
+    owner:       {email: 'owner+{run}@lcapix.test',  fullName: 'Olivia Owner',  company: 'LCAPIX Test'}
+    editor:      {email: 'editor+{run}@lcapix.test', fullName: 'Eddie Editor',  company: 'LCAPIX Test'}
+    viewer:      {email: 'viewer+{run}@lcapix.test', fullName: 'Vera Viewer',   company: 'LCAPIX Test'}
+    adminm:      {email: 'adminm+{run}@lcapix.test', fullName: 'Ada Admin',     company: 'LCAPIX Test'}
+    nonmem:      {email: 'nonmem+{run}@lcapix.test', fullName: 'Nora Nonmember', company: 'LCAPIX Test'}
+    userB:       {email: 'userb+{run}@lcapix.test',  fullName: 'Bea Tenant',    company: 'Other Co'}
+    padmin:      {email: 'padmin+{run}@lcapix.test', fullName: 'Pat Platform',  company: 'LCAPIX Test', sql: "UPDATE account SET account_type='admin' WHERE email=?"}
+    deactivated: {email: 'dee+{run}@lcapix.test',    fullName: 'Dee Activated', company: 'LCAPIX Test', sql: 'UPDATE account SET is_active=0 WHERE email=? (after minting its token)'}
+    password: 'generated per run; stored only in memory / .env.test.local'
+  handles:
+    $P: {what: 'project "E2E Coffee Mug LCA" owned by owner; members editor/viewer/adminm', put: {functional_unit: '1 ceramic mug (350 ml), at the factory gate', system_boundary: cradle-to-gate, lcia_method: 'CML 2001', region_code: US}}
+    $P.base: {what: 'base case "Standard Production"'}
+    $P.base.product: {what: 'component product "Ceramic Coffee Mug (350ml)"'}
+    $P.base.machine: {what: 'component machine_line "Forming Line"'}
+    $P.base.subprocess: {what: 'component subprocess "Slip Casting"'}
+    $P.base.op: {what: 'component operation "Mold Filling" (flow: Natural Gas 1.8 m3 input)'}
+    $P.base.task: {what: 'component elemental_task "Mold Cleaning" (flow: Electricity 2.5 kWh input)'}
+    $P.base.flow: {what: 'the Electricity flow on Mold Cleaning'}
+    $P.base.run: {what: "completed run, calculation_method 'CML 2001', region_code 'US'"}
+    $P.comp: {what: 'comparative case "Recycled Clay Variant" (duplicate of base; Electricity 1.6, Natural Gas 1.1) with one run'}
+    $P.empty: {what: 'fresh empty comparative case in $P (created per test that needs it)'}
+    $Q: {what: 'userB project with one case, one component, one flow'}
+    $Q.case: {}
+    $Q.component: {}
+    $Q.substance: {what: 'userB private custom substance "Bamboo fibre (B)"'}
+    $legacy.comparison: {what: 'comparison_runs row in $P created by owner via SQL (legacy feature; no working API creates one)'}
+    $substance.electricity: {lookup: "SELECT substance_id FROM substances WHERE substance_name='Electricity'"}
+    $substance.natural_gas: {lookup: "SELECT substance_id FROM substances WHERE substance_name='Natural Gas'"}
+    $substance.steel: {lookup: "SELECT substance_id FROM substances WHERE substance_name='Steel'"}
+  sample_expectations:
+    source: docs/SAMPLE_CASE.md (production numbers; recompute locally, do not hard-code)
+    base_gwp_kg_co2e: 6.09
+    comp_gwp_kg_co2e: 3.75
+    delta_pct: -38.4
+
+# ---------------------------------------------------------------------------
+# FLOWS
+# ---------------------------------------------------------------------------
+flows:
+
+  - id: F1
+    title: Sign up -> onboarding -> home
+    actor: anon
+    e2e: true
+    preconditions: ['email not registered', 'empty localStorage']
+    steps:
+      - id: F1.1
+        route: /auth/signup
+        action: 'fill #fullName, #email, #password'
+        api: []
+        no_api_reason: form entry
+        expects:
+          ui: 'button "Create account" disabled until email and password are filled; client messages: "Email is required", "Please enter a valid email address", "Password must be at least 8 characters long", "Password must contain at least one number"'
+      - id: F1.2
+        route: /auth/signup
+        action: 'click button "Create account"'
+        api:
+          - method: POST
+            path: /api/auth/signup
+            body: {username: '$user.fullName', email: '$user.email', password: '$user.password'}
+            matrix: R01
+            roles_allowed: [anon, nonmem, viewer, editor, adminm, owner, padmin]
+            roles_denied: []
+        db: {read: [account], write: [account]}
+        expects:
+          status: 201
+          body: {success: true, user: {account_type: user}, token: '<jwt>'}
+          ui: 'localStorage.auth_token and user set; lcapix-auth.isAuthenticated true; URL /auth/onboarding'
+        failures:
+          - {when: 'email already registered', status: 400, ui: '[role=alert] "Email already registered"', bug: L2}
+          - {when: 'another account used the same typed full name', status: 400, ui: '[role=alert] "Username already taken"', bug: AUTH-4}
+          - {when: 'password shorter than 8', status: 400}
+          - {when: 'more than 3 signups per hour from one IP (target)', status: 429, bug: H5, fixed_by: fix/platform}
+        known_bugs: [AUTH-4, AUTH-8, L2, H5]
+      - id: F1.3
+        route: /auth/onboarding
+        action: page load
+        api:
+          - {method: GET, path: /api/auth/profile, matrix: R05, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [account]}
+        expects:
+          status: 200
+          body: {profile: {needsOnboarding: true}}
+          ui: 'h1 "Tell us a little about you."; Full name prefilled with the store name (= username)'
+        known_bugs: [AUTH-7]
+      - id: F1.4
+        route: /auth/onboarding
+        action: 'fill Full name*, Company / organization*, optional Role, Primary use case, Country; click "Continue to dashboard"'
+        api:
+          - method: PUT
+            path: /api/auth/profile
+            body: {fullName: '$user.fullName', company: '$user.company', role: 'Sustainability analyst', useCase: product, country: 'United States'}
+            matrix: R06
+            roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin]
+            roles_denied: [anon]
+        db: {write: [account]}
+        expects:
+          status: 200
+          db_after: 'account.full_name, company set; onboarded_at NOT NULL'
+          ui: 'URL /home'
+        failures:
+          - {when: 'fullName or company empty', status: 400, ui: 'inline "Required."'}
+          - {when: 'useCase not in product/facility/comparative/research/other', status: 400}
+        known_bugs: [X-UI-1, AUTH-7]
+      - id: F1.5
+        route: /home
+        action: page load
+        api:
+          - {method: GET, path: /api/auth/profile, matrix: R05, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+          - {method: GET, path: /api/projects, matrix: R07, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+          - {method: GET, path: /api/integrations/status, matrix: R54, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [account, project, project_members, permissions, case_table, component, substances, driver_impact_factors, cost_rates, integration_log]}
+        expects:
+          status: 200
+          ui: '[data-tour=home-greeting] "Welcome back, <first name>."; tiles PROJECTS, CASES, FACTORS, SUBSTANCES; empty state "Start your first assessment." with buttons "Create your first project" and "Open the worked example"'
+
+  - id: F2
+    title: Log in / log out (email)
+    actor: owner
+    e2e: false
+    preconditions: ['account exists and is active']
+    steps:
+      - id: F2.1
+        route: /auth/login
+        action: 'fill #email, #password; click "Log in"'
+        api:
+          - {method: POST, path: /api/auth/login, body: {email: '$user.email', password: '$user.password'}, matrix: R02, roles_allowed: [anon, nonmem, viewer, editor, adminm, owner, padmin], roles_denied: []}
+        db: {read: [account]}
+        expects: {status: 200, body: {success: true, token: '<jwt>'}, ui: 'URL /home'}
+        failures:
+          - {when: 'wrong password or unknown email', status: 401, ui: '[role=alert] "Invalid email or password"'}
+          - {when: 'inactive account, wrong password', status: 401, ui: 'generic "Invalid email or password"', bug: AUTH-6, fixed_by: fix/auth}
+          - {when: 'inactive account, correct password', status: 403, ui: '"Account is inactive. Please contact support."', now: '401 returned before the password check', bug: AUTH-6, fixed_by: fix/auth}
+          - {when: '6th attempt within a minute for one IP+email (target)', status: 429, bug: H5, fixed_by: fix/platform}
+          - {when: 'URL /auth/login?error=%25', ui: 'page must not crash', bug: AUTH-8}
+        known_bugs: [AUTH-6, AUTH-8, L2, L8, H5]
+      - id: F2.3
+        route: '/home (any app page)'
+        action: 'token expires or account deactivated'
+        api:
+          - {method: GET, path: /api/projects, caller: deactivated, matrix: R07}
+        expects: {status: 401, ui: 'redirect /auth/login?error=session_expired; localStorage auth_token removed'}
+        known_bugs: [AUTH-5, X-API-2]
+      - id: F2.4
+        route: 'top bar "Account menu" -> "Log out"'
+        action: click
+        api:
+          - {method: POST, path: /api/auth/logout, matrix: R63, roles_allowed: [anon, nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [], exists_since: c4a7200}
+        baseline_note: 'no logout route at 704a964; the top bar cleared localStorage only (M4)'
+        db: {}
+        expects_api: {status: 200, set_cookie: 'auth_token and user_data with Max-Age=0'}
+        expects:
+          ui: 'URL /auth/login; localStorage auth_token and user removed; lcapix-auth logged out'
+          target_ui: 'cookies auth_token/user_data expired; lcapix-projects cleared; visiting /auth/callback afterwards does not sign in'
+        known_bugs: [M4, AUTH-3, AUTH-5]
+      - id: F2.5
+        route: /home
+        action: navigate after logout
+        api: []
+        no_api_reason: client-side AuthGuard
+        expects: {ui: 'redirect to /auth/login (no next param)'}
+
+  - id: F3
+    title: Google sign-in (target behaviour)
+    actor: anon
+    e2e: false
+    preconditions: ['Google endpoints mocked (TEST_PLAN §7)']
+    target_branch: fix/auth
+    steps:
+      - id: F3.1
+        route: '/auth/login -> button "Continue with Google"'
+        action: click
+        api:
+          - {method: GET, path: /api/auth/google, matrix: R03, roles_allowed: [anon, nonmem, viewer, editor, adminm, owner, padmin], roles_denied: []}
+        expects:
+          status: 302
+          location_prefix: 'https://accounts.google.com/o/oauth2/v2/auth'
+          location_params_required: [client_id, redirect_uri, response_type, scope, state]
+          location_params_forbidden: [access_type, prompt]
+          set_cookie: 'oauth state cookie: HttpOnly; SameSite=Lax; short Max-Age'
+          now: 'no state param and no state cookie; access_type=offline and prompt=consent present'
+        failures:
+          - {when: 'client id or app URL not configured', status: 302, location: '/auth/login?error=google_not_configured'}
+        known_bugs: [AUTH-1]
+      - id: F3.3
+        route: /api/auth/google?code&state
+        action: 'Google redirects back'
+        api:
+          - {method: GET, path: '/api/auth/google?code=test-code&state={state}', matrix: R03b, roles_allowed: [anon], roles_denied: []}
+        outbound_mocked: ['POST oauth2.googleapis.com/token', 'GET www.googleapis.com/oauth2/v2/userinfo']
+        db: {read: [account], write: [account]}
+        expects:
+          status: 302
+          location: '/auth/callback?next=/auth/onboarding (new or not onboarded) | /auth/callback?next=/home'
+          set_cookie: 'session cookie HttpOnly (target, AUTH-3); state cookie cleared'
+        cases:
+          - {when: 'state missing or mismatched', status: 302, location: '/auth/login?error=oauth_state_mismatch', session_cookie: none, now: 'accepted', bug: AUTH-1}
+          - {when: 'userinfo verified_email false', status: 302, location: '/auth/login?error=google_email_unverified', now: 'linked/created', bug: AUTH-2}
+          - {when: 'email matches an existing password account', status: 302, location: '/auth/login?error=use_password_login', expect: 'never linked silently', now: 'signed into that account', bug: H3}
+          - {when: 'email matches an inactive Google account', status: 302, location: '/auth/login?error=account_inactive', now: 'token issued', bug: AUTH-8}
+          - {when: 'second user with same email local-part, different domain', expect: 'unique username derived; no 500', now: 'redirect error=server_error', bug: AUTH-4}
+          - {when: 'Google returns ?error=access_denied', status: 302, location: '/auth/login?error=google_cancelled', now: 'error=access_denied'}
+          - {when: 'token exchange fails', status: 302, location: '/auth/login?error=oauth_failed'}
+          - {when: 'userinfo fails', status: 302, location: '/auth/login?error=userinfo_failed'}
+        known_bugs: [AUTH-1, AUTH-2, AUTH-3, AUTH-4, AUTH-8, H3]
+      - id: F3.4
+        route: /auth/callback
+        action: page load
+        api:
+          - {method: POST, path: /api/auth/google/session, matrix: R64, roles_allowed: ['anon with hand-off cookie'], roles_denied: ['any caller without the cookie', 'cross-site'], exists_since: c4a7200}
+        baseline_note: 'at 704a964 the page read JS-readable auth_token/user_data cookies (7 days) and never cleared them'
+        expects:
+          status: 200
+          body: {success: true, token: '<jwt>', user: '<user>'}
+          set_cookie: 'auth_token cleared (Max-Age=0); a second call returns 401'
+          ui: 'router.replace(next) where next is in [/home, /auth/onboarding], anything else -> /home; failure -> /auth/login?error=oauth_sync_failed'
+        known_bugs: [M4, AUTH-3]
+
+  - id: F4
+    title: Create project (method, region, FU) and worked example
+    actor: owner
+    e2e: true
+    preconditions: ['signed in and onboarded']
+    steps:
+      - id: F4.1
+        route: /home
+        action: 'click [data-tour=home-new-project] ("New project") or "Create your first project"'
+        api: []
+        no_api_reason: navigation
+        expects: {ui: 'URL /project/new; h1 "Define an assessment."'}
+      - id: F4.2
+        route: /project/new
+        action: 'fill #projectName, #projectDescription, #functionalUnit; select #boundary, #methodology, #region'
+        api: []
+        no_api_reason: form entry
+        inputs:
+          projectName: 'E2E Coffee Mug LCA {run}'
+          projectDescription: '350ml ceramic coffee mug, end-to-end test'
+          functionalUnit: '1 ceramic mug (350 ml), at the factory gate'
+          boundary: cradle-to-gate
+          methodology: 'CML 2001'
+          region: US
+        expects: {ui: 'button "Create Project" enabled only when the name is not blank'}
+      - id: F4.3
+        route: /project/new
+        action: 'click "Create Project"'
+        api:
+          - method: POST
+            path: /api/projects
+            body: {project_name: '$inputs.projectName', description: '$inputs.projectDescription'}
+            matrix: R08
+            roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin]
+            roles_denied: [anon]
+          - method: PUT
+            path: '/api/projects/{projectId}'
+            params: {projectId: '$created.project_id'}
+            body: {functional_unit: '$inputs.functionalUnit', system_boundary: cradle-to-gate, goal_statement: '$inputs.projectDescription', lcia_method: 'CML 2001', region_code: US}
+            matrix: R10
+            roles_allowed: [adminm, owner]
+            roles_denied: [anon, nonmem, viewer, editor, padmin]
+        db: {read: [project, permissions], write: [project, project_members]}
+        expects:
+          status: [201, 200]
+          db_after: "project row with owner_id=me, lcia_method 'CML 2001', region_code 'US', functional_unit set; one project_members row with permission owner"
+          ui: 'URL /project/{id}/start; h1 "How do you want to start?"'
+        failures:
+          - {when: 'same owner already has the name (case-insensitive)', status: 409, ui: 'inline [role=alert] under the name'}
+          - {when: 'PUT fails (e.g. 403/409)', expect: 'error surfaced, user stays on the form', now: 'swallowed; project runs as CML/Global', bug: PROJ-3}
+        known_bugs: [PROJ-2, PROJ-3]
+      - id: F4.5
+        route: /project/{id}/start
+        action: 'click "Start an empty case"'
+        api:
+          - {method: POST, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, body: {case_name: 'Base case', case_type: base, description: 'Built by hand'}, matrix: R13, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [case_table]}
+        expects: {status: 201, ui: 'URL /project/{id}/case/{caseId}?learn=1; lesson rail and Reference pane open'}
+        failures:
+          - {when: 'case name exists in project', status: 409, ui: 'toast + navigate to /project/{id}'}
+      - id: F4.6
+        route: /project/{id}
+        action: page load
+        api:
+          - {method: GET, path: '/api/projects/{projectId}', matrix: R09, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+          - {method: GET, path: '/api/projects/{projectId}/cases', matrix: R12, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        db: {read: [project, project_members, case_table, component, flows, assessment_runs]}
+        expects:
+          status: 200
+          ui: 'h1[data-tour=project-header]; buttons Analytics, Compare Cases (disabled < 2 cases), Class, Import Data, Add Case [data-tour=project-add-case], Delete; Open editor [data-tour=project-open-editor]'
+        known_bugs: [PROJ-4, PROJ-5, PROJ-6]
+      - id: F4b.1
+        route: /home
+        precondition: 'user has 0 projects'
+        action: 'click "Open the worked example"'
+        api:
+          - {method: POST, path: /api/example-project, matrix: R50b, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [project, substances], write: [project, case_table, component, flows]}
+        expects:
+          status: 200
+          body: {success: true, project_id: '<id>', case_id: '<id>'}
+          db_after: "project 'Example: painted steel bracket' lcia_method 'TRACI 2.1' region_code 'US'; project.functional_unit = '1 painted steel bracket, at the factory gate'; case reference_flow 1"
+          ui: 'URL /project/{id}'
+          now: 'project.functional_unit NULL (written to case_table, error swallowed) -> Run disabled'
+        failures:
+          - {when: 'called again', status: 200, body: {existed: true}}
+        known_bugs: [PROJ-1, PROJ-2]
+      - id: F4b.2
+        route: /project/{id}/case/{caseId}
+        action: 'open the example case'
+        api: []
+        no_api_reason: see F5/F9
+        expects: {ui: 'button "Run Assessment" enabled', now: 'disabled, title "Set the functional unit (Goal & scope) before running"'}
+        known_bugs: [PROJ-1]
+
+  - id: F5
+    title: Goal & scope (ISO phase 1)
+    actor: owner
+    e2e: true
+    preconditions: ['$P with a base case', 'migrations 014 and 018 applied']
+    steps:
+      - id: F5.1
+        route: /project/{id}/case/{caseId}
+        action: 'page load; card [data-tour=case-goal-scope]'
+        api:
+          - {method: GET, path: '/api/projects/{projectId}', matrix: R09}
+          - {method: GET, path: '/api/cases/{caseId}', matrix: R19, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        db: {read: [project, case_table]}
+        expects: {status: 200, ui: 'collapsed summary or red "Functional unit not set: needed before a run"; toggle "Set it"/"Edit"/"Close"'}
+      - id: F5.3
+        route: /project/{id}/case/{caseId}
+        action: 'click "Set it"; fill Functional unit, System boundary, Reference flow (+unit), Data basis, Goal, Exclusions & cut-off; click "Save"'
+        api:
+          - method: PUT
+            path: '/api/projects/{projectId}'
+            body: {functional_unit: '1 ceramic mug (350 ml), at the factory gate', system_boundary: cradle-to-gate, goal_statement: 'Compare clay sources', boundary_notes: 'Packaging excluded'}
+            matrix: R10
+            roles_allowed: [adminm, owner]
+            roles_denied: [anon, nonmem, viewer, editor, padmin]
+          - method: PUT
+            path: '/api/cases/{caseId}'
+            body: {reference_flow: 1, reference_flow_unit: mug, modeled_output: 1}
+            matrix: R20
+            roles_allowed: [editor, adminm, owner]
+            roles_denied: [anon, nonmem, viewer, padmin]
+        db: {write: [project, case_table, component]}
+        expects:
+          status: [200, 200]
+          db_after: 'project goal fields saved; case reference_flow and modeled_output saved; root product component.quantity = modeled_output'
+          ui: 'card collapses; summary shows the FU'
+        failures:
+          - {when: 'caller is editor', expect: 'project PUT 403, case PUT 200 (partial save); UI message says "Only the project owner…"', note: 'decide whether editors may set the FU'}
+          - {when: 'reference_flow or modeled_output <= 0', status: 400, ui: 'client "Reference flow and data basis must be numbers above 0."'}
+          - {when: 'system_boundary not one of the three', status: 400}
+          - {when: 'migration 014 missing', status: 409}
+        known_bugs: [EDIT-8, GS-2]
+      - id: F5.4
+        route: /project/{id}/case/{caseId}
+        action: 'observe button "Run Assessment"'
+        api:
+          - {method: GET, path: '/api/cases/{caseId}/completeness', matrix: R25, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        db: {read: [component, flows, substances]}
+        expects:
+          ui: 'enabled only when FU set AND completeness.present includes materials|energy|emissions|transport; otherwise title "Set the functional unit (Goal & scope) before running" or "Add at least one input or emission before running"'
+        notes: 'gate is UI-only; POST /api/cases/{id}/assessments accepts a case without FU'
+
+  - id: F6
+    title: Build the process tree (5 tiers)
+    actor: editor
+    e2e: true
+    preconditions: ['$P.empty case with no components']
+    steps:
+      - id: F6.1
+        route: /project/{id}/case/{caseId}
+        action: page load
+        api:
+          - {method: GET, path: '/api/cases/{caseId}', matrix: R19}
+          - {method: GET, path: '/api/cases/{caseId}/components', matrix: R26, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+          - {method: GET, path: '/api/cases/{caseId}/completeness', matrix: R25}
+          - {method: GET, path: '/api/cases/{caseId}/assessments', matrix: R22, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+          - {method: GET, path: '/api/projects/{projectId}', matrix: R09}
+          - {method: GET, path: '/api/projects/{projectId}/cases', matrix: R12}
+        db: {read: [case_table, component, flows, substances, assessment_runs, project]}
+        expects: {status: 200, ui: 'canvas "No components in this case yet." + button "Create your first component"; view switch Tree / List / Plot (target label Graph)'}
+      - id: F6.3
+        route: '/project/{id}/case/{caseId}/component/new (modal "New component")'
+        action: 'for each tier: choose radio in radiogroup "Component type", choose "Parent component", fill Name, Quantity, Unit; click "Create component"'
+        api:
+          - method: POST
+            path: '/api/cases/{caseId}/components'
+            repeat:
+              - {component_name: 'Ceramic Coffee Mug (350ml)', component_type: product, quantity: 1, unit: unit}
+              - {component_name: 'Forming Line', component_type: machine_line, parent_component_id: '$prev'}
+              - {component_name: 'Slip Casting', component_type: subprocess, parent_component_id: '$prev'}
+              - {component_name: 'Mold Filling', component_type: operation, parent_component_id: '$prev'}
+              - {component_name: 'Mold Cleaning', component_type: elemental_task, parent_component_id: '$prev'}
+            matrix: R27
+            roles_allowed: [editor, adminm, owner]
+            roles_denied: [anon, nonmem, viewer, padmin]
+        db: {write: [component]}
+        expects:
+          status: 201
+          db_after: 'five rows, each parent in the same case, hierarchy_level 1..5'
+          ui: 'node appears in sidebar, canvas and List view (editor remounts on lcapix:components-changed)'
+        failures:
+          - {when: 'component_type not in the five', status: 400}
+          - {when: 'name or type missing', status: 400}
+          - {when: 'parent_component_id belongs to $Q.case', status: 400, now: 201, bug: M1, fixed_by: 'fix-first 1.5'}
+          - {when: 'caller is viewer', status: 403}
+        known_bugs: [FLOW-1, M1, EDIT-6]
+      - id: F6.4
+        route: /project/{id}/case/{caseId}
+        action: 'select "Mold Cleaning"; set Life-cycle stage "Production"; change Placement -> Parent to "Slip Casting"; click "Save"'
+        api:
+          - method: PUT
+            path: '/api/components/{componentId}'
+            params: {componentId: $P.base.task}
+            body: {component_name: 'Mold Cleaning', component_type: elemental_task, parent_component_id: $P.base.subprocess, life_cycle_stage: production}
+            matrix: R34
+            roles_allowed: [editor, adminm, owner]
+            roles_denied: [anon, nonmem, viewer, padmin]
+          - {method: GET, path: '/api/cases/{caseId}/components', matrix: R26}
+        db: {write: [component]}
+        expects:
+          status: 200
+          db_after: 'life_cycle_stage=production; parent_component_id updated; hierarchy_level = new depth'
+          ui: 'after reload the stage select shows the saved stage'
+          now: 'life_cycle_stage never sent (EDIT-2); hierarchy_level not updated (EDIT-9)'
+        failures:
+          - {when: 'parent is self or a descendant', status: 400, now: 200, bug: FLOW-1}
+          - {when: 'parent in another case/tenant', status: 400, now: '200 + other tenant name echoed', bug: M1}
+          - {when: 'clear description/unit to null', expect: 'stored NULL', now: 'old value kept', bug: FLOW-3}
+        known_bugs: [EDIT-2, EDIT-5, EDIT-9, FLOW-3]
+      - id: F6.6
+        route: /project/{id}/case/{caseId}
+        action: 'select a node with children; click inspector "Delete"; choose "Delete subtree" (today: confirm OK twice) or "Keep children (move up)"'
+        api:
+          - method: DELETE
+            path: '/api/components/{componentId}'
+            params: {componentId: $P.base.subprocess}
+            matrix: R35
+            roles_allowed: [adminm, owner]
+            roles_denied: [anon, nonmem, viewer, padmin]
+            decision: 'D5 — editor allowed? (REC FLOW-10)'
+          - method: PUT
+            path: '/api/components/{childId}'
+            when: keep children
+            body: {parent_component_id: '<grandparent id or null>'}
+            matrix: R34
+        db: {write: [component, flows, assessment_results]}
+        expects:
+          status: 200
+          db_after: 'subtree rows gone (or children re-parented); historical run totals unchanged (RUN-1)'
+          ui: 'node gone after reload'
+          now: 'no request sent; only the Zustand store changes; node survives reload'
+        known_bugs: [EDIT-1, FLOW-10, RUN-1]
+      - id: F6.7
+        route: /project/{id}/case/{caseId}
+        action: 'drag node, pan, Ctrl+wheel zoom, "Fit to view", "Reset layout", search'
+        api: []
+        no_api_reason: session-only layout by design
+        expects: {ui: 'zoom 25-300%; dragging never re-parents; data-testid tree-canvas-viewport / tree-canvas-stage present'}
+
+  - id: F7
+    title: Environmental flows
+    actor: editor
+    e2e: true
+    preconditions: ['$P.base tree exists; select leaf "Mold Cleaning"']
+    steps:
+      - id: F7.1
+        route: /project/{id}/case/{caseId}
+        action: 'select leaf; open section "Environmental Flows"'
+        api:
+          - {method: GET, path: '/api/components/{componentId}/flows', matrix: R36, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+          - {method: GET, path: '/api/substances?limit=500', matrix: R49, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [flows, substances, driver_impact_factors]}
+        expects: {status: 200, ui: 'rows with IN/OUT badge, provenance line, quantity button; or "No flows yet. Add the substances this step consumes or emits."'}
+      - id: F7.2
+        route: /project/{id}/case/{caseId}
+        action: 'click "Add flow"; search "Electricity"; Direction Input; Quantity 2.5; Unit kWh; click "Save flow"'
+        api:
+          - {method: POST, path: '/api/components/{componentId}/flows', body: {substance_id: $substance.electricity, flow_type: input, quantity: 2.5, unit: kWh}, matrix: R37, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {read: [substances], write: [flows]}
+        expects: {status: 201, db_after: 'flows row quantity 2.5 unit kWh is_driver 1', ui: 'row appears after reload of list'}
+        failures:
+          - {when: 'unit not convertible (kWh for Steel)', status: 400, body_contains: 'cannot be converted to'}
+          - {when: 'quantity null / "abc" / -1', status: 400, now: '201 or 500', bug: FLOW-4}
+          - {when: 'substance_id = $Q.substance', status: [400, 404], now: '201 + name echoed', bug: FLOW-5}
+          - {when: 'caller is viewer', status: 403}
+        known_bugs: [FLOW-4, FLOW-5, FLOW-6, E9, L3]
+      - id: F7.3
+        route: /project/{id}/case/{caseId}
+        action: 'add flow with a tkm/transport substance; Mass (tonnes) 0.85; Distance (km) 450; "Save flow"'
+        api:
+          - {method: POST, path: '/api/components/{componentId}/flows', body: {substance_id: '$substance.transport', flow_type: input, quantity: 382.5, unit: tkm, transport_mass_kg: 850, transport_distance_km: 450}, matrix: R37}
+        db: {write: [flows]}
+        expects: {status: 201, ui: '"= 382.5 tkm"', db_after: 'transport_mass_kg 850, transport_distance_km 450'}
+        failures:
+          - {when: 'mass cleared or 0 after a calculation', expect: 'quantity cleared, save blocked', now: 'stale tkm saved', bug: TKM-1}
+          - {when: 'quantity hand-edited after calculation', expect: 'read-only or recomputed', bug: TKM-2}
+        known_bugs: [TKM-1, TKM-2, TKM-3, TKM-4, TKM-5]
+      - id: F7.5
+        route: /project/{id}/case/{caseId}
+        action: 'click "Edit quantity of Electricity"; set 3; "Save"'
+        api:
+          - {method: PUT, path: '/api/flows/{flowId}', params: {flowId: $P.base.flow}, body: {quantity: 3, unit: kWh}, matrix: R39, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [flows]}
+        expects: {status: 200}
+      - id: F7.6
+        route: /project/{id}/case/{caseId}
+        action: 'click "Delete flow" (no confirmation)'
+        api:
+          - {method: DELETE, path: '/api/flows/{flowId}', matrix: R40, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [flows]}
+        expects: {status: 200}
+      - id: F7.8
+        route: /project/{id}/case/{caseId}
+        action: '"Don''t know what to add? Use the process library"; choose template; driver quantity 12; "Add these flows"'
+        api:
+          - {method: GET, path: /api/process-templates, matrix: R50, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+          - {method: POST, path: '/api/components/{componentId}/flows', repeat: per template line, matrix: R37}
+        db: {read: [process_templates, process_template_flows, substances], write: [flows]}
+        expects: {status: [200, 201], ui: '"N flow(s) added from <template>"'}
+        known_bugs: [FLOW-9, LIB-1]
+
+  - id: F8
+    title: Costs (manual, Suggest, calculators, clear, zero)
+    actor: editor
+    e2e: true
+    preconditions: ['leaf "Mold Filling" selected']
+    steps:
+      - id: F8.1
+        route: /project/{id}/case/{caseId}
+        action: 'Costs grid: Labor 12.5, Energy 0, Material 3.2; click "Save"'
+        api:
+          - {method: PUT, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, body: {component_name: 'Mold Filling', component_type: operation, parent_component_id: $P.base.subprocess, labor_cost: 12.5, energy_cost: 0, material_cost: 3.2}, matrix: R34}
+        db: {write: [component]}
+        expects: {status: 200, db_after: 'labor_cost 12.50, energy_cost 0.00 (not NULL), material_cost 3.20'}
+        known_bugs: [FLOW-2, EDIT-5]
+      - id: F8.3
+        route: /project/{id}/case/{caseId}
+        action: 'clear Material to empty; "Save"'
+        api:
+          - {method: PUT, path: '/api/components/{componentId}', body: {material_cost: null}, matrix: R34}
+        expects: {status: 200, db_after: 'material_cost IS NULL', now: 'old value kept (COALESCE)'}
+        known_bugs: [FLOW-3]
+      - id: F8.4
+        route: /project/{id}/case/{caseId}
+        action: 'Labor = hours x rate: "Labor hours" 2; "Wage location" NC'
+        api:
+          - {method: POST, path: /api/integrations/bls/fetch-wage, body: {occupation: '51-4121', state: NC}, matrix: R60, roles_allowed: [padmin], roles_denied: [anon, nonmem, viewer, editor, adminm, owner], expected_change: 'D6: non-admins get 403 after fix/authz and keep the static national rate'}
+        db: {read: [cost_rates], write: [cost_rates, integration_log]}
+        expects: {ui: 'Labor cost = 2 x rate; applied on Save', now: 'calculator hidden unless a labour value exists (EDIT-4)'}
+        known_bugs: [EDIT-4, EDIT-7, D6]
+      - id: F8.5
+        route: /project/{id}/case/{caseId}
+        action: 'Machine energy: Run hours 2, Power (kW) 5, Load (%) 50; "Add kWh as electricity input"'
+        api:
+          - {method: GET, path: /api/substances, matrix: R49}
+          - {method: POST, path: '/api/components/{componentId}/flows', body: {substance_id: $substance.electricity, flow_type: input, quantity: 5, unit: kWh}, matrix: R37}
+        db: {write: [flows]}
+        expects: {status: 201, ui: '"Added 5 kWh of electricity as an input"'}
+      - id: F8.6
+        route: /project/{id}/case/{caseId}
+        action: 'Suggest strip: click "Suggest", then "Apply & save"'
+        api:
+          - {method: PUT, path: '/api/components/{componentId}', matrix: R34, when: 'Apply & save'}
+        no_api_reason: 'suggestion is computed client-side (suggestCostsFromFlows)'
+        expects: {ui: 'L/E/M/T proposed from the step flows and hours', now: 'always empty (flows=[]), no Apply button'}
+        known_bugs: [EDIT-3]
+      - id: F8.7
+        route: '/project/{id}/case/{caseId}/component/new'
+        action: 'Costs -> "Suggest from integrations" -> "Fetch defaults" -> "Apply to fields"'
+        api:
+          - {method: POST, path: /api/integrations/bls/fetch-wage, body: {occupation: '51-4121', state: US}, matrix: R60}
+          - {method: POST, path: /api/integrations/eia/fetch-energy-price, body: {fuel: electricity, state: US}, matrix: R61}
+          - {method: POST, path: /api/integrations/metals/fetch-price, body: {symbol: STL}, matrix: R62}
+        expects: {ui: 'fields filled (form only)', now: 'POST /components ignores ABC cost keys, costs lost'}
+        known_bugs: [COST-6, D6]
+      - id: F8.8
+        route: '(no UI)'
+        action: 'API only'
+        api:
+          - {method: POST, path: '/api/components/{componentId}/auto-costs', matrix: R38, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [component, cost_rates, integration_log]}
+        expects: {status: 200}
+        known_bugs: [H2, COST-1, COST-4, COST-8]
+
+  - id: F9
+    title: Run assessment -> results
+    actor: editor
+    e2e: true
+    preconditions: ['$P.base with FU and flows']
+    steps:
+      - id: F9.1a
+        route: /project/{id}/case/{caseId}
+        action: 'click toolbar "Run Assessment"'
+        api:
+          - method: POST
+            path: '/api/cases/{caseId}/assessments'
+            body: {run_name: Assessment}
+            matrix: R23
+            roles_allowed: [editor, adminm, owner]
+            roles_denied: [anon, nonmem, viewer, padmin]
+        db: {read: [case_table, project, component, flows, substances, driver_impact_factors, impact_categories], write: [assessment_runs, assessment_results]}
+        expects:
+          status: 201
+          body: {success: true, run_id: '<id>', assessment: {status: completed}}
+          db_after: "assessment_runs.status='completed', calculation_method 'CML 2001', region_code 'US', run_snapshot has flow_detail, goal_scope, data_quality"
+          ui: 'URL /project/{id}/case/{caseId}/results'
+        failures:
+          - {when: 'caller is viewer', status: 403, ui: 'error shown (target)', now: 'modal/results treat as success (RUN-4)'}
+          - {when: 'calculation_method "NOPE"', status: 400, now: '201 all-zero run', bug: RUN-6}
+          - {when: 'engine throws', status: 500, db_after: "run row with status 'failed' and error_log", now: 'rolled back, nothing recorded', bug: RUN-3}
+          - {when: 'no flows', status: 201, body_contains: 'No process step in this case has any input or output flows yet'}
+          - {when: '31st run within an hour (target)', status: 429, bug: H5}
+        known_bugs: [RUN-3, RUN-4, RUN-6, PROJ-5, L1]
+      - id: F9.1c
+        route: /project/{id}/case/{caseId}/results
+        action: 'click "Re-run" -> dialog "Run Assessment": method "TRACI 2.1", region "Global"; click "Run assessment"'
+        api:
+          - {method: POST, path: '/api/cases/{caseId}/assessments', body: {run_name: 'Assessment <date>', calculation_method: 'TRACI 2.1', region_code: Global}, matrix: R23}
+          - {method: GET, path: '/api/cases/{caseId}/assessments', matrix: R22}
+        expects: {status: [201, 200], ui: 'new latest run shown; localStorage lcapix-run-prefs:<caseId> saved'}
+        known_bugs: [RUN-5]
+      - id: F9.2
+        route: /project/{id}/case/{caseId}/results
+        action: page load
+        api:
+          - {method: GET, path: '/api/cases/{caseId}', matrix: R19}
+          - {method: GET, path: '/api/cases/{caseId}/components', matrix: R26}
+          - {method: GET, path: '/api/projects/{projectId}', matrix: R09}
+          - {method: GET, path: '/api/cases/{caseId}/assessments', matrix: R22}
+        db: {read: [case_table, component, project, assessment_runs, assessment_results, impact_categories, account]}
+        expects:
+          status: 200
+          ui: 'badge "LATEST RUN"; hero "TOTAL IMPACT · GLOBAL WARMING" value + unit; category cards; top contributors; "By life-cycle stage"; "Your write-up"; "Flow-level detail" (All/Inputs/Outputs); "Historical runs"'
+        failures:
+          - {when: 'stage total 1000', expect: 'shows 1,000', now: 'shows "1"', bug: RES-1}
+          - {when: 'ozone-depletion value 4.2e-9', expect: 'non-zero display and storage', now: '0', bug: RUN-2}
+          - {when: 'assessments GET 500', expect: 'error state', now: '"No assessments yet"', bug: RES-5}
+        known_bugs: [RES-1, RES-3, RES-4, RES-5, RUN-2, STAGE-2]
+      - id: F9.4
+        route: /project/{id}/case/{caseId}/results
+        action: 'after a second run with same method+region, read the delta pill'
+        api: []
+        no_api_reason: computed client-side from GET /assessments
+        expects: {ui: '"↓/↑ X.X% vs last run" (same method and region only)', now: 'never renders'}
+        known_bugs: [RES-2, RES-6]
+      - id: F9.6
+        route: '(API)'
+        action: 'read one run; then edit/delete components and read again'
+        api:
+          - {method: GET, path: '/api/assessments/{runId}', params: {runId: $P.base.run}, matrix: R41, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        expects:
+          status: 200
+          invariant: 'totals, per-step rows, step names and stages identical before and after later edits/deletes'
+          now: 'live JOIN component + ON DELETE CASCADE changes history'
+        known_bugs: [RUN-1, RUN-8]
+
+  - id: F10
+    title: Export PDF / PPTX / CSV
+    actor: viewer
+    e2e: true
+    preconditions: ['$P.base.run exists']
+    steps:
+      - id: F10.1
+        route: /project/{id}/case/{caseId}/results
+        action: 'click "Export PDF"'
+        api:
+          - {method: GET, path: '/api/assessments/{runId}/export?format=pdf', matrix: R42, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        db: {read: [assessment_runs, case_table, project, account, component, assessment_results, impact_categories, flows, substances, driver_impact_factors, cost_rates]}
+        expects: {status: 200, content_type: application/pdf, magic: '%PDF-', download_name: 'LCAPIX_Report_<case>.pdf', ui: 'button label "Exporting…" while running'}
+      - id: F10.2
+        route: /project/{id}/case/{caseId}/results
+        action: 'click "Export PPT"'
+        api:
+          - {method: GET, path: '/api/assessments/{runId}/export?format=pptx', matrix: R42}
+        expects: {status: 200, content_type: application/vnd.openxmlformats-officedocument.presentationml.presentation, magic: 'PK\x03\x04', download_name: 'LCAPIX_Report_<case>.pptx'}
+        known_bugs: [EXP-2]
+      - id: F10.3
+        route: /project/{id}/case/{caseId}/results
+        action: 'click "Export rows (CSV)"'
+        api:
+          - {method: GET, path: '/api/assessments/{runId}/export?format=csv', matrix: R42}
+        expects:
+          status: 200
+          content_type: 'text/csv; charset=utf-8'
+          first_line: '# LCAPIX assessment run <runId>'
+          columns: [step, life_cycle_stage, substance, direction, amount_entered, unit_entered, unit_conversion, factor, factor_scope, factor_source, source_tier, allocation, impact_category, impact_value]
+          invariant: 'rows equal run_snapshot.flow_detail'
+          download_name: 'LCAPIX_inventory_<case>.csv'
+        failures:
+          - {when: 'step named =HYPERLINK("http://x","y")', expect: "cell starts with a single quote", now: raw, bug: EXP-3}
+          - {when: 'format=xls', status: 400, now: '200 PDF', bug: EXP-7}
+        known_bugs: [EXP-1, EXP-3, EXP-7, STAGE-2, L5]
+      - id: F10.4
+        route: /project/{id}/case/{caseId}/results
+        precondition: 'case has no run'
+        action: 'click any export'
+        api: []
+        no_api_reason: 'window.print()'
+        expects: {ui: 'print dialog'}
+
+  - id: F11
+    title: Magic Insights (computed + AI)
+    actor: viewer
+    e2e: false
+    preconditions: ['results page with a run']
+    steps:
+      - id: F11.1
+        route: /project/{id}/case/{caseId}/results
+        action: 'click "Magic Insights"; chips "Summary", "Reduce environmental load by 20%", "Cost vs environmental load trade-off", "Compare to base", "Ask anything"'
+        api: []
+        no_api_reason: computed mode is client-side
+        expects: {ui: 'text types out; provenance "Computed deterministically from your assessment results. Not AI-generated."'}
+        known_bugs: [INS-4, INS-5, INS-6]
+      - id: F11.3
+        route: /project/{id}/case/{caseId}/results
+        action: 'toggle "AI" in group "Insight mode"'
+        api:
+          - method: POST
+            path: /api/insights
+            body: {caseName: 'Standard Production', method: 'CML 2001', categoryLabel: 'Global Warming', contributors: [{name: 'Mold Filling', pct: 60, value: 3.6}], materials: [], levers: [], mode: summary, allCategories: []}
+            matrix: R51
+            roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin]
+            roles_denied: [anon]
+        outbound_mocked: ['POST router.huggingface.co/v1/chat/completions (SSE)']
+        expects:
+          no_hf_token: {status: 200, body: {fallback: true}, ui: '"AI narration unavailable (no model key configured) — showing the computed insight."'}
+          with_mock: {status: 200, content_type: 'text/plain', header: X-Insights-Model, ui: 'text streams in < 10 s'}
+        failures:
+          - {when: 'upstream first delta is role-only', expect: 'still streams', now: 'stalls until maxDuration', bug: INS-1}
+          - {when: 'body > 16 KB or question > 500 chars (target)', status: [413, 400], bug: INS-2}
+          - {when: '21st call within an hour (target)', status: 429, bug: H5}
+        known_bugs: [INS-1, INS-2, INS-3, H5]
+
+  - id: F12
+    title: Comparative case -> Compare -> Analytics
+    actor: editor
+    e2e: true
+    preconditions: ['$P.base has steps, flows and a run']
+    steps:
+      - id: F12.1
+        route: /project/{id}/case/{caseId}
+        action: 'toolbar "Duplicate"; #case-name-input "Recycled Clay Variant"; click "Duplicate"'
+        api:
+          - {method: POST, path: '/api/cases/{caseId}/duplicate', body: {case_name: 'Recycled Clay Variant'}, matrix: R31, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {read: [case_table, component, flows], write: [case_table, component, flows]}
+        expects:
+          status: 201
+          body: {case_id: '<id>', components_copied: 5, flows_copied: 2}
+          db_after: 'same tree/flows/costs; life_cycle_stage and transport_* copied'
+          ui: 'URL /project/{id}/case/{newCaseId}'
+        failures:
+          - {when: 'a step has drivers JSON', status: 201, now: 500, bug: CMP-1}
+          - {when: 'name already used', status: 409, ui: 'inline [role=alert]'}
+          - {when: 'source has no steps', status: 400}
+        known_bugs: [CMP-1, CMP-3]
+      - id: F12.3
+        route: /project/{id}
+        action: 'empty comparative tab "This scenario is empty" -> "Clone from base"'
+        api:
+          - {method: POST, path: '/api/cases/{caseId}/clone-from', params: {caseId: $P.empty}, body: {sourceCaseId: $P.base}, matrix: R24, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [component, flows]}
+        expects: {status: 200, db_after: 'components AND flows/costs/stage copied, one transaction', now: 'components only'}
+        failures:
+          - {when: 'target not empty', status: 409}
+          - {when: 'sourceCaseId in $Q', status: 400}
+        known_bugs: [CMP-2, CMP-3]
+      - id: F12.4
+        route: /project/{id}/case/{caseId}
+        action: 'change product quantity 1 -> 2; "Save"; dialog: "Scale everything ×2"'
+        api:
+          - {method: POST, path: '/api/cases/{caseId}/scale', body: {from: 1, to: 2, mode: scale-inputs}, matrix: R32, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+          - {method: PUT, path: '/api/components/{componentId}', matrix: R34}
+        db: {write: [flows, component, case_table]}
+        expects: {status: 200, db_after: 'flow quantities and per-unit costs x2; product quantity 2; modeled_output 2'}
+        failures:
+          - {when: 'same request replayed', expect: 'idempotent', now: 'scales twice', bug: COST-7}
+          - {when: 'mode not scale-inputs/data-covers or from/to <= 0', status: 400}
+      - id: F12.5
+        route: /project/{id}/case/{newCaseId}
+        action: 'lower Electricity to 1.6 kWh and Natural Gas to 1.1 m3; Run Assessment (same method and region)'
+        api:
+          - {method: PUT, path: '/api/flows/{flowId}', matrix: R39}
+          - {method: POST, path: '/api/cases/{caseId}/assessments', matrix: R23}
+        expects: {status: [200, 201]}
+      - id: F12.6
+        route: /project/{id}/comparison
+        action: 'workspace "Compare Cases"; chips select base + copy'
+        api:
+          - {method: GET, path: '/api/projects/{projectId}', matrix: R09}
+          - {method: GET, path: '/api/projects/{projectId}/cases', matrix: R12}
+          - {method: GET, path: '/api/projects/{projectId}/compare?cases={base},{copy}', matrix: R14, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        db: {read: [project, case_table, assessment_runs, assessment_results, impact_categories, component, flows, substances]}
+        expects:
+          status: 200
+          ui: 'banner "Same functional unit, method and region."; verdict "Lowest <cat>: Recycled Clay Variant, -x.x% against Standard Production."; tablist "Comparison views" (What differs, Results, Where the change comes from, Hotspots, Cost, Data quality); URL ?cases='
+          invariant: 'delta sign negative when copy is lower'
+        failures:
+          - {when: 'no cases param', status: 400}
+          - {when: 'runs= names a run from $Q', expect: 'ignored or 404, never used'}
+          - {when: 'copy edited then a component deleted after its run', expect: 'stale note shown', now: 'deletions not detected', bug: CMP-5}
+        known_bugs: [CMP-5, CMP-6]
+      - id: F12.7
+        route: /project/{id}/analytics
+        action: 'workspace "Analytics"'
+        api:
+          - {method: GET, path: '/api/projects/{projectId}', matrix: R09}
+          - {method: GET, path: '/api/projects/{projectId}/cases', matrix: R12}
+          - {method: GET, path: '/api/cases/{caseId}/assessments', matrix: R22}
+          - {method: GET, path: '/api/assessments/{runId}', matrix: R41}
+          - {method: GET, path: '/api/cases/{caseId}/components', matrix: R26}
+        expects: {status: 200, ui: 'target: multi-case, sign-correct sentence ("decreases … by 38.4%")', now: 'one case only; Math.abs on values'}
+        known_bugs: [ANA-1, ANA-2, ANA-3, ANA-4, CMP-7]
+
+  - id: F13
+    title: Document import
+    actor: editor
+    e2e: true
+    preconditions: ['$P exists; fixtures tests/fixtures/ingest/{bom.csv,routing.csv,itac-trimmed.xlsx,oversize.bin}']
+    steps:
+      - id: F13.1
+        route: /project/{id}/import
+        action: page load
+        api:
+          - {method: GET, path: '/api/projects/{projectId}/cases', matrix: R12}
+          - {method: GET, path: '/api/cases/{caseId}/completeness', repeat: per case, matrix: R25}
+        expects: {status: 200, ui: 'h1 "Import a document"; "DOCUMENTS & DATA ADDED SO FAR"'}
+      - id: F13.3
+        route: /project/{id}/import
+        action: 'DOCUMENT TYPE "Bill of materials (BOM)"; ADD TO "Create a new case"; choose bom.csv; click "Preview extraction"'
+        api:
+          - {method: POST, path: /api/ingest/preview, multipart: {file: bom.csv, connector: bom, plant_id: ''}, matrix: R52, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [substances, driver_impact_factors]}
+        expects: {status: 200, body: {success: true, plan: '<plan>'}, db_after: 'nothing written', ui: 'Review step with "FLOWS · n EXTRACTED" table'}
+        failures:
+          - {when: 'unknown connector', status: 400}
+          - {when: 'itac plant id not in workbook', status: 404, body_has: matching_ids}
+          - {when: 'equipment without target_case_id', status: 400}
+          - {when: 'equipment, caller viewer on target case', status: 403, matrix: R52b}
+          - {when: 'file above the cap (target)', status: 413, now: 'parsed in full / 500 on Vercel', bug: ING-3}
+          - {when: '11th preview within an hour (target)', status: 429, bug: H5}
+        known_bugs: [ING-2, ING-3, ING-4, ING-5, ING-6, ING-7, ING-9, ING-10, M6]
+      - id: F13.4
+        route: /project/{id}/import
+        action: 'review: tick "Apply flow <text>", change "MAPS TO SUBSTANCE", set "Override unit"'
+        api: []
+        no_api_reason: client-side review state
+        expects: {ui: 'APPLY pre-ticked only when match >= 0.9; "NO IMPACT DATA" marker; unit warning'}
+        known_bugs: [ING-8, ING-11]
+      - id: F13.5
+        route: /project/{id}/import
+        action: 'click "Apply — create this case"'
+        api:
+          - {method: POST, path: /api/ingest/apply, body: {project_id: $P, case_name: 'BOM import {run}', nodes: '$plan.nodes', flows: '$plan.flows(ticked)', costs: '$plan.costs', notes: []}, matrix: R53, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {read: [substances], write: [case_table, component, flows]}
+        expects:
+          status: 201
+          body: {case_id: '<id>', components_created: '<n>', flows_applied: '<n>', flows_held_for_review: '<n>'}
+          invariant: 'all-or-nothing; quantity 0.0004 kg stored as 0.0004'
+        failures:
+          - {when: 'missing project_id/case_name/nodes', status: 400}
+          - {when: 'caller viewer', status: 403}
+          - {when: 'quantity 0.0004', expect: 0.0004, now: 0, bug: ING-1}
+        known_bugs: [ING-1, L6, L7]
+      - id: F13.5b
+        route: /project/{id}/import
+        action: 'ADD TO an existing case; choose DEFAULT STEP; "Apply — add to case"'
+        api:
+          - {method: POST, path: /api/ingest/apply, body: {target_case_id: $P.base, attach_component_id: $P.base.op, flows: '$plan.flows', costs: '$plan.costs', notes: []}, matrix: R53b, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [flows, component, case_table]}
+        expects: {status: 200, body: {appended: true}}
+        failures:
+          - {when: 'attach_component_id not in the target case', status: 400}
+      - id: F13.6
+        route: /project/{id}/import
+        action: automatic after apply
+        api:
+          - {method: POST, path: '/api/cases/{caseId}/documents', multipart: {file: bom.csv, doc_type: bom}, matrix: R29, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+          - {method: GET, path: '/api/cases/{caseId}/completeness', matrix: R25}
+        db: {write: [case_documents]}
+        expects: {status: [200, 200], ui: '"Case created from document"; "Open case" -> editor with the document in Reference pane'}
+        failures:
+          - {when: 'file > 12 MB', status: 413, now: '400 after buffering', bug: DOC-2}
+          - {when: '.png / .zip / .docx', status: [415, 400], now: 'stored as garbage text', bug: DOC-2}
+        known_bugs: [DOC-2, M6]
+
+  - id: F14
+    title: Members and roles
+    actor: owner
+    e2e: false
+    preconditions: ['$P; invitees have accounts']
+    steps:
+      - id: F14.1
+        route: /project/{id}/class
+        action: page load
+        api:
+          - {method: GET, path: '/api/projects/{projectId}/members', matrix: R15, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+          - {method: GET, path: '/api/projects/{projectId}/progress', matrix: R18, roles_allowed: [viewer, editor, adminm, owner], roles_denied: [anon, nonmem, padmin]}
+        db: {read: [project, project_members, account, permissions, case_table, assessment_runs, component, flows]}
+        expects: {status: 200, body: {canManage: 'true only for owner'}, ui: 'People table; add form and Remove only for owner'}
+        known_bugs: [PROJ-8]
+      - id: F14.2
+        route: /project/{id}/class
+        action: 'input "Email address"; role select "Editor, can change"; click "Add"'
+        api:
+          - {method: POST, path: '/api/projects/{projectId}/members', body: {email: '$user.editor.email', role: editor}, matrix: R16, roles_allowed: [adminm, owner], roles_denied: [anon, nonmem, viewer, editor, padmin]}
+        db: {read: [account, permissions, project], write: [project_members]}
+        expects: {status: 200, body: {updated: false}}
+        failures:
+          - {when: 'email has no account', status: 404, bug: L2}
+          - {when: 'email is the owner', status: 409}
+          - {when: 'role not viewer/editor/admin', status: 400}
+          - {when: 'adminm grants role admin', expect: 403, now: 200, bug: L9, decision: REC}
+      - id: F14.3
+        route: /project/{id}/class
+        action: 'click "Remove" (no confirmation)'
+        api:
+          - {method: DELETE, path: '/api/projects/{projectId}/members?user_id={userId}', matrix: R17, roles_allowed: [adminm, owner], roles_denied: [anon, nonmem, viewer, editor, padmin]}
+        db: {write: [project_members]}
+        expects: {status: 200, invariant: 'removed user now gets 403 on $P routes'}
+    permission_table_ref: 'USER_FLOWS.md F14 "Permissions per action"; PERMISSIONS_MATRIX.md'
+
+  - id: F15
+    title: Class mode (Setup B — student owns, instructor viewer)
+    actors: [student, instructor]
+    e2e: false
+    preconditions: ['student = owner of $P; instructor = separate account']
+    steps:
+      - id: F15.1
+        actor: student
+        route: /project/{id}/case/{caseId}?learn=1
+        action: 'rail "Guided lessons" open'
+        api: []
+        no_api_reason: navigation
+        expects: {ui: 'Learn aria-pressed=true; lessons 1..6 ("five" in copy — LES-1)'}
+      - id: F15.2
+        actor: student
+        route: /project/{id}/case/{caseId}
+        action: 'lesson "Goal and scope": choose answer b; "Check" / choice'
+        api:
+          - {method: PUT, path: '/api/cases/{caseId}', body: {learning_state: {version: 1, lessons: {scope: {answer: b, correct: true, doneAt: '<iso>'}}}}, matrix: R20, roles_allowed: [editor, adminm, owner], roles_denied: [anon, nonmem, viewer, padmin]}
+        db: {write: [case_table]}
+        expects: {status: 200, ui: '"Right." feedback; done count increments when facts are true'}
+        known_bugs: [LES-1]
+      - id: F15.4
+        actor: student
+        route: /project/{id}/case/{caseId}/results
+        action: 'fill "What the result means", "What you assumed and left out"; "Save write-up"'
+        api:
+          - {method: PUT, path: '/api/cases/{caseId}', body: {interpretation: 'Kiln gas dominates.', assumptions: 'Packaging excluded.'}, matrix: R20}
+        db: {write: [case_table]}
+        expects: {status: 200}
+        failures:
+          - {when: 'text > 20000 chars', ui: '"Too long: keep each box under 20,000 characters."'}
+          - {when: 'migration 021 missing', status: 409}
+        known_bugs: [WRITE-1, WRITE-2]
+      - id: F15.5
+        actor: student
+        route: /project/{id}/case/{caseId}/results
+        action: 'tick "This is my hand-in"'
+        api:
+          - {method: PUT, path: '/api/cases/{caseId}', body: {is_final: true}, matrix: R20}
+        db: {write: [case_table]}
+        expects: {status: 200, db_after: 'is_final=1, finalized_at NOT NULL; at most one is_final per project (target)'}
+        known_bugs: [WRITE-1]
+      - id: F15.6
+        actor: student
+        route: /project/{id}/class
+        action: 'add instructor as "Viewer, can read"'
+        api:
+          - {method: POST, path: '/api/projects/{projectId}/members', body: {email: '$user.instructor.email', role: viewer}, matrix: R16}
+        expects: {status: 200}
+      - id: F15.7
+        actor: instructor
+        route: /project/{id}/class
+        action: 'open the Class page'
+        api:
+          - {method: GET, path: '/api/projects/{projectId}/members', matrix: R15}
+          - {method: GET, path: '/api/projects/{projectId}/progress', matrix: R18}
+        expects:
+          status: 200
+          body: {canManage: false}
+          ui: 'Progress table: Lessons "n of 6", Write-up "Interpretation + assumptions", Hand-in "Yes"; any save by instructor -> 403'
+          note: 'lessons column max "5 of 6" (hand-in lesson has no question)'
+        known_bugs: [D4]
+
+  - id: F16
+    title: Library and custom-substance privacy
+    actor: owner
+    e2e: false
+    steps:
+      - id: F16.1
+        route: /library/factors
+        action: 'home tile FACTORS; search'
+        api:
+          - {method: GET, path: /api/integrations/status, matrix: R54}
+          - {method: GET, path: /api/driver-factors, matrix: R47, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [driver_impact_factors, impact_categories, substances]}
+        expects: {status: 200, ui: '"Factor library"; first 200 rows'}
+        known_bugs: [FAC-1, FAC-2]
+      - id: F16.2
+        route: /library/substances
+        action: 'home tile SUBSTANCES'
+        api:
+          - {method: GET, path: /api/substances, matrix: R49}
+        expects: {status: 200, ui: '"Substance catalog"; Default unit column filled (now "—", FAC-3)'}
+        known_bugs: [FAC-3]
+      - id: F16.3
+        route: '/project/{id}/case/{caseId} (add-flow form)'
+        action: '"Not in the list? Add a substance"; fill; "Add and use it"'
+        api:
+          - {method: GET, path: /api/impact-categories, matrix: R48, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+          - {method: POST, path: /api/substances, body: {name: 'Cork, expanded {run}', kind: input, unit: kg, method: 'CML 2001', impactCategory: 'Global Warming', factorValue: 0.5, factorUnit: 'kg CO2 eq / kg', source: 'Supplier EPD 2025'}, matrix: R49b, roles_allowed: [nonmem, viewer, editor, adminm, owner, padmin], roles_denied: [anon]}
+        db: {read: [substances, impact_categories], write: [substances, driver_impact_factors]}
+        expects: {status: 201, db_after: "is_custom=1, created_by=me, source starts 'User-entered (not yet verified)'"}
+        failures:
+          - {when: 'validation fails', status: 400}
+          - {when: 'duplicate of another user private name', expect: '201 (scoped uniqueness) or 409 without leaking the other name/id', now: '409 leaking name and id', bug: FAC-4}
+        known_bugs: [FAC-4, L3]
+      - id: F16.4
+        route: '(API, as userB)'
+        action: 'list substances and factors'
+        api:
+          - {method: GET, path: /api/substances, caller: userB, matrix: R49}
+          - {method: GET, path: /api/driver-factors, caller: userB, matrix: R47}
+        expects: {invariant: "owner's custom substance and its factor absent from both lists", now: 'present in driver-factors (FAC-1)'}
+        known_bugs: [FAC-1, L3, ING-9]
+
+  - id: F17
+    title: Admin integrations
+    actor: padmin
+    e2e: false
+    preconditions: ['fix/authz merged']
+    steps:
+      - id: F17.1
+        route: /admin/integrations
+        action: 'top bar "Integrations"'
+        api:
+          - {method: GET, path: /api/integrations/status, matrix: R54}
+        expects: {status: 200, ui: 'h1 "Integrations"; tabs Overview, Data Sources, API Keys, Activity Log, Schema', target_ui: 'non-admin redirected; nav item hidden (H1 UI half)'}
+        known_bugs: [INT-5, X-API-1]
+      - id: F17.2
+        route: /admin/integrations
+        action: 'click "Import openLCA CML 2001"'
+        api:
+          - {method: POST, path: /api/integrations/openlca/import, body: {method: 'CML 2001'}, matrix: R56, roles_allowed: [padmin], roles_denied: [anon, nonmem, viewer, editor, adminm, owner]}
+        db: {write: [driver_impact_factors, integration_log]}
+        expects: {status: 200, invariant: 'no live row re-created where a QUARANTINE: twin exists'}
+        known_bugs: [E2, H1]
+      - id: F17.3
+        route: /admin/integrations
+        action: 'click "Enrich substances from PubChem"'
+        api:
+          - {method: POST, path: /api/integrations/pubchem/enrich, body: {only_missing: true}, matrix: R59, roles_allowed: [padmin], roles_denied: [anon, nonmem, viewer, editor, adminm, owner]}
+        outbound_mocked: ['pubchem.ncbi.nlm.nih.gov']
+        db: {write: [substances, integration_log]}
+        expects: {status: 200}
+        known_bugs: [INT-4, H5]
+      - id: F17.4
+        route: /admin/integrations
+        action: 'tab "Activity Log"'
+        api:
+          - {method: GET, path: '/api/integrations/log?limit=30', matrix: R55, roles_allowed: [padmin], roles_denied: [anon, nonmem, viewer, editor, adminm, owner]}
+        db: {read: [integration_log]}
+        expects: {status: 200}
+        failures:
+          - {when: 'limit=abc', status: 200, now: 500, bug: INT-6}
+      - id: F17.5
+        route: '(no UI)'
+        action: 'electricity sync'
+        api:
+          - {method: POST, path: /api/integrations/electricity/sync, body: {zone: US}, matrix: R58, roles_allowed: [padmin], roles_denied: [anon, nonmem, viewer, editor, adminm, owner]}
+        outbound_mocked: ['api.electricitymap.org']
+        expects: {status: 200, invariant: 'audited annual factor not overwritten (INT-2)'}
+        known_bugs: [INT-2]
+
+  - id: F18
+    title: Profile
+    actor: owner
+    e2e: false
+    steps:
+      - id: F18.1
+        route: /profile
+        action: 'Account menu -> "Profile"'
+        api:
+          - {method: GET, path: /api/auth/profile, matrix: R05}
+        expects: {status: 200, ui: 'eyebrow "ACCOUNT"; cards PERSONAL, PROFESSIONAL, ACCOUNT'}
+        failures:
+          - {when: 'GET fails', expect: 'error state', now: 'empty form, no message', bug: PROF-1}
+      - id: F18.3
+        route: /profile
+        action: 'edit Company; click "Save changes" in the sticky bar'
+        api:
+          - {method: PUT, path: /api/auth/profile, body: {fullName: '$user.fullName', company: 'New Co', role: null, useCase: null, country: null}, matrix: R06}
+        db: {write: [account]}
+        expects: {status: 200, ui: 'sticky bar "You have unsaved changes." disappears'}
+        failures:
+          - {when: 'company > column length', status: 400, now: 500, bug: PROF-1}
+        known_bugs: [PROF-1, AUTH-8]
+
+  - id: F19
+    title: Guided tour
+    actor: owner
+    e2e: false
+    steps:
+      - id: F19.1
+        route: /home
+        action: 'click "Walk me through" (or top bar "Tour")'
+        api: []
+        no_api_reason: 'localStorage lcapix-tour-v1 only'
+        expects: {ui: 'role=dialog "Tour step 1 of 13: Welcome to LCAPIX"'}
+      - id: F19.2
+        route: '/home, /project/{id}, /project/{id}/case/{caseId}, …/results'
+        action: 'Next through all steps'
+        api: []
+        no_api_reason: client-only
+        anchors_present: [home-greeting, home-kpi-projects, home-new-project, project-header, project-add-case, project-open-editor, case-goal-scope]
+        anchors_missing: [case-add-component, case-flow-input, case-suggest-costs, case-run-assessment, results-total-impact, results-magic-insights]
+        expects: {ui: 'every step highlights its anchor', now: '6 steps float mid-screen; progress lost at home -> project'}
+        known_bugs: [TOUR-1, TOUR-2, TOUR-3]
+
+# ---------------------------------------------------------------------------
+# PERMISSIONS: machine form of PERMISSIONS_MATRIX.md. tests/api-real/authz/
+# matrix.test.ts reads this section and runs every row x role against a real
+# MySQL database (pnpm test:api); change the two files together.
+#
+# State: v1-hardening-kavish @ 2009f63 with every fix branch merged
+# (fix/authz, fix/platform, fix/auth, fix/runs, fix/editor, fix/factors,
+# fix/int-auth, fix/int-client, fix/int-routes). Verified against the route
+# code by the generated tests on 2026-09-30. 45 route files, 66 route x
+# method pairs, 3 mode rows (R03b, R52b, R53b) = 69 rows.
+#
+# Row fields
+#   expect     role -> status for the 7 roles.
+#   callers    extra callers and their status. Every row that is not public
+#              also gets {deactivated: 401, revoked: 401, tampered: 401}
+#              (x_expect.auth_failures); a row may override one of them.
+#   params     path/query placeholder -> handle ($P, $P.base, $fresh.x, ...).
+#   fresh      a builder run before EACH call, so one role's success cannot
+#              change the next role's target: project, emptyCase, invitee,
+#              document, caseCopy, leaf, flow, legacyComparison. Its id is
+#              $fresh.<name>.
+#   body       JSON body; multipart: a named fixture (notes_txt, bom_csv,
+#              equipment_csv). '{run}' and '{role}' are filled per call.
+#   not_found  the body a non-member gets, byte-identical to the body for a
+#              missing id; primary names the id to replace with a missing
+#              one (default: the first path parameter).
+#   env        environment set for the call only.
+#   now        role -> status the code returns today when it differs from
+#              expect (the generator wraps that cell in it.fails, naming bug).
+# ---------------------------------------------------------------------------
+x_expect:
+  public_200: &PUB200 {anon: 200, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}
+  public_201: &PUB201 {anon: 201, nonmem: 201, viewer: 201, editor: 201, adminm: 201, owner: 201, padmin: 201}
+  public_307: &PUB307 {anon: 307, nonmem: 307, viewer: 307, editor: 307, adminm: 307, owner: 307, padmin: 307}
+  handoff_401: &H401 {anon: 401, nonmem: 401, viewer: 401, editor: 401, adminm: 401, owner: 401, padmin: 401}
+  auth_200: &A200 {anon: 401, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}
+  auth_201: &A201 {anon: 401, nonmem: 201, viewer: 201, editor: 201, adminm: 201, owner: 201, padmin: 201}
+  member_200: &M200 {anon: 401, nonmem: 404, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 404}
+  editor_200: &E200 {anon: 401, nonmem: 404, viewer: 403, editor: 200, adminm: 200, owner: 200, padmin: 404}
+  editor_201: &E201 {anon: 401, nonmem: 404, viewer: 403, editor: 201, adminm: 201, owner: 201, padmin: 404}
+  admin_200: &AD200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 200, owner: 200, padmin: 404}
+  owner_200: &O200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 403, owner: 200, padmin: 404}
+  padmin_200: &PA200 {anon: 401, nonmem: 403, viewer: 403, editor: 403, adminm: 403, owner: 403, padmin: 200}
+  auth_failures: {deactivated: 401, revoked: 401, tampered: 401}
+
+permissions:
+  # --- auth & account ---
+  - {id: R01, method: POST, path: /api/auth/signup, rule: public, body: {email: 'signup-{role}-{run}@lcapix.test', password: '$password', full_name: 'Signup {role}'}, expect: *PUB201, note: '409 (generic text) for a taken email; 400 for a bad email or a password under 8 characters or over 72 bytes; client username ignored (server derives it); 429 on the 4th signup per IP per hour'}
+  - {id: R02, method: POST, path: /api/auth/login, rule: public, body: {email: '$caller.email', password: '$caller.password'}, expect: {anon: 401, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}, callers: {deactivated: 403}, note: 'anon sends a wrong password; roles their own credentials. The same 401 body for an unknown email and a wrong password; 403 inactive only after a correct password; 429 on the 6th attempt per IP+email per minute'}
+  - {id: R03, method: GET, path: /api/auth/google, rule: public, expect: *PUB307, assert: 'NextResponse.redirect answers 307 (the older docs said 302). Location carries state and an S256 code_challenge; state cookie httpOnly, SameSite=Lax, Path=/api/auth/google, Max-Age=600'}
+  - {id: R03b, method: GET, path: '/api/auth/google?code=test-code&state=forged-state', rule: public, mode: callback, expect: *PUB307, assert: 'no state cookie -> /auth/login?error=oauth_state_mismatch and no auth_token cookie'}
+  - {id: R04, method: GET, path: /api/auth/me, rule: authenticated, expect: *A200}
+  - {id: R05, method: GET, path: /api/auth/profile, rule: authenticated, expect: *A200}
+  - {id: R06, method: PUT, path: /api/auth/profile, rule: authenticated, body: {fullName: 'Test User {role}', company: 'LCAPIX Test'}, expect: *A200}
+  - {id: R63, method: POST, path: /api/auth/logout, rule: public, expect: *PUB200, assert: 'Set-Cookie expires auth_token and user_data (Max-Age=0, httpOnly, SameSite=Lax, Path=/)'}
+  - {id: R64, method: POST, path: /api/auth/google/session, rule: 'hand-off cookie', expect: *H401, note: '200 {token, user} once with a valid hand-off cookie; 401 on the second call; 403 for Sec-Fetch-Site: cross-site'}
+
+  # --- projects, members, progress ---
+  - {id: R07, method: GET, path: /api/projects, rule: authenticated, expect: *A200, assert: 'nonmem and padmin lists exclude $P'}
+  - {id: R08, method: POST, path: /api/projects, rule: authenticated, body: {project_name: 'P {run} {role}', description: x}, expect: *A201}
+  - {id: R09, method: GET, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R10, method: PUT, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: admin, body: {description: 'updated by {role}'}, expect: *AD200, not_found: 'Project not found'}
+  - {id: R11, method: DELETE, path: '/api/projects/{projectId}', params: {projectId: $fresh.project}, fresh: project, rule: owner, expect: *O200, not_found: 'Project not found', note: '403 body "Only project owner can delete"'}
+  - {id: R12, method: GET, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R13, method: POST, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: editor, body: {case_name: 'C {run} {role}', case_type: comparative}, expect: *E201, not_found: 'Project not found'}
+  - {id: R14, method: GET, path: '/api/projects/{projectId}/compare?cases={base},{comp}', params: {projectId: $P, base: $P.base, comp: $P.comp}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R15, method: GET, path: '/api/projects/{projectId}/members', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R16, method: POST, path: '/api/projects/{projectId}/members', params: {projectId: $P}, rule: admin, body: {email: '$user.invitee.email', role: viewer}, expect: *AD200, not_found: 'Project not found', note: 'returns 200; granting or changing the admin role is owner-only (an admin member gets 403)'}
+  - {id: R17, method: DELETE, path: '/api/projects/{projectId}/members?user_id={userId}', params: {projectId: $P, userId: $fresh.invitee}, fresh: invitee, rule: admin, expect: *AD200, not_found: 'Project not found', note: '404 "Member not found" when user_id is not a member; removing an admin is owner-only'}
+  - {id: R18, method: GET, path: '/api/projects/{projectId}/progress', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+
+  # --- cases ---
+  - {id: R19, method: GET, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R20, method: PUT, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: editor, body: {description: 'updated by {role}'}, expect: *E200, not_found: 'Case not found'}
+  - {id: R21, method: DELETE, path: '/api/cases/{caseId}', params: {caseId: $fresh.emptyCase}, fresh: emptyCase, rule: admin, expect: *AD200, not_found: 'Case not found'}
+  - {id: R22, method: GET, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R23, method: POST, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: editor, body: {calculation_method: 'CML 2001', region_code: US}, expect: *E201, not_found: 'Case not found', note: '400 for an unknown method; 429 on the 31st run per user per hour'}
+  - {id: R24, method: POST, path: '/api/cases/{caseId}/clone-from', params: {caseId: $fresh.emptyCase}, fresh: emptyCase, rule: editor, body: {sourceCaseId: $P.base}, expect: *E200, not_found: 'Case not found'}
+  - {id: R25, method: GET, path: '/api/cases/{caseId}/completeness', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R26, method: GET, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R27, method: POST, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: editor, body: {component_name: 'Glazing {role} {run}', component_type: operation, parent_component_id: $P.base.subprocess}, expect: *E201, not_found: 'Case not found', note: 'parent_component_id outside the case -> 400 with no name echoed'}
+  - {id: R28, method: GET, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R29, method: POST, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: editor, multipart: notes_txt, expect: *E200, not_found: 'Case not found', note: 'returns 200; 413 above 12 MB before the body is read; 415 for bytes that do not match the extension'}
+  - {id: R30, method: DELETE, path: '/api/cases/{caseId}/documents?id={docId}', params: {caseId: $P.base, docId: $fresh.document}, fresh: document, rule: editor, expect: *E200, not_found: 'Case not found', note: '404 "Document not found" for an id not in the case'}
+  - {id: R31, method: POST, path: '/api/cases/{caseId}/duplicate', params: {caseId: $P.base}, rule: editor, body: {case_name: 'Dup {run} {role}'}, expect: *E201, not_found: 'Case not found'}
+  - {id: R32, method: POST, path: '/api/cases/{caseId}/scale', params: {caseId: $fresh.caseCopy}, fresh: caseCopy, rule: editor, body: {from: 1, to: 2, mode: data-covers}, expect: *E200, not_found: 'Case not found'}
+
+  # --- components, flows, costs ---
+  - {id: R33, method: GET, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: member, expect: *M200, not_found: 'Component not found'}
+  - {id: R34, method: PUT, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: editor, body: {component_description: 'set by {role}'}, expect: *E200, not_found: 'Component not found', note: 'parent in another case, itself or a descendant -> 400'}
+  - {id: R35, method: DELETE, path: '/api/components/{componentId}', params: {componentId: $fresh.leaf}, fresh: leaf, rule: editor, expect: *E200, not_found: 'Component not found', note: 'editor since D5 (fix/editor); ?children=delete|reparent, else 400'}
+  - {id: R36, method: GET, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: member, expect: *M200, not_found: 'Component not found'}
+  - {id: R37, method: POST, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: editor, body: {substance_id: $substance.electricity, flow_type: input, quantity: 0.1, unit: kWh}, expect: *E201, not_found: 'Component not found', note: 'another user''s private substance_id -> 400 "Unknown substance" without its name; quantity null/NaN/negative -> 400'}
+  - {id: R38, method: POST, path: '/api/components/{componentId}/auto-costs', params: {componentId: $P.base.op}, rule: editor, expect: *E200, not_found: 'Component not found'}
+  - {id: R39, method: PUT, path: '/api/flows/{flowId}', params: {flowId: $P.base.flow}, rule: editor, body: {quantity: 2.5}, expect: *E200, not_found: 'Flow not found'}
+  - {id: R40, method: DELETE, path: '/api/flows/{flowId}', params: {flowId: $fresh.flow}, fresh: flow, rule: editor, expect: *E200, not_found: 'Flow not found'}
+
+  # --- runs, export, legacy comparisons ---
+  - {id: R41, method: GET, path: '/api/assessments/{runId}', params: {runId: $P.base.run}, rule: member, expect: *M200, not_found: 'Assessment not found'}
+  - {id: R42, method: GET, path: '/api/assessments/{runId}/export?format=csv', params: {runId: $P.base.run}, rule: viewer, expect: *M200, not_found: 'Assessment not found', note: 'pdf and pptx too; unknown format -> 400'}
+  - {id: R43, method: POST, path: /api/comparisons, rule: member, legacy: true, body: {comparison_name: 'Legacy {run} {role}', case_ids: [$P.base, $P.comp], project_id: $P}, primary: body.project_id, expect: *M200, not_found: 'Project not found', note: 'saves nothing (CMP-7); REC: delete the legacy routes'}
+  - {id: R44, method: GET, path: '/api/comparisons?project_id={projectId}', params: {projectId: $P}, rule: member, legacy: true, primary: query.projectId, expect: *M200, not_found: 'Project not found'}
+  - {id: R45, method: GET, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $legacy.comparison}, rule: member, legacy: true, expect: *M200, not_found: 'Comparison not found'}
+  - {id: R46, method: DELETE, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $fresh.legacyComparison}, fresh: legacyComparison, rule: 'admin, or the creator while still a member', legacy: true, expect: *AD200, not_found: 'Comparison not found', note: 'the owner is the creator here'}
+
+  # --- global reference data ---
+  - {id: R47, method: GET, path: /api/driver-factors, rule: authenticated, expect: *A200, assert: "userB's private factor absent for everyone else; no QUARANTINE rows"}
+  - {id: R48, method: GET, path: /api/impact-categories, rule: authenticated, expect: *A200}
+  - {id: R49, method: GET, path: /api/substances, rule: authenticated, expect: *A200, assert: "userB's private substance absent for everyone else"}
+  - {id: R49b, method: POST, path: /api/substances, rule: authenticated, body: {name: 'Cork {run} {role}', kind: input, unit: kg, method: 'CML 2001', impactCategory: 'Global Warming', factorValue: 0.5, source: 'Supplier EPD 2025'}, expect: *A201, note: '409 for a library or own name (not other users'' private names)'}
+  - {id: R50, method: GET, path: /api/process-templates, rule: authenticated, expect: *A200}
+  - {id: R50b, method: POST, path: /api/example-project, rule: authenticated, expect: *A200, note: 'returns 200; a repeat returns existed:true'}
+  - {id: R51, method: POST, path: /api/insights, rule: authenticated, body: {caseName: x, method: 'CML 2001', categoryLabel: 'Global Warming', contributors: [], materials: [], levers: [], mode: summary, allCategories: []}, expect: *A200, note: 'no HF_TOKEN -> 200 {fallback:true}; 413 over 16 KB; 400 question over 500 chars; 429 on the 21st call per user per hour'}
+  - {id: R52, method: POST, path: /api/ingest/preview, rule: authenticated, mode: 'connector != equipment', multipart: bom_csv, expect: *A200, note: '413 over 12 MB before parsing; 415 wrong bytes; 429 on the 11th preview per user per hour'}
+  - {id: R52b, method: POST, path: /api/ingest/preview, rule: 'editor on the target case', mode: 'connector = equipment', multipart: equipment_csv, primary: form.target_case_id, expect: *E200, not_found: 'Case not found'}
+  - {id: R53, method: POST, path: /api/ingest/apply, rule: 'editor on project_id', mode: create, body: {project_id: $P, case_name: 'Import {run} {role}', nodes: [{name: 'Mug {role}', tier: product, parent: null}], flows: [], costs: [], notes: []}, primary: body.project_id, expect: *E201, not_found: 'Project not found'}
+  - {id: R53b, method: POST, path: /api/ingest/apply, rule: 'editor on the target case', mode: append, body: {target_case_id: $P.base, attach_component_id: $P.base.op, flows: [], costs: [], notes: []}, primary: body.target_case_id, expect: *E200, not_found: 'Target case not found'}
+
+  # --- integrations: shared reference data writers are platform-admin only;
+  #     the BLS / EIA / Metals cost lookups are open to any signed-in user
+  #     with a shared 60/hour/user budget (owner decision, D6 option c) ---
+  - {id: R54, method: GET, path: /api/integrations/status, rule: authenticated, expect: *A200}
+  - {id: R55, method: GET, path: '/api/integrations/log?limit=30', rule: platform_admin, expect: *PA200, note: 'limit clamped to 1..200; ?limit=abc gives the default'}
+  - {id: R56, method: POST, path: /api/integrations/openlca/import, rule: platform_admin, body: {method: 'CML 2001'}, expect: *PA200, note: 'insert-only; never revives a row with a QUARANTINE twin'}
+  - {id: R57, method: GET, path: /api/integrations/openlca/import, rule: authenticated, expect: *A200}
+  - {id: R58, method: POST, path: /api/integrations/electricity/sync, rule: platform_admin, body: {zone: US-CAL-CISO}, env: {ELECTRICITY_MAPS_API_KEY: test-key}, expect: *PA200, note: '502 when every zone fails'}
+  - {id: R59, method: POST, path: /api/integrations/pubchem/enrich, rule: platform_admin, body: {only_missing: true, limit: 1}, expect: *PA200, note: '429 on the 6th call per admin per hour'}
+  - {id: R60, method: POST, path: /api/integrations/bls/fetch-wage, rule: authenticated, body: {occupation: '51-4121', state: US}, expect: *A200, decision: D6, note: '429 on the 61st lookup per user per hour (shared by R60-R62)'}
+  - {id: R61, method: POST, path: /api/integrations/eia/fetch-energy-price, rule: authenticated, body: {fuel: electricity, state: NC}, expect: *A200, decision: D6}
+  - {id: R62, method: POST, path: /api/integrations/metals/fetch-price, rule: authenticated, body: {symbol: STL}, expect: *A200, decision: D6}
+
+# Routes a flow needs that do not exist (see PERMISSIONS_MATRIX.md §2.9).
+missing_routes:
+  - {method: POST, path: /api/auth/logout, needed_by: F2.4, bug: M4, branch: fix/auth, status: 'added at c4a7200 (R63)'}
+  - {path: 'password reset / change', needed_by: [F2, F18], bug: [AUTH-8, PROF-1]}
+  - {path: 'email verification', needed_by: [F1, F3], bug: H3}
+
+# API routes with no UI caller today (still covered by the matrix).
+no_ui_caller:
+  - GET /api/auth/me
+  - DELETE /api/components/{componentId}   # EDIT-1
+  - POST /api/components/{componentId}/auto-costs
+  - POST /api/integrations/electricity/sync
+  - GET /api/integrations/openlca/import
+  - '/api/comparisons* (legacy, dead UI — CMP-7)'

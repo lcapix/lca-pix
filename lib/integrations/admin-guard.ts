@@ -4,13 +4,7 @@
 // admin-only. This turns requireAdmin's thrown errors into the right response.
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
-
-const AUTH_ERRORS = new Set([
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-]);
+import { isAuthError } from '@/lib/route-guard';
 
 export type AdminGuard =
   | { userId: number; response?: undefined }
@@ -20,11 +14,11 @@ export async function guardAdmin(request: Request): Promise<AdminGuard> {
   try {
     return { userId: await requireAdmin(request) };
   } catch (err: any) {
-    const message = err?.message;
-    if (message === 'Admin privileges required') {
+    if (err?.message === 'Admin privileges required') {
       return { response: NextResponse.json({ error: 'Admin privileges required' }, { status: 403 }) };
     }
-    if (AUTH_ERRORS.has(message)) {
+    // Same rule as every other route: any requireAuth failure is a 401.
+    if (isAuthError(err)) {
       return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
     }
     console.error('Admin check failed:', err);

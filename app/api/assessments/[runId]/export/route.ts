@@ -342,10 +342,8 @@ export async function GET(
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // The error text can carry SQL, schema or host details: log it, never send it (L1).
     console.error('PDF export error:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate PDF report', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to generate the report' }, { status: 500 });
   }
 }
