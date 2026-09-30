@@ -142,3 +142,20 @@ export function fitToColumn(s: string, limit: TextLimit): string {
   }
   return out;
 }
+
+/**
+ * A MySQL error for a number outside its column (ER_WARN_DATA_OUT_OF_RANGE,
+ * ER_DATA_OUT_OF_RANGE). Routes that write DERIVED values (a rescale factor
+ * times a stored cost, several imported costs summed onto one step) cannot
+ * check every product up front; they catch this after the transaction has
+ * rolled back and answer 400.
+ */
+export function isOutOfRangeError(err: unknown): boolean {
+  const e = err as { code?: unknown; errno?: unknown } | null;
+  return (
+    e?.code === 'ER_WARN_DATA_OUT_OF_RANGE' ||
+    e?.code === 'ER_DATA_OUT_OF_RANGE' ||
+    e?.errno === 1264 ||
+    e?.errno === 1690
+  );
+}

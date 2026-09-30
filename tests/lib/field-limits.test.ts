@@ -61,3 +61,27 @@ describe('fitToColumn (text the server composes)', () => {
     expect(cut).toBe('€'.repeat(21_845));
   });
 });
+
+describe('nonNegative (lib/component-fields.ts)', () => {
+  it('accepts 0 up to the column maximum and refuses more, naming the column', async () => {
+    const { nonNegative, BadRequest } = await import('@/lib/component-fields');
+    expect(nonNegative('labor_cost', 9_999_999_999_999.99)).toBe(9_999_999_999_999.99);
+    expect(nonNegative('quantity', '0')).toBe(0);
+    expect(nonNegative('quantity', '')).toBeNull();
+    expect(() => nonNegative('labor_cost', 1e20)).toThrow(BadRequest);
+    expect(() => nonNegative('labor_cost', 1e20)).toThrow('labor_cost must be at most 9999999999999.99');
+    expect(() => nonNegative('quantity', 1e9)).toThrow('quantity must be at most 999999999.999999');
+    expect(() => nonNegative('labor_hours', 1_000_000)).toThrow('labor_hours must be at most 999999.9999');
+    expect(() => nonNegative('opex', Infinity)).toThrow('opex must be a number of 0 or more');
+  });
+});
+
+describe('isOutOfRangeError', () => {
+  it('recognises MySQL out-of-range errors only', async () => {
+    const { isOutOfRangeError } = await import('@/lib/field-limits');
+    expect(isOutOfRangeError({ code: 'ER_WARN_DATA_OUT_OF_RANGE', errno: 1264 })).toBe(true);
+    expect(isOutOfRangeError({ code: 'ER_DATA_OUT_OF_RANGE', errno: 1690 })).toBe(true);
+    expect(isOutOfRangeError({ code: 'ER_LOCK_DEADLOCK', errno: 1213 })).toBe(false);
+    expect(isOutOfRangeError(null)).toBe(false);
+  });
+});

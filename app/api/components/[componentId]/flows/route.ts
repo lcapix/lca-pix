@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
-import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
+import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -150,6 +150,16 @@ export async function POST(
       }
     }
 
+    // A transport leg's distance is DECIMAL(18,3): checked before the flow is written.
+    const legMass = Number(body.transport_mass_kg);
+    const legKm = Number(body.transport_distance_km);
+    if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > decimalMax(F.transport_distance_km)) {
+      return NextResponse.json(
+        { error: `transport_distance_km must be at most ${decimalMax(F.transport_distance_km)}` },
+        { status: 400 }
+      );
+    }
+
     // Bug #9: default is_driver to TRUE so new flows count in assessments.
     const flowId = await insert(
       `INSERT INTO flows
@@ -160,8 +170,6 @@ export async function POST(
 
     // What a transport leg was computed from (migrate-022). Its own statement,
     // so a database without the columns still records the flow itself.
-    const legMass = Number(body.transport_mass_kg);
-    const legKm = Number(body.transport_distance_km);
     if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > 0) {
       try {
         await execute(

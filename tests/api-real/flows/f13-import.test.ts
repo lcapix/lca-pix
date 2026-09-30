@@ -191,7 +191,8 @@ describe('F13 document import', () => {
         notes: [],
       },
     });
-    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.status, r.text).toBe(400);
+    expect(r.json.error).toMatch(/too large to store/);
     expect(await rowCounts()).toEqual(before);
     expect(await sql('SELECT case_id FROM case_table WHERE case_name = ?', [`Atomic ${w.tag}`])).toEqual([]);
   });

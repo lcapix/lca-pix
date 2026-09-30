@@ -60,13 +60,21 @@ describe('F8 costs', () => {
     }
   });
 
-  // BUG (FLOW-2 follow-up; lib/component-fields.ts:32-37 nonNegative accepts any
-  // finite number, and the cost columns are DECIMAL(15,2)): a cost above
-  // 9,999,999,999,999.99 fails in MySQL ("Out of range value") and the route
-  // answers 500 "Failed to update component" instead of 400.
-  it.fails('a cost larger than its column gets 400, not 500', async () => {
-    const r = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json: { labor_cost: 1e20 } });
-    expect(r.status).toBe(400);
+  // Fixed (FLOW-2 follow-up): lib/component-fields.ts checks every number
+  // against its DECIMAL column (costs DECIMAL(15,2), hours DECIMAL(10,4)), so a
+  // value MySQL would refuse as "Out of range" is a 400 naming the field.
+  it('a cost larger than its column gets 400, not 500', async () => {
+    const before = await costsOf(w.P.base.op);
+    for (const json of [{ labor_cost: 1e20 }, { opex: 1e13 }, { labor_hours: 1e6 }]) {
+      const r = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json });
+      expect(r.status, JSON.stringify(json)).toBe(400);
+      expect(r.json.error).toMatch(new RegExp(`${Object.keys(json)[0]} must be at most`));
+    }
+    expect(await costsOf(w.P.base.op)).toEqual(before);
+    // The column's largest value is accepted.
+    const max = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json: { overhead_cost: 9999999999999.99 } });
+    expect(max.status, max.text).toBe(200);
+    await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json: { overhead_cost: before.overhead_cost } });
   });
 
   it('F8.4/F8.7 an ordinary user looks up a state wage, an energy price and a metal price (D6)', async () => {

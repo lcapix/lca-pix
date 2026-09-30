@@ -17,6 +17,13 @@ import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, decimalMax, isOutOfRangeError } from '@/lib/field-limits';
+
+// `to` becomes the product's quantity and the case's modeled_output, both
+// DECIMAL(15,6): at least 0.000001 (a smaller one would be stored as 0) and at
+// most 999,999,999.999999. `from` is a stored quantity, so the same range.
+const AMOUNT_MIN = 0.000001;
+const AMOUNT_MAX = decimalMax(COLUMN_LIMITS.component.quantity);
 
 const PER_UNIT_COST_COLUMNS = [
   'labor_cost',
@@ -48,51 +55,66 @@ export async function POST(
     const { from, to, mode } = json.body;
     const f = Number(from);
     const t = Number(to);
-    if (!(f > 0) || !(t > 0)) {
-      return NextResponse.json({ error: 'from and to must be positive numbers' }, { status: 400 });
+    const inRange = (n: number) => Number.isFinite(n) && n >= AMOUNT_MIN && n <= AMOUNT_MAX;
+    if (!inRange(f) || !inRange(t)) {
+      return NextResponse.json(
+        { error: `from and to must be numbers from ${AMOUNT_MIN} to ${AMOUNT_MAX}` },
+        { status: 400 }
+      );
     }
     if (mode !== 'scale-inputs' && mode !== 'data-covers') {
       return NextResponse.json({ error: "mode must be 'scale-inputs' or 'data-covers'" }, { status: 400 });
     }
     const factor = t / f;
 
-    const result = await transaction(async (conn) => {
-      let flowsScaled = 0;
-      if (mode === 'scale-inputs') {
-        const [fr]: any = await conn.query(
-          `UPDATE flows f JOIN component c ON c.component_id = f.component_id
-              SET f.quantity = f.quantity * ?
-            WHERE c.case_id = ?`,
-          [factor, caseId]
-        );
-        flowsScaled = fr.affectedRows ?? 0;
-        // Only the cost columns this database has (later migrations add some).
-        const [cols]: any = await conn.query(
-          `SELECT COLUMN_NAME FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'component'
-              AND COLUMN_NAME IN (${PER_UNIT_COST_COLUMNS.map(() => '?').join(', ')})`,
-          PER_UNIT_COST_COLUMNS
-        );
-        const present: string[] = cols.map((r: any) => r.COLUMN_NAME);
-        if (present.length) {
-          await conn.query(
-            `UPDATE component SET ${present.map((c) => `${c} = ${c} * ?`).join(', ')} WHERE case_id = ?`,
-            [...present.map(() => factor), caseId]
+    let result: { flowsScaled: number };
+    try {
+      result = await transaction(async (conn) => {
+        let flowsScaled = 0;
+        if (mode === 'scale-inputs') {
+          const [fr]: any = await conn.query(
+            `UPDATE flows f JOIN component c ON c.component_id = f.component_id
+                SET f.quantity = f.quantity * ?
+              WHERE c.case_id = ?`,
+            [factor, caseId]
           );
+          flowsScaled = fr.affectedRows ?? 0;
+          // Only the cost columns this database has (later migrations add some).
+          const [cols]: any = await conn.query(
+            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'component'
+                AND COLUMN_NAME IN (${PER_UNIT_COST_COLUMNS.map(() => '?').join(', ')})`,
+            PER_UNIT_COST_COLUMNS
+          );
+          const present: string[] = cols.map((r: any) => r.COLUMN_NAME);
+          if (present.length) {
+            await conn.query(
+              `UPDATE component SET ${present.map((c) => `${c} = ${c} * ?`).join(', ')} WHERE case_id = ?`,
+              [...present.map(() => factor), caseId]
+            );
+          }
         }
-      }
-      await conn.query(
-        `UPDATE component SET quantity = ?
-          WHERE case_id = ? AND parent_component_id IS NULL AND component_type = 'product'`,
-        [t, caseId]
+        await conn.query(
+          `UPDATE component SET quantity = ?
+            WHERE case_id = ? AND parent_component_id IS NULL AND component_type = 'product'`,
+          [t, caseId]
+        );
+        try {
+          await conn.query(`UPDATE case_table SET modeled_output = ? WHERE case_id = ?`, [t, caseId]);
+        } catch (e: any) {
+          if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e; // no migrate-014: quantity alone
+        }
+        return { flowsScaled };
+      });
+    } catch (e) {
+      // A scaled flow or cost that no longer fits its column: the transaction
+      // rolled back, so nothing changed. Not a server fault.
+      if (!isOutOfRangeError(e)) throw e;
+      return NextResponse.json(
+        { error: `Scaling by ${Number(factor.toPrecision(6))} would push a flow or cost past what can be stored. Nothing was changed.` },
+        { status: 400 }
       );
-      try {
-        await conn.query(`UPDATE case_table SET modeled_output = ? WHERE case_id = ?`, [t, caseId]);
-      } catch (e: any) {
-        if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e; // no migrate-014: quantity alone
-      }
-      return { flowsScaled };
-    });
+    }
 
     return NextResponse.json({ success: true, mode, factor, flows_scaled: result.flowsScaled });
   } catch (error: any) {

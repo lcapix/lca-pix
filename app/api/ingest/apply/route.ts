@@ -14,7 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
-import { COLUMN_LIMITS, fitToColumn } from '@/lib/field-limits';
+import { COLUMN_LIMITS, decimalMax, fitToColumn, isOutOfRangeError } from '@/lib/field-limits';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
@@ -50,6 +50,13 @@ const text = (max: number) => z.string().max(max);
 // Strings stored in a column are capped at the column's size (lib/field-limits.ts):
 // a longer one is a 400 naming the field, never a failure inside the transaction.
 const K = COLUMN_LIMITS.component;
+// Numbers likewise: a node quantity is DECIMAL(15,6), a cost DECIMAL(15,2),
+// labour hours DECIMAL(10,4). (Several lines summed onto one step can still
+// overflow; the transaction rolls back and the route answers 400.)
+const bounded = (max: number) => z.number().finite().min(-max).max(max);
+const QTY_MAX = decimalMax(K.quantity);
+const COST_MAX = decimalMax(K.labor_cost);
+const HOURS_MAX = decimalMax(K.labor_hours);
 const provenance = z
   .object({ doc: z.string().max(1000), locator: z.string().max(1000).optional(), snippet: z.string().max(5000).optional() })
   .passthrough();
@@ -60,7 +67,7 @@ const nodeSchema = z
     tier: z.enum(['product', 'machine_line', 'subprocess', 'operation', 'elemental_task']),
     parent: text(K.component_name.max).nullable(),
     description: z.string().max(5000).nullable().optional(),
-    quantity: z.number().finite().nullable().optional(),
+    quantity: bounded(QTY_MAX).nullable().optional(),
     unit: text(K.unit.max).nullable().optional(),
     provenance: provenance.optional(),
   })
@@ -83,8 +90,8 @@ const costSchema = z
   .object({
     node: text(255).optional().default(''),
     category: z.enum(['labor', 'energy', 'material', 'transportation', 'opex', 'capex']),
-    amount: z.number().finite().nullable(),
-    hours: z.number().finite().nullable().optional(),
+    amount: bounded(COST_MAX).nullable(),
+    hours: bounded(HOURS_MAX).nullable().optional(),
     occupation: text(K.labor_occupation.max).nullable().optional(),
     provenance: provenance.nullable().optional(),
     attach_component_id: optionalId,
@@ -480,6 +487,14 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (isOutOfRangeError(error)) {
+      // Costs or hours that fit one by one but not once added onto a step.
+      // The transaction rolled back: nothing was imported.
+      return NextResponse.json(
+        { error: 'A cost or hours value in the plan is too large to store once added up on its step. Nothing was imported.' },
+        { status: 400 }
+      );
     }
     console.error('Ingest apply error:', error);
     return NextResponse.json({ error: 'Failed to apply ingestion plan' }, { status: 500 });

@@ -154,7 +154,7 @@ export async function PUT(
         }
         coreClears.push(['unit', typeof u === 'string' && u.trim() ? u.trim() : null]);
       }
-      for (const col of ['opex', 'capex']) {
+      for (const col of ['opex', 'capex'] as const) {
         if (has(body, col)) coreClears.push([col, nonNegative(col, body[col])]);
       }
 

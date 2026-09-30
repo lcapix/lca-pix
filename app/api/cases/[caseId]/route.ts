@@ -4,7 +4,7 @@ import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
-import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
+import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
 
 // GET /api/cases/[caseId] - Get single case details
 export async function GET(
@@ -91,6 +91,24 @@ export async function PUT(
     if (case_type != null && !['base', 'comparative'].includes(case_type)) {
       return NextResponse.json({ error: 'Invalid case type' }, { status: 400 });
     }
+    // reference_flow and modeled_output are DECIMAL(15,6): above 0 once
+    // stored (at least 0.000001) and at most 999,999,999.999999.
+    const num = (v: unknown): number | null =>
+      v === undefined || v === null || v === '' ? null : Number(v);
+    const refFlow = num(body.reference_flow);
+    const modeled = num(body.modeled_output);
+    const refMax = decimalMax(C.reference_flow);
+    for (const [name, v] of [
+      ['reference_flow', refFlow],
+      ['modeled_output', modeled],
+    ] as const) {
+      if (v !== null && (!Number.isFinite(v) || v < 0.000001 || v > refMax)) {
+        return NextResponse.json(
+          { error: `${name} must be a positive number (0.000001 to ${refMax})` },
+          { status: 400 }
+        );
+      }
+    }
 
     if (case_name !== undefined && case_name !== null) {
       if (!String(case_name).trim()) {
@@ -174,18 +192,6 @@ export async function PUT(
 
     const REF_FIELDS = ['reference_flow', 'reference_flow_unit', 'modeled_output'];
     if (REF_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
-      const num = (v: unknown): number | null =>
-        v === undefined || v === null || v === '' ? null : Number(v);
-      const refFlow = num(body.reference_flow);
-      const modeled = num(body.modeled_output);
-      for (const [name, v] of [
-        ['reference_flow', refFlow],
-        ['modeled_output', modeled],
-      ] as const) {
-        if (v !== null && (!Number.isFinite(v) || v <= 0)) {
-          return NextResponse.json({ error: `${name} must be a positive number` }, { status: 400 });
-        }
-      }
       try {
         await execute(
           `UPDATE case_table

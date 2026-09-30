@@ -10,6 +10,7 @@
 import { query, execute } from '@/lib/db-helpers';
 import { STAGE_IDS } from '@/lib/life-cycle';
 import type { TreeRow } from '@/lib/component-tree';
+import { COLUMN_LIMITS, decimalMax } from '@/lib/field-limits';
 
 export class BadRequest extends Error {}
 
@@ -28,11 +29,23 @@ export const MONEY_COLUMNS = [
 
 export const has = (body: object, key: string) => Object.prototype.hasOwnProperty.call(body, key);
 
-/** null/undefined/'' → null; otherwise a finite number ≥ 0, else BadRequest. */
-export function nonNegative(name: string, v: unknown): number | null {
+type ComponentColumns = typeof COLUMN_LIMITS.component;
+/** The component columns that are DECIMAL(p, s). */
+export type DecimalColumn = {
+  [K in keyof ComponentColumns]: ComponentColumns[K] extends { kind: 'decimal' } ? K : never;
+}[keyof ComponentColumns];
+
+/**
+ * null/undefined/'' → null; otherwise a finite number from 0 up to the largest
+ * value the component's DECIMAL column holds (MySQL refuses a larger one as
+ * "Out of range"), else BadRequest.
+ */
+export function nonNegative(column: DecimalColumn, v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.trim()) : NaN;
-  if (!Number.isFinite(n) || n < 0) throw new BadRequest(`${name} must be a number of 0 or more`);
+  if (!Number.isFinite(n) || n < 0) throw new BadRequest(`${column} must be a number of 0 or more`);
+  const max = decimalMax(COLUMN_LIMITS.component[column]);
+  if (n > max) throw new BadRequest(`${column} must be at most ${max}`);
   return n;
 }
 

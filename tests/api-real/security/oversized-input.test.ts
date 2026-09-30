@@ -117,10 +117,9 @@ describe('oversized fields -> 4xx or a safe truncation, never 500', () => {
 });
 
 describe('numbers the columns cannot hold', () => {
-  // BUG (Low; lib/component-fields.ts:32-37 nonNegative() and
-  // app/api/cases/[caseId]/scale/route.ts:47 accept any finite number): the
-  // DECIMAL(15,6) quantity column refuses 1e20 and the routes answer 500.
-  it.fails('component quantity 1e20 and scale to 1e300 -> 400 (500 today)', async () => {
+  // Fixed: lib/component-fields.ts and the scale route check numbers against
+  // the DECIMAL(15,6) quantity column (largest 999,999,999.999999).
+  it('component quantity 1e20 and scale to 1e300 -> 400', async () => {
     const q = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.owner.token, json: { quantity: 1e20 } });
     expect(q.status).toBe(400);
     const s = await api.post(`/api/cases/${w.P.base.id}/scale`, { token: w.users.owner.token, json: { from: 1, to: 1e300, mode: 'data-covers' } });
@@ -135,10 +134,9 @@ describe('numbers the columns cannot hold', () => {
     expect(flow.status).toBe(400);
   });
 
-  // BUG (Low; app/api/cases/[caseId]/scale/route.ts:46-47 checks `t > 0`,
-  // which Infinity passes): JSON 1e309 parses to Infinity, the product
-  // quantity UPDATE fails and the route answers 500 instead of 400.
-  it.fails('scale to a non-finite amount (1e309) -> 400 (500 today)', async () => {
+  // Fixed: the scale route requires finite amounts within the column (JSON
+  // 1e309 parses to Infinity, which the old `t > 0` check let through).
+  it('scale to a non-finite amount (1e309) -> 400', async () => {
     const scale = await api.post(`/api/cases/${w.P.base.id}/scale`, { token: w.users.owner.token, raw: '{"from":1,"to":1e309,"mode":"data-covers"}' });
     expect(scale.status).toBe(400);
   });
