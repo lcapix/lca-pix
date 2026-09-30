@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError, newRequestId, readJson } from '@/lib/http';
 import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
@@ -89,7 +89,7 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, undefined, { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' });
     if (denied) return denied;
 
     // The production `assessment_runs` table's timestamp column is `run_date`
@@ -306,7 +306,7 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, 'editor', { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
     if (denied) return denied;
 
     // REC H5: a run holds a DB transaction for the whole engine pass.

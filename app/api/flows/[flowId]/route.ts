@@ -3,7 +3,7 @@ import { readJson } from '@/lib/http';
 import { COLUMN_LIMITS, lengthError } from '@/lib/field-limits';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
   parseFlowQuantity,
@@ -24,7 +24,7 @@ export async function PUT(
     const flowId = parseId(flowIdParam);
 
     const existing = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM flows f
        LEFT JOIN component c ON f.component_id = c.component_id
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
@@ -36,7 +36,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Flow not found' });
+    const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Flow not found' });
     if (denied) return denied;
 
     // Prod schema: flows columns are flow_type / quantity. Accept either key.
@@ -159,7 +159,7 @@ export async function DELETE(
     const flowId = parseId(flowIdParam);
 
     const existing = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM flows f
        LEFT JOIN component c ON f.component_id = c.component_id
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
@@ -171,7 +171,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Flow not found' });
+    const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Flow not found' });
     if (denied) return denied;
 
     await execute(`DELETE FROM flows WHERE flow_id = ?`, [flowId]);

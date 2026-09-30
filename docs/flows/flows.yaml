@@ -1210,7 +1210,9 @@ flows:
 # (fix/authz, fix/platform, fix/auth, fix/runs, fix/editor, fix/factors,
 # fix/int-auth, fix/int-client, fix/int-routes). Verified against the route
 # code by the generated tests on 2026-09-30. 45 route files, 66 route x
-# method pairs, 3 mode rows (R03b, R52b, R53b) = 69 rows.
+# method pairs, 3 mode rows (R03b, R52b, R53b) = 69 rows; plus R10b (the
+# members_see_own_cases setting) and 36 own_cases rows (B-A1 student
+# isolation, suffix o) = 106 rows.
 #
 # Row fields
 #   expect     role -> status for the 7 roles.
@@ -1230,6 +1232,9 @@ flows:
 #   env        environment set for the call only.
 #   now        role -> status the code returns today when it differs from
 #              expect (the generator wraps that cell in it.fails, naming bug).
+#   own_cases  true: the cell runs with $P's members_see_own_cases = 1. $P's
+#              cases were made by the owner, so an editor or viewer reaches
+#              none of them (404, missing-id body); lists leave them out.
 # ---------------------------------------------------------------------------
 x_expect:
   public_200: &PUB200 {anon: 200, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}
@@ -1244,6 +1249,9 @@ x_expect:
   admin_200: &AD200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 200, owner: 200, padmin: 404}
   owner_200: &O200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 403, owner: 200, padmin: 404}
   padmin_200: &PA200 {anon: 401, nonmem: 403, viewer: 403, editor: 403, adminm: 403, owner: 403, padmin: 200}
+  # own_cases rows: a case the caller did not create, in a project with members_see_own_cases = 1
+  own_cases_200: &OWN200 {anon: 401, nonmem: 404, viewer: 404, editor: 404, adminm: 200, owner: 200, padmin: 404}
+  own_cases_201: &OWN201 {anon: 401, nonmem: 404, viewer: 404, editor: 404, adminm: 201, owner: 201, padmin: 404}
   auth_failures: {deactivated: 401, revoked: 401, tampered: 401}
 
 permissions:
@@ -1331,6 +1339,50 @@ permissions:
   - {id: R60, method: POST, path: /api/integrations/bls/fetch-wage, rule: authenticated, body: {occupation: '51-4121', state: US}, expect: *A200, decision: D6, note: '429 on the 61st lookup per user per hour (shared by R60-R62)'}
   - {id: R61, method: POST, path: /api/integrations/eia/fetch-energy-price, rule: authenticated, body: {fuel: electricity, state: NC}, expect: *A200, decision: D6}
   - {id: R62, method: POST, path: /api/integrations/metals/fetch-price, rule: authenticated, body: {symbol: STL}, expect: *A200, decision: D6}
+
+  # --- own-cases (B-A1 student isolation): the same routes on P with
+  #     project.members_see_own_cases = 1 (own_cases: true switches it on for
+  #     the call and back off after). P's cases were made by the owner, so an
+  #     editor or viewer reaches none of them: 404 with the missing-id body for
+  #     every action (never 403), and lists leave them out. The owner and admin
+  #     members reach every case. ---
+  - {id: R07o, method: GET, path: /api/projects, rule: authenticated, own_cases: true, expect: *A200, assert: 'case_count and component_count for $P count only the cases the caller reaches'}
+  - {id: R10b, method: PUT, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: admin, mode: members_see_own_cases, body: {members_see_own_cases: false}, expect: *AD200, not_found: 'Project not found', note: 'the setting itself: true, false, 1 or 0, else 400; GET returns it as a boolean'}
+  - {id: R12o, method: GET, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: member, own_cases: true, expect: *M200, not_found: 'Project not found', assert: 'editor and viewer lists hold only cases they created (neither $P.base nor $P.comp); adminm and owner see every case'}
+  - {id: R13o, method: POST, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: editor, own_cases: true, body: {case_name: 'C {run} {role}', case_type: comparative}, expect: *E201, not_found: 'Project not found', note: 'students create their own submission: created_by is the caller; a name clashes only with cases the caller reaches'}
+  - {id: R14o, method: GET, path: '/api/projects/{projectId}/compare?cases={base},{comp}', params: {projectId: $P, base: $P.base, comp: $P.comp}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: {anon: 401, nonmem: 404, viewer: 404, editor: 404, adminm: 200, owner: 200, padmin: 404}, note: 'hidden cases are left out like missing ids; with none left, 404 No such cases in this project (not_found differs from the non-member body, so it is checked in isolation.test.ts)'}
+  - {id: R18o, method: GET, path: '/api/projects/{projectId}/progress', params: {projectId: $P}, rule: member, own_cases: true, expect: *M200, not_found: 'Project not found', assert: 'editor and viewer see only cases they created; each case carries created_by and author'}
+  - {id: R19o, method: GET, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R20o, method: PUT, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {description: 'updated by {role}'}, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R21o, method: DELETE, path: '/api/cases/{caseId}', params: {caseId: $fresh.emptyCase}, fresh: emptyCase, rule: 'admin; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R22o, method: GET, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R23o, method: POST, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {calculation_method: 'CML 2001', region_code: US}, expect: *OWN201, not_found: 'Case not found'}
+  - {id: R24o, method: POST, path: '/api/cases/{caseId}/clone-from', params: {caseId: $fresh.emptyCase}, fresh: emptyCase, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {sourceCaseId: $P.base}, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R25o, method: GET, path: '/api/cases/{caseId}/completeness', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R26o, method: GET, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R27o, method: POST, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {component_name: 'Glazing {role} {run}', component_type: operation, parent_component_id: $P.base.subprocess}, expect: *OWN201, not_found: 'Case not found'}
+  - {id: R28o, method: GET, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R29o, method: POST, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, multipart: notes_txt, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R30o, method: DELETE, path: '/api/cases/{caseId}/documents?id={docId}', params: {caseId: $P.base, docId: $fresh.document}, fresh: document, rule: 'editor; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R31o, method: POST, path: '/api/cases/{caseId}/duplicate', params: {caseId: $P.base}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {case_name: 'Dup {run} {role}'}, expect: *OWN201, not_found: 'Case not found'}
+  - {id: R32o, method: POST, path: '/api/cases/{caseId}/scale', params: {caseId: $fresh.caseCopy}, fresh: caseCopy, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {from: 1, to: 2, mode: data-covers}, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R33o, method: GET, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R34o, method: PUT, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {component_description: 'set by {role}'}, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R35o, method: DELETE, path: '/api/components/{componentId}', params: {componentId: $fresh.leaf}, fresh: leaf, rule: 'editor; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R36o, method: GET, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R37o, method: POST, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {substance_id: $substance.electricity, flow_type: input, quantity: 0.1, unit: kWh}, expect: *OWN201, not_found: 'Component not found'}
+  - {id: R38o, method: POST, path: '/api/components/{componentId}/auto-costs', params: {componentId: $P.base.op}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R39o, method: PUT, path: '/api/flows/{flowId}', params: {flowId: $P.base.flow}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {quantity: 2.5}, expect: *OWN200, not_found: 'Flow not found'}
+  - {id: R40o, method: DELETE, path: '/api/flows/{flowId}', params: {flowId: $fresh.flow}, fresh: flow, rule: 'editor; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Flow not found'}
+  - {id: R41o, method: GET, path: '/api/assessments/{runId}', params: {runId: $P.base.run}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Assessment not found'}
+  - {id: R42o, method: GET, path: '/api/assessments/{runId}/export?format=csv', params: {runId: $P.base.run}, rule: 'viewer; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Assessment not found'}
+  - {id: R43o, method: POST, path: /api/comparisons, rule: 'member; own cases: admin, or the case creator', own_cases: true, legacy: true, body: {comparison_name: 'Legacy {run} {role}', case_ids: [$P.base, $P.comp], project_id: $P}, primary: body.project_id, expect: {anon: 401, nonmem: 404, viewer: 400, editor: 400, adminm: 200, owner: 200, padmin: 404}, not_found: 'Project not found', note: 'a hidden case counts as not in the project (400 with the missing-id text)'}
+  - {id: R44o, method: GET, path: '/api/comparisons?project_id={projectId}', params: {projectId: $P}, rule: member, own_cases: true, legacy: true, primary: query.projectId, expect: *M200, not_found: 'Project not found', assert: 'a saved comparison that includes a case the caller cannot reach is left out'}
+  - {id: R45o, method: GET, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $legacy.comparison}, rule: 'member; own cases: admin, or the case creator', own_cases: true, legacy: true, expect: *OWN200, not_found: 'Comparison not found'}
+  - {id: R46o, method: DELETE, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $fresh.legacyComparison}, fresh: legacyComparison, rule: 'admin, or the creator while still a member; own cases: admin, or the case creator', own_cases: true, legacy: true, expect: *OWN200, not_found: 'Comparison not found'}
+  - {id: R52bo, method: POST, path: /api/ingest/preview, rule: 'editor on the target case; own cases: admin, or the case creator', own_cases: true, mode: 'connector = equipment', multipart: equipment_csv, primary: form.target_case_id, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R53o, method: POST, path: /api/ingest/apply, rule: 'editor on project_id', own_cases: true, mode: create, body: {project_id: $P, case_name: 'Import {run} {role}', nodes: [{name: 'Mug {role}', tier: product, parent: null}], flows: [], costs: [], notes: []}, primary: body.project_id, expect: *E201, not_found: 'Project not found', note: 'an import creates a case the caller owns'}
+  - {id: R53bo, method: POST, path: /api/ingest/apply, rule: 'editor on the target case; own cases: admin, or the case creator', own_cases: true, mode: append, body: {target_case_id: $P.base, attach_component_id: $P.base.op, flows: [], costs: [], notes: []}, primary: body.target_case_id, expect: *OWN200, not_found: 'Target case not found'}
 
 # Routes a flow needs that do not exist (see PERMISSIONS_MATRIX.md §2.9).
 missing_routes:

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { assessCompleteness } from '@/lib/ingest/completeness';
 import { parseId } from '@/lib/ids';
 
@@ -25,7 +25,7 @@ export async function GET(
       [id],
     );
     if (!caseRow) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-    const denied = await projectAccessDenied(userId, caseRow.project_id, undefined, { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, id, undefined, { notFound: 'Case not found' });
     if (denied) return denied;
 
     const components = await query<any>(

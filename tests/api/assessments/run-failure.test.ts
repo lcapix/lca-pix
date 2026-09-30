@@ -28,7 +28,10 @@ describe('POST /api/cases/:id/assessments when the run fails (RUN-3)', () => {
     vi.mocked(db.queryOne).mockImplementation(async (sql: string) =>
       /FROM case_table WHERE case_id/.test(sql) && /case_name/.test(sql)
         ? ({ project_id: 5, case_name: 'Case' } as any)
-        : null,
+        : // caseAccessDenied (lib/route-guard): the case, its creator and the project's own-cases setting
+          /members_see_own_cases/.test(sql)
+          ? ({ case_id: 3, project_id: 5, created_by: 1, members_see_own_cases: 0 } as any)
+          : null,
     );
     // A transaction that rolls back: whatever the callback wrote is gone.
     vi.mocked(db.transaction).mockImplementation(async (cb: any) => {

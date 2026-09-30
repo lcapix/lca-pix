@@ -3,7 +3,7 @@ import { readJson } from '@/lib/http'
 import { requireAuth } from '@/lib/auth'
 import { query } from '@/lib/db-helpers'
 import { jsonArray } from '@/lib/compare/legacy'
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
+import { isAuthError, projectAccessDenied, reachableCasesFilter, unreachableCaseIds } from '@/lib/route-guard'
 
 // Legacy saved comparisons. Nothing new is saved any more (Compare Cases at
 // /project/[id]/comparison reads live runs); these routes only list what was
@@ -46,10 +46,12 @@ export async function POST(request: NextRequest) {
     const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' })
     if (denied) return denied
 
+    // A case the caller cannot reach (B-A1) counts as not in the project.
+    const only = await reachableCasesFilter(userId, projectId, 'case_table')
     const caseRows = await query<any>(
       `SELECT case_id FROM case_table
-        WHERE project_id = ? AND case_id IN (${ids.map(() => '?').join(',')})`,
-      [projectId, ...ids]
+        WHERE project_id = ? AND case_id IN (${ids.map(() => '?').join(',')})${only.sql}`,
+      [projectId, ...ids, ...only.params]
     )
     if (caseRows.length !== new Set(ids).size) {
       return NextResponse.json({ error: 'One or more cases not found in this project' }, { status: 400 })
@@ -103,12 +105,19 @@ export async function GET(request: NextRequest) {
       [projectId]
     )
 
+    const comparisons = rows.map((row: any) => ({
+      ...row,
+      case_ids: jsonArray<number>(row.case_ids).map(Number).filter(Number.isFinite),
+    }))
+    // A saved comparison that names a case the caller cannot reach (B-A1) is left out.
+    const hidden = new Set(
+      await unreachableCaseIds(userId, projectId, comparisons.flatMap((c: any) => [...c.case_ids, Number(c.base_case_id)]))
+    )
     return NextResponse.json({
       success: true,
-      comparisons: rows.map((row: any) => ({
-        ...row,
-        case_ids: jsonArray<number>(row.case_ids).map(Number).filter(Number.isFinite),
-      })),
+      comparisons: hidden.size
+        ? comparisons.filter((c: any) => ![...c.case_ids, Number(c.base_case_id)].some((id) => hidden.has(id)))
+        : comparisons,
     })
   } catch (error: any) {
     if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

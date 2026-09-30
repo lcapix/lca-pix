@@ -28,6 +28,8 @@ export interface PermissionRow {
   bug?: string;
   legacy?: boolean;
   mode?: string;
+  /** Run with project.members_see_own_cases = 1 on $P (B-A1 student isolation). */
+  own_cases?: boolean;
   assert?: string;
   note?: string;
 }

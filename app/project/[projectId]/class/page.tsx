@@ -8,6 +8,11 @@
  * hand anything in. Progress is read from the cases themselves — lesson
  * answers, whether a run exists, whether an interpretation was written — so it
  * cannot drift from the work it describes.
+ *
+ * "Students see only their own case" (project.members_see_own_cases, B-A1):
+ * the owner and admins switch it here; with it on, editors and viewers reach
+ * only the cases they created, and each row names its author so two
+ * submissions with the same name can be told apart.
  */
 
 import { useEffect, useState } from 'react'
@@ -28,6 +33,7 @@ type Member = {
 type CaseProgress = {
   case_id: number
   case_name: string
+  author: string | null
   steps: number
   flows: number
   runs: number
@@ -54,6 +60,8 @@ export default function ClassPage() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('viewer')
   const [adding, setAdding] = useState(false)
+  const [ownOnly, setOwnOnly] = useState(false)
+  const [savingOwnOnly, setSavingOwnOnly] = useState(false)
 
   const load = async () => {
     try {
@@ -68,6 +76,7 @@ export default function ClassPage() {
       setCanManage(!!md?.canManage)
       setCanManageAdmins(!!md?.canManageAdmins)
       setCases(Array.isArray(pd?.cases) ? pd.cases : [])
+      setOwnOnly(!!pd?.members_see_own_cases)
     } finally {
       setLoading(false)
     }
@@ -110,6 +119,26 @@ export default function ClassPage() {
     await load()
   }
 
+  const changeOwnOnly = async (next: boolean) => {
+    setSavingOwnOnly(true)
+    try {
+      const res = await apiRequest(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ members_see_own_cases: next }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data?.error || `Could not change it (${res.status})`)
+        return
+      }
+      setOwnOnly(next)
+      toast.success(next ? 'Students now see only their own case' : 'Every member sees every case again')
+      await load()
+    } finally {
+      setSavingOwnOnly(false)
+    }
+  }
+
   const cell: React.CSSProperties = {
     padding: '8px 10px',
     fontSize: 12.5,
@@ -139,6 +168,61 @@ export default function ClassPage() {
         Who can open this project, and where each case stands. Nothing here is a grade: it says what
         exists in the work.
       </p>
+
+      {canManage ? (
+        <section
+          style={{
+            display: 'flex',
+            gap: 12,
+            alignItems: 'flex-start',
+            padding: '14px 16px',
+            marginBottom: 26,
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 10,
+          }}
+        >
+          <input
+            id="own-cases-only"
+            type="checkbox"
+            role="switch"
+            aria-checked={ownOnly}
+            aria-describedby="own-cases-only-help"
+            checked={ownOnly}
+            disabled={loading || savingOwnOnly}
+            onChange={(e) => changeOwnOnly(e.target.checked)}
+            style={{
+              appearance: 'none',
+              flex: '0 0 auto',
+              width: 36,
+              height: 20,
+              marginTop: 1,
+              borderRadius: 999,
+              cursor: 'pointer',
+              background: ownOnly
+                ? 'radial-gradient(circle at 26px 50%, #fff 7px, var(--primary) 7.5px)'
+                : 'radial-gradient(circle at 10px 50%, #fff 7px, var(--text-tertiary) 7.5px)',
+              opacity: savingOwnOnly ? 0.6 : 1,
+            }}
+          />
+          <div>
+            <label
+              htmlFor="own-cases-only"
+              style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
+            >
+              Students see only their own case
+            </label>
+            <div id="own-cases-only-help" style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3 }}>
+              Editors and viewers open only the cases they created; you and admins still see every case.
+            </div>
+          </div>
+        </section>
+      ) : (
+        ownOnly && (
+          <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 26px' }}>
+            Each student sees only their own case in this project; the instructors see every case.
+          </p>
+        )
+      )}
 
       <section style={{ marginBottom: 34 }}>
         <h2 style={{ fontSize: 15, fontWeight: 650, margin: '0 0 10px', color: 'var(--text-primary)' }}>
@@ -221,10 +305,11 @@ export default function ClassPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1.6fr 0.6fr 0.6fr 0.6fr 1fr 1fr 0.7fr',
+                gridTemplateColumns: '1.6fr 1.1fr 0.6fr 0.6fr 0.6fr 1fr 1fr 0.7fr',
               }}
             >
               <div style={head}>Case</div>
+              <div style={head}>Author</div>
               <div style={head}>Steps</div>
               <div style={head}>Flows</div>
               <div style={head}>Runs</div>
@@ -244,6 +329,7 @@ export default function ClassPage() {
                       {c.case_name}
                     </Link>
                   </div>
+                  <div style={cell}>{c.author ?? '—'}</div>
                   <div style={cell}>{c.steps}</div>
                   <div style={cell}>{c.flows}</div>
                   <div style={cell}>{c.runs}</div>

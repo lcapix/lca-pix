@@ -84,8 +84,9 @@ export async function POST(request: NextRequest) {
 
       const caseId = Number(
         (
-          await run('INSERT INTO case_table (project_id, case_name, case_type, description) VALUES (?, ?, ?, ?)', [
+          await run('INSERT INTO case_table (project_id, created_by, case_name, case_type, description) VALUES (?, ?, ?, ?, ?)', [
             projectId,
+            userId,
             EXAMPLE_CASE.name,
             'base',
             EXAMPLE_CASE.description,

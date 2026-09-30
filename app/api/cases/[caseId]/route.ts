@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
 
@@ -27,7 +27,7 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, undefined, { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' });
     if (denied) return denied;
 
     // The study's method and region, so a run dialog can start from them.
@@ -71,7 +71,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, 'editor', { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
     if (denied) return denied;
 
     const json = await readJson(request);
@@ -114,10 +114,12 @@ export async function PUT(
       if (!String(case_name).trim()) {
         return NextResponse.json({ error: 'Case name is required' }, { status: 400 });
       }
+      // Only among the cases the caller reaches (B-A1), as on create.
+      const only = await reachableCasesFilter(userId, caseData.project_id, 'case_table');
       const clash = await queryOne<any>(
         `SELECT case_id FROM case_table
-          WHERE project_id = ? AND case_id <> ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
-        [caseData.project_id, caseId, case_name]
+          WHERE project_id = ? AND case_id <> ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
+        [caseData.project_id, caseId, case_name, ...only.params]
       );
       if (clash) {
         return NextResponse.json(
@@ -270,7 +272,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, 'admin', { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, 'admin', { notFound: 'Case not found' });
     if (denied) return denied;
 
     await execute(`DELETE FROM case_table WHERE case_id = ?`, [caseId]);

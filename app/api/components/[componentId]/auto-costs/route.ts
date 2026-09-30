@@ -1,7 +1,7 @@
 // app/api/components/[componentId]/auto-costs/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied } from '@/lib/route-guard';
 import { queryOne } from '@/lib/db-helpers';
 import { autoPopulateCosts } from '@/lib/costs/auto-populate';
 import { logIntegration } from '@/lib/integrations/log';
@@ -23,11 +23,10 @@ export async function POST(
 
   // This writes labor_cost / energy_cost on the component, so it needs the
   // same editor check as PUT /api/components/[id]: resolve the owning project
-  // through component -> case_table first.
-  let projectId: number;
+  // through component -> case_table first, then check the case (B-A1).
   try {
     const owner = await queryOne<any>(
-      `SELECT ct.project_id
+      `SELECT ct.project_id, c.case_id
          FROM component c
          JOIN case_table ct ON c.case_id = ct.case_id
         WHERE c.component_id = ?`,
@@ -36,8 +35,7 @@ export async function POST(
     if (!owner || owner.project_id == null) {
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
-    projectId = Number(owner.project_id);
-    const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Component not found' });
+    const denied = await caseAccessDenied(userId, owner.case_id, 'editor', { notFound: 'Component not found' });
     if (denied) return denied;
   } catch (err) {
     console.error('auto-costs access check failed:', err);

@@ -3,7 +3,7 @@ import { readJson } from '@/lib/http';
 import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { planPlacement } from '@/lib/component-tree';
 import {
   BadRequest,
@@ -35,7 +35,7 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, undefined, { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' });
     if (denied) return denied;
 
     const components = await query<any>(
@@ -102,7 +102,7 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, caseData.project_id, 'editor', { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
     if (denied) return denied;
 
     const json = await readJson(request);

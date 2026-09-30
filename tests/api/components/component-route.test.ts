@@ -24,6 +24,8 @@ function fakeDb(id: number, opts: { type?: string } = {}): Conn {
   vi.mocked(auth.requireAuth).mockResolvedValue(42)
   vi.mocked(auth.checkProjectAccess).mockResolvedValue(true)
   vi.mocked(db.queryOne).mockImplementation(async (sql: string) => {
+    // caseAccessDenied (lib/route-guard): the case, its creator and the project's own-cases setting
+    if (/members_see_own_cases/.test(sql)) return { case_id: 10, project_id: 7, created_by: 42, members_see_own_cases: 0 } as any
     if (/c\.\*/.test(sql)) return { component_id: id, component_name: 'x' } as any
     if (/FROM component c/.test(sql)) {
       return {

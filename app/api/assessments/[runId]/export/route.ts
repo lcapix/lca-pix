@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
 import { generateAssessmentPPTX } from '@/lib/pptx-generator';
 import {
@@ -78,7 +78,7 @@ export async function GET(
 
     // Exports carry the full report; require at least viewer access on the
     // owning project (this was the one resource route without the check).
-    const denied = await projectAccessDenied(userId, assessment.project_id, 'viewer', {
+    const denied = await caseAccessDenied(userId, assessment.case_id, 'viewer', {
       notFound: 'Assessment not found',
     });
     if (denied) return denied;

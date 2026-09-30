@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { planPlacement, descendantsOf } from '@/lib/component-tree';
 import {
   BadRequest,
@@ -48,7 +48,7 @@ export async function GET(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, (component as any).project_id, undefined, { notFound: 'Component not found' });
+    const denied = await caseAccessDenied(userId, (component as any).case_id, undefined, { notFound: 'Component not found' });
     if (denied) return denied;
 
     return NextResponse.json({ success: true, component });
@@ -89,7 +89,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Component not found' });
+    const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Component not found' });
     if (denied) return denied;
 
     const json = await readJson(request);
@@ -330,7 +330,7 @@ export async function DELETE(
     // Editor, the same level that creates and edits steps (FLOW-10): an
     // editor could already empty a step of flows and costs, so admin-only
     // delete protected nothing and left editors unable to undo their own adds.
-    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Component not found' });
+    const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Component not found' });
     if (denied) return denied;
 
     const rows = await loadCaseTree(Number(existing.case_id));
