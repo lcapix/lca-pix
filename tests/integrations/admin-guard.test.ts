@@ -34,6 +34,15 @@ describe('guardAdmin', () => {
     },
   );
 
+  it('401 for any AuthError, whatever its message (same rule as isAuthError in lib/route-guard)', async () => {
+    // requireAuth throws a typed AuthError; a message added to it later must
+    // not turn a sign-in failure into a 500 here.
+    vi.mocked(auth.requireAdmin).mockRejectedValue(Object.assign(new Error('Session revoked'), { name: 'AuthError' }));
+    const g = await guardAdmin(req());
+    expect(g.response?.status).toBe(401);
+    expect(await g.response!.json()).toEqual({ error: 'Unauthorized' });
+  });
+
   it('500 with a generic body when the check itself fails (e.g. the DB is down)', async () => {
     vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.1:3306'));
     const g = await guardAdmin(req());
