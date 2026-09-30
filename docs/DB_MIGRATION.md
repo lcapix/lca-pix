@@ -8,7 +8,7 @@ MySQL 8 host) when we move AWS accounts/regions.
 | | |
 |---|---|
 | Engine | AWS RDS **MySQL 8** |
-| Host | `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com` |
+| Host | `<RDS_HOST>` |
 | Port | `3306` |
 | Database | `lca_v3` |
 | User | `lcaadmin` |

@@ -187,7 +187,7 @@ If you prefer to use SQL directly instead of the Node.js script:
 
 ### Option A: MySQL Command Line
 ```bash
-mysql -h lca-dev-db-small.c55ojm7spphe.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
       -u admin \
       -p \
       lca_dev < nutroleum-vaseline-test-data.sql

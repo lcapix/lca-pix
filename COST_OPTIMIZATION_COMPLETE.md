@@ -40,7 +40,7 @@
   - Class: db.t3.small (2 vCPU, 2GB RAM)
   - Multi-AZ: Disabled
   - Performance Insights: Disabled (not supported on t3.small)
-  - Endpoint: `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306`
+  - Endpoint: `<RDS_HOST>:3306`
 - ⏳ Status: Modifying (almost ready)
 - **Savings:** $90/month
 
@@ -154,17 +154,17 @@ aws rds modify-db-instance \
 ### New RDS Database
 ```bash
 # Endpoint
-Host: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+Host: <RDS_HOST>
 Port: 3306
 Database: lca_v3
 Username: lcaadmin
 Password: [From Secrets Manager: rds!db-fabed009-0d32-4d03-aa8a-54bb8209c1b4]
 
 # Connection String
-mysql://lcaadmin:[PASSWORD]@lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306/lca_v3
+mysql://lcaadmin:[PASSWORD]@<RDS_HOST>:3306/lca_v3
 
 # MySQL CLI
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
       -P 3306 \
       -u lcaadmin \
       -p \
@@ -196,7 +196,7 @@ s3://lca-dev-backups
 ### 1. Configure EC2 Application Environment
 ```bash
 # Update .env.production
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
@@ -324,7 +324,7 @@ aws rds delete-db-instance \
     --profile lca-pix
 
 # 2. Old instance is still running (nothing changed)
-# Continue using: lca-dev-db.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+# Continue using: <RDS_HOST>
 
 # 3. Or restore from snapshot to original size
 aws rds restore-db-instance-from-db-snapshot \

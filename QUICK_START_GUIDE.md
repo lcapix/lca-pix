@@ -84,7 +84,7 @@ ps aux | grep -E "(session-m|next-server)" | grep -v grep
 - **Host**: 127.0.0.1
 - **Port**: 3307
 - **User**: lcaadmin
-- **Password**: EP76017fLefZ8?d!ezTHsN[kA()X
+- **Password**: <DB_PASSWORD>
 - **Database**: lca_v3
 
 ### Via Command Line
@@ -97,7 +97,7 @@ const mysql = require('mysql2/promise');
     host: '127.0.0.1',
     port: 3307,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3'
   });
   const [rows] = await conn.execute('SELECT COUNT(*) as count FROM project');
@@ -135,7 +135,7 @@ EOF
        const conn = await mysql.createConnection({
          host: '127.0.0.1', port: 3307,
          user: 'lcaadmin',
-         password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+         password: '<DB_PASSWORD>',
          database: 'lca_v3'
        });
        console.log('✅ Connected');

@@ -161,7 +161,7 @@ lsof -i :3307
 aws ssm start-session \
   --target i-055b91c4baf230251 \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"],"portNumber":["3306"],"localPortNumber":["3307"]}' \
+  --parameters '{"host":["<RDS_HOST>"],"portNumber":["3306"],"localPortNumber":["3307"]}' \
   --region us-east-1 \
   --profile lca-pix &
 ```

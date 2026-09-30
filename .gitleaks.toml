@@ -1,0 +1,24 @@
+# gitleaks configuration, used by the `secrets` job in
+# .github/workflows/deploy.yml (and by `gitleaks detect` locally).
+#
+# Default rules plus a narrow allowlist. Never add a real value here: allow
+# a placeholder pattern or a clearly fake test literal, nothing else.
+
+title = "lcapix"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholders and fake test/CI values"
+regexes = [
+  # Placeholders used in docs, .env templates and legacy scripts, e.g.
+  # <DB_PASSWORD>, <JWT_SECRET>, <TEST_ACCOUNT_PASSWORD>, <RDS_HOST>
+  '''<[A-Z][A-Z0-9_]*>''',
+  # Unit-test JWT secret set in tests/setup.ts
+  '''test-secret-do-not-use-in-prod''',
+  # Fake DB password in tests/lib/db.test.ts
+  '''not-a-real-password''',
+  # Dummy build-time values in the CI workflow
+  '''ci-dummy-not-a-secret''',
+]

@@ -218,7 +218,7 @@ Inside MySQL prompt, run these commands:
 CREATE DATABASE lca_v3 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 2. Create a dedicated user (more secure than using root)
-CREATE USER 'lca_user'@'localhost' IDENTIFIED BY 'LCA_secure_pass_2025!';
+CREATE USER 'lca_user'@'localhost' IDENTIFIED BY '<DB_PASSWORD>';
 
 -- 3. Grant permissions to the user
 GRANT ALL PRIVILEGES ON lca_v3.* TO 'lca_user'@'localhost';
@@ -234,14 +234,14 @@ SHOW DATABASES;
 EXIT;
 ```
 
-**Security Note**: Change `LCA_secure_pass_2025!` to a strong password of your choice.
+**Security Note**: Change `<DB_PASSWORD>` to a strong password of your choice.
 
 #### Step 3: Import Database Schema
 
 ```bash
 # Import the main schema
 mysql -u lca_user -p lca_v3 < lca_v3_drawsql_schema.sql
-# Enter password: LCA_secure_pass_2025! (or your chosen password)
+# Enter password: <DB_PASSWORD> (or your chosen password)
 
 # Verify tables were created
 mysql -u lca_user -p lca_v3 -e "SHOW TABLES;"
@@ -277,7 +277,7 @@ mysql -u lca_user -p lca_v3 < create-test-data.sql
 ```
 
 This creates:
-- Sample user accounts (username: `demo`, password: `demo123`)
+- Sample user accounts (username: `demo`, password: `<DEMO_PASSWORD>`)
 - Sample project with components
 - Sample substances and impact categories
 - Test flows and assessment data
@@ -298,11 +298,11 @@ If you want to connect to the existing AWS database instead:
 
 **Connection details** (from `.env.local.example`):
 ```
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
-DATABASE_PASSWORD=EP76017fLefZ8?d!ezTHsN[kA()X
+DATABASE_PASSWORD=<DB_PASSWORD>
 ```
 
 ---
@@ -342,7 +342,7 @@ DATABASE_HOST=localhost
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lca_user
-DATABASE_PASSWORD=LCA_secure_pass_2025!
+DATABASE_PASSWORD=<DB_PASSWORD>
 
 # JWT Authentication
 JWT_SECRET=my-super-secret-jwt-key-change-this-in-production-abc123xyz789
@@ -514,8 +514,8 @@ If you loaded the test data, you can use these accounts:
 
 | Username | Password | Role | Email |
 |----------|----------|------|-------|
-| `demo` | `demo123` | User | demo@lcaproject.com |
-| `admin` | `admin123` | Admin | admin@lcaproject.com |
+| `demo` | `<DEMO_PASSWORD>` | User | demo@lcaproject.com |
+| `admin` | `<DEMO_ADMIN_PASSWORD>` | Admin | admin@lcaproject.com |
 
 **Security Note**: These are test accounts only. Delete them in production!
 

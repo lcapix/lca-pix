@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/run-migration-006.js — run 006_api_integrations.sql against AWS RDS via SSH tunnel
+// scripts/run-migration-006.js — run 006_api_integrations.sql against the database named by DATABASE_* env vars
 
 const mysql = require('mysql2/promise');
 const fs = require('fs');
@@ -7,15 +7,26 @@ const path = require('path');
 
 const SQL_FILE = path.resolve(__dirname, '../database/migrations/006_api_integrations.sql');
 
+// Connection settings come only from the environment: no hard-coded host,
+// user or password. Load them first, e.g.  set -a; source .env.local; set +a
+function dbConfigFromEnv() {
+  const missing = ['DATABASE_HOST', 'DATABASE_USER', 'DATABASE_NAME'].filter((k) => !process.env[k]);
+  if (process.env.DATABASE_PASSWORD === undefined) missing.push('DATABASE_PASSWORD');
+  if (missing.length) {
+    console.error(`Missing required env: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  return {
+    host: process.env.DATABASE_HOST,
+    port: Number(process.env.DATABASE_PORT || 3306),
+    user: process.env.DATABASE_USER,
+    password: process.env.DATABASE_PASSWORD,
+    database: process.env.DATABASE_NAME,
+  };
+}
+
 async function main() {
-  const conn = await mysql.createConnection({
-    host: '127.0.0.1',
-    port: 3307,
-    user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
-    database: 'lca_v3',
-    multipleStatements: true,
-  });
+  const conn = await mysql.createConnection({ ...dbConfigFromEnv(), multipleStatements: true });
 
   const sql = fs.readFileSync(SQL_FILE, 'utf8');
   const statements = sql

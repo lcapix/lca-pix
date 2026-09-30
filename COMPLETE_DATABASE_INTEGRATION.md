@@ -87,7 +87,7 @@ The application now has a direct connection between the frontend and MySQL datab
 ```
 URL: http://localhost:3002/auth/login
 Email: john@lcaproject.com
-Password: password123
+Password: <DEMO_PASSWORD>
 ```
 ✅ Should login successfully and redirect to /home
 
@@ -274,7 +274,7 @@ const componentsResponse = await apiRequest(`/api/cases/${caseId}/components`)
 
 You can test these features immediately:
 
-1. ✅ **Login** with `john@lcaproject.com` / `password123`
+1. ✅ **Login** with `john@lcaproject.com` / `<DEMO_PASSWORD>`
 2. ✅ **See projects** from MySQL database (not localStorage)
 3. ✅ **Create new project** → Saves to MySQL
 4. ✅ **Click on project** → Fetches details from MySQL

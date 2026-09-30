@@ -14,12 +14,19 @@ async function runMigration() {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 
   // Database connection config from .env.local
+  // No host/user/database fallbacks: every value must come from the env.
+  const missing = ['DATABASE_HOST', 'DATABASE_USER', 'DATABASE_NAME'].filter((k) => !process.env[k]);
+  if (process.env.DATABASE_PASSWORD === undefined) missing.push('DATABASE_PASSWORD');
+  if (missing.length) {
+    console.error(`Missing required env: ${missing.join(', ')}`);
+    process.exit(1);
+  }
   const config = {
-    host: process.env.DATABASE_HOST || '127.0.0.1',
-    port: parseInt(process.env.DATABASE_PORT || '3307'),
-    user: process.env.DATABASE_USER || 'lcaadmin',
+    host: process.env.DATABASE_HOST,
+    port: parseInt(process.env.DATABASE_PORT || '3306'),
+    user: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
-    database: process.env.DATABASE_NAME || 'lca_v3',
+    database: process.env.DATABASE_NAME,
     multipleStatements: true
   };
 
@@ -35,7 +42,7 @@ async function runMigration() {
     // Connect to database
     console.log('🔌 Connecting to database...');
     connection = await mysql.createConnection(config);
-    console.log('✅ Connected to lca_v3 database\n');
+    console.log(`✅ Connected to ${config.database} database\n`);
 
     // Execute migration
     console.log('⚙️  Executing migration SQL...\n');

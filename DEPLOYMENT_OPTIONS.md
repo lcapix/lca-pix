@@ -80,7 +80,7 @@ This script:
 5. Click "Continue" → "Apply immediately"
 6. Wait 3-5 minutes
 7. Use MySQL Workbench or TablePlus to connect:
-   - Host: `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com`
+   - Host: `<RDS_HOST>`
    - Port: 3306
    - Username: `lcaadmin`
    - Password: Get from Secrets Manager

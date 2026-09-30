@@ -601,7 +601,7 @@ These are intentionally deferred. Don't add any of them in this pass.
 ## 13. Dependencies (what this design doc assumes)
 
 - Phase 1 API integration is complete (✅ done as of commit `14d28e5`)
-- AWS RDS is populated with demo data (`john@lcaproject.com` / `Lcapix@guerry123`)
+- AWS RDS is populated with demo data (`john@lcaproject.com` / `<TEST_ACCOUNT_PASSWORD>`)
 - Dev server runs on port 3002 with `pnpm run dev`
 - Claude Preview tooling works for live UI verification during implementation
 

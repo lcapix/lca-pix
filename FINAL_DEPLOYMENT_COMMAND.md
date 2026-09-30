@@ -103,7 +103,7 @@ If you prefer to do it manually:
 2. **Go to AWS Console → RDS → Query Editor**
    - Select database: `lca-dev-db-small`
    - Username: `lcaadmin`
-   - Password: Get from Secrets Manager or use: `EP76017fLefZ8?d!ezTHsN[kA()X`
+   - Password: Get from Secrets Manager or use: `<DB_PASSWORD>`
 
 3. **Run these SQL commands in order:**
 
@@ -179,10 +179,10 @@ node -e "
 const mysql = require('mysql2/promise');
 async function check() {
   const conn = await mysql.createConnection({
-    host: 'lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com',
+    host: '<RDS_HOST>',
     port: 3306,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3'
   });
   const [tables] = await conn.execute('SHOW TABLES');
@@ -221,7 +221,7 @@ check();
    # Sign up
    curl -X POST http://localhost:3000/api/auth/signup \
      -H "Content-Type: application/json" \
-     -d '{"username":"test","email":"test@example.com","password":"password123"}'
+     -d '{"username":"test","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
    ```
 
 3. **I'll continue building the remaining API routes**

@@ -180,14 +180,14 @@ Server will start on: http://localhost:3000
 ```bash
 curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123"}'
+  -d '{"username":"testuser","email":"test@example.com","password":"<DEMO_PASSWORD>"}'
 ```
 
 ### Test 2: Login
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"password123"}'
+  -d '{"email":"john@lcaproject.com","password":"<DEMO_PASSWORD>"}'
 ```
 
 ### Test 3: Get Projects (need token from login)

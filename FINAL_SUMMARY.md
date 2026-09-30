@@ -3,7 +3,7 @@
 ## 🎉 WHAT WE ACCOMPLISHED
 
 ### ✅ Database (100% Complete)
-- **Deployed to AWS RDS**: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+- **Deployed to AWS RDS**: <RDS_HOST>
 - **13 Tables Created**: Full schema with foreign keys, indexes, and constraints
 - **Reference Data Seeded**:
   - 4 permissions (owner, admin, editor, viewer)
@@ -60,9 +60,9 @@
 **In EC2 Session Manager terminal**, run:
 
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   lca_v3 < create-test-data.sql
 ```
 
@@ -76,9 +76,9 @@ This creates:
 
 **Verify it worked**:
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   lca_v3 -e "SELECT COUNT(*) FROM account; SELECT COUNT(*) FROM project; SELECT COUNT(*) FROM component;"
 ```
 
@@ -138,7 +138,7 @@ package.json                # Dependencies installed
 ## 🔑 IMPORTANT CREDENTIALS
 
 ### Database (RDS)
-- **Host**: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+- **Host**: <RDS_HOST>
 - **Port**: 3306
 - **Database**: lca_v3
 - **Username**: lcaadmin

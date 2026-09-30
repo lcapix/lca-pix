@@ -183,7 +183,7 @@ tail -f /tmp/lca-tunnel.log
 
 **Credentials**:
 - Email: `ec2user@example.com`
-- Password: `password123`
+- Password: `<DEMO_PASSWORD>`
 - OR Google: `lcapix50@gmail.com`
 
 ---

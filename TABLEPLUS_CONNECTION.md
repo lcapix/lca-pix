@@ -7,10 +7,10 @@ Use these credentials to connect to your RDS database from TablePlus:
 | Field | Value |
 |-------|-------|
 | **Connection Type** | MySQL |
-| **Host** | `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com` |
+| **Host** | `<RDS_HOST>` |
 | **Port** | `3306` |
 | **User** | `lcaadmin` |
-| **Password** | `EP76017fLefZ8?d!ezTHsN[kA()X` |
+| **Password** | `<DB_PASSWORD>` |
 | **Database** | `lca_v3` |
 
 ---
@@ -32,10 +32,10 @@ Fill in the connection form with:
 
 ```
 Name: LCA v3 Production (AWS RDS)
-Host: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+Host: <RDS_HOST>
 Port: 3306
 User: lcaadmin
-Password: EP76017fLefZ8?d!ezTHsN[kA()X
+Password: <DB_PASSWORD>
 Database: lca_v3
 ```
 
@@ -162,7 +162,7 @@ aws rds describe-db-instances \
 ### Authentication Failed
 
 Double-check password has no typos:
-- Password: `EP76017fLefZ8?d!ezTHsN[kA()X`
+- Password: `<DB_PASSWORD>`
 - Note the special characters: `?`, `!`, `[`, `]`, `(`, `)`
 
 ---

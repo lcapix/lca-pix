@@ -38,7 +38,7 @@
   - Engine: MySQL 8.0.42
   - Storage: 20GB gp2
   - Multi-AZ: Disabled
-  - Endpoint: `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com:3306`
+  - Endpoint: `<RDS_HOST>:3306`
 - **Status:** ✅ Available
 - **Publicly Accessible:** Yes (temporarily, for deployment)
 - **Security Group:** Updated with your IP (76.36.238.7/32)
@@ -196,7 +196,7 @@ cd lca-project-v3
 
 # Configure environment
 cat > .env.production << EOF
-DATABASE_HOST=lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+DATABASE_HOST=<RDS_HOST>
 DATABASE_PORT=3306
 DATABASE_NAME=lca_v3
 DATABASE_USER=lcaadmin
@@ -258,7 +258,7 @@ pm2 startup
 
 ### Database (from EC2 or VPC)
 ```bash
-Host: lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com
+Host: <RDS_HOST>
 Port: 3306
 Database: lca_v3
 Username: lcaadmin

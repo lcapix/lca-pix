@@ -21,13 +21,13 @@ Before any task, ensure the SSH tunnel is up and dev server can connect:
 aws ssm start-session \
   --target i-055b91c4baf230251 --profile lca-pix \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"],"portNumber":["3306"],"localPortNumber":["3307"]}'
+  --parameters '{"host":["<RDS_HOST>"],"portNumber":["3306"],"localPortNumber":["3307"]}'
 
 # Terminal 2 — dev server
 cd "/Users/kavishpandit/Desktop/lca/lca project v3" && /opt/homebrew/bin/pnpm run dev
 ```
 
-**Login for manual testing:** `john@lcaproject.com` / `Lcapix@guerry123`
+**Login for manual testing:** `john@lcaproject.com` / `<TEST_ACCOUNT_PASSWORD>`
 
 **AWS Console:** `https://117852575520.signin.aws.amazon.com/console`
 
@@ -204,7 +204,7 @@ async function main() {
     host: '127.0.0.1',
     port: 3307,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3',
     multipleStatements: true,
   });
@@ -255,7 +255,7 @@ Expected output: several `✓` lines, final `Done. N applied, 0 skipped.`
 node -e "
 const mysql = require('mysql2/promise');
 (async () => {
-  const c = await mysql.createConnection({host:'127.0.0.1',port:3307,user:'lcaadmin',password:'EP76017fLefZ8?d!ezTHsN[kA()X',database:'lca_v3'});
+  const c = await mysql.createConnection({host:'127.0.0.1',port:3307,user:'lcaadmin',password:'<DB_PASSWORD>',database:'lca_v3'});
   const [f] = await c.query('DESCRIBE driver_impact_factors');
   const hasMethod = f.some(x => x.Field === 'method_name');
   console.log('driver_impact_factors.method_name:', hasMethod ? 'OK' : 'MISSING');
@@ -846,7 +846,7 @@ With dev server + tunnel running:
 ```bash
 TOKEN=$(curl -sL -X POST http://localhost:3002/api/auth/login/ \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"Lcapix@guerry123"}' \
+  -d '{"email":"john@lcaproject.com","password":"<TEST_ACCOUNT_PASSWORD>"}' \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
 
 # Find one substance that's unknown to PubChem AND one that's well-known
@@ -1480,7 +1480,7 @@ Expected: `"success": true, "result": { "inserted": N, "substancesMatched": M, .
 ```bash
 node -e "
 const m=require('mysql2/promise');(async()=>{
-const c=await m.createConnection({host:'127.0.0.1',port:3307,user:'lcaadmin',password:'EP76017fLefZ8?d!ezTHsN[kA()X',database:'lca_v3'});
+const c=await m.createConnection({host:'127.0.0.1',port:3307,user:'lcaadmin',password:'<DB_PASSWORD>',database:'lca_v3'});
 const [r]=await c.query(\"SELECT method_name, COUNT(*) as cnt FROM driver_impact_factors GROUP BY method_name\");
 console.table(r);
 await c.end();})()"
@@ -2004,7 +2004,7 @@ Run on an existing case:
 # Run a fresh EV assessment; capture the number of categories and total GW
 TOKEN=$(curl -sL -X POST http://localhost:3002/api/auth/login/ \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"Lcapix@guerry123"}' \
+  -d '{"email":"john@lcaproject.com","password":"<TEST_ACCOUNT_PASSWORD>"}' \
   | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
 
 curl -sL -X POST http://localhost:3002/api/cases/19/assessments/ \

@@ -9,8 +9,9 @@
 # testing
 /coverage
 
-# next.js
+# next.js (any nested checkout's build output too)
 /.next/
+**/.next/
 /out/
 
 # production
@@ -60,3 +61,7 @@ docs/build/
 # python bytecode from the factor-import scripts
 __pycache__/
 *.pyc
+
+# per-developer Claude Code config (tool allowlists, local paths) — never tracked
+.claude/settings.local.json
+.claude/launch.json

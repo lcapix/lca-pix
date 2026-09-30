@@ -234,7 +234,7 @@ Once status shows "Available":
 3. **Find**: "Endpoint" (looks like `lca-dev-db.xxxxx.us-east-1.rds.amazonaws.com`)
 4. **Copy this** to Notepad - you'll need it later!
 
-Example: `lca-dev-db.ch1a2b3c4d5e.us-east-1.rds.amazonaws.com`
+Example: `<RDS_HOST>`
 
 ---
 

@@ -94,7 +94,7 @@ require('dotenv').config({ path: '.env.local' });
 
 ### Test 1: Verify Fixed Aggregation Bug
 1. Go to http://localhost:3002
-2. Login with: `lcapix50@gmail.com` / `Lcapix@guerry123`
+2. Login with: `lcapix50@gmail.com` / `<TEST_ACCOUNT_PASSWORD>`
 3. Navigate to: Project → Case → Results
 4. Click "Run New Assessment"
 5. **Expected**: Environmental Impact Results show actual values (e.g., 26475 kg CO2)
@@ -232,13 +232,13 @@ Use the files I've created as templates:
 
 ### Login Credentials:
 - **Email**: lcapix50@gmail.com
-- **Password**: Lcapix@guerry123
+- **Password**: <TEST_ACCOUNT_PASSWORD>
 
 ### Database Credentials:
 - **Host**: 127.0.0.1:3307
 - **Database**: lca_v3
 - **User**: lcaadmin
-- **Password**: EP76017fLefZ8?d!ezTHsN[kA()X
+- **Password**: <DB_PASSWORD>
 
 ### Key Commands:
 ```bash

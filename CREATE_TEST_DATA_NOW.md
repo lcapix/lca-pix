@@ -33,7 +33,7 @@ sh-4.2$
 Copy and paste this ENTIRE command into the terminal:
 
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 <<'EOSQL'
+mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 <<'EOSQL'
 -- Create test user
 INSERT INTO account (username, email, password_hash, account_type) VALUES
 ('john_doe', 'john@lcaproject.com', '$2b$10$abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNO', 'user');
@@ -128,7 +128,7 @@ Created 5 components, 4 flows, 1 assessment (ID: 1)
 Run this to see everything that was created:
 
 ```bash
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 -e "
+mysql -h <RDS_HOST> -u lcaadmin -p'<DB_PASSWORD>' lca_v3 -e "
 SELECT 'USERS:' AS ''; 
 SELECT id, username, email FROM account;
 

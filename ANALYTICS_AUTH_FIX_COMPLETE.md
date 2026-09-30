@@ -213,7 +213,7 @@ Now when you open analytics, you'll see detailed logs:
 3. Go to http://localhost:3002/auth/login
 4. Log in with:
    - Email: `ec2user@example.com`
-   - Password: `password123`
+   - Password: `<DEMO_PASSWORD>`
 5. Navigate to analytics again
 6. **Should work now with fresh token!** ✅
 

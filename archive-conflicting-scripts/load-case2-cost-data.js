@@ -1,3 +1,4 @@
+if (process.env.LCAPIX_ALLOW_LEGACY_SCRIPT !== '1') { console.error('Refusing to run: legacy script that can modify a live database. See ops/legacy-scripts/README.md (override: LCAPIX_ALLOW_LEGACY_SCRIPT=1).'); process.exit(1); }
 /**
  * Load ABC Cost Data for Case 2
  * Populates cost data for components in case_id = 2

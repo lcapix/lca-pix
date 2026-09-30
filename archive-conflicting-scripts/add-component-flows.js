@@ -1,3 +1,4 @@
+if (process.env.LCAPIX_ALLOW_LEGACY_SCRIPT !== '1') { console.error('Refusing to run: legacy script that can modify a live database. See ops/legacy-scripts/README.md (override: LCAPIX_ALLOW_LEGACY_SCRIPT=1).'); process.exit(1); }
 const mysql = require('mysql2/promise');
 
 async function addComponentFlows() {
@@ -5,7 +6,7 @@ async function addComponentFlows() {
     host: '127.0.0.1',
     port: 3307,
     user: 'lcaadmin',
-    password: 'EP76017fLefZ8?d!ezTHsN[kA()X',
+    password: '<DB_PASSWORD>',
     database: 'lca_v3'
   });
 

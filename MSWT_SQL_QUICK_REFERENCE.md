@@ -154,7 +154,7 @@ UPDATE component SET currency = 'EUR' WHERE case_id IN (31, 32, 33);
 ### Via MySQL Command Line:
 
 ```bash
-mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 < mswt-project-setup.sql
+mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' lca_v3 < mswt-project-setup.sql
 ```
 
 ### Via MySQL Client (Windows/Mac):
@@ -164,7 +164,7 @@ mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' lca_v3 <
 mysql -h 127.0.0.1 \
   -P 3307 \
   -u lcaadmin \
-  -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+  -p'<DB_PASSWORD>' \
   lca_v3 < /path/to/mswt-project-setup.sql
 ```
 
@@ -385,11 +385,11 @@ Always backup your database:
 
 ```bash
 # Create backup
-mysqldump -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+mysqldump -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' \
   lca_v3 > lca_v3_backup_$(date +%Y%m%d_%H%M%S).sql
 
 # Restore if needed
-mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'EP76017fLefZ8?d!ezTHsN[kA()X' \
+mysql -h 127.0.0.1 -P 3307 -u lcaadmin -p'<DB_PASSWORD>' \
   lca_v3 < lca_v3_backup_20251203_120000.sql
 ```
 

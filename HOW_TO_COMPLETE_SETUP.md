@@ -80,10 +80,10 @@ AWS doesn't let you recover lost keys, but you CAN create a new one:
 Since you have the credentials, you can deploy manually:
 
 **Database Credentials:**
-- Host: `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com`
+- Host: `<RDS_HOST>`
 - Port: `3306`
 - Username: `lcaadmin`
-- Password: `EP76017fLefZ8?d!ezTHsN[kA()X`
+- Password: `<DB_PASSWORD>`
 - Database: `lca_v3` (will create)
 
 **Tools you can use:**
@@ -171,7 +171,7 @@ Once the schema is deployed (by any method), run these commands:
 ### 1. Verify Deployment
 ```bash
 # Connect and check
-mysql -h lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com \
+mysql -h <RDS_HOST> \
       -P 3306 -u lcaadmin -p lca_v3 \
       -e "SHOW TABLES; SELECT COUNT(*) FROM permissions;"
 ```

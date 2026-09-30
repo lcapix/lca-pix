@@ -3,7 +3,7 @@
 
 USE lca_v3;
 
--- 1. Create test user (password is hashed "password123")
+-- 1. Create test user (password is hashed "<DEMO_PASSWORD>")
 INSERT INTO account (username, email, password_hash, account_type) VALUES
 ('john_doe', 'john@lcaproject.com', '$2b$10$YourHashedPasswordHere', 'user');
 
