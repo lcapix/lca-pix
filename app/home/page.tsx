@@ -21,8 +21,8 @@ import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-s
 import { GuidedTour } from '@/components/global/guided-tour'
 import { LCAPIX_TOUR_STEPS } from '@/lib/lcapix-tour-steps'
 import { useAuthStore, useProjectStore } from '@/lib/store'
-import { useToast } from '@/hooks/use-toast'
-import { apiRequest } from '@/lib/api-client'
+import { toast } from 'sonner'
+import { ApiError, apiGet, apiRequest } from '@/lib/api-client'
 import { transformProjectFromDB } from '@/lib/data-transformers'
 
 type ViewMode = 'grid' | 'list'
@@ -94,9 +94,11 @@ export default function HomePage() {
   const router = useRouter()
   const { user } = useAuthStore()
   const { projects, setProjects, setCurrentProject } = useProjectStore() as any
-  const { toast } = useToast()
 
   const [isLoadingProjects, setIsLoadingProjects] = useState(false)
+  // X-API-1: a failed /api/projects is an error state, never "no projects".
+  const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [projectsReload, setProjectsReload] = useState(0)
   const [tourOpen, setTourOpen] = useState(false)
 
   // The global navbar "Tour" button signals us either via sessionStorage
@@ -143,33 +145,37 @@ export default function HomePage() {
     }
   }, [user, router])
 
-  // Preserved: fetch projects from DB on mount (same API, same transform)
+  // Fetch projects from the DB on mount and on Retry (same API, same
+  // transform). apiGet throws ApiError on a non-2xx answer.
   useEffect(() => {
+    if (!user) return
+    let cancelled = false
     const fetchProjects = async () => {
-      if (!user) return
       setIsLoadingProjects(true)
+      setProjectsError(null)
       try {
-        const response = await apiRequest('/api/projects')
-        const data = await response.json()
-        if (data.success && data.projects) {
-          const transformed = data.projects.map(
-            (p: unknown) => transformProjectFromDB(p as any),
-          )
-          if (typeof setProjects === 'function') setProjects(transformed)
+        const data = await apiGet<{ projects?: unknown[] }>('/api/projects')
+        if (!Array.isArray(data?.projects)) {
+          throw new Error('The server did not send a project list.')
         }
+        const transformed = data.projects.map((p) => transformProjectFromDB(p as any))
+        if (!cancelled && typeof setProjects === 'function') setProjects(transformed)
       } catch (error) {
-        console.error('Failed to fetch projects:', error)
-        toast({
-          title: 'Error',
-          description: 'Failed to load projects from database',
-          variant: 'destructive',
-        })
+        if (cancelled) return
+        // A 401 is already on its way to the login page.
+        if (error instanceof ApiError && error.status === 401) return
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        setProjectsError(message)
+        toast.error("Couldn't load your projects", { description: message })
       } finally {
-        setIsLoadingProjects(false)
+        if (!cancelled) setIsLoadingProjects(false)
       }
     }
     fetchProjects()
-  }, [user, setProjects, toast])
+    return () => {
+      cancelled = true
+    }
+  }, [user, setProjects, projectsReload])
 
   // Preserved: pull live integration KPIs
   useEffect(() => {
@@ -234,10 +240,7 @@ export default function HomePage() {
       .toUpperCase() || 'KP'
 
   const handleImport = () => {
-    toast({
-      title: 'Import',
-      description: 'Project import is coming soon.',
-    })
+    toast('Import', { description: 'Project import is coming soon.' })
   }
 
   // The worked example, built in this account on demand.
@@ -248,19 +251,17 @@ export default function HomePage() {
       const res = await apiRequest('/api/example-project', { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data?.project_id) {
-        toast({
-          title: 'Could not build the example',
+        toast.error('Could not build the example', {
           description: data?.error ?? 'Unknown error',
         })
         return
       }
-      toast({
-        title: data.existed ? 'You already have the example' : 'Example ready',
+      toast.success(data.existed ? 'You already have the example' : 'Example ready', {
         description: 'Quantities in it are illustrative; the factors and their sources are real.',
       })
       router.push(`/project/${data.project_id}`)
     } catch (e: any) {
-      toast({ title: 'Could not build the example', description: e?.message ?? 'Unknown error' })
+      toast.error('Could not build the example', { description: e?.message ?? 'Unknown error' })
     } finally {
       setLoadingExample(false)
     }
@@ -568,7 +569,33 @@ export default function HomePage() {
             </div>
 
             {/* Projects content */}
-            {isLoadingProjects ? (
+            {projectsError ? (
+              <div
+                role="alert"
+                className="card"
+                style={{
+                  padding: 24,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Couldn&apos;t load your projects
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {projectsError}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setProjectsReload((n) => n + 1)}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : isLoadingProjects ? (
               <div
                 style={{
                   display: 'grid',
