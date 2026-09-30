@@ -36,7 +36,8 @@ describe('POST /api/integrations/openlca/import', () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(imp.importFactorMethod).mockResolvedValue({
       method: 'CML 2001', inserted: 40, substancesMatched: 15,
-      skippedNoSubstance: 2, skippedNoCategory: 0, errors: [],
+      skippedNoSubstance: 2, skippedNoCategory: 0,
+      skippedExisting: 0, skippedQuarantined: 0, errors: [],
     });
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 
