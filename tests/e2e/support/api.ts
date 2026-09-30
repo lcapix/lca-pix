@@ -56,16 +56,29 @@ export class Api {
   }
 
   async call<T = any>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-    const res = await this.request.fetch(`${this.baseURL}${path}`, {
-      method,
-      headers: {
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...headers,
-      },
-      data: body === undefined ? undefined : JSON.stringify(body),
-      timeout: 120_000,
-    });
+    const send = () =>
+      this.request.fetch(`${this.baseURL}${path}`, {
+        method,
+        headers: {
+          // A fresh connection per call: next dev closes idle keep-alive
+          // sockets, and a request sent on one as it closes dies with ECONNRESET.
+          Connection: 'close',
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...headers,
+        },
+        data: body === undefined ? undefined : JSON.stringify(body),
+        timeout: 120_000,
+      });
+    let res;
+    try {
+      res = await send();
+    } catch (e) {
+      // Reset before any response (a socket the server was closing): retry
+      // once. createUser copes with a signup that did land the first time.
+      if (!/ECONNRESET|socket hang up|EPIPE/.test(String(e))) throw e;
+      res = await send();
+    }
     const text = await res.text();
     if (!res.ok()) throw new ApiError(method, path, res.status(), text);
     return (text ? JSON.parse(text) : null) as T;
@@ -93,11 +106,19 @@ export class Api {
     password?: string;
   }): Promise<ApiUser> {
     const password = opts.password ?? newPassword();
-    const res = await this.post<{ user: { id: number; username: string; email: string }; token: string }>(
-      '/api/auth/signup',
-      { email: opts.email, password, full_name: opts.onboard === false ? undefined : opts.fullName },
-      { 'x-forwarded-for': fakeIp() },
-    );
+    type Session = { user: { id: number; username: string; email: string }; token: string };
+    let res: Session;
+    try {
+      res = await this.post<Session>(
+        '/api/auth/signup',
+        { email: opts.email, password, full_name: opts.onboard === false ? undefined : opts.fullName },
+        { 'x-forwarded-for': fakeIp() },
+      );
+    } catch (e) {
+      // A retried signup whose first attempt did land: the account is ours.
+      if (!(e instanceof ApiError) || e.status !== 409) throw e;
+      res = await this.post<Session>('/api/auth/login', { email: opts.email, password }, { 'x-forwarded-for': fakeIp() });
+    }
     const user: ApiUser = {
       id: res.user.id,
       email: res.user.email,
