@@ -13,6 +13,14 @@
  *      nothing); elementary factors count outputs (CO2 out counts).
  *   4. Data quality: junk units are EXCLUDED with a warning; modeling a fuel
  *      input AND its combustion gas output raises the DOUBLE COUNT warning.
+ *   5. Wood fuel (migrate-028): 1 MMBtu of Wood is 94.956 kg CO2 eq under
+ *      every method, and lumber is its own kg substance at 0.187 kg/kg.
+ *   6. Unit exclusion: a mass on the MMBtu fuel, an ambiguous 'ton', and the
+ *      per-kg Water row on an m3 substance are EXCLUDED with a warning and
+ *      change no total.
+ *
+ * Requires migrations 028 and 029 as well (node --env-file=.env.local
+ * scripts/db/migrate.mjs).
  *
  * Creates its own throwaway project/case/rows and removes them afterwards.
  */
@@ -38,6 +46,9 @@ let elecGwGlobal: number;
 let elecGwUS: number;
 let gasGw: number;
 let co2Gw: number;
+let woodId: number;
+let lumberId: number;
+let waterId: number;
 
 async function factor(substanceId: number, scope: string): Promise<number> {
   const [[row]]: any = await conn.query(
@@ -69,6 +80,9 @@ d('engine golden E2E (local DB, post-migration-009)', () => {
     elecId = await byName('Electricity');
     gasId = await byName('Natural Gas');
     co2Id = await byName('Carbon Dioxide');
+    woodId = await byName('Wood');
+    lumberId = await byName('Wood, dimensional lumber');
+    waterId = await byName('Water');
     const [[gw]]: any = await conn.query(
       `SELECT category_id FROM impact_categories WHERE category_name = 'Global Warming' LIMIT 1`,
     );
@@ -231,6 +245,88 @@ d('engine golden E2E (local DB, post-migration-009)', () => {
     } finally {
       await conn.query(`DELETE FROM flows WHERE flow_id = ?`, [ins.insertId]);
     }
+  });
+
+  // Temporary extra flows on the leaf, removed afterwards so the other cases'
+  // expected totals are untouched.
+  async function withFlows(
+    flows: Array<[number, 'input' | 'output', number, string]>,
+    fn: (ids: number[]) => Promise<void>,
+  ) {
+    const ids: number[] = [];
+    try {
+      for (const [sid, dir, qty, unit] of flows) {
+        const [r]: any = await conn.query(
+          `INSERT INTO flows (component_id, substance_id, flow_type, quantity, unit, is_driver) VALUES (?, ?, ?, ?, ?, 1)`,
+          [leafId, sid, dir, qty, unit],
+        );
+        ids.push(r.insertId);
+      }
+      await fn(ids);
+    } finally {
+      if (ids.length) await conn.query(`DELETE FROM flows WHERE flow_id IN (?)`, [ids]);
+    }
+  }
+
+  const baseline = () => 850 * steelGw + 120 * elecGwGlobal + 100 * gasGw + 190 * co2Gw;
+
+  it.each(['CML 2001', 'TRACI 2.1', 'ReCiPe Midpoint (H)'])(
+    'Wood fuel (migrate-028): 1 MMBtu and 293.071 kWh are each 94.956 kg CO2 eq under %s',
+    async (method) => {
+      await withFlows(
+        [
+          [woodId, 'input', 1, 'MMBtu'],
+          [woodId, 'input', 293.071, 'kWh'],
+        ],
+        async (ids) => {
+          const result = await calculateCaseImpacts(caseId, conn as any, { method, regionCode: 'Global' });
+          const leaf = result.component_results.find((r) => r.component_id === leafId)!;
+          const wood = leaf.flow_contributions.filter((c) => ids.includes(c.flow_id) && c.category_id === gwCategoryId);
+          expect(wood).toHaveLength(2);
+          for (const c of wood) {
+            expect(c.characterization_factor).toBeCloseTo(94.956, 9);
+            expect(c.impact_contribution).toBeCloseTo(94.956, 6);
+          }
+          expect(wood.find((c) => c.unit === 'kWh')!.unit_conversion).toContain('MMBtu');
+        },
+      );
+    },
+  );
+
+  it('Wood fuel adds exactly 94.956 to the CML Global total; lumber is 0.187 kg/kg on its own substance', async () => {
+    await withFlows(
+      [
+        [woodId, 'input', 1, 'MMBtu'],
+        [lumberId, 'input', 100, 'kg'],
+      ],
+      async () => {
+        const result = await calculateCaseImpacts(caseId, conn as any, { method: 'CML 2001', regionCode: 'Global' });
+        const gwTotal = result.total_impacts.find((t) => t.category_id === gwCategoryId)!;
+        expect(gwTotal.impact_value).toBeCloseTo(baseline() + 94.956 + 100 * 0.187, 6);
+      },
+    );
+  });
+
+  it('unit exclusion: kg on the MMBtu fuel, an ambiguous ton, and per-kg Water on m3 are left out with warnings', async () => {
+    await withFlows(
+      [
+        [woodId, 'input', 500, 'kg'], // lumber typed onto the fuel
+        [steelId, 'input', 2, 'ton'], // short or metric? refused
+        [waterId, 'input', 10, 'm3'], // CML Water GW row is 'kg CO2 eq / kg' on an m3 substance (E11)
+      ],
+      async (ids) => {
+        const result = await calculateCaseImpacts(caseId, conn as any, { method: 'CML 2001', regionCode: 'Global' });
+        const gwTotal = result.total_impacts.find((t) => t.category_id === gwCategoryId)!;
+        expect(gwTotal.impact_value).toBeCloseTo(baseline(), 6);
+        const leaf = result.component_results.find((r) => r.component_id === leafId)!;
+        expect(leaf.flow_contributions.filter((c) => ids.includes(c.flow_id) && c.category_id === gwCategoryId)).toEqual([]);
+        const w = result.warnings.join('\n');
+        expect(w).toMatch(/Wood\): unit 'kg' cannot be converted to factor unit 'MMBtu'.*EXCLUDED/);
+        expect(w).toMatch(/Steel, reinforced\): ambiguous unit 'ton'.*EXCLUDED/);
+        expect(w).toMatch(/Water\): factor is stated per 'kg'.*'m3'.*EXCLUDED/);
+        expect(result.data_quality!.excluded_flows).toBeGreaterThanOrEqual(4); // + the 'bananas' flow
+      },
+    );
   });
 
   it('audited values are live: CH4=28, elec US=0.350, elec Global=0.473, gas=1.877', async () => {

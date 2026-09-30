@@ -1,41 +1,38 @@
 /**
  * LCA CALCULATION ENGINE
  *
- * Implements the core LCA calculation algorithm using the CML 2001 methodology.
- * This engine processes environmental flows and calculates impact category results
- * by applying characterization factors to substance quantities.
+ * Impact_c = Σ over flows of quantity_in_factor_unit × CF(substance, c, method, region)
+ *            × allocation share of the step
  *
- * Algorithm Overview (CML 2001):
- * ================================
+ * Method-agnostic: the run's method (CML 2001 by default, TRACI 2.1, ReCiPe
+ * Midpoint (H)) selects the factor rows; the characterization values are
+ * whatever those rows hold. For each step (component):
+ *   1. every flow on the step is joined to its factor rows for the method, for
+ *      the requested region and Global;
+ *   2. one row per flow × category is kept, the exact region beating Global
+ *      (lib/factor-selection.ts);
+ *   3. the direction rule applies: 'embodied' factors charge inputs only,
+ *      'elementary' factors charge outputs only;
+ *   4. the quantity is expressed in the unit the factor is stated per
+ *      (lib/units.ts toFactorBasis); a non-numeric quantity is skipped and an
+ *      unconvertible, unknown or ambiguous unit is EXCLUDED, both with a
+ *      warning; nothing is ever multiplied raw;
+ *   5. contributions are summed per category, labelled with the factor's
+ *      reference unit (numerator).
+ * The case total sums the steps after allocation (ISO 14044 4.3.4) and comes
+ * with warnings and a data-quality statement (4.2.3.6).
  *
- * For each component in the product system:
- *   1. Identify all environmental flows (inputs/outputs)
- *   2. Filter for driver flows (is_driver = TRUE)
- *   3. For each driver flow:
- *      a. Lookup characterization factor from driver_impact_factors table
- *      b. Calculate impact: Impact = Quantity × Characterization_Factor
- *      c. Aggregate by impact category
- *   4. Sum all component impacts to get total impact per category
+ * Example (CML 2001 rows, IPCC AR5 GWP100: CH4 28; TRACI 2.1's lciafmt row is
+ * AR4, CH4 25 — see CALCULATIONS.md section 9):
+ *   Global Warming = 125.25 kg CO2 × 1 + 2.5 kg CH4 × 28 = 195.25 kg CO2 eq
  *
- * Formula:
- * --------
- * Impact_CategoryX = Σ(Flow_Quantity_i × Characterization_Factor_i)
- *
- * Where:
- *   - Flow_Quantity_i = amount of substance i emitted/consumed
- *   - Characterization_Factor_i = environmental impact per unit of substance i for category X
- *
- * Example:
- * --------
- * Global Warming Impact = (CO₂_quantity × 1.0) + (CH₄_quantity × 28.0) + (N₂O_quantity × 265.0)
- *                      = (125.25 kg × 1.0) + (2.5 kg × 28.0) + (0 kg × 265.0)
- *                      = 125.25 + 70.0 + 0
- *                      = 195.25 kg CO₂ eq
+ * CALCULATIONS.md is the full description; its worked example is pinned by
+ * tests/lib/calculations-doc-example.test.ts.
  */
 
 import type { Connection, RowDataPacket } from 'mysql2/promise';
 import { canonicalizeRegion, selectBestScopeRows } from './factor-selection';
-import { convertQuantity, normalizeUnit } from './units';
+import { toFactorBasis } from './units';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -107,13 +104,15 @@ export interface DataQualitySummary {
   unit_conversions: number;
   /** Flows left out of a category because their unit could not be converted. */
   excluded_flows: number;
+  /** Flows skipped because their quantity is not a finite number. */
+  invalid_quantity_flows?: number;
   /** Components whose burden was allocated (allocation_factor < 1). */
   allocated_components: number;
   /** Flows no factor in the method characterizes (they add nothing). */
   uncharacterized_flows: number;
   /**
-   * Per impact category: how many of the characterized flows have a factor in
-   * THAT category. A category whose factors cover only some inputs still prints
+   * Per impact category: how many of the characterized INPUT flows have a
+   * factor in THAT category (outputs are not counted on either side). A category whose factors cover only some inputs still prints
    * a total, and without this it reads as if the whole product were counted.
    */
   category_coverage: Array<{
@@ -138,13 +137,17 @@ export interface ComponentImpactResult {
   life_cycle_stage?: string | null;
   impacts: CategoryImpact[];
   flow_contributions: FlowContribution[];
+  /** Distinct flows evaluated: flows with at least one factor row in the method. */
   total_flows_processed: number;
+  /** Distinct flows that contributed to at least one category. */
   driver_flows_count: number;
   /** Data-quality problems that excluded or altered contributions (unit
    * mismatches, missing units). Never empty silently — surfaced to the run. */
   warnings: string[];
   /** Flow × category pairs left out because the flow's unit could not be converted. */
   excluded_flows?: number;
+  /** Flows skipped because their quantity is not a finite number (NULL, '', 'abc'). */
+  invalid_quantity_flows?: number;
   /** Flows with at least one applicable factor (after the direction rule). */
   characterized_flow_ids?: number[];
   /** Allocation share applied to this component (ISO 14044 4.3.4), when < 1. */
@@ -292,6 +295,7 @@ export async function calculateComponentImpacts(
   // many flow × category pairs a unit problem left out.
   const characterized = new Set<number>();
   let excluded = 0;
+  const invalidQuantityFlows = new Set<number>();
   for (const row of selectedRows) {
     // Direction rule: 'embodied' factors describe PRODUCING a substance and
     // apply to input flows only (steel you buy, electricity you draw);
@@ -304,40 +308,45 @@ export async function calculateComponentImpacts(
     if (!row.factor_basis) untypedFactorSeen = true;
     characterized.add(row.flow_id);
 
-    const rawQuantity = parseFloat(row.quantity);
-    const factor = parseFloat(row.characterization_factor);
-    const flowUnit: string | null = row.flow_unit ?? null;
-    const factorUnit: string | null = row.substance_default_unit ?? null;
-
-    let quantityInFactorUnit = rawQuantity;
-    let conversionNote: string | undefined;
-
-    const flowNorm = normalizeUnit(flowUnit);
-    const factorNorm = normalizeUnit(factorUnit);
-
-    if (!flowUnit || !flowUnit.trim()) {
-      warnings.push(
-        `Flow ${row.flow_id} (${row.substance_name}): no unit recorded — assumed ${factorUnit ?? 'factor unit'}.`,
-      );
-    } else if (factorNorm && flowNorm && flowNorm !== factorNorm) {
-      const conv = convertQuantity(rawQuantity, flowUnit, factorUnit);
-      if (conv) {
-        quantityInFactorUnit = conv.quantity;
-        conversionNote = conv.note;
-      } else {
+    // E9: a quantity that is not a finite number (NULL, '', 'abc', NaN) is
+    // skipped and named. One NaN would otherwise turn the category total NaN.
+    const rawQuantity = finiteNumber(row.quantity);
+    if (rawQuantity === null) {
+      if (!invalidQuantityFlows.has(row.flow_id)) {
+        invalidQuantityFlows.add(row.flow_id);
         warnings.push(
-          `Flow ${row.flow_id} (${row.substance_name}): unit '${flowUnit}' cannot be converted to factor unit '${factorUnit}' — EXCLUDED from ${row.category_name}.`,
+          `Flow ${row.flow_id} (${row.substance_name}): quantity ${JSON.stringify(row.quantity ?? null)} is not a finite number — SKIPPED in every category.`,
         );
-        excluded++;
-        continue;
       }
-    } else if (flowUnit && !flowNorm) {
+      continue;
+    }
+    const factor = finiteNumber(row.characterization_factor);
+    if (factor === null) {
       warnings.push(
-        `Flow ${row.flow_id} (${row.substance_name}): unrecognized unit '${flowUnit}' — EXCLUDED from ${row.category_name}.`,
+        `Flow ${row.flow_id} (${row.substance_name}): the ${row.category_name} factor is not a finite number — SKIPPED from ${row.category_name}.`,
+      );
+      continue;
+    }
+
+    // E3 + E11: express the quantity in the unit the factor is stated per
+    // (the factor label's denominator, else the substance unit). Identical
+    // units pass as-is; convertible units are converted and recorded; every
+    // other case is EXCLUDED and reported. There is no raw-multiply fallback.
+    const basis = toFactorBasis(
+      rawQuantity,
+      row.flow_unit ?? null,
+      row.substance_default_unit ?? null,
+      row.factor_unit ?? null,
+    );
+    if (!basis.ok) {
+      warnings.push(
+        `Flow ${row.flow_id} (${row.substance_name}): ${basis.reason} — EXCLUDED from ${row.category_name}.`,
       );
       excluded++;
       continue;
     }
+    const quantityInFactorUnit = basis.quantity;
+    const conversionNote = basis.note;
 
     flowContributions.push({
       flow_id: row.flow_id,
@@ -453,12 +462,23 @@ export async function calculateComponentImpacts(
     hierarchy_level: component.hierarchy_level,
     impacts,
     flow_contributions: flowContributions,
-    total_flows_processed: flowContributions.length,
+    // Flows the engine evaluated (at least one factor row in this method),
+    // counted once each however many categories they have factors in.
+    total_flows_processed: new Set(flowsData.map((r) => r.flow_id)).size,
     driver_flows_count: new Set(flowContributions.map((f) => f.flow_id)).size,
     warnings,
     excluded_flows: excluded,
+    invalid_quantity_flows: invalidQuantityFlows.size,
     characterized_flow_ids: [...characterized],
   };
+}
+
+/** A number, or null when the value is not a finite number ('' and null included). */
+function finiteNumber(v: unknown): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v !== 'string' || v.trim() === '') return null;
+  const n = Number(v.trim());
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -827,20 +847,25 @@ export function summarizeDataQuality(
   /** Substances that actually had a factor for the requested region. */
   const regionalSubstances = new Set<string>();
   let unit_conversions = 0;
-  // flow ids seen per category, and the flows seen at all, so a category can be
-  // told "you cover 5 of the 26 inputs this run characterized".
-  const flowsByCategory = new Map<string, Set<number>>();
-  const allCharacterizedFlows = new Set<number>();
+  // Input flows seen per category, and all characterized inputs, so a category
+  // can be told "you cover 5 of the 26 inputs this run characterized".
+  // Outputs are left out on both sides: an emission characterizes only the
+  // categories it acts in (CO2 has no acidification factor), so counting it as
+  // a missing input would overstate the gap.
+  const inputsByCategory = new Map<string, Set<number>>();
+  const allCharacterizedInputs = new Set<number>();
   const substanceByFlow = new Map<number, string>();
 
   for (const r of componentResults) {
     for (const c of r.flow_contributions) {
       contributions++;
-      allCharacterizedFlows.add(c.flow_id);
       substanceByFlow.set(c.flow_id, c.substance_name);
-      const seen = flowsByCategory.get(c.category_name) ?? new Set<number>();
-      seen.add(c.flow_id);
-      flowsByCategory.set(c.category_name, seen);
+      const seen = inputsByCategory.get(c.category_name) ?? new Set<number>();
+      if (c.flow_type !== 'output') {
+        allCharacterizedInputs.add(c.flow_id);
+        seen.add(c.flow_id);
+      }
+      inputsByCategory.set(c.category_name, seen);
       const tier = c.source_tier ?? classifyFactorSource(c.factor_source);
       by_tier[tier]++;
       if (/global warming|climate change/i.test(c.category_name)) {
@@ -860,18 +885,23 @@ export function summarizeDataQuality(
   const gw_share_by_tier = zero();
   for (const t of SOURCE_TIERS) gw_share_by_tier[t] = gwTotal > 0 ? gwMagnitude[t] / gwTotal : 0;
   const excluded_flows = componentResults.reduce((s, r) => s + (r.excluded_flows ?? 0), 0);
+  const invalid_quantity_flows = componentResults.reduce(
+    (s, r) => s + (r.invalid_quantity_flows ?? 0),
+    0,
+  );
   const allocated = componentResults.filter((r) => (r.allocation_factor ?? 1) < 1);
   const unchar = opts.uncharacterized ?? [];
   const uncharNames = [...new Set(unchar.map((u) => u.substance_name))];
 
-  const category_coverage = [...flowsByCategory.entries()]
+  const category_coverage = [...inputsByCategory.entries()]
+    .filter(() => allCharacterizedInputs.size > 0)
     .map(([category, seen]) => {
-      const missing = [...allCharacterizedFlows].filter((id) => !seen.has(id));
+      const missing = [...allCharacterizedInputs].filter((id) => !seen.has(id));
       const names = [...new Set(missing.map((id) => substanceByFlow.get(id) ?? 'unnamed flow'))];
       return {
         category,
         covered: seen.size,
-        total: allCharacterizedFlows.size,
+        total: allCharacterizedInputs.size,
         missing_examples: names.slice(0, 5),
       };
     })
@@ -931,6 +961,11 @@ export function summarizeDataQuality(
       `${excluded_flows} flow-category ${plural(excluded_flows, 'pair was', 'pairs were')} left out because the unit could not be converted (see warnings).`,
     );
   }
+  if (invalid_quantity_flows > 0) {
+    statement.push(
+      `${invalid_quantity_flows} ${plural(invalid_quantity_flows, 'flow was', 'flows were')} skipped because the quantity is not a number (see warnings).`,
+    );
+  }
   const partial = category_coverage.filter((c) => c.covered < c.total);
   for (const c of partial.slice(0, 3)) {
     statement.push(
@@ -960,6 +995,7 @@ export function summarizeDataQuality(
     regional_fallbacks,
     unit_conversions,
     excluded_flows,
+    invalid_quantity_flows,
     allocated_components: allocated.length,
     uncharacterized_flows: unchar.length,
     uncharacterized_examples: uncharNames.slice(0, 10),
@@ -988,41 +1024,4 @@ export function formatAlgorithmSteps(steps: AlgorithmStep[]): string[] {
 
     return message;
   });
-}
-
-/**
- * Validate flow contributions
- *
- * Ensures all flow contributions have valid characterization factors
- * and positive quantities. Returns list of validation issues.
- *
- * @param contributions - Flow contributions to validate
- * @returns Array of validation error messages (empty if valid)
- */
-export function validateFlowContributions(
-  contributions: FlowContribution[]
-): string[] {
-  const errors: string[] = [];
-
-  for (const contrib of contributions) {
-    if (contrib.quantity <= 0) {
-      errors.push(
-        `Flow ${contrib.flow_id} (${contrib.substance_name}) has non-positive quantity: ${contrib.quantity}`
-      );
-    }
-
-    if (contrib.characterization_factor === 0) {
-      errors.push(
-        `Flow ${contrib.flow_id} (${contrib.substance_name}) has zero characterization factor for ${contrib.category_name}`
-      );
-    }
-
-    if (isNaN(contrib.impact_contribution)) {
-      errors.push(
-        `Flow ${contrib.flow_id} (${contrib.substance_name}) has invalid impact contribution (NaN)`
-      );
-    }
-  }
-
-  return errors;
 }

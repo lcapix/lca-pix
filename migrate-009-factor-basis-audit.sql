@@ -1,3 +1,10 @@
+-- LATER FIX NOTE (2026-09-29, audit E5): section 2a below sets Methane = 28
+-- under EVERY method, with no method filter. Applied after migrate-015 it
+-- would silently turn TRACI 2.1's lciafmt methane (IPCC AR4, 25) into 28.
+-- Do NOT re-run this file by hand. Apply migrations only through
+-- scripts/db/migrate.mjs, which records each file in schema_migrations and
+-- never runs a recorded file twice. The GWP vintage per method, and the open
+-- AR4-vs-AR5 decision for TRACI 2.1, are recorded by migrate-029.
 -- Migration 009 — factor basis + audited factor corrections (2026-09-09)
 -- Additive only. Two jobs:
 --   1) factor_basis column: 'embodied' factors charge INPUT flows (producing /

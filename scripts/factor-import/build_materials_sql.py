@@ -14,7 +14,17 @@ characterize INPUT flows (material you buy). Scope is 'Global' because it is the
 only average on file; the US-data rows say so in their source text.
 
 Usage:
-  python scripts/factor-import/build_materials_sql.py > migrate-016-embodied-materials.sql
+  python scripts/factor-import/build_materials_sql.py > migrate-0NN-<name>.sql
+
+Never write over migrate-016: it is recorded as applied (scripts/db/migrate.mjs
+keeps a checksum ledger) and would not run again. Put a regeneration in a new
+numbered migration.
+
+2026-09-29 (audit E1): the lumber row now targets 'Wood, dimensional lumber'.
+The version that produced migrate-016 wrote it onto 'Wood', the MMBtu fuel
+substance, and overwrote the fuel's combustion factor (fixed by migrate-028).
+Every row now states its basis ('kg CO2 eq / kg'), updates the unit on a
+duplicate key, and only lands on a substance whose unit is 'kg'.
 """
 
 WARM = 'US EPA WARM v16 (Dec 2023)'
@@ -48,7 +58,7 @@ MATERIALS = [
      f'{WARM}, Exhibit 3-11 corrugated containers, {WARM_RMAM}: 0.85 MTCO2E/short ton = 0.937 kg/kg'),
     ('Paper', 1.091,
      f'{WARM}, Exhibit 3-11 office paper, {WARM_RMAM}: 0.99 MTCO2E/short ton = 1.091 kg/kg'),
-    ('Wood', 0.187,
+    ('Wood, dimensional lumber', 0.187,
      f'{WARM}, Exhibit 12-5 dimensional lumber, raw material acquisition + manufacturing, '
      'forest carbon storage excluded, US: 0.17 MTCO2E/short ton = 0.187 kg/kg'),
     ('Concrete', 0.133,
@@ -80,10 +90,11 @@ def main():
             out.append(
                 'INSERT INTO driver_impact_factors (substance_id,category_id,method_name,factor_value,unit,'
                 'geographic_scope,factor_basis,source_reference) '
-                f"SELECT s.substance_id, ic.category_id, '{method}', {value}, 'kg CO2 eq', 'Global', 'embodied', "
+                f"SELECT s.substance_id, ic.category_id, '{method}', {value}, 'kg CO2 eq / kg', 'Global', 'embodied', "
                 f"'{esc(src)}' FROM substances s JOIN impact_categories ic ON ic.category_name = 'Global Warming' "
-                f"WHERE s.substance_name = '{esc(name)}' "
-                "ON DUPLICATE KEY UPDATE factor_value=VALUES(factor_value),factor_basis='embodied',"
+                # A per-kg factor may only land on a kg substance (E1: 'Wood' is the MMBtu fuel).
+                f"WHERE s.substance_name = '{esc(name)}' AND s.unit = 'kg' "
+                "ON DUPLICATE KEY UPDATE factor_value=VALUES(factor_value),unit=VALUES(unit),factor_basis='embodied',"
                 'source_reference=VALUES(source_reference);'
             )
     print('\n'.join(out))
