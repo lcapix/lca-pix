@@ -24,7 +24,6 @@ import {
   Breadcrumb,
   Icon,
   MiniBar,
-  fmtNum,
   CategoryBarChart,
   RunTimeline,
   type CategoryBarChartItem,
@@ -41,6 +40,13 @@ import { IsoRunSummary } from '@/components/lcapix/results/iso-run-summary'
 import type { GoalScope } from '@/lib/run-snapshot'
 import type { DataQualitySummary } from '@/lib/lca-engine'
 import { StagePanel } from '@/components/lcapix/results/stage-panel'
+import { fmtSig } from '@/components/lcapix/formatters'
+import {
+  deltaVsPreviousRun,
+  initialRunScope,
+  latestCompletedRun,
+  rankContributors,
+} from '@/components/lcapix/results/run-math'
 
 // Impact categories supported (preserved from prior page for unit lookup).
 const IMPACT_CATEGORIES: Record<string, { unit: string }> = {
@@ -132,6 +138,12 @@ export default function ResultsPage() {
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
   const [projectName, setProjectName] = useState<string>('Project')
   const [isLoadingCase, setIsLoadingCase] = useState(true)
+  // RES-5: a failed fetch is an error, not an empty state. 'notfound' only for
+  // a 404 (or a body without the case); 'error' for anything else.
+  const [caseLoadError, setCaseLoadError] = useState<null | 'notfound' | 'error'>(null)
+  const [assessmentsError, setAssessmentsError] = useState<string | null>(null)
+  // The case's own region (where the product is made), for a first run.
+  const [caseRegion, setCaseRegion] = useState<string | null>(null)
 
   // Assessment state (PRESERVED)
   const [isRunningAssessment] = useState(false)
@@ -147,11 +159,12 @@ export default function ResultsPage() {
 
   // LCAPIX UI state
   const [activeCategoryKey, setActiveCategoryKey] = useState<string | null>(null)
-  const [method, setMethod] = useState('CML 2001')
-  const [region, setRegion] = useState('US Grid')
+  // The pickers only hold what the user chose here; until then they show the
+  // scope a re-run starts from (see initialRunScope below, RUN-5). Keeping the
+  // choice separate also stops every refetch from resetting it.
+  const [pickedMethod, setPickedMethod] = useState<string | null>(null)
+  const [pickedRegion, setPickedRegion] = useState<string | null>(null)
   const [flowFilter, setFlowFilter] = useState<FilterDir>('all')
-  // The study's own method and region (goal & scope), used until this case has
-  // a run of its own.
   // The author's own interpretation and assumptions, kept on the case and
   // printed in the exported report (ISO 14044 5.1).
   const [writeUp, setWriteUp] = useState<{
@@ -159,25 +172,10 @@ export default function ResultsPage() {
     assumptions: string
     isFinal: boolean
   }>({ interpretation: '', assumptions: '', isFinal: false })
+  // The study's own method and region (goal & scope), used until this case has
+  // a run of its own.
   const [studyMethod, setStudyMethod] = useState<string | null>(null)
   const [studyRegion, setStudyRegion] = useState<string | null>(null)
-  const regionToPicker = (rc: string) => (rc === 'US' ? 'US Grid' : rc === 'EU' ? 'EU Average' : rc)
-  // The pickers start at the displayed run's method and region, so "Re-run"
-  // repeats that run instead of silently switching to something else. A case
-  // that has never been run starts at the STUDY's method and region, so a fresh
-  // copy is not offered CML 2001 when the study is TRACI 2.1 (which would make
-  // it incomparable with the base).
-  const latestRun = currentAssessment || assessmentResults[0]
-  useEffect(() => {
-    if (latestRun) {
-      if (latestRun.calculation_method) setMethod(latestRun.calculation_method)
-      const rc = latestRun.regionCode
-      if (rc) setRegion(regionToPicker(rc))
-      return
-    }
-    if (studyMethod) setMethod(studyMethod)
-    if (studyRegion) setRegion(regionToPicker(studyRegion))
-  }, [latestRun?.calculation_method, latestRun?.regionCode, latestRun, studyMethod, studyRegion])
 
   // Fetch case + components (PRESERVED)
   useEffect(() => {
@@ -189,11 +187,15 @@ export default function ResultsPage() {
           apiRequest(`/api/cases/${caseId}/components`),
         ])
 
-        if (caseResponse.ok) {
+        if (!caseResponse.ok) {
+          setCaseLoadError(caseResponse.status === 404 ? 'notfound' : 'error')
+        } else {
           const caseData = await caseResponse.json()
-          const componentsData = await componentsResponse.json()
+          const componentsData = await componentsResponse.json().catch(() => ({}))
 
+          if (!(caseData.success && caseData.case)) setCaseLoadError('notfound')
           if (caseData.success && caseData.case) {
+            setCaseRegion(caseData.case.region_code ?? null)
             const transformedCase = transformCaseFromDB(caseData.case)
 
             if (componentsData.success && componentsData.components) {
@@ -225,6 +227,7 @@ export default function ResultsPage() {
         } catch {}
       } catch (error) {
         console.error('Failed to fetch case:', error)
+        setCaseLoadError('error')
       } finally {
         setIsLoadingCase(false)
       }
@@ -240,7 +243,10 @@ export default function ResultsPage() {
   const fetchAssessments = async () => {
       try {
         const response = await apiRequest(`/api/cases/${caseId}/assessments`)
-        if (response.ok) {
+        if (!response.ok) {
+          setAssessmentsError(`the server answered ${response.status}`)
+        } else {
+          setAssessmentsError(null)
           const data = await response.json()
           if (data.assessments && data.assessments.length > 0) {
             const transformedAssessments: AssessmentResult[] = data.assessments.map(
@@ -266,13 +272,13 @@ export default function ResultsPage() {
               }),
             )
             setAssessmentResults(transformedAssessments)
-            if (transformedAssessments.length > 0) {
-              setCurrentAssessment(transformedAssessments[0])
-            }
+            // The newest run that completed: a failed run has no results.
+            setCurrentAssessment(latestCompletedRun(transformedAssessments))
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to fetch assessments:', error)
+        setAssessmentsError(error?.message ?? 'the request failed')
       }
     }
 
@@ -442,17 +448,41 @@ export default function ResultsPage() {
         >
           <AlertCircle className="h-10 w-10" style={{ color: 'var(--text-tertiary)' }} />
           <h2 style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>
-            Case not found
+            {caseLoadError === 'error' ? 'Could not load this case' : 'Case not found'}
           </h2>
-          <Button onClick={() => router.back()} variant="outline">
-            <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
-          </Button>
+          {caseLoadError === 'error' && (
+            <p style={{ color: 'var(--text-tertiary)', fontSize: 13, margin: 0 }}>
+              The server did not answer as expected. Try again in a moment.
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button onClick={() => router.back()} variant="outline">
+              <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
+            </Button>
+            {caseLoadError === 'error' && (
+              <Button onClick={() => window.location.reload()} variant="outline">
+                Try again
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     )
   }
 
-  const mostRecentAssessment = currentAssessment || assessmentResults[0]
+  const mostRecentAssessment = currentAssessment || latestCompletedRun(assessmentResults)
+
+  // What a re-run starts from (RUN-5): the displayed run, else the study's
+  // method and the case's (then the project's) region. Unknown stays unset so
+  // the run modal applies its own lookup instead of a hard-coded US grid.
+  const runScope = initialRunScope({
+    latestRun: mostRecentAssessment,
+    caseRegion,
+    projectRegion: studyRegion,
+    studyMethod,
+  })
+  const method = pickedMethod ?? runScope.method ?? 'CML 2001'
+  const region = pickedRegion ?? runScope.region ?? 'Global'
 
   // Real impact entries from the most-recent assessment (preserved).
   const impactEntries: Array<[string, { value: number; unit: string }]> =
@@ -492,39 +522,15 @@ export default function ResultsPage() {
   const activeKey = activeCategoryKey ?? primaryKey
   const activeCat = categoryItems.find((c) => c.key === activeKey) ?? categoryItems[0]
 
-  // Contributors (real if available, else DEMO).
-  const realContributors =
+  // Contributors to the active category (RES-4): credits stay in, ranked by
+  // size, each share of the sum of absolute step values.
+  const contributors =
     mostRecentAssessment && activeCat
-      ? (mostRecentAssessment.componentBreakdown || [])
-          .map((c) => {
-            const match = c.impacts.find((i) => i.category_name === activeCat.key)
-            return {
-              id: String(c.component_id),
-              name: c.component_name,
-              value: match?.impact_value || 0,
-              unit: match?.unit || activeCat.unit,
-            }
-          })
-          .filter((c) => c.value > 0)
-          .sort((a, b) => b.value - a.value)
+      ? rankContributors(mostRecentAssessment.componentBreakdown || [], activeCat.key)
       : []
-
-  const contributors = realContributors.length
-    ? (() => {
-        const sum = realContributors.reduce((s, c) => s + c.value, 0) || 1
-        return realContributors.slice(0, 5).map((c) => ({
-          id: c.id,
-          name: c.name,
-          value: c.value,
-          pct: (c.value / sum) * 100,
-        }))
-      })()
-    : []
-  // ^^ Bug fix: do NOT fall back to DEMO_CONTRIBUTORS. Empty contributors
-  // now drive a real empty state in the render below — previously a brand-
-  // new case looked like it had run an assessment when it hadn't.
-
-  const usingDemoContributors = !realContributors.length
+  // "No contributors yet" is for a case with no run at all; a run whose steps
+  // carry nothing in this category says so differently.
+  const usingDemoContributors = !mostRecentAssessment
 
   // Flow table — real per-flow rows for the active category, computed
   // server-side (Amount × Factor = Impact, matching the engine). Filtered by
@@ -618,11 +624,7 @@ export default function ResultsPage() {
     ? (isNaN(new Date(mostRecentAssessment.run_date).getTime()) ? 'Recent' : new Date(mostRecentAssessment.run_date).toLocaleString())
     : 'Never'
 
-  const totalImpactDisplay = activeCat
-    ? activeCat.value < 0.01 && activeCat.value > 0
-      ? activeCat.value.toExponential(2)
-      : fmtNum(activeCat.value, activeCat.value < 1 ? 4 : 2)
-    : '—'
+  const totalImpactDisplay = activeCat ? fmtSig(activeCat.value) : '—'
 
   // Breadcrumb items — plain const; this sits after two early returns
   // (isLoadingCase / !currentCase) so it cannot be a hook without
@@ -706,6 +708,11 @@ export default function ResultsPage() {
                   Run #{mostRecentAssessment.run_id} ·{' '}
                   {safeDate(mostRecentAssessment.run_date)}
                 </>
+              ) : assessmentsError ? (
+                <span style={{ color: 'var(--signal-warn, #b45309)' }}>
+                  Could not load this case&apos;s assessments ({assessmentsError}). Reload the page to try
+                  again.
+                </span>
               ) : (
                 'No assessments yet — run one to see results.'
               )}
@@ -736,7 +743,7 @@ export default function ResultsPage() {
             </span>
             <select
               value={method}
-              onChange={(e) => setMethod(e.target.value)}
+              onChange={(e) => setPickedMethod(e.target.value)}
               style={{
                 appearance: 'none',
                 WebkitAppearance: 'none',
@@ -786,7 +793,7 @@ export default function ResultsPage() {
             </span>
             <select
               value={region}
-              onChange={(e) => setRegion(e.target.value)}
+              onChange={(e) => setPickedRegion(e.target.value)}
               style={{
                 appearance: 'none',
                 WebkitAppearance: 'none',
@@ -835,7 +842,10 @@ export default function ResultsPage() {
           <button
             type="button"
             className={`btn btn-secondary btn-sm ${magicPulse ? 'bell-pulse' : ''}`}
-            onClick={() => setMagicPulse(false) || setMagicOpen(true)}
+            onClick={() => {
+              setMagicPulse(false)
+              setMagicOpen(true)
+            }}
             style={{
               background:
                 'linear-gradient(135deg, oklch(from var(--brand-primary) l c h / 0.12), oklch(from var(--chart-2, var(--brand-primary)) l c h / 0.12))',
@@ -854,14 +864,6 @@ export default function ResultsPage() {
             <Icon name="run" size={14} />{' '}
             {mostRecentAssessment ? 'Re-run' : 'Run new'}
           </button>
-          {assessmentResults.length > 1 && (
-            <button
-              className="chip chip-active"
-              style={{ fontSize: 11, cursor: 'pointer', border: 'none' }}
-            >
-              Compare to last run
-            </button>
-          )}
         </div>
 
         {/* Hero dashboard — total impact · contributors · all categories */}
@@ -874,17 +876,8 @@ export default function ResultsPage() {
           categoryItems={categoryItems}
           activeKey={activeKey}
           onSelectCategory={setActiveCategoryKey}
-          deltaPct={(() => {
-            // Δ vs previous run on the active category
-            if (!activeCat || realRuns.length < 2) return null
-            const sorted = [...realRuns].sort((a, b) =>
-              new Date(b.runAt).getTime() - new Date(a.runAt).getTime(),
-            )
-            const cur = Number(sorted[0]?.value ?? 0)
-            const prev = Number(sorted[1]?.value ?? 0)
-            if (!prev) return null
-            return ((cur - prev) / prev) * 100
-          })()}
+          // Δ vs the previous run with the same method and region (RES-2).
+          deltaPct={activeCat ? deltaVsPreviousRun(assessmentResults, activeCat.key) : null}
           methodLabel={mostRecentAssessment?.calculation_method || 'CML 2001'}
           activeCategoriesCount={activeCategoriesCount}
           componentsAssessed={allComponents.length}
@@ -1126,7 +1119,7 @@ export default function ResultsPage() {
                 </span>
               </div>
               <div className="mono" style={{ textAlign: 'right' }}>
-                {fmtNum(f.amount, 2)}
+                {fmtSig(f.amount)}
               </div>
               <div style={{ color: 'var(--text-tertiary)' }} title={f.conversion || undefined}>
                 {f.unit}
@@ -1143,7 +1136,7 @@ export default function ResultsPage() {
                       : undefined
                 }
               >
-                {fmtNum(f.factor, 3)}
+                {fmtSig(f.factor)}
                 {(f.sourceTier === 'unverified' || f.sourceTier === 'unknown') && (
                   <span style={{ color: 'var(--signal-warn)' }}> !</span>
                 )}
@@ -1170,7 +1163,7 @@ export default function ResultsPage() {
                   fontWeight: 500,
                 }}
               >
-                {fmtNum(f.impact, 2)}
+                {fmtSig(f.impact)}
                 {f.allocation != null && f.allocation < 1 && (
                   <span
                     title={`Allocated: ${Math.round(f.allocation * 100)}% of this process's burden is assigned to the product (ISO 14044 4.3.4)`}
@@ -1233,8 +1226,8 @@ export default function ResultsPage() {
         onClose={() => setAssessOpen(false)}
         caseId={Number(caseId)}
         onCompleted={handleAssessmentCompleted}
-        initialMethod={method}
-        initialRegion={region}
+        initialMethod={pickedMethod ?? runScope.method}
+        initialRegion={pickedRegion ?? runScope.region}
       />
 
       <MagicInsightsModal
@@ -1327,15 +1320,10 @@ function DashboardHero({
     1e-9,
     ...contributors.map((c) => Math.abs(c.value)),
   )
-  const formatVal = (v: number) =>
-    v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2)
-  const formatCatVal = (v?: number) => {
-    if (v == null || !isFinite(v)) return '—'
-    if (v < 0.001 && v > 0) return v.toExponential(2)
-    if (v < 1) return v.toFixed(4)
-    if (v < 100) return v.toFixed(2)
-    return v.toFixed(0)
-  }
+  // Significant figures everywhere (RES-1/RES-6): credits keep their sign and
+  // a small non-zero value never prints as 0.00.
+  const formatVal = (v: number) => fmtSig(v)
+  const formatCatVal = (v?: number) => fmtSig(v)
   return (
     <div
       className="card"
@@ -1553,7 +1541,7 @@ function DashboardHero({
                 </div>
               )
             })}
-            {usingDemoContributors && (
+            {contributors.length === 0 && (
               <div
                 style={{
                   fontSize: 12,
@@ -1562,7 +1550,9 @@ function DashboardHero({
                   fontStyle: 'italic',
                 }}
               >
-                No contributors yet — run an assessment to see what is driving impact.
+                {usingDemoContributors
+                  ? 'No contributors yet — run an assessment to see what is driving impact.'
+                  : `No step carries ${activeCat?.label ?? 'this category'} in this run.`}
               </div>
             )}
           </div>
