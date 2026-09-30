@@ -17,7 +17,7 @@ import { Icon, SectionHeader, NumberedRail } from "@/components/lcapix"
 import { HelpTip } from "@/components/lcapix/help-tip"
 import { ISO_HELP } from "@/components/lcapix/iso-help"
 import { apiRequest } from "@/lib/api-client"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 // Only the LCIA methods that actually have characterization factors loaded in
 // the database (driver_impact_factors). Offering others (ReCiPe 2016, IPCC 2013,
 // EPS 2015, …) would let a user pick a method that silently produces all-zero
@@ -41,7 +41,6 @@ const REGION_OPTIONS = [
 
 export default function NewProjectPage() {
   const router = useRouter()
-  const { toast } = useToast()
 
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -80,24 +79,41 @@ export default function NewProjectPage() {
         null
       if (res.ok && data?.success && projectId != null) {
         // Goal & scope is study-level (ISO 14044 4.2): save what was entered
-        // here onto the new project. Best-effort; it can be set on the case too.
-        await apiRequest(`/api/projects/${projectId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            ...(functionalUnit.trim()
-              ? { functional_unit: functionalUnit.trim(), system_boundary: boundary }
-              : {}),
-            // The goal typed here is the study's ISO 14044 4.2.2 goal statement
-            // (it also stays the project's description on cards).
-            ...(description.trim() ? { goal_statement: description.trim() } : {}),
-            lcia_method: methodology,
-            region_code: region,
-          }),
-        }).catch(() => undefined)
-        toast({
-          title: "Project created",
-          description: `"${name.trim()}" is ready. Choose how you want to build the first case.`,
-        })
+        // here onto the new project. The project already exists, so a failure
+        // here still opens it, but says so: silently, every run would use the
+        // default method and region and there would be no functional unit.
+        let settingsError: string | null = null
+        try {
+          const put = await apiRequest(`/api/projects/${projectId}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              ...(functionalUnit.trim()
+                ? { functional_unit: functionalUnit.trim(), system_boundary: boundary }
+                : {}),
+              // The goal typed here is the study's ISO 14044 4.2.2 goal statement
+              // (it also stays the project's description on cards).
+              ...(description.trim() ? { goal_statement: description.trim() } : {}),
+              lcia_method: methodology,
+              region_code: region,
+            }),
+          })
+          if (!put.ok) {
+            const j = await put.json().catch(() => ({}))
+            settingsError = j?.error || `error ${put.status}`
+          }
+        } catch (putErr) {
+          settingsError = putErr instanceof Error ? putErr.message : "network error"
+        }
+        if (settingsError) {
+          toast.error(`"${name.trim()}" was created, but its settings were not saved`, {
+            description: `The impact method, region and functional unit were not saved (${settingsError}). Set the functional unit in Goal & scope, and pick the method and region when you run.`,
+            duration: 12000,
+          })
+        } else {
+          toast.success("Project created", {
+            description: `"${name.trim()}" is ready. Choose how you want to build the first case.`,
+          })
+        }
         // Two ways in, offered as equals: build the model by hand, or read it
         // from a document. Landing straight on Import taught that an LCA starts
         // with a file, which is not what a student needs to learn first.
@@ -105,17 +121,13 @@ export default function NewProjectPage() {
       } else {
         // A name clash (409) belongs next to the name field, not only in a toast.
         if (res.status === 409 && data?.error) setNameError(data.error)
-        toast({
-          title: "Could not create project",
+        toast.error("Could not create project", {
           description: data?.error || "Unknown error. Please try again.",
-          variant: "destructive",
         })
       }
     } catch (err) {
-      toast({
-        title: "Network error",
+      toast.error("Network error", {
         description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
       })
     } finally {
       setSubmitting(false)
