@@ -1,36 +1,33 @@
 /**
  * LCA CALCULATION ENGINE
  *
- * Implements the core LCA calculation algorithm using the CML 2001 methodology.
- * This engine processes environmental flows and calculates impact category results
- * by applying characterization factors to substance quantities.
+ * Impact_c = Σ over flows of quantity_in_factor_unit × CF(substance, c, method, region)
+ *            × allocation share of the step
  *
- * Algorithm Overview (CML 2001):
- * ================================
+ * Method-agnostic: the run's method (CML 2001 by default, TRACI 2.1, ReCiPe
+ * Midpoint (H)) selects the factor rows; the characterization values are
+ * whatever those rows hold. For each step (component):
+ *   1. every flow on the step is joined to its factor rows for the method, for
+ *      the requested region and Global;
+ *   2. one row per flow × category is kept, the exact region beating Global
+ *      (lib/factor-selection.ts);
+ *   3. the direction rule applies: 'embodied' factors charge inputs only,
+ *      'elementary' factors charge outputs only;
+ *   4. the quantity is expressed in the unit the factor is stated per
+ *      (lib/units.ts toFactorBasis); a non-numeric quantity is skipped and an
+ *      unconvertible, unknown or ambiguous unit is EXCLUDED, both with a
+ *      warning; nothing is ever multiplied raw;
+ *   5. contributions are summed per category, labelled with the factor's
+ *      reference unit (numerator).
+ * The case total sums the steps after allocation (ISO 14044 4.3.4) and comes
+ * with warnings and a data-quality statement (4.2.3.6).
  *
- * For each component in the product system:
- *   1. Identify all environmental flows (inputs/outputs)
- *   2. Filter for driver flows (is_driver = TRUE)
- *   3. For each driver flow:
- *      a. Lookup characterization factor from driver_impact_factors table
- *      b. Calculate impact: Impact = Quantity × Characterization_Factor
- *      c. Aggregate by impact category
- *   4. Sum all component impacts to get total impact per category
+ * Example (CML 2001 rows, IPCC AR5 GWP100: CH4 28; TRACI 2.1's lciafmt row is
+ * AR4, CH4 25 — see CALCULATIONS.md section 9):
+ *   Global Warming = 125.25 kg CO2 × 1 + 2.5 kg CH4 × 28 = 195.25 kg CO2 eq
  *
- * Formula:
- * --------
- * Impact_CategoryX = Σ(Flow_Quantity_i × Characterization_Factor_i)
- *
- * Where:
- *   - Flow_Quantity_i = amount of substance i emitted/consumed
- *   - Characterization_Factor_i = environmental impact per unit of substance i for category X
- *
- * Example:
- * --------
- * Global Warming Impact = (CO₂_quantity × 1.0) + (CH₄_quantity × 28.0) + (N₂O_quantity × 265.0)
- *                      = (125.25 kg × 1.0) + (2.5 kg × 28.0) + (0 kg × 265.0)
- *                      = 125.25 + 70.0 + 0
- *                      = 195.25 kg CO₂ eq
+ * CALCULATIONS.md is the full description; its worked example is pinned by
+ * tests/lib/calculations-doc-example.test.ts.
  */
 
 import type { Connection, RowDataPacket } from 'mysql2/promise';
