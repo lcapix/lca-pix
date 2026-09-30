@@ -962,7 +962,8 @@ export default function ResultsPage() {
             >
               See what drives it
             </button>
-            <Link href={`/project/${projectId}/case/${caseId}`} className="btn btn-ghost btn-sm">
+            {/* Opens the case editor's Duplicate dialog (RES-6). */}
+            <Link href={`/project/${projectId}/case/${caseId}?duplicate=1`} className="btn btn-ghost btn-sm">
               Duplicate and change one thing
             </Link>
             <Link href={`/project/${projectId}/comparison`} className="btn btn-ghost btn-sm">

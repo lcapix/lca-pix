@@ -102,11 +102,25 @@ export default function CaseViewPage() {
   const [dupOpen, setDupOpen] = useState(false)
   const [dupBusy, setDupBusy] = useState(false)
   const [dupError, setDupError] = useState<string | null>(null)
+  // ?duplicate=1 (the results page's "Duplicate and change one thing") opens
+  // the Duplicate dialog once the case has loaded, then drops the param so a
+  // reload or Back does not open it again (RES-6).
+  const wantsDuplicate = searchParams.get('duplicate') === '1'
+  const duplicateFromUrlHandled = useRef(false)
   useEffect(() => {
     const handler = () => setRefreshKey((k) => k + 1)
     window.addEventListener('lcapix:components-changed', handler)
     return () => window.removeEventListener('lcapix:components-changed', handler)
   }, [])
+  useEffect(() => {
+    if (!wantsDuplicate || !currentCase || duplicateFromUrlHandled.current) return
+    duplicateFromUrlHandled.current = true
+    setDupOpen(true)
+    const rest = new URLSearchParams(searchParams.toString())
+    rest.delete('duplicate')
+    const qs = rest.toString()
+    router.replace(`/project/${projectId}/case/${caseId}${qs ? `?${qs}` : ''}`, { scroll: false })
+  }, [wantsDuplicate, currentCase, searchParams, router, projectId, caseId])
   // Fetched once for the breadcrumb so it reads "<project name>" instead of "Project".
   const [projectName, setProjectName] = useState<string>('')
   // The document a person types their quantities from, kept open beside the
