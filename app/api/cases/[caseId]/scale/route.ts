@@ -9,6 +9,10 @@
  *     describes `to` units, so results per unit are divided by `to`.
  * Either way the product's quantity and the case's data basis (modeled_output,
  * ISO 14044 reference-flow scaling) are set to `to`, in one transaction.
+ *
+ * `from` must be the product quantity the case has now (COST-7): the check runs
+ * under a row lock on the case, so a replayed or concurrent "1 -> 2" (a retry,
+ * a double click) gets 409 instead of scaling the inventory a second time.
  * Capital cost (capex) does not scale with output and is left alone.
  */
 import { NextRequest, NextResponse } from 'next/server';
@@ -67,9 +71,28 @@ export async function POST(
     }
     const factor = t / f;
 
-    let result: { flowsScaled: number };
+    let result: { flowsScaled: number } | { stale: number };
     try {
       result = await transaction(async (conn) => {
+        // One rescale of a case at a time: the case row stays locked until
+        // commit, and the quantity is read with a locking read, so it is the
+        // latest committed value, not this transaction's snapshot.
+        const [[caseLocked]]: any = await conn.query(
+          `SELECT * FROM case_table WHERE case_id = ? FOR UPDATE`,
+          [caseId]
+        );
+        const [[product]]: any = await conn.query(
+          `SELECT quantity FROM component
+            WHERE case_id = ? AND parent_component_id IS NULL AND component_type = 'product'
+            ORDER BY component_id LIMIT 1 FOR UPDATE`,
+          [caseId]
+        );
+        // The data basis now: the product's quantity (what the editor shows as
+        // `from`), else modeled_output (a case with no product), else 1.
+        const current = Number(product?.quantity ?? caseLocked?.modeled_output ?? 1);
+        // Both are DECIMAL(15,6): equal means equal to the 6th decimal.
+        if (Math.abs(current - f) >= 0.0000005) return { stale: current };
+
         let flowsScaled = 0;
         if (mode === 'scale-inputs') {
           const [fr]: any = await conn.query(
@@ -113,6 +136,16 @@ export async function POST(
       return NextResponse.json(
         { error: `Scaling by ${Number(factor.toPrecision(6))} would push a flow or cost past what can be stored. Nothing was changed.` },
         { status: 400 }
+      );
+    }
+
+    if ('stale' in result) {
+      return NextResponse.json(
+        {
+          error: `This case was already rescaled or changed since you opened it: the product quantity is now ${result.stale}, not ${f}. Reload the case and try again.`,
+          current: result.stale,
+        },
+        { status: 409 }
       );
     }
 

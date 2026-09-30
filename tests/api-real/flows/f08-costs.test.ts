@@ -156,19 +156,36 @@ describe('F8 costs', () => {
     }
   });
 
-  // BUG COST-7 (app/api/cases/[caseId]/scale/route.ts:53 scales by the
-  // client's from/to, not by the stored product quantity): replaying the same
-  // "1 -> 2" request (a retry, a double click) scales the inventory twice.
-  it.fails('replaying a scale request does not scale twice (COST-7)', async () => {
+  // COST-7 (fixed): the route compares the client's `from` with the stored
+  // product quantity under a row lock, so a replayed "1 -> 2" (a retry, a
+  // double click) is refused with 409 instead of scaling the inventory twice.
+  it('replaying a scale request does not scale twice (COST-7)', async () => {
     const copy = await w.fresh.caseCopy();
     const sum = async () =>
       Number(
         (await sqlOne('SELECT SUM(f.quantity) AS q FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?', [copy])).q,
       );
     const before = await sum();
+    const statuses: number[] = [];
     for (let i = 0; i < 2; i++) {
-      await api.post(`/api/cases/${copy}/scale`, { token: w.users.editor.token, json: { from: 1, to: 2, mode: 'scale-inputs' } });
+      const r = await api.post(`/api/cases/${copy}/scale`, { token: w.users.editor.token, json: { from: 1, to: 2, mode: 'scale-inputs' } });
+      statuses.push(r.status);
+      if (i === 1) expect(r.json.error).toMatch(/changed since/i);
     }
+    expect(statuses).toEqual([200, 409]);
     expect(await sum()).toBeCloseTo(before * 2, 9);
+  });
+
+  it('two scale requests at once apply exactly one (row lock)', async () => {
+    const copy = await w.fresh.caseCopy();
+    const sum = async () =>
+      Number(
+        (await sqlOne('SELECT SUM(f.quantity) AS q FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?', [copy])).q,
+      );
+    const before = await sum();
+    const send = () => api.post(`/api/cases/${copy}/scale`, { token: w.users.editor.token, json: { from: 1, to: 3, mode: 'scale-inputs' } });
+    const statuses = (await Promise.all([send(), send(), send()])).map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 409, 409]);
+    expect(await sum()).toBeCloseTo(before * 3, 9);
   });
 });
