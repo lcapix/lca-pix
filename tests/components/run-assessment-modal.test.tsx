@@ -26,7 +26,7 @@ describe('<RunAssessmentModal> run outcome', () => {
   })
 
   function setup(response: Response) {
-    const errorBody = { error: 'Failed to run assessment', details: 'engine exploded' }
+    const errorBody = { error: 'Failed to run assessment', request_id: 'req-1234' }
     // What the shared helpers do today: the body comes back whatever the status.
     vi.mocked(api.apiPost).mockResolvedValue(errorBody)
     vi.mocked(api.apiRequest).mockResolvedValue(response)
@@ -48,9 +48,11 @@ describe('<RunAssessmentModal> run outcome', () => {
 
   it('stays open, shows the error and saves nothing when the server answers 500', async () => {
     const { onCompleted, onClose } = setup(
-      json(500, { error: 'Failed to run assessment', details: 'engine exploded' }),
+      json(500, { error: 'Failed to run assessment', request_id: 'req-1234' }),
     )
-    expect(await screen.findByText(/engine exploded/)).toBeInTheDocument()
+    // The server sends a request id, not its error text (L1): shown so the
+    // user can report it.
+    expect(await screen.findByText(/Failed to run assessment, reference req-1234/)).toBeInTheDocument()
     expect(onCompleted).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
     expect(localStorage.getItem('lcapix-run-prefs:3')).toBeNull()

@@ -52,3 +52,25 @@ export async function readJson(
   }
   return { ok: true, body: value as JsonObject };
 }
+
+/** An id for one failed request, shown to the client and written to the server log. */
+export function newRequestId(): string {
+  return crypto.randomUUID();
+}
+
+/**
+ * A 500 that tells the client nothing internal (security audit L1): a generic
+ * message and a request id. The error itself, with its SQL, codes and stack,
+ * goes to the server log under the same id, so a user who reports the id can
+ * be matched to the cause.
+ */
+export function internalError(
+  label: string,
+  publicMessage: string,
+  err: unknown,
+  opts: { requestId?: string; extra?: Record<string, unknown> } = {},
+): NextResponse {
+  const requestId = opts.requestId ?? newRequestId();
+  console.error(`[${label}] request ${requestId}:`, err);
+  return NextResponse.json({ error: publicMessage, request_id: requestId, ...opts.extra }, { status: 500 });
+}

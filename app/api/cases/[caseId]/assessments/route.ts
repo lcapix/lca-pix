@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readJson } from '@/lib/http';
+import { internalError, newRequestId, readJson } from '@/lib/http';
 import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -53,9 +53,11 @@ async function recordFailedRun(args: {
   method: string;
   regionCode: string;
   userId: number;
-  error: unknown;
+  requestId: string;
 }): Promise<number | null> {
-  const message = String((args.error as any)?.message ?? args.error ?? 'Unknown error').slice(0, 60000);
+  // The run row is readable by every project member (GET returns it), so it
+  // names the request, not the error: the detail is in the server log (L1).
+  const message = `Run failed. Details are in the server log under request ${args.requestId}.`;
   try {
     return await insert(
       `INSERT INTO assessment_runs (case_id, run_name, calculation_method, region_code, status, error_log, executed_by)
@@ -446,7 +448,7 @@ export async function POST(
         return { runId, lcaResult, snapshot };
       });
     } catch (calcError: any) {
-      console.error(`\n❌ ASSESSMENT FAILED:`, calcError);
+      const requestId = newRequestId();
       // The transaction rolled the run row back; keep a record of the attempt.
       const failedRunId = await recordFailedRun({
         caseId,
@@ -454,16 +456,13 @@ export async function POST(
         method,
         regionCode,
         userId,
-        error: calcError,
+        requestId,
       });
-      return NextResponse.json(
-        {
-          error: 'Failed to run assessment',
-          details: calcError?.message ?? String(calcError),
-          ...(failedRunId ? { run_id: failedRunId, status: 'failed' } : {}),
-        },
-        { status: 500 },
-      );
+      // L1: the engine's or the database's message stays in the server log.
+      return internalError('assessments POST: run failed', 'Failed to run assessment', calcError, {
+        requestId,
+        extra: failedRunId ? { run_id: failedRunId, status: 'failed' } : {},
+      });
     }
 
     // Fetch complete assessment data
@@ -519,10 +518,6 @@ export async function POST(
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.error('Run assessment error:', error);
-    return NextResponse.json({
-      error: 'Failed to run assessment',
-      details: error.message
-    }, { status: 500 });
+    return internalError('assessments POST', 'Failed to run assessment', error);
   }
 }
