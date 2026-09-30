@@ -53,6 +53,8 @@ export interface ReportData {
     life_cycle_stage?: string | null;
   }>;
   results: Array<{
+    /** Step id; keys stages and per-step sums so same-named steps never merge. */
+    component_id?: number | null;
     component_name: string;
     category_name: string;
     impact_value: string | number;
@@ -64,6 +66,7 @@ export interface ReportData {
     unit: string;
   }>;
   flows: Array<{
+    component_id?: number | null;
     component_name: string;
     substance_name: string;
     direction: string;
@@ -84,6 +87,11 @@ export interface ReportData {
   interpretation?: string | null;
   /** What the author assumed, and what they left out. */
   assumptions?: string | null;
+  /**
+   * Set when the run predates frozen inventories: the tree and flows are the
+   * case as it is now, so the report says so next to them (audit EXP-1).
+   */
+  inventory_note?: string | null;
 }
 
 export const BOUNDARY_LABEL: Record<string, string> = {
@@ -129,6 +137,55 @@ const COLORS = {
 };
 
 // ============================================================================
+// TEXT THE BUILT-IN FONTS CAN DRAW (audit EXP-4)
+// ============================================================================
+
+// PDFKit's built-in Helvetica encodes WinAnsi (cp1252) only. Units such as
+// "kg CO₂ eq" (written by migrate-fix-chemical-subscripts.sql) and symbols such
+// as "−" or "→" came out as garbage. No TTF ships with the repo, so text is
+// folded to its ASCII spelling before it is drawn.
+const PDF_FOLD: Record<string, string> = {
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+  '₊': '+', '₋': '-', '₌': '=', '₍': '(', '₎': ')',
+  'ₐ': 'a', 'ₑ': 'e', 'ₒ': 'o', 'ₓ': 'x', 'ₔ': 'e', 'ₕ': 'h', 'ₖ': 'k', 'ₗ': 'l', 'ₘ': 'm', 'ₙ': 'n',
+  'ₚ': 'p', 'ₛ': 's', 'ₜ': 't',
+  '⁰': '0', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+  '⁺': '+', '⁻': '-', '⁼': '=', '⁽': '(', '⁾': ')', 'ⁿ': 'n', 'ⁱ': 'i',
+  '−': '-', '‐': '-', '‑': '-', '‒': '-', '→': '->', '←': '<-', '↔': '<->', '↑': 'up', '↓': 'down',
+  '≤': '<=', '≥': '>=', '≈': '~', '≠': '!=', '\u2009': ' ', '\u202f': ' ', '\u2007': ' ',
+};
+const WIN_ANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+
+function winAnsi(ch: string): boolean {
+  const c = ch.codePointAt(0) ?? 0;
+  return (
+    c === 0x09 || c === 0x0a || c === 0x0d ||
+    (c >= 0x20 && c <= 0x7e) || (c >= 0xa0 && c <= 0xff) || WIN_ANSI_EXTRA.has(ch)
+  );
+}
+
+/** Text as Helvetica can draw it: subscripts and symbols folded, the rest '?'. */
+export function pdfSafeText(text: string): string {
+  let out = '';
+  for (const ch of text.normalize('NFC')) {
+    const folded = PDF_FOLD[ch];
+    if (folded !== undefined) out += folded;
+    else out += winAnsi(ch) ? ch : '?';
+  }
+  return out;
+}
+
+/** Route every string the document measures or draws through pdfSafeText. */
+function foldDocumentText(doc: PDFKit.PDFDocument) {
+  const d = doc as any;
+  const fold = (t: unknown) => (typeof t === 'string' ? pdfSafeText(t) : t);
+  for (const name of ['text', 'heightOfString', 'widthOfString'] as const) {
+    const original = d[name].bind(d);
+    d[name] = (t: unknown, ...rest: unknown[]) => original(fold(t), ...rest);
+  }
+}
+
+// ============================================================================
 // PDF GENERATION
 // ============================================================================
 
@@ -146,6 +203,7 @@ export function generateAssessmentPDF(data: ReportData): PDFKit.PDFDocument {
       Creator: 'LCAPIX Life Cycle Assessment Platform',
     },
   });
+  foldDocumentText(doc);
 
   // The order ISO 14044's reporting clause expects: what the study is, what it
   // covers, what went in, what came out, what it means, what it assumed, and
@@ -376,6 +434,7 @@ function drawProcessHierarchy(doc: PDFKit.PDFDocument, data: ReportData, heading
     50, y, { width: 495 }
   );
   y += 35;
+  y = drawInventoryNote(doc, data, y);
 
   const typeLabels: Record<string, string> = {
     product: 'Product',
@@ -517,19 +576,25 @@ function drawImpactSummary(doc: PDFKit.PDFDocument, data: ReportData, heading: s
 // SECTION 4: COMPONENT BREAKDOWN
 // ============================================================================
 
-function headlineSteps(data: ReportData) {
+/**
+ * The headline category (climate change, else the first) split by process
+ * step. Steps are keyed by component id when the rows carry one, so two steps
+ * with the same name ("Assembly" under two parents) stay two steps.
+ */
+export function headlineSteps(data: ReportData) {
   const headline =
     data.total_impacts.find((t) => /global warming|climate/i.test(t.category_name)) ?? data.total_impacts[0];
   if (!headline) return null;
 
-  const byStep = new Map<string, number>();
+  const byStep = new Map<string, { id: number | null; name: string; value: number }>();
   for (const r of data.results) {
     if (r.category_name !== headline.category_name) continue;
-    byStep.set(r.component_name, (byStep.get(r.component_name) ?? 0) + (Number(r.impact_value) || 0));
+    const key = r.component_id != null ? `id:${r.component_id}` : `name:${r.component_name}`;
+    const step = byStep.get(key) ?? { id: r.component_id ?? null, name: r.component_name, value: 0 };
+    step.value += Number(r.impact_value) || 0;
+    byStep.set(key, step);
   }
-  const steps = [...byStep.entries()]
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
+  const steps = [...byStep.values()].sort((a, b) => b.value - a.value);
   const total = steps.reduce((sum, st) => sum + st.value, 0);
   return steps.length ? { headline, steps, total } : null;
 }
@@ -539,16 +604,21 @@ function headlineSteps(data: ReportData) {
  * split means. A cradle-to-gate study lands entirely in two stages, and saying
  * so is more honest than printing one bar and calling it a life cycle.
  */
-function stageSplit(data: ReportData) {
+export function stageSplit(data: ReportData) {
   const hot = headlineSteps(data);
   if (!hot) return null;
 
-  const stageByStep = new Map<string, string | null>();
-  for (const c of data.components) stageByStep.set(c.component_name, c.life_cycle_stage ?? null);
+  // Stage per step id (STAGE-2); by name only for rows that carry no id.
+  const stageById = new Map<number, string | null>();
+  const stageByName = new Map<string, string | null>();
+  for (const c of data.components) {
+    stageById.set(c.component_id, c.life_cycle_stage ?? null);
+    if (!stageByName.has(c.component_name)) stageByName.set(c.component_name, c.life_cycle_stage ?? null);
+  }
+  const stageOfStep = (s: { id: number | null; name: string }) =>
+    s.id != null && stageById.has(s.id) ? stageById.get(s.id) ?? null : stageByName.get(s.name) ?? null;
 
-  const rows = groupByStage(
-    hot.steps.map((s) => ({ stage: stageByStep.get(s.name) ?? null, value: s.value })),
-  );
+  const rows = groupByStage(hot.steps.map((s) => ({ stage: stageOfStep(s), value: s.value })));
   if (!rows.length) return null;
 
   const declared = data.goal_scope?.system_boundary ?? null;
@@ -556,7 +626,7 @@ function stageSplit(data: ReportData) {
     declared,
     STAGE_IDS.map((id) => ({
       stage: id,
-      steps: [...stageByStep.values()].filter((v) => stageOf(v) === id).length,
+      steps: [...stageById.values()].filter((v) => stageOf(v) === id).length,
       flows: rows.find((r) => r.stage === id) ? 1 : 0,
     })),
   );
@@ -687,6 +757,7 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData, headi
     50, y, { width: 495 }
   );
   y += 35;
+  y = drawInventoryNote(doc, data, y);
 
   if (data.flows.length === 0) {
     doc.font('Helvetica').fontSize(11).fillColor(COLORS.textLight);
@@ -739,6 +810,16 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData, headi
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/** The legacy-run notice beside the inventory; returns the y below it. */
+function drawInventoryNote(doc: PDFKit.PDFDocument, data: ReportData, y: number): number {
+  const note = data.inventory_note?.trim();
+  if (!note) return y;
+  doc.font('Helvetica-Bold').fontSize(9);
+  const h = doc.heightOfString(note, { width: 495 });
+  doc.fillColor(COLORS.red).text(note, 50, y, { width: 495 });
+  return y + h + 12;
+}
 
 /** Info table whose rows grow to fit long values (goal statements, notes). */
 function drawWrappedInfoTable(

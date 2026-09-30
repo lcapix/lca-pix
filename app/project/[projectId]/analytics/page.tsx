@@ -38,6 +38,11 @@ import {
   fmtNum,
   fmtInt,
 } from '@/components/lcapix'
+import {
+  analyticsImpacts,
+  normalizeByMaxAbs,
+  signedLog10,
+} from '@/components/lcapix/results/analytics-impacts'
 
 const SERIES_COLORS = ['#2d6a4f', '#74c69d', '#d98568', '#9f88cc', '#4f90c9']
 const COMPONENT_COLORS = [
@@ -216,25 +221,9 @@ export default function AnalyticsPage() {
           const detailData = await detailRes.json()
           if (!detailData.success) return null
 
-          const categories = (detailData.total_impacts || []).map((cat: any) => ({
-            category_name: cat.category_name,
-            impact_value: parseFloat(
-              Math.abs(cat.impact_value || 0).toString()
-            ),
-            unit: cat.unit,
-          }))
-          const components = (detailData.component_breakdown || []).map(
-            (comp: any) => ({
-              component_name: comp.component_name,
-              component_type: comp.component_type,
-              impacts: comp.impacts.map((imp: any) => ({
-                category_name: imp.category_name,
-                impact_value: parseFloat(
-                  Math.abs(imp.impact_value || 0).toString()
-                ),
-              })),
-            })
-          )
+          // Impacts keep their sign (ANA-1): a net credit is part of the
+          // result, not a burden.
+          const { categories, components } = analyticsImpacts(detailData)
           // The headline is the climate-change result. Impacts in different
           // units (kg CO2e, kg SO2e, kg Sb eq) cannot be added into one score
           // (ISO 14044 4.4); each category is compared on its own below.
@@ -685,7 +674,7 @@ export default function AnalyticsPage() {
                             lineHeight: 1,
                           }}
                         >
-                          {c.totalScore > 0 ? fmtNum(c.totalScore, 2) : '—'}
+                          {c.totalScore !== 0 ? fmtNum(c.totalScore, 2) : '—'}
                         </div>
                         <div
                           style={{
@@ -1004,8 +993,8 @@ export default function AnalyticsPage() {
                           : 0
                         const isBase = d === baseCase
                         const delta =
-                          !isBase && baseVal > 0
-                            ? ((val - baseVal) / baseVal) * 100
+                          !isBase && baseVal !== 0
+                            ? ((val - baseVal) / Math.abs(baseVal)) * 100
                             : null
                         return (
                           <div
@@ -1016,8 +1005,8 @@ export default function AnalyticsPage() {
                               color: 'var(--text-secondary)',
                             }}
                           >
-                            {val > 0 ? fmtNum(val, 1) : '—'}
-                            {delta !== null && val > 0 && (
+                            {val !== 0 ? fmtNum(val, 1) : '—'}
+                            {delta !== null && val !== 0 && (
                               <span
                                 style={{
                                   marginLeft: 6,
@@ -1085,10 +1074,11 @@ function CategoryComparisonPanel({
     // For radar, normalise each category to its max across scenarios so the
     // shape reads at a glance (otherwise one giant category dwarfs the rest).
     return groups.map((g) => {
-      const max = Math.max(...g.values, 1e-9)
+      // Percent of the largest magnitude: a credit stays below zero.
+      const pct = normalizeByMaxAbs(g.values)
       const point: Record<string, number | string> = { category: g.label }
       seriesLabels.forEach((name, i) => {
-        point[name] = (g.values[i] / max) * 100
+        point[name] = pct[i]
         point[`${name}__raw`] = g.values[i]
       })
       return point
@@ -1097,10 +1087,11 @@ function CategoryComparisonPanel({
 
   const normalizedData = useMemo(() => {
     return groups.map((g) => {
-      const max = Math.max(...g.values, 1e-9)
+      // Percent of the largest magnitude: a credit stays below zero.
+      const pct = normalizeByMaxAbs(g.values)
       const point: Record<string, number | string> = { category: g.label }
       seriesLabels.forEach((name, i) => {
-        point[name] = (g.values[i] / max) * 100
+        point[name] = pct[i]
         point[`${name}__raw`] = g.values[i]
       })
       return point
@@ -1112,7 +1103,7 @@ function CategoryComparisonPanel({
       const point: Record<string, number | string> = { category: g.label }
       seriesLabels.forEach((name, i) => {
         const v = g.values[i]
-        point[name] = v > 0 ? Math.log10(v + 1) : 0
+        point[name] = signedLog10(v)
         point[`${name}__raw`] = v
       })
       return point
@@ -1271,7 +1262,7 @@ function CategoryComparisonPanel({
                   view === 'normalized'
                     ? `${v}%`
                     : view === 'log'
-                      ? `10^${v.toFixed(1)}`
+                      ? `${v < 0 ? '-' : ''}10^${Math.abs(v).toFixed(1)}`
                       : fmtNum(v, 2)
                 }
               />
@@ -1305,7 +1296,7 @@ function CategoryComparisonPanel({
                           fontSize: 10,
                           fill: 'var(--text-secondary)',
                           formatter: (v: number) =>
-                            v === 0 ? '' : v < 0.01 ? v.toExponential(1) : fmtNum(v, 2),
+                            v === 0 ? '' : Math.abs(v) < 0.01 ? v.toExponential(1) : fmtNum(v, 2),
                         }
                       : undefined
                   }
@@ -1498,7 +1489,7 @@ function CostAnalysisPanel({
               {r.cost > 0 ? fmtMoney(r.cost, currency) : '—'}
             </div>
             <div className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-              {r.impact > 0 ? fmtNum(r.impact, 2) : '—'}
+              {r.impact !== 0 ? fmtNum(r.impact, 2) : '—'}
             </div>
             <div
               className="mono"
@@ -1534,7 +1525,7 @@ function DeltaChartPanel({
       const point: Record<string, number | string> = { category: g.label }
       others.forEach((name, i) => {
         const v = g.values[i + 1] || 0
-        point[name] = base > 0 ? ((v - base) / base) * 100 : 0
+        point[name] = base !== 0 ? ((v - base) / Math.abs(base)) * 100 : 0
       })
       return point
     })

@@ -16,7 +16,7 @@
  */
 
 import PptxGenJS from 'pptxgenjs';
-import { goalScopeRows, type ReportData } from './pdf-generator';
+import { goalScopeRows, headlineSteps, type ReportData } from './pdf-generator';
 
 const BRAND = {
   primary: '1A5632',
@@ -47,6 +47,32 @@ function fmtNum(v: number, dp = 2): string {
 
 function fmtMoney(v: number): string {
   return `$${v.toLocaleString(undefined, { maximumFractionDigits: v >= 1000 ? 0 : 2 })}`
+}
+
+/**
+ * The steps carrying the headline category (climate change, else the first),
+ * largest first, in that category's unit (audit EXP-2: the slide used to add
+ * kg CO2 eq, kg SO2 eq and CTUe together and print the sum unitless). Credits
+ * stay in, so each share is of the sum of absolute step values.
+ */
+export function topContributors(data: ReportData, limit = 10) {
+  const hot = headlineSteps(data)
+  if (!hot) return null
+  const ranked = [...hot.steps]
+    .filter((s) => s.value !== 0)
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+  const absSum = ranked.reduce((sum, s) => sum + Math.abs(s.value), 0)
+  return {
+    category: hot.headline.category_name,
+    unit: hot.headline.unit,
+    rows: ranked.slice(0, limit).map((s) => ({
+      id: s.id,
+      name: s.name,
+      value: s.value,
+      share: absSum > 0 ? Math.abs(s.value) / absSum : 0,
+    })),
+    hasCredits: ranked.some((s) => s.value < 0),
+  }
 }
 
 /** Generate a .pptx and return it as a Node Buffer. */
@@ -138,38 +164,36 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
     fontSize: 12, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.2,
   })
 
-  // ─── Slide 3: Top contributors ──────────────────────────────────────────────
+  // ─── Slide 3: Top contributors (headline category only) ──────────────────────
   const contribSlide = pptx.addSlide()
   slideHeader(contribSlide, 'Top component contributors')
-  // Aggregate each component's total impact across categories.
-  const compTotals = new Map<string, number>()
-  for (const r of data.results) {
-    const v = typeof r.impact_value === 'string' ? parseFloat(r.impact_value) : r.impact_value
-    compTotals.set(r.component_name, (compTotals.get(r.component_name) ?? 0) + (v || 0))
+  const top = topContributors(data)
+  if (top) {
+    contribSlide.addText(
+      `${top.category}, ${top.unit}. ` +
+        (top.hasCredits
+          ? 'Share of the sum of absolute step values: a credit (negative value) counts by its size.'
+          : 'Share of the category total carried by each step.'),
+      { x: 0.6, y: 1.35, w: 12.1, h: 0.4, fontSize: 12, color: BRAND.textLight, italic: true },
+    )
   }
-  const ranked = Array.from(compTotals.entries())
-    .map(([name, value]) => ({ name, value }))
-    .filter((c) => c.value > 0)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10)
-  const grand = ranked.reduce((s, c) => s + c.value, 0) || 1
   const contribRows: PptxGenJS.TableRow[] = [
-    headerRow(['#', 'Component', 'Impact', 'Share']),
+    headerRow(['#', 'Component', top ? `Impact (${top.unit})` : 'Impact', 'Share']),
   ]
-  if (ranked.length === 0) {
+  if (!top || top.rows.length === 0) {
     contribRows.push([cell('No component impacts in this run.', { colspan: 4, italic: true })])
   } else {
-    ranked.forEach((c, i) => {
+    top.rows.forEach((c, i) => {
       contribRows.push([
         cell(String(i + 1), { color: BRAND.textLight }, i),
         cell(c.name, {}, i),
         cell(fmtNum(c.value, 3), { align: 'right' }, i),
-        cell(`${((c.value / grand) * 100).toFixed(1)}%`, { align: 'right', bold: true, color: BRAND.secondary }, i),
+        cell(`${(c.share * 100).toFixed(1)}%`, { align: 'right', bold: true, color: BRAND.secondary }, i),
       ])
     })
   }
   contribSlide.addTable(contribRows, {
-    x: 0.6, y: 1.5, w: 12.1, colW: [0.8, 7.3, 2.0, 2.0],
+    x: 0.6, y: 1.85, w: 12.1, colW: [0.8, 6.8, 2.5, 2.0],
     border: { type: 'solid', color: BRAND.border, pt: 0.5 },
     fontSize: 12, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.2,
   })
@@ -208,29 +232,18 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
   const interpSlide = pptx.addSlide()
   slideHeader(interpSlide, 'Interpretation')
 
-  const headline =
-    data.total_impacts.find((t) => /global warming|climate/i.test(t.category_name)) ?? data.total_impacts[0]
-  const byStep = new Map<string, number>()
-  if (headline) {
-    for (const r of data.results) {
-      if (r.category_name !== headline.category_name) continue
-      byStep.set(r.component_name, (byStep.get(r.component_name) ?? 0) + (Number(r.impact_value) || 0))
-    }
-  }
-  const stepTotal = [...byStep.values()].reduce((a, b) => a + b, 0)
+  // The steps carrying the headline category, keyed by step id (STAGE-2).
+  const hot = headlineSteps(data)
   const interpLines: string[] = []
   interpLines.push(
     data.interpretation?.trim() ||
       'Interpretation not written yet: name what drives the result, how far the data can be trusted, and what you would change first.',
   )
-  if (headline) {
-    ;[...byStep.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .forEach(([name, v]) => {
-        const share = stepTotal > 0 ? ` (${((v / stepTotal) * 100).toFixed(1)}%)` : ''
-        interpLines.push(`${name}: ${fmtNum(v)} ${headline.unit}${share}`)
-      })
+  if (hot) {
+    hot.steps.slice(0, 4).forEach((st) => {
+      const share = hot.total > 0 ? ` (${((st.value / hot.total) * 100).toFixed(1)}%)` : ''
+      interpLines.push(`${st.name}: ${fmtNum(st.value)} ${hot.headline.unit}${share}`)
+    })
   }
   interpSlide.addText(
     interpLines.map((t, i) => ({
