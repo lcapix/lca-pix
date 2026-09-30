@@ -65,6 +65,8 @@ test.describe('non-member', () => {
     await page.goto(`/project/${projectId}`);
     expect((await res).status()).toBe(404);
     await expectToast(page, 'Project not found');
+    // …and sends you back to your own dashboard.
+    await expect(page).toHaveURL(/\/home$/);
     await settle(page);
     await expect(page.getByText(projectName)).toHaveCount(0);
 

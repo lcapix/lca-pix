@@ -3,7 +3,8 @@
     "Every screen in docs/design-revamp/CLAUDE_DESIGN_BRIEF.md §4, as a route on the seeded world (tests/e2e/support/seed.ts).",
     "One list feeds the visual and accessibility baselines, the global-setup warm-up and scripts/capture-review.mjs.",
     "slug: snapshot + a11y baseline key. path: {placeholders} come from the seed ids (support/routes.ts idsFromSeed).",
-    "as: who is signed in (owner by default; viewer, empty, newcomer, anon). ready: text that must be visible before the page counts as loaded. brief: the §4 item."
+    "as: who is signed in (owner by default; viewer, empty, newcomer, anon). ready: text that must be visible before the page counts as loaded. brief: the §4 item.",
+    "landsOn: the path the page redirects to by itself (the check waits for it)."
   ],
   "viewports": [
     {
@@ -27,48 +28,56 @@
       "slug": "landing",
       "path": "/",
       "as": "anon",
+      "ready": "Built for sustainability engineers.",
       "brief": "1 Landing"
     },
     {
       "slug": "product",
       "path": "/product",
       "as": "anon",
+      "ready": "Six capabilities.",
       "brief": "2 Product"
     },
     {
       "slug": "pricing",
       "path": "/pricing",
       "as": "anon",
+      "ready": "Free to model.",
       "brief": "2 Pricing"
     },
     {
       "slug": "changelog",
       "path": "/changelog",
       "as": "anon",
+      "ready": "What's new in LCAPIX.",
       "brief": "2 Changelog"
     },
     {
       "slug": "legal-privacy",
       "path": "/legal/privacy",
       "as": "anon",
+      "ready": "Privacy policy",
       "brief": "2 Legal"
     },
     {
       "slug": "legal-security",
       "path": "/legal/security",
       "as": "anon",
+      "ready": "Security",
       "brief": "2 Legal"
     },
     {
       "slug": "legal-terms",
       "path": "/legal/terms",
       "as": "anon",
+      "ready": "Terms of service",
       "brief": "2 Legal"
     },
     {
       "slug": "docs",
       "path": "/docs",
       "as": "anon",
+      "ready": "Everything you need to ship",
       "brief": "2 Docs"
     },
     {
@@ -108,143 +117,172 @@
     {
       "slug": "project-new",
       "path": "/project/new",
+      "ready": "Define an assessment.",
       "brief": "6 New project"
     },
     {
       "slug": "project-start",
       "path": "/project/{exampleProject}/start",
+      "ready": "How do you want to start?",
       "brief": "7 Project start"
     },
     {
       "slug": "project-workspace",
       "path": "/project/{exampleProject}",
+      "ready": "Open editor",
       "brief": "8 Project workspace"
     },
     {
       "slug": "project-workspace-five-tier",
       "path": "/project/{fiveTierProject}",
+      "ready": "Open editor",
       "brief": "8 Project workspace (single case)"
     },
     {
       "slug": "case-new-base",
       "path": "/project/{exampleProject}/case/base/new",
+      "ready": "Create your Base Case",
       "brief": "9 New base case"
     },
     {
       "slug": "case-new-comparative",
       "path": "/project/{exampleProject}/case/comparative/new",
+      "ready": "Create Comparative Case",
       "brief": "9 New comparative case"
     },
     {
       "slug": "case-editor",
       "path": "/project/{exampleProject}/case/{baseCase}",
+      "ready": "Add Component",
       "brief": "10 Case editor"
     },
     {
       "slug": "case-editor-five-tier",
       "path": "/project/{fiveTierProject}/case/{fiveTierCase}",
+      "ready": "Add Component",
       "brief": "10 Case editor (5 tiers)"
     },
     {
       "slug": "component-new-page",
       "path": "/project/{exampleProject}/case/{baseCase}/component/new",
+      "ready": "New Component",
       "brief": "12 Add component (full page)"
     },
     {
       "slug": "component-edit-page",
       "path": "/project/{exampleProject}/case/{baseCase}/component/{cutBlank}/edit",
+      "ready": "Add Component",
       "brief": "12 Edit component (full page)"
     },
     {
       "slug": "results",
       "path": "/project/{exampleProject}/case/{baseCase}/results",
+      "ready": "TOTAL IMPACT",
       "brief": "13 Results"
     },
     {
       "slug": "analytics",
       "path": "/project/{exampleProject}/analytics",
+      "ready": "Example: painted steel bracket",
       "brief": "15 Analytics"
     },
     {
       "slug": "compare",
       "path": "/project/{exampleProject}/comparison",
+      "ready": "Cases in the comparison",
       "brief": "16 Compare"
     },
     {
       "slug": "import",
       "path": "/project/{exampleProject}/import",
+      "ready": "Import a document",
       "brief": "17 Import"
     },
     {
       "slug": "class",
       "path": "/project/{exampleProject}/class",
+      "ready": "Progress",
       "brief": "18 Class"
     },
     {
       "slug": "library-factors",
       "path": "/library/factors",
+      "ready": "Factor library",
       "brief": "19 Library: factors"
     },
     {
       "slug": "library-substances",
       "path": "/library/substances",
+      "ready": "Substance catalog",
       "brief": "19 Library: substances"
     },
     {
       "slug": "admin-integrations",
       "path": "/admin/integrations",
+      "ready": "Admins only",
       "brief": "20 Integrations"
     },
     {
       "slug": "profile",
       "path": "/profile",
+      "ready": "Olivia Owner",
       "brief": "21 Profile"
     },
     {
       "slug": "about",
       "path": "/about",
+      "ready": "What is LCAPIX?",
       "brief": "21 About"
     },
     {
       "slug": "guide",
       "path": "/guide",
+      "ready": "Getting started",
       "brief": "21 Guide"
     },
     {
       "slug": "guide-data-model",
       "path": "/guide/data-model",
+      "ready": "Data model",
       "brief": "21 Guide: data model"
     },
     {
       "slug": "guide-first-assessment",
       "path": "/guide/first-assessment",
+      "ready": "Your first assessment",
       "brief": "21 Guide: first assessment"
     },
     {
       "slug": "guide-glossary",
       "path": "/guide/glossary",
+      "ready": "Glossary",
       "brief": "21 Guide: glossary"
     },
     {
       "slug": "guide-faq",
       "path": "/guide/faq",
+      "ready": "FAQ",
       "brief": "21 Guide: FAQ"
     },
     {
       "slug": "guide-api-reference",
       "path": "/guide/api-reference",
+      "ready": "API reference",
       "brief": "21 Guide: API reference"
     },
     {
       "slug": "not-found",
       "path": "/this-page-does-not-exist",
+      "ready": "404",
       "brief": "4 404 page"
     },
     {
       "slug": "project-not-found",
       "path": "/project/{fiveTierProject}",
       "as": "viewer",
-      "brief": "4 Project not found (non-member)"
+      "ready": "Project not found",
+      "brief": "4 Project not found (non-member): toast, then back to /home",
+      "landsOn": "/home"
     }
   ]
 }

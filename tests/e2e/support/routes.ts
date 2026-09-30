@@ -2,11 +2,13 @@
  * Typed access to tests/e2e/routes.json, the one route list shared by the
  * visual and accessibility baselines, the warm-up and capture-review.mjs.
  */
+import { expect, type Page } from '@playwright/test';
 import data from '../routes.json';
 import type { Seed } from './seed';
+import { open, settle } from './ui';
 
 export type Actor = 'owner' | 'viewer' | 'empty' | 'newcomer' | 'anon';
-export type RouteDef = { slug: string; path: string; as?: Actor; ready?: string; brief: string };
+export type RouteDef = { slug: string; path: string; as?: Actor; ready?: string; landsOn?: string; brief: string };
 export type Viewport = { name: string; width: number; height: number };
 
 export const ROUTES = data.routes as RouteDef[];
@@ -30,6 +32,15 @@ export function resolvePath(template: string, ids: Record<string, number | strin
     if (ids[key] === undefined || ids[key] === null) throw new Error(`No id for {${key}} in ${template}`);
     return String(ids[key]);
   });
+}
+
+/** Open a route and wait until it is ready (and has redirected, if it does). */
+export async function openRoute(page: Page, route: RouteDef, seed: Seed): Promise<void> {
+  await open(page, resolvePath(route.path, idsFromSeed(seed)), { ready: route.ready });
+  if (route.landsOn) {
+    await expect(page).toHaveURL(new RegExp(`${route.landsOn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+    await settle(page);
+  }
 }
 
 export function routeBySlug(slug: string): RouteDef {

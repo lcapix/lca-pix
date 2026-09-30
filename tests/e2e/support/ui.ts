@@ -48,6 +48,35 @@ export async function settle(page: Page, opts: { timeout?: number } = {}): Promi
   }
   await page.evaluate(() => document.fonts.ready.then(() => undefined)).catch(() => undefined);
   await waitForHydration(page, Math.max(1_000, deadline - Date.now()));
+  await waitForStableLayout(page, Math.max(1_000, deadline - Date.now()));
+}
+
+/**
+ * Wait until the layout stops moving: the tree canvas fits itself to the
+ * viewport after mount, charts size themselves after the first paint. Samples
+ * the canvas transform, the page size and the number of elements every 150 ms
+ * until three samples in a row agree.
+ */
+export async function waitForStableLayout(page: Page, timeout = 10_000): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const w = window as unknown as { __e2eLayout?: { sig: string; same: number } };
+        const stage = document.querySelector('[data-testid="tree-canvas-stage"]') as HTMLElement | null;
+        const sig = [
+          stage ? getComputedStyle(stage).transform : '',
+          document.documentElement.scrollHeight,
+          document.documentElement.scrollWidth,
+          document.getElementsByTagName('*').length,
+        ].join('|');
+        const prev = w.__e2eLayout;
+        w.__e2eLayout = { sig, same: prev && prev.sig === sig ? prev.same + 1 : 0 };
+        return w.__e2eLayout.same >= 3;
+      },
+      undefined,
+      { timeout, polling: 150 },
+    )
+    .catch(() => undefined);
 }
 
 /**
