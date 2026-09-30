@@ -21,6 +21,7 @@ import { expect, readSeed, storagePath, test } from '../support/fixtures';
 import { ARTIFACTS_DIR, E2E_DIR } from '../support/paths';
 import { ROUTES, openRoute } from '../support/routes';
 import { STATES, openState } from '../support/states';
+import { refitCanvas } from '../support/visual';
 
 export const A11Y_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 export const BASELINE_FILE = path.join(E2E_DIR, 'a11y', 'baseline.json');
@@ -35,6 +36,7 @@ const baseline: Baseline = existsSync(BASELINE_FILE)
 const updating = process.env.A11Y_UPDATE_BASELINE === '1';
 
 async function audit(page: Page, slug: string): Promise<void> {
+  await refitCanvas(page); // every tree node in view, whatever the load timing
   const result = await new AxeBuilder({ page }).withTags(A11Y_TAGS).exclude('nextjs-portal')
     // Toasts come and go on a timer; a screen's baseline must not depend on
     // whether one was still up. (The toaster itself is checked on /auth/login.)
