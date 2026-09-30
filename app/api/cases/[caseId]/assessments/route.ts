@@ -98,12 +98,14 @@ export async function GET(
     // making every case read as "Not Yet Assessed" even when completed runs with
     // results existed. Use `run_date` (present in prod) and also expose it under
     // the `run_at` alias so any client that still reads `run_at` keeps working.
+    // run_date has one-second precision: run_id breaks the tie, so the newest
+    // run is first even when several were made in the same second.
     const assessments = await query(
       `SELECT ar.*, ar.run_date AS run_at, a.username as executed_by_username
        FROM assessment_runs ar
        LEFT JOIN account a ON ar.executed_by = a.id
        WHERE ar.case_id = ?
-       ORDER BY ar.run_date DESC`,
+       ORDER BY ar.run_date DESC, ar.run_id DESC`,
       [caseId]
     );
 
