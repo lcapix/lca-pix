@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
-import { queryOne, execute } from '@/lib/db-helpers';
+import { queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
@@ -172,15 +172,31 @@ export async function PUT(
 
     // The hand-in flag (migrate-022). Its own statement so a database without
     // the column still saves everything else.
+    // A project has one hand-in (WRITE-1): marking this case clears the flag
+    // on the project's other cases in the same transaction, so a new hand-in
+    // replaces the previous one. The project row is locked first, so two
+    // hand-ins marked at the same moment cannot both stay.
     if (Object.prototype.hasOwnProperty.call(body, 'is_final')) {
       const final = body.is_final ? 1 : 0;
       try {
-        await execute(
-          'UPDATE case_table SET is_final = ?, finalized_at = ' +
-            (final ? 'CURRENT_TIMESTAMP' : 'NULL') +
-            ' WHERE case_id = ?',
-          [final, caseId],
-        );
+        await transaction(async (conn) => {
+          if (final) {
+            await conn.query('SELECT project_id FROM project WHERE project_id = ? FOR UPDATE', [
+              caseData.project_id,
+            ]);
+            await conn.query(
+              `UPDATE case_table SET is_final = 0, finalized_at = NULL
+                WHERE project_id = ? AND case_id <> ? AND is_final = 1`,
+              [caseData.project_id, caseId],
+            );
+          }
+          await conn.query(
+            'UPDATE case_table SET is_final = ?, finalized_at = ' +
+              (final ? 'CURRENT_TIMESTAMP' : 'NULL') +
+              ' WHERE case_id = ?',
+            [final, caseId],
+          );
+        });
       } catch (finalErr: any) {
         if (finalErr?.code !== 'ER_BAD_FIELD_ERROR') throw finalErr;
         return NextResponse.json(

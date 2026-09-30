@@ -92,15 +92,16 @@ describe('F15 class mode', () => {
     expect(await sqlOne('SELECT is_final, finalized_at FROM case_table WHERE case_id = ?', [caseId])).toEqual({ is_final: 0, finalized_at: null });
   });
 
-  // BUG WRITE-1 (app/api/cases/[caseId]/route.ts:139-147: is_final is set on one case
-  // with no regard for the project's other cases): marking a second case as
-  // the hand-in leaves the first one marked too, so a project can hold two
-  // hand-ins and the instructor cannot tell which one counts.
-  it.fails('a second hand-in in the same project replaces the first (WRITE-1)', async () => {
+  // WRITE-1 (fixed): a project has one hand-in. Marking a case as the hand-in
+  // clears the flag (and finalized_at) on the project's other cases in the
+  // same transaction, so the latest hand-in replaces the previous one.
+  it('a second hand-in in the same project replaces the first (WRITE-1)', async () => {
     const second = await createCase(student, pid, 'Second attempt', 'comparative');
-    await api.put(`/api/cases/${caseId}`, { token: student.token, json: { is_final: true } });
-    await api.put(`/api/cases/${second}`, { token: student.token, json: { is_final: true } });
+    expect((await api.put(`/api/cases/${caseId}`, { token: student.token, json: { is_final: true } })).status).toBe(200);
+    expect((await api.put(`/api/cases/${second}`, { token: student.token, json: { is_final: true } })).status).toBe(200);
     const finals = await sqlOne('SELECT COUNT(*) AS n FROM case_table WHERE project_id = ? AND is_final = 1', [pid]);
     expect(Number(finals.n)).toBe(1);
+    expect(await sqlOne('SELECT is_final, finalized_at FROM case_table WHERE case_id = ?', [caseId])).toEqual({ is_final: 0, finalized_at: null });
+    expect((await sqlOne('SELECT is_final FROM case_table WHERE case_id = ?', [second])).is_final).toBe(1);
   });
 });
