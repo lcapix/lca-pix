@@ -187,10 +187,9 @@ export async function POST(request: NextRequest) {
             skippedFlows.push(`${f.substance_text}: no step chosen`);
             continue;
           }
+          // lib/units decides, as the engine will ('Mg' is not 'mg').
           const factorUnit = unitBySubstance.get(f.substance_id);
-          const sameUnit =
-            !!factorUnit && (f.unit ?? '').toLowerCase().trim() === factorUnit.toLowerCase().trim();
-          if (factorUnit && !sameUnit && !convertQuantity(1, f.unit, factorUnit)) {
+          if (factorUnit && !convertQuantity(1, f.unit, factorUnit)) {
             held++;
             skippedFlows.push(
               `${f.substance_text}: unit '${f.unit}' cannot convert to factor unit '${factorUnit}'`
@@ -413,10 +412,9 @@ export async function POST(request: NextRequest) {
           skippedFlows.push(`${f.substance_text} (${f.node}): node not in plan`);
           continue;
         }
+        // lib/units decides, as the engine will ('Mg' is not 'mg').
         const factorUnit = unitBySubstance.get(f.substance_id);
-        const sameUnit =
-          !!factorUnit && (f.unit ?? '').toLowerCase().trim() === factorUnit.toLowerCase().trim();
-        if (factorUnit && !sameUnit && !convertQuantity(1, f.unit, factorUnit)) {
+        if (factorUnit && !convertQuantity(1, f.unit, factorUnit)) {
           held++;
           skippedFlows.push(
             `${f.substance_text} (${f.node}): unit '${f.unit}' cannot convert to factor unit '${factorUnit}'`

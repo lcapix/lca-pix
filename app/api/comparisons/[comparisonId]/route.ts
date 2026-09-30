@@ -1,214 +1,136 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
-import pool from '@/lib/db'
-import { RowDataPacket } from 'mysql2/promise'
+import { execute, query, queryOne } from '@/lib/db-helpers'
+import { jsonArray, jsonColumn } from '@/lib/compare/legacy'
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
 
-// GET /api/comparisons/[comparisonId] - Get detailed comparison results
+// One legacy saved comparison (see app/api/comparisons/route.ts).
+
+const positiveInt = (v: unknown): number | null => {
+  const n = Number(v)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
+
+const notFound = () => NextResponse.json({ error: 'Comparison not found' }, { status: 404 })
+
+// GET /api/comparisons/[comparisonId]
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ comparisonId: string }> }
 ) {
   try {
     const userId = await requireAuth(request)
-    const { comparisonId: comparisonIdParam } = await params
-    const comparisonId = parseInt(comparisonIdParam)
+    const comparisonId = positiveInt((await params).comparisonId)
+    if (!comparisonId) return NextResponse.json({ error: 'Invalid comparison id' }, { status: 400 })
 
-    const connection = await pool.getConnection()
-
-    try {
-      // Get comparison basic info
-      const [comparisonRows] = await connection.query<RowDataPacket[]>(
-        `SELECT
-           cr.comparison_id,
-           cr.comparison_name,
-           cr.project_id,
-           cr.case_ids,
-           cr.base_case_id,
-           cr.comparison_type,
-           cr.created_at,
-           u.username as created_by_username,
-           p.project_name
-         FROM comparison_runs cr
-         JOIN account u ON cr.created_by = u.id
-         JOIN project p ON cr.project_id = p.project_id
-         WHERE cr.comparison_id = ?`,
-        [comparisonId]
-      )
-
-      if (comparisonRows.length === 0) {
-        return NextResponse.json(
-          { error: 'Comparison not found' },
-          { status: 404 }
-        )
-      }
-
-      const comparison = comparisonRows[0]
-
-      // Verify user has access to project
-      const [accessRows] = await connection.query<RowDataPacket[]>(
-        `SELECT p.project_id
-         FROM project p
-         LEFT JOIN project_members pm ON p.project_id = pm.project_id
-         WHERE p.project_id = ?
-           AND (p.owner_id = ? OR pm.user_id = ?)
-         LIMIT 1`,
-        [comparison.project_id, userId, userId]
-      )
-
-      if (accessRows.length === 0) {
-        return NextResponse.json(
-          { error: 'Access denied' },
-          { status: 403 }
-        )
-      }
-
-      // Get comparison results by category
-      const [resultsRows] = await connection.query<RowDataPacket[]>(
-        `SELECT
-           result_id,
-           category_id,
-           category_name,
-           case_results,
-           best_case_id,
-           worst_case_id
-         FROM comparison_results
-         WHERE comparison_id = ?
-         ORDER BY category_name`,
-        [comparisonId]
-      )
-
-      // Get metadata
-      const [metadataRows] = await connection.query<RowDataPacket[]>(
-        `SELECT
-           total_cases_compared,
-           total_categories_analyzed,
-           overall_best_case_id,
-           overall_worst_case_id,
-           calculation_time_ms,
-           assessment_run_ids
-         FROM comparison_metadata
-         WHERE comparison_id = ?`,
-        [comparisonId]
-      )
-
-      // Get case details
-      const caseIds = JSON.parse(comparison.case_ids as string)
-      const [caseRows] = await connection.query<RowDataPacket[]>(
-        `SELECT case_id, case_name, description as case_description
-         FROM case_table
-         WHERE case_id IN (?)`,
-        [caseIds]
-      )
-
-      // Parse JSON fields
-      const categoryComparisons = resultsRows.map(row => ({
-        ...row,
-        case_results: JSON.parse(row.case_results as string)
-      }))
-
-      const metadata = metadataRows.length > 0 ? {
-        ...metadataRows[0],
-        assessment_run_ids: JSON.parse(metadataRows[0].assessment_run_ids as string || '[]')
-      } : null
-
-      // Assemble response
-      const response = {
-        success: true,
-        comparison: {
-          comparison_id: comparison.comparison_id,
-          comparison_name: comparison.comparison_name,
-          project_id: comparison.project_id,
-          project_name: comparison.project_name,
-          case_ids: caseIds,
-          base_case_id: comparison.base_case_id,
-          comparison_type: comparison.comparison_type,
-          created_at: comparison.created_at,
-          created_by_username: comparison.created_by_username,
-          cases: caseRows,
-          category_comparisons: categoryComparisons,
-          metadata
-        }
-      }
-
-      return NextResponse.json(response)
-    } finally {
-      connection.release()
-    }
-  } catch (error: any) {
-    console.error('[Comparison API Error]:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch comparison details' },
-      { status: 500 }
+    const comparison = await queryOne<any>(
+      `SELECT
+         cr.comparison_id,
+         cr.comparison_name,
+         cr.project_id,
+         cr.case_ids,
+         cr.base_case_id,
+         cr.comparison_type,
+         cr.created_at,
+         u.username AS created_by_username,
+         p.project_name
+       FROM comparison_runs cr
+       LEFT JOIN account u ON cr.created_by = u.id
+       JOIN project p ON cr.project_id = p.project_id
+       WHERE cr.comparison_id = ?`,
+      [comparisonId]
     )
+    // A non-member learns nothing, not even that the comparison exists.
+    if (!comparison) return notFound()
+    const denied = await projectAccessDenied(userId, comparison.project_id, undefined, {
+      notFound: 'Comparison not found',
+    })
+    if (denied) return denied
+
+    const results = await query<any>(
+      `SELECT result_id, category_id, category_name, case_results, best_case_id, worst_case_id
+         FROM comparison_results
+        WHERE comparison_id = ?
+        ORDER BY category_name`,
+      [comparisonId]
+    )
+    const metadataRow = await queryOne<any>(
+      `SELECT total_cases_compared, total_categories_analyzed, overall_best_case_id,
+              overall_worst_case_id, calculation_time_ms, assessment_run_ids
+         FROM comparison_metadata
+        WHERE comparison_id = ?`,
+      [comparisonId]
+    )
+
+    const caseIds = jsonArray<number>(comparison.case_ids).map(Number).filter((n) => Number.isInteger(n) && n > 0)
+    const cases = caseIds.length
+      ? await query<any>(
+          `SELECT case_id, case_name, description AS case_description
+             FROM case_table
+            WHERE case_id IN (${caseIds.map(() => '?').join(',')}) AND project_id = ?`,
+          [...caseIds, comparison.project_id]
+        )
+      : []
+
+    return NextResponse.json({
+      success: true,
+      comparison: {
+        comparison_id: comparison.comparison_id,
+        comparison_name: comparison.comparison_name,
+        project_id: comparison.project_id,
+        project_name: comparison.project_name,
+        case_ids: caseIds,
+        base_case_id: comparison.base_case_id,
+        comparison_type: comparison.comparison_type,
+        created_at: comparison.created_at,
+        created_by_username: comparison.created_by_username,
+        cases,
+        category_comparisons: results.map((row: any) => ({
+          ...row,
+          case_results: jsonColumn<unknown>(row.case_results, []),
+        })),
+        metadata: metadataRow
+          ? { ...metadataRow, assessment_run_ids: jsonArray<number>(metadataRow.assessment_run_ids) }
+          : null,
+      },
+    })
+  } catch (error: any) {
+    if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    console.error('[Comparison API Error]:', error)
+    return NextResponse.json({ error: 'Failed to fetch comparison details' }, { status: 500 })
   }
 }
 
-// DELETE /api/comparisons/[comparisonId] - Delete a comparison
+// DELETE /api/comparisons/[comparisonId] - the creator (still a member), the
+// project owner or a project admin.
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { comparisonId: string } }
+  { params }: { params: Promise<{ comparisonId: string }> }
 ) {
   try {
     const userId = await requireAuth(request)
-    const comparisonId = parseInt(params.comparisonId)
+    const comparisonId = positiveInt((await params).comparisonId)
+    if (!comparisonId) return NextResponse.json({ error: 'Invalid comparison id' }, { status: 400 })
 
-    const connection = await pool.getConnection()
-
-    try {
-      // Check if user created this comparison or is project admin
-      const [comparisonRows] = await connection.query<RowDataPacket[]>(
-        `SELECT cr.comparison_id, cr.created_by, cr.project_id
-         FROM comparison_runs cr
-         WHERE cr.comparison_id = ?`,
-        [comparisonId]
-      )
-
-      if (comparisonRows.length === 0) {
-        return NextResponse.json(
-          { error: 'Comparison not found' },
-          { status: 404 }
-        )
-      }
-
-      const comparison = comparisonRows[0]
-
-      // Check if user is creator or project admin
-      const [accessRows] = await connection.query<RowDataPacket[]>(
-        `SELECT p.project_id
-         FROM project p
-         LEFT JOIN project_members pm ON p.project_id = pm.project_id
-         LEFT JOIN permissions perm ON pm.permission_id = perm.permission_id
-         WHERE p.project_id = ?
-           AND (p.owner_id = ? OR (pm.user_id = ? AND perm.permission_name = 'admin') OR ? = ?)
-         LIMIT 1`,
-        [comparison.project_id, userId, userId, userId, comparison.created_by]
-      )
-
-      if (accessRows.length === 0) {
-        return NextResponse.json(
-          { error: 'Access denied - only creator or project admin can delete' },
-          { status: 403 }
-        )
-      }
-
-      // Delete (cascades to related tables)
-      await connection.query(
-        `DELETE FROM comparison_runs WHERE comparison_id = ?`,
-        [comparisonId]
-      )
-
-      return NextResponse.json({
-        success: true,
-        message: 'Comparison deleted successfully'
-      })
-    } finally {
-      connection.release()
-    }
-  } catch (error: any) {
-    console.error('[Comparison API Error]:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete comparison' },
-      { status: 500 }
+    const comparison = await queryOne<any>(
+      `SELECT comparison_id, created_by, project_id FROM comparison_runs WHERE comparison_id = ?`,
+      [comparisonId]
     )
+    if (!comparison) return notFound()
+    // The creator needs only to be a member still; anyone else a project admin.
+    const denied = await projectAccessDenied(
+      userId,
+      comparison.project_id,
+      comparison.created_by === userId ? undefined : 'admin',
+      { notFound: 'Comparison not found', forbidden: 'Access denied - only creator or project admin can delete' }
+    )
+    if (denied) return denied
+
+    await execute(`DELETE FROM comparison_runs WHERE comparison_id = ?`, [comparisonId])
+    return NextResponse.json({ success: true, message: 'Comparison deleted successfully' })
+  } catch (error: any) {
+    if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    console.error('[Comparison API Error]:', error)
+    return NextResponse.json({ error: 'Failed to delete comparison' }, { status: 500 })
   }
 }

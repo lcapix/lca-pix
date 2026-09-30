@@ -3,6 +3,7 @@ import { POST } from '@/app/api/integrations/pubchem/enrich/route';
 import * as enrich from '@/lib/integrations/pubchem/enrich';
 import * as auth from '@/lib/auth';
 import * as log from '@/lib/integrations/log';
+import { MemoryRateLimitStore, setRateLimitStore } from '@/lib/rate-limit';
 
 vi.mock('@/lib/integrations/pubchem/enrich');
 vi.mock('@/lib/auth');
@@ -17,7 +18,34 @@ function mkRequest(body: any): Request {
 }
 
 describe('POST /api/integrations/pubchem/enrich', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setRateLimitStore(new MemoryRateLimitStore());
+  });
+
+  it('stays admin-only after the rate lookups reopened', async () => {
+    vi.mocked(auth.requireAuth).mockResolvedValue(7);
+    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    const res = await POST(mkRequest({ substance_id: 5 }) as any);
+    expect(res.status).toBe(403);
+    expect(enrich.enrichSubstance).not.toHaveBeenCalled();
+  });
+
+  it('429 on the 6th enrichment in an hour for one admin, before PubChem is called', async () => {
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(enrich.enrichSubstance).mockResolvedValue({ status: 'enriched', cid: 297 });
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+    for (let i = 0; i < 5; i++) {
+      expect((await POST(mkRequest({ substance_id: 5 }) as any)).status).toBe(200);
+    }
+    const limited = await POST(mkRequest({ substance_id: 5 }) as any);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBeTruthy();
+    expect(enrich.enrichSubstance).toHaveBeenCalledTimes(5);
+
+    vi.mocked(auth.requireAdmin).mockResolvedValue(2);
+    expect((await POST(mkRequest({ substance_id: 5 }) as any)).status).toBe(200);
+  });
 
   it('returns 401 when not authenticated', async () => {
     vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));

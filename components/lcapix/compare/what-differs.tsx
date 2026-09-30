@@ -3,11 +3,11 @@
 // What each copy changes against the base, read from the cases themselves:
 // the run scope, the exchanges on each step, the steps, the step costs.
 
-import { totalOf } from '@/lib/compare/analytics'
+import { hasComparableResults, totalOf } from '@/lib/compare/analytics'
 import type { CostKey, FlowChange, FlowSide } from '@/lib/compare/diff'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import type { CompareCase, CompareDiff } from './types'
-import { BAD, GOOD, Muted, Panel, money, seriesColor, sig, signedPct, signedSig, td, th } from './ui'
+import { BAD, GOOD, Muted, notComparableText, Panel, money, pctOf, seriesColor, sig, signedPct, signedSig, td, th } from './ui'
 
 const COST_LABEL: Record<CostKey, string> = {
   material: 'material',
@@ -93,7 +93,7 @@ export function WhatDiffersPanel({
         const bTotal = totalOf(base, category)
         const cTotal = totalOf(copy, category)
         const delta = cTotal - bTotal
-        const bothRun = !!base.run && !!copy.run
+        const bothRun = hasComparableResults(base) && hasComparableResults(copy)
         const noFactorFrom = (s: FlowSide) => !!base.run?.hasSnapshot && !baseChar.has(s.substance)
         const noFactorTo = (s: FlowSide) => !!copy.run?.hasSnapshot && !copyChar.has(s.substance)
 
@@ -110,12 +110,12 @@ export function WhatDiffersPanel({
                   {category}: <span className="mono">{sig(bTotal)}</span> →{' '}
                   <span className="mono">{sig(cTotal)}</span> {unit}{' '}
                   <span className="mono" style={{ fontWeight: 600, color: delta <= 0 ? GOOD : BAD }}>
-                    ({signedSig(delta)}, {signedPct(bTotal ? (delta / Math.abs(bTotal)) * 100 : null, 2)})
+                    ({signedSig(delta)}, {signedPct(pctOf(cTotal, bTotal), 2)})
                   </span>
                 </span>
               ) : (
                 <span style={{ fontSize: 13, color: BAD }}>
-                  {copy.run ? `${base.name} has no run yet` : `${copy.name} has no run yet`}: run it to compare results.
+                  {notComparableText(hasComparableResults(copy) ? base : copy)}: run it over its flows to compare results.
                 </span>
               )}
             </div>

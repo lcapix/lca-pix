@@ -114,6 +114,9 @@ describe('rateLimit / enforceRateLimit', () => {
     expect(RATE_LIMITS.insights).toMatchObject({ limit: 20, windowMs: 3_600_000 });
     expect(RATE_LIMITS.ingestPreview).toMatchObject({ limit: 10, windowMs: 3_600_000 });
     expect(RATE_LIMITS.assessments).toMatchObject({ limit: 30, windowMs: 3_600_000 });
+    expect(RATE_LIMITS.pubchemEnrich).toMatchObject({ limit: 5, windowMs: 3_600_000 });
+    // BLS / EIA / Metals lookups, one budget per user across the three.
+    expect(RATE_LIMITS.costRates).toMatchObject({ id: 'cost-rates', limit: 60, windowMs: 3_600_000 });
   });
 });
 

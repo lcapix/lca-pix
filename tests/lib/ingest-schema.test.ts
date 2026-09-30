@@ -57,3 +57,18 @@ describe('validateProcessModel: tiers are labels, not a ladder', () => {
     expect(d.get('Op')).toBe(2)
   })
 })
+
+describe('validateProcessModel: a tier must be one of the table own keys', () => {
+  it.each(['toString', 'constructor', 'hasOwnProperty', '__proto__'])(
+    "rejects the inherited name '%s' as an unknown tier",
+    (tier) => {
+      const errors = validateProcessModel(
+        pm([
+          { name: 'P', tier: 'product', parent: null },
+          { name: 'X', tier: tier as any, parent: 'P' },
+        ]),
+      )
+      expect(errors).toContain(`node 'X' has unknown tier '${tier}'`)
+    },
+  )
+})

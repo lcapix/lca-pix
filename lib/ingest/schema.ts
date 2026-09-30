@@ -97,7 +97,8 @@ export function validateProcessModel(pm: ProcessModel): string[] {
   }
   const byName = new Map(pm.nodes.map((n) => [n.name, n]));
   for (const n of pm.nodes) {
-    if (!(n.tier in TIER_RANK)) {
+    // Own keys only: `in` would accept inherited names such as 'toString'.
+    if (!Object.hasOwn(TIER_RANK, n.tier)) {
       errors.push(`node '${n.name}' has unknown tier '${n.tier}'`);
       continue;
     }

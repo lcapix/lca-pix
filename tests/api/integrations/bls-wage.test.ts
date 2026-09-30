@@ -3,6 +3,7 @@ import { POST } from '@/app/api/integrations/bls/fetch-wage/route';
 import * as auth from '@/lib/auth';
 import * as rates from '@/lib/integrations/cost-rates';
 import * as log from '@/lib/integrations/log';
+import { MemoryRateLimitStore, setRateLimitStore } from '@/lib/rate-limit';
 
 vi.mock('@/lib/auth');
 vi.mock('@/lib/integrations/cost-rates');
@@ -16,39 +17,85 @@ function req(body: any) {
   });
 }
 
+const RATE = { rateValue: 28.15, unit: '$/hr', source: 'BLS 2024', effectiveDate: '2024-05-01' };
+
 describe('POST /api/integrations/bls/fetch-wage', () => {
-  beforeEach(() => vi.resetAllMocks());
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setRateLimitStore(new MemoryRateLimitStore());
+  });
 
   it('401 when unauth', async () => {
-    vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('No authentication token provided'));
+    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
+    const res = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
+    expect(res.status).toBe(401);
+    expect(rates.getOrFetchRate).not.toHaveBeenCalled();
+  });
+
+  it('401 for a deactivated account', async () => {
+    vi.mocked(auth.requireAuth).mockRejectedValue(new Error('User account not found or inactive'));
     const res = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
     expect(res.status).toBe(401);
   });
 
-  it('403 for a non-admin, and nothing is fetched or written', async () => {
+  it('200 for any signed-in user (not only admins): the wage comes from BLS, not the caller', async () => {
+    vi.mocked(auth.requireAuth).mockResolvedValue(7);
     vi.mocked(auth.requireAdmin).mockRejectedValue(new Error('Admin privileges required'));
+    vi.mocked(rates.getOrFetchRate).mockResolvedValue(RATE);
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
     const res = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect((await res.json()).rate.rateValue).toBe(28.15);
+    expect(auth.requireAdmin).not.toHaveBeenCalled();
+    expect(log.logIntegration).toHaveBeenCalledWith(expect.objectContaining({ executedBy: 7 }));
+  });
+
+  it.each([
+    ['occupation not in OEWS format', { occupation: 'invalid', state: 'NY' }],
+    ['occupation with extra text', { occupation: '51-4121; DROP', state: 'NY' }],
+    ['state longer than 2 letters', { occupation: '51-4121', state: 'LONGSTATE' }],
+    ['state that is not a US state', { occupation: '51-4121', state: 'ZZ' }],
+    ['lower-case state', { occupation: '51-4121', state: 'ny' }],
+    ['missing state', { occupation: '51-4121' }],
+    ['extra keys', { occupation: '51-4121', state: 'NY', rateValue: 1 }],
+  ])('400 for %s, and nothing is fetched', async (_label, body) => {
+    vi.mocked(auth.requireAuth).mockResolvedValue(7);
+    const res = await POST(req(body) as any);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toMatch(/invalid/i);
+    expect(json.issues).toBeUndefined();
     expect(rates.getOrFetchRate).not.toHaveBeenCalled();
   });
 
-  it('400 when occupation is not the right shape', async () => {
-    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
-    const res = await POST(req({ occupation: 'invalid', state: 'NY' }) as any);
-    expect(res.status).toBe(400);
+  it('accepts the national code US', async () => {
+    vi.mocked(auth.requireAuth).mockResolvedValue(7);
+    vi.mocked(rates.getOrFetchRate).mockResolvedValue(RATE);
+    const res = await POST(req({ occupation: '51-4121', state: 'US' }) as any);
+    expect(res.status).toBe(200);
   });
 
-  it('400 when state is not 2 letters or US', async () => {
-    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
-    const res = await POST(req({ occupation: '51-4121', state: 'LONGSTATE' }) as any);
-    expect(res.status).toBe(400);
+  it('429 on the 61st lookup in an hour for one user; another user is unaffected', async () => {
+    vi.mocked(auth.requireAuth).mockResolvedValue(7);
+    vi.mocked(rates.getOrFetchRate).mockResolvedValue(RATE);
+    for (let i = 0; i < 60; i++) {
+      const ok = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
+      expect(ok.status).toBe(200);
+    }
+    const limited = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('Retry-After')).toBeTruthy();
+    expect(rates.getOrFetchRate).toHaveBeenCalledTimes(60);
+
+    vi.mocked(auth.requireAuth).mockResolvedValue(8);
+    const other = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
+    expect(other.status).toBe(200);
   });
 
   it('returns rate from getOrFetchRate on success', async () => {
-    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
-    vi.mocked(rates.getOrFetchRate).mockResolvedValue({
-      rateValue: 28.15, unit: '$/hr', source: 'BLS 2024', effectiveDate: '2024-05-01',
-    });
+    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(rates.getOrFetchRate).mockResolvedValue(RATE);
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 
     const res = await POST(req({ occupation: '51-4121', state: 'NY' }) as any);
@@ -64,10 +111,9 @@ describe('POST /api/integrations/bls/fetch-wage', () => {
     expect(typeof arg.fetcher).toBe('function');
   });
 
-
   it('500 hides the internal error from the client (bls)', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 
@@ -81,7 +127,7 @@ describe('POST /api/integrations/bls/fetch-wage', () => {
 
   it('still answers with a generic 500 when writing the failure log also fails (bls)', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
     vi.mocked(log.logIntegration).mockRejectedValue(new Error('log table missing'));
 
@@ -89,8 +135,10 @@ describe('POST /api/integrations/bls/fetch-wage', () => {
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toMatch(/ETIMEDOUT|log table missing/);
   });
+
   it('logs + returns 500 when fetch throws', async () => {
-    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('BLS error 500'));
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 

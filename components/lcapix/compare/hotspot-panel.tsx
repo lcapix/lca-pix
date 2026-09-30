@@ -4,7 +4,7 @@
 // result, with every share at or above the threshold highlighted.
 
 import { useState } from 'react'
-import { hotspotMatrix, type Grouping } from '@/lib/compare/analytics'
+import { hasComparableResults, hotspotMatrix, type Grouping } from '@/lib/compare/analytics'
 import { fmtNum } from '@/components/lcapix'
 import type { CompareCase } from './types'
 import { Muted, Panel, SelectBox, Segmented, seriesColor, sig, td, tdNum, th } from './ui'
@@ -13,7 +13,7 @@ export function HotspotPanel({ cases, category }: { cases: CompareCase[]; catego
   const [by, setBy] = useState<Grouping>('step')
   const [show, setShow] = useState<'share' | 'value'>('share')
   const [threshold, setThreshold] = useState('10')
-  const withRun = cases.filter((c) => c.run)
+  const withRun = cases.filter(hasComparableResults)
   if (!withRun.length) {
     return (
       <Panel title="Hotspots">

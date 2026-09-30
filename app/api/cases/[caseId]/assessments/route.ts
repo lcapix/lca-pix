@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
+import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import {
   buildGoalScope,
   buildRunSnapshot,
@@ -16,13 +18,6 @@ import {
   type GoalScope,
   type RunSnapshot,
 } from '@/lib/run-snapshot';
-
-const AUTH_ERRORS = new Set([
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-]);
 
 /** Flow-level detail of a snapshot, as the results screen reads it. */
 function snapshotFlowDetail(snapshot: RunSnapshot) {
@@ -90,10 +85,8 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, undefined, { notFound: 'Case not found' });
+    if (denied) return denied;
 
     // The production `assessment_runs` table's timestamp column is `run_date`
     // (there is no `run_at` column). A prior "fix" selected/ordered by `ar.run_at`,
@@ -279,7 +272,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, assessments: assessmentsWithResults });
   } catch (error: any) {
-    if (AUTH_ERRORS.has(error?.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get assessments error:', error);
@@ -307,10 +300,12 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
+
+    // REC H5: a run holds a DB transaction for the whole engine pass.
+    const limited = await enforceRateLimit(RATE_LIMITS.assessments, [userId]);
+    if (limited) return limited;
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -521,7 +516,7 @@ export async function POST(
     }, { status: 201 });
 
   } catch (error: any) {
-    if (AUTH_ERRORS.has(error?.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Run assessment error:', error);

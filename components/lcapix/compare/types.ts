@@ -1,7 +1,7 @@
 // Shape of GET /api/projects/[projectId]/compare.
 
 import type { CaseDiff, CostKey, ScopeDifference } from '@/lib/compare/diff'
-import type { CaseResult } from '@/lib/compare/analytics'
+import type { CaseResult, CompareStatus } from '@/lib/compare/analytics'
 
 export interface CompareRun {
   runId: number
@@ -15,6 +15,10 @@ export interface CompareRun {
   perFuScale: number
   functionalUnit: string | null
   hasSnapshot: boolean
+  /** 'snapshot': results frozen with the run; otherwise rebuilt from stored rows and current step names. */
+  resultsSource: 'snapshot' | 'recomputed from current data'
+  /** 'run': the step costs frozen with the run; 'current': the case's costs now. */
+  costsSource: 'run' | 'current'
 }
 
 export interface CompareDataQuality {
@@ -35,6 +39,9 @@ export interface CompareCase extends CaseResult {
   type: 'base' | 'comparative'
   isBase: boolean
   run: CompareRun | null
+  /** 'incomplete' (no run, no flows, nothing computed) and 'stale' (edited after its run) are never ranked. */
+  status: CompareStatus
+  statusReason: string | null
   runs: Array<{ runId: number; method: string | null; region: string | null; runDate: string }>
   flows: Array<{ step: string; substance: string; category: string; value: number; tier: string | null; scope: string | null }>
   dataQuality: CompareDataQuality | null

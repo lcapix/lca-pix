@@ -70,6 +70,8 @@ export const RATE_LIMITS = {
   assessments: { id: 'assessments', limit: 30, windowMs: HOUR },
   /** Per user: one call can make hundreds of PubChem requests. */
   pubchemEnrich: { id: 'pubchem-enrich', limit: 5, windowMs: HOUR },
+  /** Per user, shared by the BLS / EIA / Metals rate lookups (upstream quotas). */
+  costRates: { id: 'cost-rates', limit: 60, windowMs: HOUR },
 } satisfies Record<string, RateLimitPolicy>;
 
 // ── In-memory store ──────────────────────────────────────────────────────────

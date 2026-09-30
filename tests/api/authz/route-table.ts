@@ -64,11 +64,11 @@ export const PROJECT_ROUTES: RouteCase[] = [
   { name: 'GET /api/projects/:id/progress', load: async () => (await import('@/app/api/projects/[projectId]/progress/route')).GET,
     method: 'GET', url: '/api/projects/7/progress', params: { projectId: '7' }, notFound: 'Project not found' },
   { name: 'GET /api/projects/:id/members', load: async () => (await import('@/app/api/projects/[projectId]/members/route')).GET,
-    method: 'GET', url: '/api/projects/7/members', params: { projectId: '7' }, notFound: 'Project not found', owner: 'other', pending404: true, pending401: 'account' },
+    method: 'GET', url: '/api/projects/7/members', params: { projectId: '7' }, notFound: 'Project not found' },
   { name: 'POST /api/projects/:id/members', load: async () => (await import('@/app/api/projects/[projectId]/members/route')).POST,
-    method: 'POST', url: '/api/projects/7/members', params: { projectId: '7' }, json: { email: 'b@corp.com', role: 'viewer' }, level: 'admin', notFound: 'Project not found', owner: 'other', pending404: true, pending401: 'account' },
+    method: 'POST', url: '/api/projects/7/members', params: { projectId: '7' }, json: { email: 'b@corp.com', role: 'viewer' }, level: 'admin', notFound: 'Project not found' },
   { name: 'DELETE /api/projects/:id/members', load: async () => (await import('@/app/api/projects/[projectId]/members/route')).DELETE,
-    method: 'DELETE', url: '/api/projects/7/members?user_id=12', params: { projectId: '7' }, level: 'admin', notFound: 'Project not found', owner: 'other', pending404: true, pending401: 'account' },
+    method: 'DELETE', url: '/api/projects/7/members?user_id=12', params: { projectId: '7' }, level: 'admin', notFound: 'Project not found' },
 
   // ── case ───────────────────────────────────────────────────────────────────
   { name: 'GET /api/cases/:id', load: async () => (await import('@/app/api/cases/[caseId]/route')).GET,
@@ -92,9 +92,9 @@ export const PROJECT_ROUTES: RouteCase[] = [
 
   // ── document ───────────────────────────────────────────────────────────────
   { name: 'GET /api/cases/:id/documents', load: async () => (await import('@/app/api/cases/[caseId]/documents/route')).GET,
-    method: 'GET', url: '/api/cases/3/documents', params: { caseId: '3' }, notFound: 'Case not found', owner: 'other', pending404: true, pending401: 'account' },
+    method: 'GET', url: '/api/cases/3/documents', params: { caseId: '3' }, notFound: 'Case not found' },
   { name: 'DELETE /api/cases/:id/documents', load: async () => (await import('@/app/api/cases/[caseId]/documents/route')).DELETE,
-    method: 'DELETE', url: '/api/cases/3/documents?id=2', params: { caseId: '3' }, level: 'editor', notFound: 'Case not found', owner: 'other', pending404: true, pending401: 'account' },
+    method: 'DELETE', url: '/api/cases/3/documents?id=2', params: { caseId: '3' }, level: 'editor', notFound: 'Case not found' },
 
   // ── component ──────────────────────────────────────────────────────────────
   { name: 'GET /api/components/:id', load: async () => (await import('@/app/api/components/[componentId]/route')).GET,
@@ -120,21 +120,21 @@ export const PROJECT_ROUTES: RouteCase[] = [
   { name: 'GET /api/assessments/:runId', load: async () => (await import('@/app/api/assessments/[runId]/route')).GET,
     method: 'GET', url: '/api/assessments/8', params: { runId: '8' }, notFound: 'Assessment not found' },
   { name: 'GET /api/assessments/:runId/export', load: async () => (await import('@/app/api/assessments/[runId]/export/route')).GET,
-    method: 'GET', url: '/api/assessments/8/export?format=csv', params: { runId: '8' }, notFound: 'Assessment not found', owner: 'other', pending404: true },
+    method: 'GET', url: '/api/assessments/8/export?format=csv', params: { runId: '8' }, notFound: 'Assessment not found' },
   { name: 'GET /api/cases/:id/assessments', load: async () => (await import('@/app/api/cases/[caseId]/assessments/route')).GET,
-    method: 'GET', url: '/api/cases/3/assessments', params: { caseId: '3' }, notFound: 'Case not found', owner: 'other', pending404: true },
+    method: 'GET', url: '/api/cases/3/assessments', params: { caseId: '3' }, notFound: 'Case not found' },
   { name: 'POST /api/cases/:id/assessments', load: async () => (await import('@/app/api/cases/[caseId]/assessments/route')).POST,
-    method: 'POST', url: '/api/cases/3/assessments', params: { caseId: '3' }, json: {}, level: 'editor', notFound: 'Case not found', owner: 'other', pending404: true },
+    method: 'POST', url: '/api/cases/3/assessments', params: { caseId: '3' }, json: {}, level: 'editor', notFound: 'Case not found' },
 
   // ── comparison ─────────────────────────────────────────────────────────────
   { name: 'GET /api/projects/:id/compare', load: async () => (await import('@/app/api/projects/[projectId]/compare/route')).GET,
-    method: 'GET', url: '/api/projects/7/compare?cases=3', params: { projectId: '7' }, notFound: 'Project not found', owner: 'other', pending404: true },
+    method: 'GET', url: '/api/projects/7/compare?cases=3', params: { projectId: '7' }, notFound: 'Project not found' },
   { name: 'GET /api/comparisons/:id', load: async () => (await import('@/app/api/comparisons/[comparisonId]/route')).GET,
-    method: 'GET', url: '/api/comparisons/1', params: { comparisonId: '1' }, notFound: 'Comparison not found', owner: 'other', pending404: true, pending401: 'all' },
+    method: 'GET', url: '/api/comparisons/1', params: { comparisonId: '1' }, notFound: 'Comparison not found' },
   { name: 'DELETE /api/comparisons/:id', load: async () => (await import('@/app/api/comparisons/[comparisonId]/route')).DELETE,
-    method: 'DELETE', url: '/api/comparisons/1', params: { comparisonId: '1' }, level: 'admin', notFound: 'Comparison not found', owner: 'other', pending404: true, pending401: 'all' },
+    method: 'DELETE', url: '/api/comparisons/1', params: { comparisonId: '1' }, level: 'admin', notFound: 'Comparison not found' },
   { name: 'GET /api/comparisons?project_id', load: async () => (await import('@/app/api/comparisons/route')).GET,
-    method: 'GET', url: '/api/comparisons?project_id=7', notFound: 'Project not found or access denied', owner: 'other', pending401: 'all' },
+    method: 'GET', url: '/api/comparisons?project_id=7', notFound: 'Project not found' },
 
   // ── ingest (writes into a case or project) ─────────────────────────────────
   { name: 'POST /api/ingest/apply (append)', load: async () => (await import('@/app/api/ingest/apply/route')).POST,
@@ -159,16 +159,16 @@ export const OTHER_AUTHED_ROUTES: Array<Pick<RouteCase, 'name' | 'load' | 'metho
   { name: 'GET /api/process-templates', load: async () => (await import('@/app/api/process-templates/route')).GET, method: 'GET', url: '/api/process-templates' },
   { name: 'POST /api/example-project', load: async () => (await import('@/app/api/example-project/route')).POST, method: 'POST', url: '/api/example-project', json: {} },
   { name: 'POST /api/insights', load: async () => (await import('@/app/api/insights/route')).POST, method: 'POST', url: '/api/insights', json: {} },
-  { name: 'POST /api/comparisons', load: async () => (await import('@/app/api/comparisons/route')).POST, method: 'POST', url: '/api/comparisons', json: { comparison_name: 'x', case_ids: [3, 4], project_id: 7 }, owner: 'other', pending401: 'all' },
+  { name: 'POST /api/comparisons', load: async () => (await import('@/app/api/comparisons/route')).POST, method: 'POST', url: '/api/comparisons', json: { comparison_name: 'x', case_ids: [3, 4], project_id: 7 } },
   { name: 'GET /api/integrations/status', load: async () => (await import('@/app/api/integrations/status/route')).GET, method: 'GET', url: '/api/integrations/status' },
   { name: 'GET /api/integrations/log', load: async () => (await import('@/app/api/integrations/log/route')).GET, method: 'GET', url: '/api/integrations/log' },
   { name: 'GET /api/integrations/openlca/import', load: async () => (await import('@/app/api/integrations/openlca/import/route')).GET, method: 'GET', url: '/api/integrations/openlca/import' },
   { name: 'POST /api/integrations/openlca/import', load: async () => (await import('@/app/api/integrations/openlca/import/route')).POST, method: 'POST', url: '/api/integrations/openlca/import', json: { method: 'TRACI 2.1' } },
   { name: 'POST /api/integrations/electricity/sync', load: async () => (await import('@/app/api/integrations/electricity/sync/route')).POST, method: 'POST', url: '/api/integrations/electricity/sync', json: { zone: 'US-CAL-CISO' } },
-  { name: 'POST /api/integrations/bls/fetch-wage', load: async () => (await import('@/app/api/integrations/bls/fetch-wage/route')).POST, method: 'POST', url: '/api/integrations/bls/fetch-wage', json: {}, owner: 'other' },
-  { name: 'POST /api/integrations/eia/fetch-energy-price', load: async () => (await import('@/app/api/integrations/eia/fetch-energy-price/route')).POST, method: 'POST', url: '/api/integrations/eia/fetch-energy-price', json: {}, owner: 'other' },
-  { name: 'POST /api/integrations/metals/fetch-price', load: async () => (await import('@/app/api/integrations/metals/fetch-price/route')).POST, method: 'POST', url: '/api/integrations/metals/fetch-price', json: {}, owner: 'other' },
-  { name: 'POST /api/integrations/pubchem/enrich', load: async () => (await import('@/app/api/integrations/pubchem/enrich/route')).POST, method: 'POST', url: '/api/integrations/pubchem/enrich', json: {}, owner: 'other' },
+  { name: 'POST /api/integrations/bls/fetch-wage', load: async () => (await import('@/app/api/integrations/bls/fetch-wage/route')).POST, method: 'POST', url: '/api/integrations/bls/fetch-wage', json: {} },
+  { name: 'POST /api/integrations/eia/fetch-energy-price', load: async () => (await import('@/app/api/integrations/eia/fetch-energy-price/route')).POST, method: 'POST', url: '/api/integrations/eia/fetch-energy-price', json: {} },
+  { name: 'POST /api/integrations/metals/fetch-price', load: async () => (await import('@/app/api/integrations/metals/fetch-price/route')).POST, method: 'POST', url: '/api/integrations/metals/fetch-price', json: {} },
+  { name: 'POST /api/integrations/pubchem/enrich', load: async () => (await import('@/app/api/integrations/pubchem/enrich/route')).POST, method: 'POST', url: '/api/integrations/pubchem/enrich', json: {} },
 ];
 
 /** Build the request for a route case with the given bearer token. */

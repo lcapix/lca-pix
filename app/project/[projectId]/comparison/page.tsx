@@ -11,11 +11,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { apiRequest } from '@/lib/api-client'
 import { transformCaseFromDB } from '@/lib/data-transformers'
-import { totalOf } from '@/lib/compare/analytics'
+import { pctChange, rankCases, totalOf, type NotRankedReason } from '@/lib/compare/analytics'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import { Breadcrumb, Icon, fmtInt, fmtNum } from '@/components/lcapix'
 import type { CompareCase, CompareResponse } from '@/components/lcapix/compare/types'
@@ -35,6 +35,16 @@ interface CaseSummary {
 
 type Tab = 'differs' | 'results' | 'change' | 'hotspots' | 'cost' | 'quality'
 
+/** A comparison saved by the legacy Saved comparisons feature (GET /api/comparisons). */
+interface SavedComparison {
+  comparison_id: number
+  comparison_name: string
+  case_ids: number[]
+  base_case_name: string | null
+  created_by_username: string | null
+  created_at: string
+}
+
 const TABS: Array<{ id: Tab; label: string; help: string }> = [
   { id: 'differs', label: 'What differs', help: 'What each copy changes against the base: run settings, exchanges, steps and costs.' },
   { id: 'results', label: 'Results', help: 'Every impact category side by side, as values, as change against the base, or relative.' },
@@ -45,6 +55,22 @@ const TABS: Array<{ id: Tab; label: string; help: string }> = [
 ]
 
 const unique = <T,>(xs: T[]) => Array.from(new Set(xs))
+
+/** Why a case is left out of the ranking, as the verdict line says it. */
+function notRankedText(reason: NotRankedReason, c: CompareCase | undefined, category: string): string {
+  switch (reason) {
+    case 'incomplete':
+      return `incomplete: ${(c?.statusReason ?? 'nothing computed').toLowerCase()}`
+    case 'stale':
+      return 're-run to compare'
+    case 'method':
+      return 'another LCIA method'
+    case 'functional-unit':
+      return 'another functional unit'
+    default:
+      return `no ${category} result`
+  }
+}
 
 export default function ComparisonPage() {
   const params = useParams()
@@ -62,6 +88,11 @@ export default function ComparisonPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [tab, setTab] = useState<Tab>('differs')
+  // The old /comparisons pages land here with ?tab=saved. Read from the router,
+  // not window.location: after their redirect the address bar catches up late.
+  const searchParams = useSearchParams()
+  const [savedTab] = useState(() => searchParams?.get('tab') === 'saved')
+  const [saved, setSaved] = useState<SavedComparison[] | null>(null)
   const [category, setCategory] = useState('Global Warming')
 
   // Returning from a fresh run re-reads the comparison.
@@ -108,6 +139,23 @@ export default function ComparisonPage() {
         if (!cancelled) setError('Could not load the cases.')
       } finally {
         if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  // Comparisons saved by the legacy feature; the section hides when the read fails.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/comparisons?project_id=${projectId}`)
+        const d = await r.json()
+        if (!cancelled) setSaved(r.ok && d?.success && Array.isArray(d.comparisons) ? d.comparisons : null)
+      } catch {
+        if (!cancelled) setSaved(null)
       }
     })()
     return () => {
@@ -165,8 +213,15 @@ export default function ComparisonPage() {
     window.history.replaceState(null, '', url)
   }, [selectedIds, projectId, cases.length])
 
-  const compared: CompareCase[] = data?.cases ?? []
+  const compared: CompareCase[] = useMemo(() => data?.cases ?? [], [data])
   const base = compared.find((c) => c.caseId === data?.baseCaseId) ?? compared[0]
+  // The analysis views never read an incomplete case's numbers: a run over no
+  // flows is all zeros and would read as a -100% improvement.
+  const analysisCases: CompareCase[] = useMemo(
+    () => compared.map((c) => (c.status === 'incomplete' ? { ...c, totals: [], byStep: [], flows: [] } : c)),
+    [compared],
+  )
+  const analysisBase = analysisCases.find((c) => c.caseId === base?.caseId) ?? analysisCases[0]
 
   const categories = useMemo(
     () => unique(compared.flatMap((c) => c.totals.map((t) => t.category))),
@@ -195,16 +250,18 @@ export default function ComparisonPage() {
 
   const unit = base?.totals.find((t) => t.category === category)?.unit ?? ''
 
-  const verdict = useMemo(() => {
-    if (!base?.run || basis.methodMismatch || basis.fuMismatch) return null
-    const copies = compared.filter((c) => c.caseId !== base.caseId && c.run)
-    if (!copies.length) return null
-    const baseValue = totalOf(base, category)
-    if (!(baseValue > 0)) return null
-    const best = copies.reduce((a, b) => (totalOf(b, category) < totalOf(a, category) ? b : a))
-    const bestValue = totalOf(best, category)
-    return { best, pct: ((bestValue - baseValue) / baseValue) * 100, lower: bestValue < baseValue }
-  }, [compared, base, basis, category])
+  // Which copy is lowest. Incomplete cases (no run, no flows, a run that
+  // computed nothing), stale runs and runs under another method or functional
+  // unit are never ranked.
+  const ranking = useMemo(() => {
+    if (!base || compared.length < 2) return null
+    return rankCases(
+      compared.map((c) => ({ ...c, method: c.run?.method ?? null, functionalUnit: c.run?.functionalUnit ?? null })),
+      base.caseId,
+      category,
+    )
+  }, [compared, base, category])
+  const nameOf = (id: string) => compared.find((c) => c.caseId === id)?.name ?? id
 
   return (
     <>
@@ -293,6 +350,49 @@ export default function ComparisonPage() {
           )}
         </div>
 
+        {saved && (saved.length > 0 || savedTab) && (
+          <section aria-label="Saved comparisons" className="card" style={{ padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Saved comparisons</div>
+            {saved.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>
+                No saved comparisons in this project. Pick the cases to compare above.
+              </div>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {saved.map((sc) => {
+                  const here = sc.case_ids.map(String).filter((id) => cases.some((c) => c.id === id))
+                  return (
+                    <li
+                      key={sc.comparison_id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{sc.comparison_name}</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>
+                        {sc.case_ids.length} cases
+                        {sc.base_case_name ? ` · base ${sc.base_case_name}` : ''}
+                        {sc.created_by_username ? ` · ${sc.created_by_username}` : ''}
+                        {sc.created_at ? ` · ${new Date(sc.created_at).toLocaleDateString()}` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!here.length}
+                        title={here.length ? undefined : 'None of these cases exists any more'}
+                        onClick={() => {
+                          setRunPicks({})
+                          setSelected(new Set(here))
+                        }}
+                      >
+                        Compare these
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        )}
+
         {error && (
           <div className="card" style={{ padding: 14, marginBottom: 16, color: BAD, fontSize: 13 }}>
             {error}
@@ -365,28 +465,52 @@ export default function ComparisonPage() {
               ))}
             </div>
 
-            {verdict && (
+            {ranking && base && (
               <div
                 className="card"
+                data-testid="compare-verdict"
                 style={{
                   padding: '12px 16px',
                   marginBottom: 16,
                   background: 'linear-gradient(135deg, var(--brand-subtle), transparent 70%)',
                   display: 'flex',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   gap: 12,
                   fontSize: 13.5,
                 }}
               >
-                <Icon name="target" size={18} style={{ color: 'var(--brand-primary)' }} />
-                {verdict.lower ? (
-                  <span>
-                    Lowest {category}: <strong style={{ color: 'var(--brand-primary)' }}>{verdict.best.name}</strong>,{' '}
-                    <span className="mono" style={{ fontWeight: 600 }}>{signedPct(verdict.pct, 1)}</span> against {base.name}.
-                  </span>
-                ) : (
-                  <span>No copy has a lower {category} than {base.name}.</span>
-                )}
+                <Icon name="target" size={18} style={{ color: 'var(--brand-primary)', flex: 'none', marginTop: 1 }} />
+                <div>
+                  {ranking.best ? (
+                    ranking.best.lower ? (
+                      <span>
+                        Lowest {category}:{' '}
+                        <strong style={{ color: 'var(--brand-primary)' }}>{nameOf(ranking.best.caseId)}</strong>,{' '}
+                        <span className="mono" style={{ fontWeight: 600 }}>{signedPct(ranking.best.pct, 1)}</span> against {base.name}.
+                      </span>
+                    ) : (
+                      <span>No ranked copy has a lower {category} than {base.name}.</span>
+                    )
+                  ) : ranking.baseExcluded ? (
+                    <span>
+                      No ranking yet: the base, {base.name}, is{' '}
+                      {ranking.baseExcluded === 'stale'
+                        ? 'edited after its run. Re-run it to compare.'
+                        : `${notRankedText(ranking.baseExcluded, base, category)}.`}
+                    </span>
+                  ) : (
+                    <span>No copy can be ranked on {category} yet.</span>
+                  )}
+                  {ranking.excluded.length > 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                      Not ranked:{' '}
+                      {ranking.excluded
+                        .map((e) => `${nameOf(e.caseId)} (${notRankedText(e.reason, compared.find((c) => c.caseId === e.caseId), category)})`)
+                        .join(', ')}
+                      .
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -474,13 +598,15 @@ export default function ComparisonPage() {
             </div>
 
             {tab === 'differs' && (
-              <WhatDiffersPanel base={base} cases={compared} diffs={data.diffs} category={category} />
+              <WhatDiffersPanel base={analysisBase} cases={analysisCases} diffs={data.diffs} category={category} />
             )}
-            {tab === 'results' && <ResultsPanel cases={compared} baseId={base.caseId} />}
-            {tab === 'change' && <ChangePanel base={base} cases={compared} category={category} />}
-            {tab === 'hotspots' && <HotspotPanel cases={compared} category={category} />}
-            {tab === 'cost' && <CostPanel base={base} cases={compared} diffs={data.diffs} category={category} />}
-            {tab === 'quality' && <QualityPanel base={base} cases={compared} />}
+            {tab === 'results' && <ResultsPanel cases={analysisCases} baseId={base.caseId} />}
+            {tab === 'change' && <ChangePanel base={analysisBase} cases={analysisCases} category={category} />}
+            {tab === 'hotspots' && <HotspotPanel cases={analysisCases} category={category} />}
+            {tab === 'cost' && (
+              <CostPanel base={analysisBase} cases={analysisCases} diffs={data.diffs} category={category} />
+            )}
+            {tab === 'quality' && <QualityPanel base={analysisBase} cases={analysisCases} />}
           </div>
         )}
       </div>
@@ -508,9 +634,19 @@ function CaseCard({
   onPickRun: (runId: number) => void
 }) {
   const isBase = c.caseId === base.caseId
-  const value = c.run ? totalOf(c, category) : null
-  const baseValue = base.run ? totalOf(base, category) : null
-  const delta = !isBase && value !== null && baseValue ? ((value - baseValue) / baseValue) * 100 : null
+  const incomplete = c.status === 'incomplete' || !c.run
+  const stale = c.status === 'stale'
+  const value = incomplete ? null : totalOf(c, category)
+  // A change against the base only means something when both runs are
+  // current and computed under one method. Measured against the size of the
+  // base, so a net-negative base keeps the direction.
+  const comparable =
+    !isBase &&
+    !stale &&
+    base.status === 'ok' &&
+    !!base.run &&
+    (c.run?.method ?? '') === (base.run?.method ?? '')
+  const delta = comparable && value !== null ? pctChange(value, totalOf(base, category)) : null
   const latest = c.runs[0]
   const reasonText =
     c.run && latest && latest.runId !== c.run.runId
@@ -555,11 +691,18 @@ function CaseCard({
         </div>
         {value === null ? (
           <div style={{ fontSize: 13, color: BAD, padding: '6px 0' }}>
-            Not run yet.{' '}
-            <Link href={`/project/${projectId}/case/${c.caseId}`} style={{ color: 'var(--brand-primary)' }}>
-              Open the case
-            </Link>{' '}
-            and run it.
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>Incomplete — not ranked</div>
+            <div>
+              {c.statusReason ?? 'Not run yet'}.{' '}
+              <Link href={`/project/${projectId}/case/${c.caseId}`} style={{ color: 'var(--brand-primary)' }}>
+                Open the case
+              </Link>{' '}
+              {c.statusReason === 'No flows yet'
+                ? `to add flows, then ${c.run ? 're-run' : 'run'} it.`
+                : c.run
+                  ? 'to check its flows and factors, then re-run it.'
+                  : 'and run it.'}
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
@@ -614,8 +757,18 @@ function CaseCard({
           </div>
         )}
         {reasonText && <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6 }}>{reasonText}</div>}
-        {c.run?.stale && (
-          <div style={{ fontSize: 11.5, color: BAD, marginTop: 6 }}>Edited after this run. Re-run it for current numbers.</div>
+        {stale && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+            <span className="chip" style={{ fontSize: 10.5, padding: '2px 8px', color: BAD }}>
+              Re-run to compare
+            </span>
+            <span style={{ fontSize: 11.5, color: BAD }}>Edited after this run, so it is not ranked.</span>
+          </div>
+        )}
+        {c.run && c.run.resultsSource !== 'snapshot' && (
+          <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+            Older run: its step names and costs are read from the case as it is now. Re-run to freeze them.
+          </div>
         )}
       </div>
     </div>

@@ -105,3 +105,40 @@ describe('POST /api/ingest/apply validation (L6, L7)', () => {
     expect((await res.json()).error).toMatch(/flows\.0\.quantity/);
   });
 });
+
+describe('POST /api/ingest/apply unit guard agrees with the engine (lib/units)', () => {
+  let factorUnit = 'mg';
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(auth.requireAuth).mockResolvedValue(1);
+    vi.mocked(auth.checkProjectAccess).mockResolvedValue(true);
+    vi.mocked(db.queryOne).mockImplementation(async (sql: string) =>
+      (/FROM case_table/.test(sql) ? { project_id: 9 } : { unit: factorUnit }) as any,
+    );
+    vi.mocked(db.query).mockResolvedValue([{ component_id: 100, component_name: 'Weld' }] as any);
+    let id = 500;
+    conn = { query: vi.fn(async (sql: string) => (/^\s*SELECT/i.test(sql) ? [[], []] : [{ insertId: id++ }])) };
+    vi.mocked(db.transaction).mockImplementation(async (cb: any) => cb(conn));
+  });
+
+  const cases: Array<[string, string, 'applied' | 'held']> = [
+    ['Mg', 'mg', 'held'], // a megagram is not a milligram; the engine refuses it
+    ['m³', 'm3', 'applied'],
+    ['mwh', 'MWh', 'held'], // ambiguous spelling, refused by the engine
+    ['MWh', 'MWh', 'applied'],
+    ['g', 'kg', 'applied'],
+  ];
+
+  for (const mode of ['create', 'append'] as const) {
+    it.each(cases)(`${mode}: a flow in %s on a factor per %s is %s`, async (unit, factor, outcome) => {
+      factorUnit = factor;
+      const body = mode === 'create' ? create({ flows: [{ ...flow, unit }] }) : append({ flows: [{ ...flow, unit }] });
+      const res = await POST(req(body) as any);
+      expect(res.status).toBeLessThan(300);
+      const json = await res.json();
+      const held = JSON.stringify(json).match(/"flows_held_for_review":(\d+)/)?.[1];
+      expect(Number(held)).toBe(outcome === 'held' ? 1 : 0);
+      expect(sqlCalls().some((s) => /INSERT INTO flows/.test(s))).toBe(outcome === 'applied');
+    });
+  }
+});

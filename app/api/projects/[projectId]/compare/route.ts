@@ -1,22 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
-import { parseRunSnapshot } from '@/lib/run-snapshot';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { hasFrozenResults, parseRunSnapshot } from '@/lib/run-snapshot';
 import {
-  COST_KEYS,
   diffInventories,
   diffScope,
   type CaseInventory,
   type CostKey,
   type RunScope,
 } from '@/lib/compare/diff';
+import { compareStatus, runResults, snapshotDrift, type LegacyRunRows } from '@/lib/compare/run-results';
 
 // GET /api/projects/[projectId]/compare?cases=209,212[&base=209][&runs=209:173,212:176]
 //
 // Everything Compare Cases shows, in one read: for each case the run it is
-// compared on, that run's results per functional unit (totals, per step, per
-// exchange from the frozen snapshot), its data-quality summary, the case's
-// current step costs, and what differs from the base (scope and inventory).
+// compared on, that run's results per functional unit (totals, per step with
+// the step costs, per exchange), its data-quality summary, whether the case can
+// be ranked at all (status), and what differs from the base (scope and
+// inventory). A frozen run (snapshot v3) answers from its snapshot only; an
+// older run falls back to its stored result rows and says so (resultsSource).
 //
 // Which run: a copy uses its latest completed run. The base uses the run whose
 // method and region match the copies (so a grid try on the base does not leak
@@ -41,10 +44,9 @@ export async function GET(
     if (!Number.isFinite(projectId)) {
       return NextResponse.json({ error: 'Invalid project' }, { status: 400 });
     }
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    // Any member may compare; to anyone else the project does not exist.
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const sp = request.nextUrl.searchParams;
     const ids = Array.from(
@@ -170,7 +172,7 @@ export async function GET(
         capex: num(k.capex),
       });
       const flowRows = await query<any>(
-        `SELECT f.component_id, COALESCE(s.substance_name, CONCAT('Substance #', f.substance_id)) AS substance,
+        `SELECT f.flow_id, f.component_id, COALESCE(s.substance_name, CONCAT('Substance #', f.substance_id)) AS substance,
                 f.flow_type, f.quantity, f.unit
            FROM flows f
            JOIN component k ON k.component_id = f.component_id
@@ -206,35 +208,42 @@ export async function GET(
         modeledOutput: gs ? num(gs.modeled_output) : c.modeled_output != null ? num(c.modeled_output) : null,
       });
 
-      let totals: any[] = [];
-      let byStep: any[] = [];
+      // Results of the run: frozen runs from the snapshot, older runs from
+      // their stored rows (read only when needed).
+      let legacy: LegacyRunRows | undefined;
       let stale = false;
       if (run) {
-        totals = (
-          await query<any>(
-            `SELECT ic.category_name AS category, ar.unit, SUM(ar.impact_value) AS value
-               FROM assessment_results ar
-               JOIN impact_categories ic ON ic.category_id = ar.category_id
-              WHERE ar.run_id = ?
-              GROUP BY ic.category_name, ar.unit`,
-            [run.run_id]
-          )
-        ).map((t: any) => ({ category: t.category, unit: t.unit, value: num(t.value) * scale }));
-        byStep = (
-          await query<any>(
-            `SELECT ar.component_id, ic.category_name AS category, SUM(ar.impact_value) AS value
-               FROM assessment_results ar
-               JOIN impact_categories ic ON ic.category_id = ar.category_id
-              WHERE ar.run_id = ?
-              GROUP BY ar.component_id, ic.category_name`,
-            [run.run_id]
-          )
-        ).map((r: any) => ({
-          step: byId.get(r.component_id)?.component_name ?? `Removed step #${r.component_id}`,
-          category: r.category,
-          value: num(r.value) * scale,
-        }));
+        if (!hasFrozenResults(snapshot)) {
+          legacy = {
+            totals: (
+              await query<any>(
+                `SELECT ic.category_name AS category, ar.unit, SUM(ar.impact_value) AS value
+                   FROM assessment_results ar
+                   JOIN impact_categories ic ON ic.category_id = ar.category_id
+                  WHERE ar.run_id = ?
+                  GROUP BY ic.category_name, ar.unit`,
+                [run.run_id]
+              )
+            ).map((t: any) => ({ category: t.category, unit: t.unit, value: num(t.value) })),
+            byStep: (
+              await query<any>(
+                `SELECT ar.component_id, ic.category_name AS category, SUM(ar.impact_value) AS value
+                   FROM assessment_results ar
+                   JOIN impact_categories ic ON ic.category_id = ar.category_id
+                  WHERE ar.run_id = ?
+                  GROUP BY ar.component_id, ic.category_name`,
+                [run.run_id]
+              )
+            ).map((r: any) => ({
+              componentId: r.component_id === null || r.component_id === undefined ? null : Number(r.component_id),
+              category: r.category,
+              value: num(r.value),
+            })),
+          };
+        }
         // Edited after the run? Then its results no longer describe the case.
+        // updated_at catches edits; a delete leaves nothing behind, so a frozen
+        // run also compares its steps, flows and data basis with the case now.
         const s = await queryOne<any>(
           `SELECT (
               EXISTS (SELECT 1 FROM component k WHERE k.case_id = r.case_id AND k.updated_at > r.run_date)
@@ -244,8 +253,32 @@ export async function GET(
              FROM assessment_runs r WHERE r.run_id = ?`,
           [run.run_id]
         );
-        stale = !!Number(s?.stale);
+        stale =
+          !!Number(s?.stale) ||
+          snapshotDrift(snapshot, {
+            componentIds: comps.map((k: any) => Number(k.component_id)),
+            flowIds: flowRows.map((f: any) => Number(f.flow_id)),
+            referenceFlow: c.reference_flow ?? null,
+            modeledOutput: c.modeled_output ?? null,
+          });
       }
+      const results = runResults({
+        snapshot: run ? snapshot : null,
+        scale,
+        legacy,
+        currentSteps: comps.map((k: any) => ({
+          id: Number(k.component_id),
+          name: k.component_name,
+          costs: costOf(k),
+        })),
+      });
+      const { status, reason: statusReason } = compareStatus({
+        hasRun: !!run,
+        currentFlows: flowRows.length,
+        characterizedFlows: run ? results.characterizedFlows : null,
+        zeroInventory: results.zeroInventory,
+        editedSinceRun: stale,
+      });
 
       out.push({
         caseId: String(c.case_id),
@@ -263,16 +296,20 @@ export async function GET(
               perFuScale: scale,
               functionalUnit: gs?.functional_unit ?? null,
               hasSnapshot: !!snapshot,
+              resultsSource: results.source,
+              costsSource: results.costsSource,
             }
           : null,
+        status,
+        statusReason,
         runs: (runsByCase.get(c.case_id) ?? []).map((r) => ({
           runId: r.run_id,
           method: r.calculation_method,
           region: r.region_code,
           runDate: r.run_date,
         })),
-        totals,
-        byStep,
+        totals: run ? results.totals : [],
+        byStep: run ? results.byStep : [],
         flows: (snapshot?.flow_detail ?? []).map((r) => ({
           step: r.component,
           substance: r.substance,
@@ -283,12 +320,7 @@ export async function GET(
         })),
         dataQuality: snapshot?.data_quality ?? null,
         warnings: snapshot?.warnings ?? [],
-        costs: comps
-          .map((k: any) => {
-            const cost = costOf(k);
-            return { step: k.component_name, ...Object.fromEntries(COST_KEYS.map((key) => [key, cost[key] * scale])) };
-          })
-          .filter((row: any) => COST_KEYS.some((key) => row[key] > 0)),
+        costs: results.costs,
         inventory: {
           steps: comps.length,
           flows: flowRows.length,
@@ -321,14 +353,7 @@ export async function GET(
       diffs,
     });
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     console.error('Compare cases error:', error);
     return NextResponse.json({ error: 'Failed to compare cases' }, { status: 500 });
   }
