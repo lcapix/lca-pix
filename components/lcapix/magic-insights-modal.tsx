@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/lcapix'
+import { fmtSig } from '@/components/lcapix/formatters'
 import { useStreamText } from '@/lib/hooks/use-stream-text'
 import { consultantRead, stepLabel, type ConsultantItem } from '@/lib/insights/consultant'
 
@@ -262,7 +263,7 @@ export function MagicInsightsModal({
     const second = contributors[1]
     const totalStr =
       activeTotal !== undefined
-        ? `${activeTotal.toFixed(2)} ${activeUnit}`
+        ? `${fmtSig(activeTotal)} ${activeUnit}`
         : 'an indicative overall load'
     const costStr = totalCost !== undefined ? `$${totalCost.toLocaleString()}` : '—'
     const loadLabel = selectedCategory === OVERALL_KEY ? 'environmental load' : activeLabel
@@ -891,7 +892,7 @@ export function MagicInsightsModal({
                   className="mono"
                   style={{ color: 'var(--text-tertiary)', fontSize: 11 }}
                 >
-                  {c.value.toFixed(2)}
+                  {fmtSig(c.value)}
                 </span>
                 <span
                   className="mono"
