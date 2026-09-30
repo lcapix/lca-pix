@@ -7,6 +7,7 @@ import {
 } from '@/lib/integrations/pubchem/enrich';
 import { logIntegration } from '@/lib/integrations/log';
 import { logFailure } from '@/lib/integrations/route-errors';
+import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 const Body = z.object({
   substance_id: z.number().int().positive().optional(),
@@ -18,6 +19,10 @@ export async function POST(request: NextRequest) {
   const guard = await guardAdmin(request);
   if (guard.response) return guard.response;
   const userId = guard.userId;
+
+  // One call can make hundreds of PubChem requests.
+  const limited = await enforceRateLimit(RATE_LIMITS.pubchemEnrich, [userId]);
+  if (limited) return limited;
 
   const json = await request.json().catch(() => ({}));
   const parsed = Body.safeParse(json);

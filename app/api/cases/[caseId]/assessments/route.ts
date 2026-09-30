@@ -3,6 +3,7 @@ import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
+import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import {
   buildGoalScope,
   buildRunSnapshot,
@@ -311,6 +312,10 @@ export async function POST(
     if (!hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
+
+    // REC H5: a run holds a DB transaction for the whole engine pass.
+    const limited = await enforceRateLimit(RATE_LIMITS.assessments, [userId]);
+    if (limited) return limited;
 
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
