@@ -8,7 +8,10 @@
  *   node --env-file=.env.local scripts/db/fresh.mjs --name=lcapix_t_mine
  *   node --env-file=.env.local scripts/db/fresh.mjs --drop lcapix_t_xxx
  *   node --env-file=.env.local scripts/db/fresh.mjs --list        list lcapix_t_* databases
- *   node --env-file=.env.local scripts/db/fresh.mjs --drop-all    drop every lcapix_t_* database
+ *   node --env-file=.env.local scripts/db/fresh.mjs --drop-stale  drop lcapix_t_* databases made over 60 min ago
+ *   node --env-file=.env.local scripts/db/fresh.mjs --drop-stale=10   ... over 10 min ago
+ *   node --env-file=.env.local scripts/db/fresh.mjs --drop-all    drop every lcapix_t_* database, including
+ *                                                                 one a test run in another worktree is using
  *
  * - Only ever creates or drops databases named lcapix_t_<something>, and only
  *   on 127.0.0.1 / localhost / ::1. There is no override: a remote host is
@@ -44,8 +47,16 @@ export function isThrowawayName(name) {
   return NAME_RE.test(String(name ?? ''));
 }
 
-export function newName() {
-  return `${NAME_PREFIX}${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`;
+export function newName(now = Date.now()) {
+  return `${NAME_PREFIX}${now.toString(36)}_${randomBytes(3).toString('hex')}`;
+}
+
+/** When a generated name was made (ms since epoch), or null for a hand-picked name. */
+export function createdAt(name) {
+  const m = /^lcapix_t_([0-9a-z]{6,10})_[0-9a-f]{6}$/.exec(String(name ?? ''));
+  if (!m) return null;
+  const t = parseInt(m[1], 36);
+  return Number.isFinite(t) && t > Date.UTC(2020, 0, 1) && t < Date.now() + 86_400_000 ? t : null;
 }
 
 /** Connection settings from the environment (DATABASE_NAME deliberately ignored). */
@@ -186,7 +197,7 @@ function main(argv) {
     const i = argv.indexOf(flag);
     return i >= 0 ? argv[i + 1] : undefined;
   };
-  const known = new Set(['--drop', '--drop-all', '--list', '--no-migrate', '--keep-on-error', '--name']);
+  const known = new Set(['--drop', '--drop-all', '--drop-stale', '--list', '--no-migrate', '--keep-on-error', '--name']);
   for (const a of argv) {
     const flag = a.split('=')[0];
     if (a.startsWith('--') && !known.has(flag)) {
@@ -197,6 +208,25 @@ function main(argv) {
 
   if (has('--list')) {
     for (const n of listThrowaway()) console.log(n);
+    return 0;
+  }
+  const staleArg = argv.find((a) => a === '--drop-stale' || a.startsWith('--drop-stale='));
+  if (staleArg) {
+    const minutes = staleArg.includes('=') ? Number(staleArg.split('=')[1]) : 60;
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      console.error(`Bad value: ${staleArg}`);
+      return 2;
+    }
+    const cutoff = Date.now() - minutes * 60_000;
+    let n = 0;
+    for (const name of listThrowaway()) {
+      const t = createdAt(name);
+      if (t === null || t > cutoff) continue;
+      dropDatabase(name);
+      console.error(`fresh: dropped ${name}`);
+      n++;
+    }
+    console.error(`fresh: dropped ${n} database(s) made more than ${minutes} min ago`);
     return 0;
   }
   if (has('--drop-all')) {
