@@ -11,8 +11,8 @@ import { useRouter } from "next/navigation"
 import { AuthGuard } from "@/components/auth-guard"
 import { AppTopBar, Icon, SectionHeader } from "@/components/lcapix"
 import { useAuthStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
-import { apiRequest } from "@/lib/api-client"
+import { toast } from "sonner"
+import { ApiError, apiGet, apiRequest } from "@/lib/api-client"
 
 /**
  * /profile — editable user profile.
@@ -80,13 +80,16 @@ function emptySnapshot(): ProfileSnapshot {
 
 export default function ProfilePage() {
   const router = useRouter()
-  const { toast } = useToast()
   const storeUser = useAuthStore((s) => s.user)
   const login = useAuthStore((s) => s.login)
 
   const [server, setServer] = useState<ProfileSnapshot>(emptySnapshot)
   const [draft, setDraft] = useState<ProfileSnapshot>(emptySnapshot)
   const [loading, setLoading] = useState(true)
+  // A failed load shows an error instead of an empty form, so Save cannot
+  // write blanks over the real profile (PROF-1).
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<{ fullName?: string; company?: string }>(
     {},
@@ -103,37 +106,44 @@ export default function ProfilePage() {
       .toUpperCase()
   }, [draft.fullName, storeUser])
 
-  // Load
+  // Load (and reload on Retry). apiGet throws ApiError on a non-2xx answer.
   useEffect(() => {
     let cancelled = false
-    apiRequest("/api/auth/profile")
-      .then((r) => r.json())
+    setLoading(true)
+    setLoadError(null)
+    apiGet<{ profile?: any }>("/api/auth/profile")
       .then((res) => {
         if (cancelled) return
-        if (res?.success && res.profile) {
-          const p = res.profile
-          const snap: ProfileSnapshot = {
-            email: p.email ?? "",
-            username: p.username ?? "",
-            fullName: p.fullName ?? "",
-            company: p.company ?? "",
-            role: p.role ?? "",
-            useCase: p.useCase ?? "",
-            country: p.country ?? "",
-            onboardedAt: p.onboardedAt ?? null,
-          }
-          setServer(snap)
-          setDraft(snap)
+        const p = res?.profile
+        if (!p) throw new Error("The server did not send a profile.")
+        const snap: ProfileSnapshot = {
+          email: p.email ?? "",
+          username: p.username ?? "",
+          fullName: p.fullName ?? "",
+          company: p.company ?? "",
+          role: p.role ?? "",
+          useCase: p.useCase ?? "",
+          country: p.country ?? "",
+          onboardedAt: p.onboardedAt ?? null,
         }
-        setLoading(false)
+        setServer(snap)
+        setDraft(snap)
       })
-      .catch(() => {
+      .catch((err) => {
+        if (cancelled) return
+        // A 401 is already on its way to the login page.
+        if (err instanceof ApiError && err.status === 401) return
+        const message = err instanceof Error ? err.message : "Unknown error"
+        setLoadError(message)
+        toast.error("Couldn't load your profile", { description: message })
+      })
+      .finally(() => {
         if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   const dirty = useMemo(() => {
     return (
@@ -188,15 +198,11 @@ export default function ProfilePage() {
       if (storeUser) {
         login({ ...storeUser, name: draft.fullName.trim() })
       }
-      toast({ title: "Profile saved", description: "Changes are live." })
+      toast.success("Profile saved", { description: "Changes are live." })
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Couldn't save your profile."
-      toast({
-        title: "Save failed",
-        description: message,
-        variant: "destructive",
-      })
+      toast.error("Save failed", { description: message })
     } finally {
       setSaving(false)
     }
@@ -274,6 +280,32 @@ export default function ProfilePage() {
             {/* Form */}
             {loading ? (
               <Skeleton />
+            ) : loadError ? (
+              <div
+                role="alert"
+                style={{
+                  marginTop: 28,
+                  padding: 24,
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: 10,
+                }}
+              >
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+                  Couldn&apos;t load your profile
+                </div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{loadError}</div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setReloadKey((n) => n + 1)}
+                >
+                  Retry
+                </button>
+              </div>
             ) : (
               <form
                 onSubmit={handleSubmit}

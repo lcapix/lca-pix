@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuthStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 /**
  * OAuth callback landing page.
@@ -38,7 +38,6 @@ function CallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const login = useAuthStore((s) => s.login)
-  const { toast } = useToast()
   const ran = useRef(false)
 
   // Whitelist destination paths to avoid open-redirect attacks via ?next=.
@@ -87,25 +86,18 @@ function CallbackInner() {
           createdAt: new Date(),
         })
 
-        toast({
-          title: "Welcome!",
-          description: "Signed in with Google.",
-        })
+        toast.success("Welcome!", { description: "Signed in with Google." })
 
         router.replace(next)
       } catch (err) {
         expireLegacyCookies()
         const message =
           err instanceof Error ? err.message : "OAuth sign-in failed."
-        toast({
-          title: "Sign-in failed",
-          description: message,
-          variant: "destructive",
-        })
+        toast.error("Sign-in failed", { description: message })
         router.replace("/auth/login?error=oauth_sync_failed")
       }
     })()
-  }, [login, next, router, toast])
+  }, [login, next, router])
 
   return <Spinner />
 }

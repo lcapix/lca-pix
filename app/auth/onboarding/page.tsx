@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { AuthGuard } from "@/components/auth-guard"
 import { useAuthStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { apiRequest } from "@/lib/api-client"
 
 /**
@@ -29,7 +29,6 @@ const USE_CASES = [
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { toast } = useToast()
   const storeUser = useAuthStore((s) => s.user)
   const login = useAuthStore((s) => s.login)
 
@@ -107,19 +106,12 @@ export default function OnboardingPage() {
         })
       }
 
-      toast({
-        title: "You're all set",
-        description: "Welcome to LCAPIX.",
-      })
+      toast.success("You're all set", { description: "Welcome to LCAPIX." })
       router.replace("/home")
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Couldn't save your profile."
-      toast({
-        title: "Save failed",
-        description: message,
-        variant: "destructive",
-      })
+      toast.error("Save failed", { description: message })
     } finally {
       setSubmitting(false)
     }

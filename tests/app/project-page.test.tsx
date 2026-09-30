@@ -9,7 +9,6 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
-vi.mock('@/hooks/use-toast', () => ({ toast: vi.fn(), useToast: () => ({ toast: vi.fn() }) }))
 vi.mock('@/components/lcapix/case/case-journey', () => ({
   CaseJourney: ({ onReadiness }: any) => {
     const React = require('react')

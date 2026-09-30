@@ -8,7 +8,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
   useSearchParams: () => search,
 }));
-vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+const { toast } = vi.hoisted(() => ({
+  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+}));
+vi.mock('sonner', () => ({ toast }));
 
 import OAuthCallbackPage from '@/app/auth/callback/page';
 import { useAuthStore } from '@/lib/store';
@@ -16,6 +19,8 @@ import { useAuthStore } from '@/lib/store';
 describe('/auth/callback (Google hand-off)', () => {
   beforeEach(() => {
     replace.mockReset();
+    toast.error.mockReset();
+    toast.success.mockReset();
     localStorage.clear();
     useAuthStore.setState({ user: null, isAuthenticated: false });
     search = new URLSearchParams('next=/home');
@@ -50,6 +55,7 @@ describe('/auth/callback (Google hand-off)', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{"error":"x"}', { status: 401 })));
     render(<OAuthCallbackPage />);
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/auth/login?error=oauth_sync_failed'));
+    expect(toast.error).toHaveBeenCalledWith('Sign-in failed', expect.objectContaining({ description: expect.any(String) }));
     expect(localStorage.getItem('auth_token')).toBeNull();
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });

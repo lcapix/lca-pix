@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { AuthShell } from "@/components/lcapix/auth/auth-shell"
 import { Icon } from "@/components/lcapix/icon"
 
@@ -75,7 +75,6 @@ export default function LoginPage() {
 
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
-  const { toast } = useToast()
 
   // Surface sign-in errors as toasts. The Google route and the API client
   // bounce here with ?error=<code>. Only known codes are shown; anything else
@@ -90,12 +89,12 @@ export default function LoginPage() {
     const msg = Object.prototype.hasOwnProperty.call(LOGIN_ERRORS, err)
       ? LOGIN_ERRORS[err]
       : GENERIC_LOGIN_ERROR
-    toast({ title: msg.title, description: msg.description, variant: "destructive" })
+    toast.error(msg.title, { description: msg.description })
     // Strip the param so reloads don't re-toast.
     const url = new URL(window.location.href)
     url.searchParams.delete("error")
     window.history.replaceState({}, "", url.toString())
-  }, [toast])
+  }, [])
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {}
@@ -154,19 +153,14 @@ export default function LoginPage() {
       }
 
       login(user)
-      toast({
-        title: "Welcome back!",
+      toast.success("Welcome back!", {
         description: "You have successfully logged in.",
       })
       router.push("/home")
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid email or password. Please try again."
       setErrors({ general: message })
-      toast({
-        title: "Login failed",
-        description: message,
-        variant: "destructive",
-      })
+      toast.error("Login failed", { description: message })
     } finally {
       setIsLoading(false)
     }

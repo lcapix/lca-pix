@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { AuthShell } from "@/components/lcapix/auth/auth-shell"
 import { Icon } from "@/components/lcapix/icon"
 
@@ -20,7 +20,6 @@ export default function SignupPage() {
 
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
-  const { toast } = useToast()
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {}
@@ -84,8 +83,7 @@ export default function SignupPage() {
       }
 
       login(user)
-      toast({
-        title: "Account created successfully!",
+      toast.success("Account created successfully!", {
         description: "Just a few quick details and you're in.",
       })
       // Send fresh email signups through the onboarding form so we capture
@@ -94,11 +92,7 @@ export default function SignupPage() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create account. Please try again."
       setErrors({ general: message })
-      toast({
-        title: "Signup failed",
-        description: message,
-        variant: "destructive",
-      })
+      toast.error("Signup failed", { description: message })
     } finally {
       setIsLoading(false)
     }
