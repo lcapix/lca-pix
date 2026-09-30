@@ -1,38 +1,102 @@
-name: Deploy to Vercel
+name: CI and production deploy
+
+# Pull requests run checks only. A production deploy happens only on a push
+# to main, and only after the checks pass. Third-party actions are pinned to
+# commit SHAs (the tag is in the trailing comment); bump both together.
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main]
   pull_request:
-    branches: [ main, master ]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Supersede stale PR runs, but never cancel a production deploy mid-way.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  deploy:
+  check:
+    name: Typecheck, test, build
     runs-on: ubuntu-latest
-
+    timeout-minutes: 25
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
 
-    - name: Build application
-      run: npm run build
-      env:
-        NEXT_PUBLIC_APP_NAME: LCAPIX
-        NODE_ENV: production
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-    - name: Deploy to Vercel
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.ORG_ID }}
-        vercel-project-id: ${{ secrets.PROJECT_ID }}
-        vercel-args: '--prod'
+      - name: Typecheck (ratchet against scripts/tsc-baseline.txt)
+        run: node scripts/tsc-ratchet.mjs
+
+      - name: Unit tests
+        run: pnpm vitest run
+
+      # Dummy values only: lib/db.ts connects lazily, so the build never
+      # opens a database connection. Nothing here is a real credential.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_PORT: '3306'
+          DATABASE_USER: ci
+          DATABASE_PASSWORD: ci-dummy-not-a-secret
+          DATABASE_NAME: lcapix_ci
+          JWT_SECRET: ci-dummy-not-a-secret
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout (full history for the commit range)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_VERSION: 8.24.3
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          # Only needed if the repo moves to a GitHub organization account.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  deploy:
+    name: Deploy to Vercel (production)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Deploy
+        uses: amondnet/vercel-action@de09aeac2ace6599ec9b11ef87558759a496bac4 # v42.3.0
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.ORG_ID }}
+          vercel-project-id: ${{ secrets.PROJECT_ID }}
+          vercel-args: '--prod'
+          github-comment: false
