@@ -9,6 +9,7 @@ import {
   findUsableSubstance,
   SUBSTANCE_ERROR,
 } from '@/lib/flow-fields';
+import { parseId } from '@/lib/ids';
 
 // GET /api/components/[componentId]/flows - Get all flows for a component
 export async function GET(
@@ -18,7 +19,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     const component = await queryOne<any>(
       `SELECT ct.project_id 
@@ -73,7 +74,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     const component = await queryOne<any>(
       `SELECT ct.project_id 

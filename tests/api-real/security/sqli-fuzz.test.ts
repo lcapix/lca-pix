@@ -55,10 +55,20 @@ beforeAll(async () => {
   before = await rowCounts();
 });
 
-function allowed(status: number, owner: boolean, payload: string, method: string) {
+// Ids are parsed strictly (lib/ids.ts): only the exact clean id may reach the
+// resource. Before, parseInt/Number accepted '31abc', ' 31' and '0x1F' as 31.
+function allowed(status: number, owner: boolean, payload: string, method: string, cleanValue: string) {
   if (status >= 500) return false;
-  if (owner && method === 'GET' && status === 200) return /^\s*\d/.test(payload) && !/^\s*0/.test(payload);
+  if (owner && method === 'GET' && status === 200) return payload === cleanValue;
   return [400, 404].includes(status);
+}
+
+// Other spellings of the real id. Every one must miss, whatever the id is,
+// so the check doesn't depend on a project happening to have id 31 (= 0x1F).
+function aliasesOf(clean: string): string[] {
+  const n = Number(clean);
+  return [`0x${n.toString(16)}`, `0X${n.toString(16).toUpperCase()}`, `${clean}abc`, ` ${clean}`, `${clean} `, `+${clean}`,
+    `0${clean}`, `${clean}.0`, `${clean}e0`, `${n / 10}e1`, `${clean}%00`];
 }
 
 describe('fuzz: path parameters', () => {
@@ -74,11 +84,11 @@ describe('fuzz: path parameters', () => {
         // Control: the clean request reaches the resource (owner read 200, non-member 404).
         const control = await call(handler, row.method, base.url, base.opts);
         expect(control.status, `${row.id} control: ${control.text.slice(0, 120)}`).toBe(caller === 'owner' ? 200 : 404);
-        for (const payload of PAYLOADS) {
+        for (const payload of [...PAYLOADS, ...aliasesOf(String(cleanValue))]) {
           const value = payload.replace(/^1(?=\D|$)/, cleanValue);
           const url = base.url.replace(`/${cleanValue}`, `/${encodeURIComponent(value)}`);
           const res = await call(handler, row.method, url, { ...base.opts, params: { ...base.opts.params, [param]: value } });
-          expect(allowed(res.status, caller === 'owner', value, row.method), `${row.id} ${param}=${JSON.stringify(value)} -> ${res.status} ${res.text.slice(0, 160)}`).toBe(true);
+          expect(allowed(res.status, caller === 'owner', value, row.method, String(cleanValue)), `${row.id} ${param}=${JSON.stringify(value)} -> ${res.status} ${res.text.slice(0, 160)}`).toBe(true);
         }
       });
     }

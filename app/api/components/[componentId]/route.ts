@@ -15,6 +15,7 @@ import {
   updateExistingColumns,
 } from '@/lib/component-fields';
 import type { TreeRow } from '@/lib/component-tree';
+import { parseId } from '@/lib/ids';
 
 const ALLOCATION_METHODS = ['none', 'physical', 'economic', 'system_expansion'];
 
@@ -26,7 +27,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     // The parent's name is only joined from the same case, so a row that was
     // pointed at another tenant's step (M1) cannot echo that step's name.
@@ -71,7 +72,7 @@ export async function PUT(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     const existing = await queryOne<any>(
       `SELECT c.case_id, c.component_type, c.parent_component_id, c.hierarchy_level,
@@ -292,7 +293,7 @@ export async function DELETE(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     const mode = new URL(request.url).searchParams.get('children') ?? 'delete';
     if (mode !== 'delete' && mode !== 'reparent') {

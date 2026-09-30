@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { parseId } from '@/lib/ids';
 
 // GET /api/cases/[caseId] - Get single case details
 export async function GET(
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne(
       `SELECT c.*
@@ -57,7 +58,7 @@ export async function PUT(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,
@@ -219,7 +220,7 @@ export async function DELETE(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,

@@ -5,6 +5,7 @@ import { projectAccessDenied } from '@/lib/route-guard';
 import { queryOne } from '@/lib/db-helpers';
 import { autoPopulateCosts } from '@/lib/costs/auto-populate';
 import { logIntegration } from '@/lib/integrations/log';
+import { parseId } from '@/lib/ids';
 
 export async function POST(
   request: NextRequest,
@@ -15,7 +16,7 @@ export async function POST(
   catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
 
   const { componentId } = await params;
-  const id = Number(componentId);
+  const id = parseId(componentId);
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: 'Component not found' }, { status: 404 });
   }

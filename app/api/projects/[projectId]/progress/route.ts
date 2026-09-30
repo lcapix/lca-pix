@@ -3,6 +3,7 @@ import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { LESSONS, parseLearningState } from '@/lib/lessons';
+import { parseId } from '@/lib/ids';
 
 /**
  * What an instructor needs to see: for every case in the project, how far the
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const userId = await requireAuth(request);
     const { projectId: projectIdParam } = await params;
-    const projectId = parseInt(projectIdParam);
+    const projectId = parseId(projectIdParam);
 
     const project = await queryOne<any>('SELECT owner_id FROM project WHERE project_id = ?', [projectId]);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });

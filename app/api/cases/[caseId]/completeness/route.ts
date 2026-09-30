@@ -8,6 +8,7 @@ import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { assessCompleteness } from '@/lib/ingest/completeness';
+import { parseId } from '@/lib/ids';
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +17,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { caseId } = await params;
-    const id = parseInt(caseId);
+    const id = parseId(caseId);
     if (!id) return NextResponse.json({ error: 'Invalid case id' }, { status: 400 });
 
     const caseRow = await queryOne<any>(

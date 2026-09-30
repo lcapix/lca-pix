@@ -20,6 +20,7 @@ import {
   parseRunSnapshot,
   snapshotReportParts,
 } from '@/lib/run-snapshot';
+import { parseId } from '@/lib/ids';
 
 const FORMATS = new Set(['pdf', 'pptx', 'ppt', 'csv']);
 
@@ -47,7 +48,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { runId: runIdParam } = await params;
-    const runId = parseInt(runIdParam);
+    const runId = parseId(runIdParam);
 
     // format=pdf (default) | pptx — committees often want an editable deck.
     const format = (new URL(request.url).searchParams.get('format') || 'pdf').toLowerCase();

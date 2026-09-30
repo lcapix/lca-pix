@@ -14,6 +14,7 @@ import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
+import { parseId } from '@/lib/ids';
 
 export async function POST(
   request: NextRequest,
@@ -22,7 +23,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const sourceCase = await queryOne<any>(
       `SELECT * FROM case_table WHERE case_id = ?`,

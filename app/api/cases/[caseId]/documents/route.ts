@@ -11,6 +11,7 @@ import {
 } from '@/lib/ingest/extract-text';
 import { readSheet } from '@/lib/ingest/sheet-reader';
 import { PayloadTooLargeError } from '@/lib/rate-limit';
+import { parseId } from '@/lib/ids';
 
 /**
  * The documents a case was built from, kept so a person can read from them
@@ -38,7 +39,7 @@ function missingTable(err: any) {
  */
 async function caseAccess(request: NextRequest, caseIdParam: string, level?: 'editor') {
   const userId = await requireAuth(request);
-  const caseId = parseInt(caseIdParam);
+  const caseId = parseId(caseIdParam);
   const caseData = await queryOne<any>('SELECT project_id FROM case_table WHERE case_id = ?', [caseId]);
   if (!caseData) return { error: NextResponse.json({ error: 'Case not found' }, { status: 404 }) };
   // A non-member gets the same 404 as a missing case; a viewer who tries to

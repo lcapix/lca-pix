@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError } from '@/lib/route-guard';
+import { parseId } from '@/lib/ids';
 
 // GET /api/driver-factors - Get all driver impact factors
 //
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     let substanceId: number | null = null;
     if (substanceIdParam !== null) {
-      substanceId = Number(substanceIdParam);
+      substanceId = parseId(substanceIdParam);
       if (!Number.isInteger(substanceId) || substanceId <= 0) {
         return NextResponse.json({ error: 'substance_id must be a positive integer' }, { status: 400 });
       }
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
 
       if (categoryId) {
         sql += ` AND dif.category_id = ?`;
-        params.push(parseInt(categoryId));
+        params.push(parseId(categoryId));
       }
 
       if (substanceId !== null) {

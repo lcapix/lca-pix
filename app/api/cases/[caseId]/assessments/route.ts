@@ -18,6 +18,7 @@ import {
   type GoalScope,
   type RunSnapshot,
 } from '@/lib/run-snapshot';
+import { parseId } from '@/lib/ids';
 
 /** Flow-level detail of a snapshot, as the results screen reads it. */
 function snapshotFlowDetail(snapshot: RunSnapshot) {
@@ -74,7 +75,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,
@@ -289,7 +290,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id, case_name FROM case_table WHERE case_id = ?`,
