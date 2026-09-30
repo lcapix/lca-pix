@@ -154,7 +154,12 @@ export async function mockedFetch(input: RequestInfo | URL, init?: RequestInit):
   const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const url = new URL(href);
   const method = (init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET')).toUpperCase();
-  outbound.calls.push({ url: url.href, method, body: typeof init?.body === 'string' ? init.body : undefined });
+  const body = init?.body;
+  outbound.calls.push({
+    url: url.href,
+    method,
+    body: typeof body === 'string' ? body : body instanceof URLSearchParams ? body.toString() : undefined,
+  });
   const route =
     overrides.find((r) => r.match(url)) ??
     DEFAULT_ROUTES.filter(([re]) => re.test(url.href)).map(([, handler]) => ({ handler }))[0];

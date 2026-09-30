@@ -87,3 +87,10 @@ export async function tableChecksums(): Promise<Record<string, string>> {
   for (const r of rows) out[String(r.Table).split('.').pop()!] = String(r.Checksum);
   return out;
 }
+
+/** A run's frozen snapshot (mysql2 returns JSON columns parsed). */
+export async function snapshotOf(runId: number): Promise<any> {
+  const row = await sqlOne<{ run_snapshot: unknown }>('SELECT run_snapshot FROM assessment_runs WHERE run_id = ?', [runId]);
+  const v = row?.run_snapshot;
+  return typeof v === 'string' ? JSON.parse(v) : v;
+}
