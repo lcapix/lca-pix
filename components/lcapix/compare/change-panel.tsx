@@ -5,9 +5,9 @@
 
 import { useState } from 'react'
 import { Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { changeBreakdown, type Grouping } from '@/lib/compare/analytics'
+import { changeBreakdown, hasComparableResults, type Grouping } from '@/lib/compare/analytics'
 import type { CompareCase } from './types'
-import { BAD, GOOD, Muted, Panel, Segmented, seriesColor, sig, signedPct, signedSig, td, tdNum, th } from './ui'
+import { BAD, GOOD, Muted, notComparableText, Panel, Segmented, seriesColor, sig, signedPct, signedSig, td, tdNum, th } from './ui'
 
 export function ChangePanel({
   base,
@@ -34,10 +34,11 @@ export function ChangePanel({
     <>
       {copies.map((copy) => {
         const idx = cases.findIndex((c) => c.caseId === copy.caseId)
-        if (!copy.run || !base.run) {
+        if (!hasComparableResults(copy) || !hasComparableResults(base)) {
+          const missing = !hasComparableResults(copy) ? copy : base
           return (
             <Panel key={copy.caseId} title={`Where the change comes from: ${copy.name}`}>
-              <Muted>{!copy.run ? copy.name : base.name} has no run yet. Run it to see where the difference comes from.</Muted>
+              <Muted>{notComparableText(missing)}. Run it over its flows to see where the difference comes from.</Muted>
             </Panel>
           )
         }

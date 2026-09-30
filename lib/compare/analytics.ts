@@ -11,7 +11,8 @@ import { COST_KEYS, type CostKey } from '@/lib/compare/diff'
 export interface CaseResult {
   caseId: string
   name: string
-  totals: Array<{ category: string; unit: string; value: number }>
+  /** flowCount (frozen runs): flows behind the total; 0 means nothing was computed. */
+  totals: Array<{ category: string; unit: string; value: number; flowCount?: number }>
   /** Per step (the component the run booked the result on). */
   byStep: Array<{ step: string; category: string; value: number }>
   /** Per exchange, from the run snapshot. Empty for runs without one. */
@@ -30,6 +31,18 @@ const sumBy = <T,>(rows: T[], key: (r: T) => string, val: (r: T) => number) => {
 
 export function totalOf(c: CaseResult, category: string): number {
   return c.totals.filter((t) => t.category === category).reduce((s, t) => s + t.value, 0)
+}
+
+/**
+ * Change of `value` against `base`, in % of the size of the base. Dividing by
+ * the signed base would flip the sign for a net-negative result (a credit or
+ * sequestration): -20 against -10 is 100% lower, not 100% higher.
+ */
+export function pctChange(value: number, base: number | null | undefined): number | null {
+  if (base === null || base === undefined || !Number.isFinite(base) || base === 0 || !Number.isFinite(value)) {
+    return null
+  }
+  return ((value - base) / Math.abs(base)) * 100
 }
 
 export interface ResultsRow {
@@ -214,5 +227,112 @@ export function costImpact(base: CaseResult, other: CaseResult, category: string
     impactDelta,
     impactDeltaPct: baseImpact ? (impactDelta / Math.abs(baseImpact)) * 100 : null,
     costPerUnitAvoided: impactDelta < 0 && moved ? costDelta / -impactDelta : null,
+  }
+}
+
+// ── Ranking ──────────────────────────────────────────────────────────────────
+
+export type CompareStatus = 'ok' | 'incomplete' | 'stale'
+
+export interface RankableCase extends CaseResult {
+  /** 'incomplete': no run, no flows, or a run that computed nothing. 'stale': edited after its run. */
+  status: CompareStatus
+  /** LCIA method of the run compared on. */
+  method: string | null
+  functionalUnit?: string | null
+}
+
+/** Why a case is left out of a ranking. */
+export type NotRankedReason = 'incomplete' | 'stale' | 'method' | 'functional-unit' | 'no-result'
+
+export interface Ranking {
+  category: string
+  baseValue: number | null
+  /** Set when the base itself cannot anchor a ranking; nothing is ranked then. */
+  baseExcluded: NotRankedReason | null
+  /** Rankable copies, lowest first. */
+  ranked: Array<{ caseId: string; value: number; pct: number | null }>
+  excluded: Array<{ caseId: string; reason: NotRankedReason }>
+  /** The lowest rankable copy; `lower` when it is below the base. */
+  best: { caseId: string; value: number; pct: number | null; lower: boolean } | null
+}
+
+/** A case can be read for results: it has a run that computed something. */
+export function hasComparableResults(c: { run?: unknown; status?: CompareStatus }): boolean {
+  return !!c.run && c.status !== 'incomplete'
+}
+
+/** The case's total in a category, or null when the run computed none. */
+function rankValue(c: CaseResult, category: string): number | null {
+  const rows = c.totals.filter((t) => t.category === category)
+  if (!rows.length || rows.every((t) => t.flowCount === 0)) return null
+  return rows.reduce((s, t) => s + t.value, 0)
+}
+
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+
+/**
+ * Rank the copies against the base in one category, lowest first. A case is
+ * never ranked when it is incomplete (no run, no flows, nothing computed),
+ * stale (edited after its run), computed under another LCIA method (categories
+ * that share a name across methods are not the same indicator) or per another
+ * functional unit.
+ */
+export function rankCases(cases: RankableCase[], baseId: string, category: string): Ranking {
+  const base = cases.find((c) => c.caseId === baseId)
+  const ownReason = (c: RankableCase): NotRankedReason | null =>
+    c.status === 'incomplete'
+      ? 'incomplete'
+      : c.status === 'stale'
+        ? 'stale'
+        : rankValue(c, category) === null
+          ? 'no-result'
+          : null
+  const empty = (baseExcluded: NotRankedReason, baseValue: number | null): Ranking => ({
+    category,
+    baseValue,
+    baseExcluded,
+    ranked: [],
+    excluded: cases
+      .filter((c) => c.caseId !== baseId)
+      .flatMap((c) => {
+        const reason = ownReason(c)
+        return reason ? [{ caseId: c.caseId, reason }] : []
+      }),
+    best: null,
+  })
+
+  if (!base) return empty('incomplete', null)
+  const baseReason = ownReason(base)
+  const baseValue = rankValue(base, category)
+  if (baseReason || baseValue === null) return empty(baseReason ?? 'no-result', baseValue)
+
+  const ranked: Ranking['ranked'] = []
+  const excluded: Ranking['excluded'] = []
+  for (const c of cases) {
+    if (c.caseId === baseId) continue
+    const reason =
+      ownReason(c) ??
+      (norm(c.method) !== norm(base.method)
+        ? 'method'
+        : norm(c.functionalUnit) && norm(base.functionalUnit) && norm(c.functionalUnit) !== norm(base.functionalUnit)
+          ? 'functional-unit'
+          : null)
+    if (reason) {
+      excluded.push({ caseId: c.caseId, reason })
+      continue
+    }
+    const value = rankValue(c, category)!
+    ranked.push({ caseId: c.caseId, value, pct: pctChange(value, baseValue) })
+  }
+  ranked.sort((a, b) => a.value - b.value)
+  const top = ranked[0]
+  return {
+    category,
+    baseValue,
+    baseExcluded: null,
+    ranked,
+    excluded,
+    best: top ? { ...top, lower: top.value < baseValue } : null,
   }
 }

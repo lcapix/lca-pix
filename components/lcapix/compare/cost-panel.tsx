@@ -4,7 +4,7 @@
 // change costs against what it saves in the selected category.
 
 import { COST_KEYS, type CostKey } from '@/lib/compare/diff'
-import { costImpact, costView } from '@/lib/compare/analytics'
+import { costImpact, costView, hasComparableResults } from '@/lib/compare/analytics'
 import { fmtNum } from '@/components/lcapix'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import type { CompareCase, CompareDiff } from './types'
@@ -49,7 +49,7 @@ export function CostPanel({
     <>
       <Panel
         title="Cost by kind, per functional unit"
-        help="The step costs each case holds now (activity-based: hours × wage, material bought, energy used). Costs are read live from the cases, while impacts come from each case's run."
+        help="The step costs of each case (activity-based: hours × wage, material bought, energy used). A frozen run carries the costs in force when it was made; an older run, or a case not run yet, shows the case's current costs."
       >
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -116,7 +116,12 @@ export function CostPanel({
                 {copies.map((copy) => {
                   const ci = costImpact(base, copy, category)
                   const unchanged = diffs.find((d) => d.caseId === copy.caseId)?.inventory.costUnchanged ?? []
-                  const hasRuns = !!copy.run && !!base.run
+                  const hasRuns = hasComparableResults(copy) && hasComparableResults(base)
+                  const why = !hasRuns
+                    ? [copy, base].some((c) => c.run && !hasComparableResults(c))
+                      ? 'incomplete'
+                      : 'not run'
+                    : null
                   return (
                     <tr key={copy.caseId}>
                       <td style={td}>
@@ -128,8 +133,8 @@ export function CostPanel({
                         )}
                       </td>
                       <td style={{ ...tdNum, color: ci.costDelta <= 0 ? GOOD : BAD }}>{signedMoney(ci.costDelta)}</td>
-                      <td style={{ ...tdNum, color: ci.impactDelta <= 0 ? GOOD : BAD }}>
-                        {hasRuns ? `${signedSig(ci.impactDelta)} (${signedPct(ci.impactDeltaPct, 2)})` : 'not run'}
+                      <td style={{ ...tdNum, color: !hasRuns ? 'var(--text-tertiary)' : ci.impactDelta <= 0 ? GOOD : BAD }}>
+                        {hasRuns ? `${signedSig(ci.impactDelta)} (${signedPct(ci.impactDeltaPct, 2)})` : why}
                       </td>
                       <td style={tdNum}>
                         {hasRuns && ci.costPerUnitAvoided !== null ? (

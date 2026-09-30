@@ -97,6 +97,7 @@ const ROWS: Row[] = [
 export function QualityPanel({ base, cases }: { base: CompareCase; cases: CompareCase[] }) {
   const flags: string[] = []
   for (const c of cases) {
+    if (c.status === 'incomplete') flags.push(`${c.name} is incomplete (${(c.statusReason ?? 'nothing computed').toLowerCase()}): it is not compared or ranked.`)
     if (c.run?.stale) flags.push(`${c.name} was edited after run #${c.run.runId}: re-run it before trusting the comparison.`)
     if (c.run && !c.run.hasSnapshot) flags.push(`${c.name}'s run #${c.run.runId} predates data-quality records: re-run it to compare data quality.`)
   }

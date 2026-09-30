@@ -5,12 +5,23 @@
 import type { ReactNode } from 'react'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import { fmtNum } from '@/components/lcapix'
+import type { CompareCase } from './types'
+export { pctChange as pctOf } from '@/lib/compare/analytics'
 
 export const SERIES_COLORS = ['#2d6a4f', '#74c69d', '#d98568', '#9f88cc', '#4f90c9', '#c9a227', '#6b8f71', '#b5651d']
 export const seriesColor = (i: number) => SERIES_COLORS[i % SERIES_COLORS.length]
 
 export const GOOD = 'var(--signal-success, #16a34a)'
 export const BAD = '#b45309'
+
+/**
+ * Why a case's results are not read: no run yet, or an incomplete run (no
+ * flows, nothing computed), which is never compared or ranked.
+ */
+export function notComparableText(c: Pick<CompareCase, 'name' | 'run' | 'statusReason'>): string {
+  if (!c.run) return `${c.name} has no run yet`
+  return `${c.name} is incomplete (${(c.statusReason ?? 'nothing computed').toLowerCase()}), so it is not compared`
+}
 
 /** "+0.03" / "−0.43" with a true minus sign; "0" stays unsigned. */
 export function signed(n: number | null | undefined, digits = 2): string {

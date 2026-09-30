@@ -20,7 +20,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { resultsTable } from '@/lib/compare/analytics'
+import { hasComparableResults, resultsTable } from '@/lib/compare/analytics'
 import { fmtNum } from '@/components/lcapix'
 import { impactCategoryHelp } from '@/components/lcapix/iso-help'
 import { HelpTip } from '@/components/lcapix/help-tip'
@@ -39,7 +39,7 @@ const tooltipStyle = {
 export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: string }) {
   const [mode, setMode] = useState<Mode>('values')
   const rows = resultsTable(cases, baseId)
-  const withRun = cases.filter((c) => c.run)
+  const withRun = cases.filter(hasComparableResults)
   if (!rows.length) return null
 
   const radarData = rows.map((r) => {
@@ -50,7 +50,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
     })
     return p
   })
-  const others = cases.filter((c) => c.caseId !== baseId && c.run)
+  const others = cases.filter((c) => c.caseId !== baseId && hasComparableResults(c))
   const deltaData = rows.map((r) => {
     const p: Record<string, number | string> = { category: r.category }
     r.cells.forEach((cell, i) => {
@@ -97,6 +97,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                     />
                     {c.name}
                     {c.caseId === baseId ? ' (base)' : ''}
+                    {c.run && c.status === 'incomplete' ? ' (incomplete, not ranked)' : ''}
                   </th>
                 ))}
               </tr>
@@ -163,7 +164,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                 <PolarGrid stroke="var(--border-subtle)" />
                 <PolarAngleAxis dataKey="category" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
                 <PolarRadiusAxis tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} tickFormatter={(v) => `${v}%`} />
-                {cases.map((c, i) => (
+                {cases.map((c, i) => hasComparableResults(c) && (
                   <Radar
                     key={c.caseId}
                     name={c.name}
