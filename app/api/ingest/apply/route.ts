@@ -13,6 +13,7 @@
  * are skipped and reported the same way (mirrors the save-time unit guard).
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { convertQuantity } from '@/lib/units';
@@ -29,20 +30,98 @@ const COST_COLUMN: Record<string, string> = {
   capex: 'capex',
 };
 
+/** The cost column for a category, own keys only ("constructor" is not a column). */
+const costColumn = (category: unknown): string | undefined =>
+  typeof category === 'string' && Object.hasOwn(COST_COLUMN, category) ? COST_COLUMN[category] : undefined;
+
+// ── Body validation ──────────────────────────────────────────────────────────
+// Every value that reaches SQL is checked for type here. mysql2's .query()
+// escapes client-side and expands an object into `col` = val fragments, so an
+// object where a number belongs must never get that far (L6). Enums use exact
+// strings, so prototype keys ("constructor", "__proto__") are refused (L7).
+// Extra fields from the review screen (candidates, match_score...) pass through.
+
+const id = z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]);
+const optionalId = z.union([id, z.null(), z.literal('')]).optional().transform((v) => (v ? v : null));
+const text = (max: number) => z.string().max(max);
+const provenance = z.object({ doc: z.string(), locator: z.string().optional(), snippet: z.string().optional() }).passthrough();
+
+const nodeSchema = z
+  .object({
+    name: text(255).min(1),
+    tier: z.enum(['product', 'machine_line', 'subprocess', 'operation', 'elemental_task']),
+    parent: text(255).nullable(),
+    description: z.string().max(5000).nullable().optional(),
+    quantity: z.number().finite().nullable().optional(),
+    unit: text(64).nullable().optional(),
+    provenance: provenance.optional(),
+  })
+  .passthrough();
+
+const flowSchema = z
+  .object({
+    node: text(255).optional().default(''),
+    substance_text: text(500),
+    substance_id: z.number().int().positive().nullable().optional(),
+    direction: z.enum(['input', 'output']),
+    quantity: z.number().finite(),
+    unit: text(64),
+    provenance: z.string().max(1000).nullable().optional(),
+    attach_component_id: optionalId,
+  })
+  .passthrough();
+
+const costSchema = z
+  .object({
+    node: text(255).optional().default(''),
+    category: z.enum(['labor', 'energy', 'material', 'transportation', 'opex', 'capex']),
+    amount: z.number().finite().nullable(),
+    hours: z.number().finite().nullable().optional(),
+    occupation: text(32).nullable().optional(),
+    provenance: provenance.nullable().optional(),
+    attach_component_id: optionalId,
+  })
+  .passthrough();
+
+const bodySchema = z.object({
+  project_id: optionalId,
+  case_name: z.string().max(255).optional().default(''),
+  nodes: z.array(nodeSchema).max(5000).optional().default([]),
+  flows: z.array(flowSchema).max(20000).optional().default([]),
+  costs: z.array(costSchema).max(20000).optional().default([]),
+  notes: z.array(z.string().max(5000)).max(1000).optional().default([]),
+  target_case_id: optionalId,
+  attach_component_id: optionalId,
+});
+
+function invalid(error: z.ZodError) {
+  const issue = error.issues[0];
+  const where = issue?.path?.length ? issue.path.join('.') : 'body';
+  return NextResponse.json({ error: `Invalid plan: ${where}: ${issue?.message ?? 'invalid'}` }, { status: 400 });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    const body = await request.json();
+    let raw: unknown;
+    try {
+      raw = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 });
+    }
+    const parsed = bodySchema.safeParse(raw);
+    if (!parsed.success) return invalid(parsed.error);
+    const body = parsed.data;
 
-    const projectId = parseInt(body.project_id);
-    const caseName: string = String(body.case_name ?? '').trim();
-    const nodes: IngestNode[] = Array.isArray(body.nodes) ? body.nodes : [];
-    const flows: MappedFlow[] = Array.isArray(body.flows) ? body.flows : [];
-    const costs: IngestCost[] = Array.isArray(body.costs) ? body.costs : [];
-    const notes: string[] = Array.isArray(body.notes) ? body.notes : [];
+    const projectId = body.project_id ?? 0;
+    const caseName: string = body.case_name.trim();
+    const nodes = body.nodes as unknown as IngestNode[];
+    const flows = body.flows as unknown as MappedFlow[];
+    const costs = body.costs as unknown as IngestCost[];
+    const notes: string[] = body.notes;
 
-    const targetCaseId = body.target_case_id ? parseInt(body.target_case_id) : null;
-    const attachComponentId = body.attach_component_id ? parseInt(body.attach_component_id) : null;
+    const targetCaseId = body.target_case_id;
+    const attachComponentId = body.attach_component_id;
 
     // ── Append mode ──────────────────────────────────────────────────────────
     // Attach an ingested plan's flows and costs onto an EXISTING node in an
@@ -139,7 +218,7 @@ export async function POST(request: NextRequest) {
         // Costs ADD onto each step's existing columns (append, never overwrite).
         const totals = new Map<string, number>(); // "componentId|column" -> amount
         for (const c of costs) {
-          const col = COST_COLUMN[c.category];
+          const col = costColumn(c.category);
           const target = stepFor(c);
           if (!col) continue;
           if (!target) {
@@ -366,7 +445,7 @@ export async function POST(request: NextRequest) {
       // Aggregate costs per node into the component cost columns.
       const costByNode = new Map<string, Record<string, number>>();
       for (const c of costs) {
-        const col = COST_COLUMN[c.category];
+        const col = costColumn(c.category);
         const componentId = idByName.get(c.node);
         if (!col || !componentId) continue;
         const acc = costByNode.get(c.node) ?? {};
