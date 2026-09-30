@@ -9,7 +9,8 @@ export default defineConfig({
     environment: 'node',
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
-    exclude: ['node_modules', '.next'],
+    // tests/db needs a MySQL server: it runs under vitest.db.config.ts (pnpm test:db).
+    exclude: ['node_modules', '.next', 'tests/db/**'],
     testTimeout: 10000,
     environmentMatchGlobs: [
       ['tests/components/**', 'jsdom'],

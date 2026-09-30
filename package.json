@@ -11,6 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
+    "test:db": "vitest run -c vitest.db.config.ts",
+    "test:db:e2e-local": "DB_TESTS_E2E_LOCAL=1 vitest run -c vitest.db.config.ts",
     "deploy:prod": "URL=$(vercel --prod --yes | tail -1 | grep -oE 'https://[^ ]+vercel.app') && [ -n \"$URL\" ] && vercel alias set \"${URL#https://}\" lcapix.vercel.app && echo \"Live at https://lcapix.vercel.app\""
   },
   "dependencies": {
