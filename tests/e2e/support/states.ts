@@ -4,7 +4,7 @@
  * open. The visual and accessibility baselines cover these on top of
  * routes.json.
  */
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { inspector, selectComponent } from './editor';
 import type { Seed } from './seed';
 import { open, settle } from './ui';
@@ -14,6 +14,11 @@ export type ScreenState = {
   brief: string;
   path: (seed: Seed) => string;
   prepare: (page: Page) => Promise<void>;
+  /**
+   * Capture this element instead of the full page: for an overlay whose page
+   * behind it carries masked dates (masks are painted above everything).
+   */
+  target?: (page: Page) => Locator;
 };
 
 const editorPath = (s: Seed) => `/project/${s.example.projectId}/case/${s.example.baseCaseId}`;
@@ -81,6 +86,14 @@ export const STATES: ScreenState[] = [
       await expect(page.getByText('Computed deterministically from your assessment results. Not AI-generated.')).toBeVisible();
       await settle(page);
     },
+    // The insights overlay has no role=dialog (INS-6): the card is the
+    // innermost box holding both its Close button and the provenance line.
+    target: (page) =>
+      page
+        .locator('div')
+        .filter({ has: page.getByRole('button', { name: 'Close', exact: true }) })
+        .filter({ has: page.getByText('Computed deterministically from your assessment results.') })
+        .last(),
   },
 ];
 

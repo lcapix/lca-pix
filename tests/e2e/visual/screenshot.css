@@ -3,3 +3,6 @@
 
 /* next dev's build indicator and error overlay */
 nextjs-portal { display: none !important; }
+
+/* Toasts time out on their own; whether one is still up is not part of a screen. */
+[data-sonner-toaster] { display: none !important; }

@@ -93,7 +93,9 @@ Object.assign(env, {
   NEXT_PUBLIC_APP_URL: `http://localhost:${PORT}`,
   NEXT_TELEMETRY_DISABLED: '1',
   RATE_LIMIT_STORE: 'memory',
-  NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require ${path.join(REPO_ROOT, 'tests/e2e/support/block-outbound.cjs')}`.trim(),
+  // A bigger heap: next dev restarts itself ("approaching the used memory
+  // threshold") after a few hundred page compiles, and requests hang meanwhile.
+  NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192 --require ${path.join(REPO_ROOT, 'tests/e2e/support/block-outbound.cjs')}`.trim(),
 });
 
 const nextBin = path.join(REPO_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');

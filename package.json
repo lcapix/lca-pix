@@ -17,7 +17,7 @@
     "e2e:visual": "playwright test --project=visual",
     "e2e:a11y": "playwright test --project=a11y",
     "e2e:a11y:update": "A11Y_UPDATE_BASELINE=1 playwright test --project=a11y --repeat-each=2",
-    "e2e:update": "playwright test --project=visual --update-snapshots=all",
+    "e2e:update": "E2E_UPDATE_SNAPSHOTS=1 playwright test --project=visual --update-snapshots=all",
     "deploy:prod": "URL=$(vercel --prod --yes | tail -1 | grep -oE 'https://[^ ]+vercel.app') && [ -n \"$URL\" ] && vercel alias set \"${URL#https://}\" lcapix.vercel.app && echo \"Live at https://lcapix.vercel.app\""
   },
   "dependencies": {

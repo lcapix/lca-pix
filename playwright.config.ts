@@ -19,11 +19,19 @@ import { ARTIFACTS_DIR, BASE_URL } from './tests/e2e/support/paths';
 
 const CI = !!process.env.CI;
 
+// Snapshots are read from the repo. When they are being rewritten
+// (E2E_UPDATE_SNAPSHOTS=1, set by `pnpm e2e:update`) they are written to the
+// artifacts directory instead and copied into the repo by global teardown:
+// a file written inside the tree mid-run makes next dev rebuild under the
+// other workers' pages.
+const SNAPSHOT_ROOT =
+  process.env.E2E_UPDATE_SNAPSHOTS === '1' ? path.join(ARTIFACTS_DIR, 'snapshots') : '{testDir}/__snapshots__';
+
 export default defineConfig({
   testDir: './tests/e2e',
   // Outside the repo on purpose: see ARTIFACTS_DIR in tests/e2e/support/paths.ts.
   outputDir: path.join(ARTIFACTS_DIR, 'results'),
-  snapshotPathTemplate: '{testDir}/__snapshots__/{testFileDir}/{arg}-{platform}{ext}',
+  snapshotPathTemplate: `${SNAPSHOT_ROOT}/{testFileDir}/{arg}-{platform}{ext}`,
   timeout: 120_000,
   expect: {
     timeout: 20_000,

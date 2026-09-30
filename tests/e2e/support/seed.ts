@@ -20,6 +20,8 @@ import { Api, type ApiUser } from './api';
 
 export type Seed = {
   baseURL: string;
+  /** When seeding finished. The visual suite pins the browser clock here, so "Updated just now" never changes. */
+  seededAt: string;
   users: { owner: ApiUser; viewer: ApiUser; empty: ApiUser; newcomer: ApiUser };
   example: {
     projectId: number;
@@ -135,6 +137,7 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
   const baseCase = await api.get<{ case: { case_name: string } }>(`/api/cases/${ex.case_id}`);
   return {
     baseURL,
+    seededAt: new Date().toISOString(),
     users: { owner, viewer, empty, newcomer },
     example: {
       projectId: ex.project_id,

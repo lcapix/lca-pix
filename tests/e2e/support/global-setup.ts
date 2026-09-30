@@ -29,6 +29,8 @@ export default async function globalSetup() {
   mkdirSync(STATE_DIR, { recursive: true });
   // Per-run axe results (merged into the baseline by e2e:a11y:update).
   rmSync(path.join(ARTIFACTS_DIR, 'a11y'), { recursive: true, force: true });
+  // Snapshots staged by the previous e2e:update (see playwright.config.ts).
+  rmSync(path.join(ARTIFACTS_DIR, 'snapshots'), { recursive: true, force: true });
   const { database } = JSON.parse(readFileSync(SERVER_STATE, 'utf8')) as { database: string };
 
   // E2E_REUSE=1 against a server that was already seeded: keep its world.

@@ -97,11 +97,27 @@ export async function waitForHydration(page: Page, timeout = 30_000): Promise<vo
     .catch(() => undefined);
 }
 
-/** goto + settle, with the API tracker attached before the first request. */
+/**
+ * goto + settle, with the API tracker attached before the first request.
+ *
+ * Under parallel load `next dev` occasionally serves a page whose client
+ * bundle never runs (it is recompiling that chunk), leaving the auth guard's
+ * spinner up. If `ready` has not appeared after 30 s the page is reloaded
+ * once before giving up.
+ */
 export async function open(page: Page, path: string, opts: { ready?: string | RegExp; timeout?: number } = {}) {
   trackApi(page);
   await page.goto(path);
-  if (opts.ready) await expect(page.getByText(opts.ready).first()).toBeVisible({ timeout: opts.timeout ?? 60_000 });
+  if (opts.ready) {
+    const ready = page.getByText(opts.ready).first();
+    try {
+      await expect(ready).toBeVisible({ timeout: 30_000 });
+    } catch {
+      process.stderr.write(`[e2e] ${path}: "${String(opts.ready)}" not there after 30 s; reloading once\n`);
+      await page.reload();
+      await expect(ready).toBeVisible({ timeout: opts.timeout ?? 60_000 });
+    }
+  }
   await settle(page, { timeout: opts.timeout });
 }
 

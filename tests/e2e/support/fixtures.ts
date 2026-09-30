@@ -64,6 +64,18 @@ export const test = base.extend<Fixtures>({
     await installNetGuard(context);
     await use(context);
   },
+  // Console errors and uncaught exceptions, attached to a failing test.
+  page: async ({ page }, use, testInfo) => {
+    const errors: string[] = [];
+    page.on('console', (m) => {
+      if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+    });
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    await use(page);
+    if (testInfo.status !== testInfo.expectedStatus && errors.length) {
+      await testInfo.attach('browser-errors.txt', { body: errors.join('\n'), contentType: 'text/plain' });
+    }
+  },
   seed: async ({}, use) => {
     await use(readSeed());
   },

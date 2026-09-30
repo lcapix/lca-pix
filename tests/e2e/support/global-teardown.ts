@@ -7,7 +7,7 @@
  * import an .mjs file.
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { ARTIFACTS_DIR, E2E_DIR, REPO_ROOT, SERVER_STATE } from './paths';
 
@@ -64,8 +64,17 @@ function mergeA11yBaseline(): void {
   }
 }
 
+/** pnpm e2e:update: copy the snapshots this run wrote into the repo. */
+function copyUpdatedSnapshots(): void {
+  const staged = path.join(ARTIFACTS_DIR, 'snapshots');
+  if (!existsSync(staged)) return;
+  cpSync(staged, path.join(E2E_DIR, '__snapshots__'), { recursive: true });
+  process.stderr.write(`[e2e visual] copied updated snapshots into tests/e2e/__snapshots__ (review them before committing)\n`);
+}
+
 export default async function globalTeardown() {
   if (process.env.A11Y_UPDATE_BASELINE === '1') mergeA11yBaseline();
+  if (process.env.E2E_UPDATE_SNAPSHOTS === '1') copyUpdatedSnapshots();
   // E2E_REUSE=1: the server (and its database) belong to whoever started it.
   if (process.env.E2E_KEEP_DB === '1' || process.env.E2E_REUSE === '1' || !existsSync(SERVER_STATE)) return;
   const envFile = path.join(REPO_ROOT, '.env.local');
