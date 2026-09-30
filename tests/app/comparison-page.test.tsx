@@ -224,3 +224,50 @@ describe('Compare page: the analysis views never read an incomplete case as an i
     expect(document.body.textContent).not.toMatch(/−100/)
   })
 })
+
+describe('Compare page: saved comparisons (the legacy list, folded in)', () => {
+  const saved = [
+    { comparison_id: 4, comparison_name: 'Frame materials', case_ids: [1, 3], base_case_id: 1, comparison_type: 'absolute',
+      created_at: '2026-09-01T00:00:00Z', created_by_username: 'jo', total_cases_compared: 2, total_categories_analyzed: 5, base_case_name: 'Base' },
+  ]
+  const three = () => [kase('1', 'Base'), kase('2', 'Copy A', { totals: gw(95) }), kase('3', 'Copy B', { totals: gw(90) })]
+
+  it('lists the saved comparisons from GET /api/comparisons and opens one by selecting its cases', async () => {
+    routeApi(three(), saved)
+    render(<ComparisonPage />)
+    const section = await screen.findByRole('region', { name: 'Saved comparisons' })
+    expect(within(section).getByText('Frame materials')).toBeInTheDocument()
+    expect(vi.mocked(apiRequest).mock.calls.some(([u]) => u === '/api/comparisons?project_id=7')).toBe(true)
+
+    fireEvent.click(within(section).getByRole('button', { name: /Compare these/ }))
+    await waitFor(() =>
+      expect(vi.mocked(apiRequest).mock.calls.some(([u]) => String(u).startsWith('/api/projects/7/compare?cases=1,3'))).toBe(true),
+    )
+  })
+
+  it('shows nothing when there are none', async () => {
+    routeApi(three(), [])
+    render(<ComparisonPage />)
+    await screen.findByTestId('compare-verdict')
+    expect(screen.queryByRole('region', { name: 'Saved comparisons' })).toBeNull()
+  })
+
+  it('arriving from the old Saved page (?tab=saved) with none says so', async () => {
+    window.history.replaceState(null, '', '/project/7/comparison?tab=saved')
+    routeApi(three(), [])
+    render(<ComparisonPage />)
+    const section = await screen.findByRole('region', { name: 'Saved comparisons' })
+    expect(within(section).getByText(/No saved comparisons/)).toBeInTheDocument()
+  })
+
+  it('a failed list read hides the section instead of breaking the page', async () => {
+    routeApi(three(), [])
+    const base = vi.mocked(apiRequest).getMockImplementation()!
+    vi.mocked(apiRequest).mockImplementation(async (url: string, init?: any) =>
+      url.startsWith('/api/comparisons') ? json({ error: 'x' }, 500) : base(url, init),
+    )
+    render(<ComparisonPage />)
+    await screen.findByTestId('compare-verdict')
+    expect(screen.queryByRole('region', { name: 'Saved comparisons' })).toBeNull()
+  })
+})

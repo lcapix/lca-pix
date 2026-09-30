@@ -35,6 +35,16 @@ interface CaseSummary {
 
 type Tab = 'differs' | 'results' | 'change' | 'hotspots' | 'cost' | 'quality'
 
+/** A comparison saved by the legacy Saved comparisons feature (GET /api/comparisons). */
+interface SavedComparison {
+  comparison_id: number
+  comparison_name: string
+  case_ids: number[]
+  base_case_name: string | null
+  created_by_username: string | null
+  created_at: string
+}
+
 const TABS: Array<{ id: Tab; label: string; help: string }> = [
   { id: 'differs', label: 'What differs', help: 'What each copy changes against the base: run settings, exchanges, steps and costs.' },
   { id: 'results', label: 'Results', help: 'Every impact category side by side, as values, as change against the base, or relative.' },
@@ -78,6 +88,11 @@ export default function ComparisonPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [tab, setTab] = useState<Tab>('differs')
+  // The old /comparisons pages land here with ?tab=saved.
+  const [savedTab] = useState(
+    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'saved',
+  )
+  const [saved, setSaved] = useState<SavedComparison[] | null>(null)
   const [category, setCategory] = useState('Global Warming')
 
   // Returning from a fresh run re-reads the comparison.
@@ -124,6 +139,23 @@ export default function ComparisonPage() {
         if (!cancelled) setError('Could not load the cases.')
       } finally {
         if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
+  // Comparisons saved by the legacy feature; the section hides when the read fails.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest(`/api/comparisons?project_id=${projectId}`)
+        const d = await r.json()
+        if (!cancelled) setSaved(r.ok && d?.success && Array.isArray(d.comparisons) ? d.comparisons : null)
+      } catch {
+        if (!cancelled) setSaved(null)
       }
     })()
     return () => {
@@ -317,6 +349,49 @@ export default function ComparisonPage() {
             </div>
           )}
         </div>
+
+        {saved && (saved.length > 0 || savedTab) && (
+          <section aria-label="Saved comparisons" className="card" style={{ padding: 16, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Saved comparisons</div>
+            {saved.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>
+                No saved comparisons in this project. Pick the cases to compare above.
+              </div>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {saved.map((sc) => {
+                  const here = sc.case_ids.map(String).filter((id) => cases.some((c) => c.id === id))
+                  return (
+                    <li
+                      key={sc.comparison_id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{sc.comparison_name}</span>
+                      <span style={{ color: 'var(--text-tertiary)' }}>
+                        {sc.case_ids.length} cases
+                        {sc.base_case_name ? ` · base ${sc.base_case_name}` : ''}
+                        {sc.created_by_username ? ` · ${sc.created_by_username}` : ''}
+                        {sc.created_at ? ` · ${new Date(sc.created_at).toLocaleDateString()}` : ''}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={!here.length}
+                        title={here.length ? undefined : 'None of these cases exists any more'}
+                        onClick={() => {
+                          setRunPicks({})
+                          setSelected(new Set(here))
+                        }}
+                      >
+                        Compare these
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </section>
+        )}
 
         {error && (
           <div className="card" style={{ padding: 14, marginBottom: 16, color: BAD, fontSize: 13 }}>
