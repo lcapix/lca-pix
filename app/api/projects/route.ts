@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError } from '@/lib/route-guard';
+import { isAuthError, REACHABLE_CASE_SQL } from '@/lib/route-guard';
 
 // GET /api/projects - Get all projects for authenticated user
 export async function GET(request: NextRequest) {
@@ -20,13 +20,15 @@ export async function GET(request: NextRequest) {
        LEFT JOIN project_members pm ON p.project_id = pm.project_id AND pm.user_id = ?
        LEFT JOIN permissions perm ON pm.permission_id = perm.permission_id
        LEFT JOIN account a ON p.owner_id = a.id
-       LEFT JOIN case_table c ON p.project_id = c.project_id
+       -- Only the cases the caller reaches: in a project that keeps members'
+       -- cases apart, a student's card counts their own cases (B-A1).
+       LEFT JOIN case_table c ON p.project_id = c.project_id AND ${REACHABLE_CASE_SQL}
        LEFT JOIN component comp ON comp.case_id = c.case_id
        WHERE p.owner_id = ? OR pm.user_id = ?
        GROUP BY p.project_id, p.project_name, p.description, p.owner_id,
                 p.created_at, p.updated_at, a.username, pm.permission_id, perm.permission_name
        ORDER BY p.updated_at DESC`,
-      [userId, userId, userId]
+      [userId, userId, userId, userId, userId]
     );
 
     return NextResponse.json({ success: true, projects });

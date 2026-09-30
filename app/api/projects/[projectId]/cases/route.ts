@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
@@ -16,6 +16,8 @@ export async function GET(
 
     const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
     if (denied) return denied;
+    // Members of a project that keeps cases apart list only their own (B-A1).
+    const only = await reachableCasesFilter(userId, projectId);
 
     // driver_count must reflect REAL attached flows (the flows table), not the
     // legacy `drivers` JSON column — otherwise the UI showed "0 drivers" even
@@ -32,9 +34,9 @@ export async function GET(
               -- comparable case from an empty one without a request each.
               (SELECT COUNT(*) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS run_count
        FROM case_table c
-       WHERE c.project_id = ?
+       WHERE c.project_id = ?${only.sql}
        ORDER BY c.created_at DESC`,
-      [projectId]
+      [projectId, ...only.params]
     );
 
     return NextResponse.json({ success: true, cases });
@@ -74,11 +76,13 @@ export async function POST(
     }
 
     // Two cases with the same name inside one project cannot be told apart in
-    // the case list or in a comparison.
+    // the case list or in a comparison. Only among the cases the caller
+    // reaches: a student must not learn another student's case names (B-A1).
+    const only = await reachableCasesFilter(userId, projectId, 'case_table');
     const clash = await queryOne<any>(
       `SELECT case_id FROM case_table
-        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
-      [projectId, case_name]
+        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
+      [projectId, case_name, ...only.params]
     );
     if (clash) {
       return NextResponse.json(
@@ -88,9 +92,9 @@ export async function POST(
     }
 
     const caseId = await insert(
-      `INSERT INTO case_table (project_id, case_name, case_type, description)
-       VALUES (?, ?, ?, ?)`,
-      [projectId, case_name, case_type, description || null]
+      `INSERT INTO case_table (project_id, created_by, case_name, case_type, description)
+       VALUES (?, ?, ?, ?, ?)`,
+      [projectId, userId, case_name, case_type, description || null]
     );
 
     const newCase = await queryOne(
