@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -60,7 +61,9 @@ export async function POST(
     const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
     if (denied) return denied;
 
-    const { case_name, case_type, parent_case_id, description } = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { case_name, case_type, parent_case_id, description } = json.body;
 
     if (!case_name || !case_type) {
       return NextResponse.json(

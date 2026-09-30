@@ -10,6 +10,7 @@
  * Assessment runs are NOT copied: they are the original case's history.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -50,8 +51,10 @@ export async function POST(
       );
     }
 
-    let body: any = {};
-    try { body = await request.json(); } catch { /* empty body is fine */ }
+    // The body is optional (Duplicate with the default name sends none).
+    const json = await readJson(request, { optional: true });
+    if (!json.ok) return json.response;
+    const body = json.body;
     const askedName = typeof body.case_name === 'string' ? body.case_name.trim().slice(0, 255) : '';
     const newName: string = askedName || `${sourceCase.case_name} (Copy)`;
 

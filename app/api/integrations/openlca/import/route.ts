@@ -1,5 +1,6 @@
 // app/api/integrations/openlca/import/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { guardAdmin } from '@/lib/integrations/admin-guard';
@@ -26,7 +27,9 @@ export async function POST(request: NextRequest) {
   if (guard.response) return guard.response;
   const userId = guard.userId;
 
-  const parsed = Body.safeParse(await request.json().catch(() => ({})));
+  const json = await readJson(request);
+  if (!json.ok) return json.response;
+  const parsed = Body.safeParse(json.body);
   if (!parsed.success) {
     return NextResponse.json({
       error: `Unsupported method. Available: ${SUPPORTED_METHODS.join(', ')}`,

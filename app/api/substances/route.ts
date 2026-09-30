@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError } from '@/lib/route-guard';
@@ -87,7 +88,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    const body = await request.json().catch(() => ({}));
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
 
     const checked = validateCustomSubstance(body);
     if (!checked.ok || !checked.value) {

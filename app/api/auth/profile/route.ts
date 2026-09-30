@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { readJson } from "@/lib/http"
 import { requireAuth } from "@/lib/auth"
 import { isAuthError } from "@/lib/route-guard"
 import { query, execute } from "@/lib/db-helpers"
@@ -73,7 +74,9 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const userId = await requireAuth(request)
-    const body = await request.json().catch(() => ({}))
+    const json = await readJson(request)
+    if (!json.ok) return json.response
+    const body = json.body
 
     const fullName = trimOrNull(body.fullName)
     const company = trimOrNull(body.company)

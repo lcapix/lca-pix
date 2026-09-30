@@ -27,18 +27,18 @@ const JSON_ROUTES: Array<[string, Probe, string | null]> = [
   ['POST /api/auth/signup', P('POST', () => '/api/auth/signup'), null],
   ['POST /api/auth/login', P('POST', () => '/api/auth/login'), null],
   ['PUT /api/auth/profile', P('PUT', () => '/api/auth/profile'), null],
-  ['POST /api/projects', P('POST', () => '/api/projects'), 'app/api/projects/route.ts:46 request.json() unguarded; the catch answers 500'],
-  ['PUT /api/projects/:id', P('PUT', (w) => `/api/projects/${w.P.id}`), 'app/api/projects/[projectId]/route.ts:76 request.json() unguarded; the catch answers 500'],
-  ['POST /api/projects/:id/cases', P('POST', (w) => `/api/projects/${w.P.id}/cases`), 'app/api/projects/[projectId]/cases/route.ts:62 request.json() unguarded; the catch answers 500'],
-  ['POST /api/projects/:id/members', P('POST', (w) => `/api/projects/${w.P.id}/members`), 'app/api/projects/[projectId]/members/route.ts:101 request.json() unguarded; the catch answers 500'],
-  ['PUT /api/cases/:id', P('PUT', (w) => `/api/cases/${w.P.base.id}`), 'app/api/cases/[caseId]/route.ts:74 request.json() unguarded; the catch answers 500'],
+  ['POST /api/projects', P('POST', () => '/api/projects'), null],
+  ['PUT /api/projects/:id', P('PUT', (w) => `/api/projects/${w.P.id}`), null],
+  ['POST /api/projects/:id/cases', P('POST', (w) => `/api/projects/${w.P.id}/cases`), null],
+  ['POST /api/projects/:id/members', P('POST', (w) => `/api/projects/${w.P.id}/members`), null],
+  ['PUT /api/cases/:id', P('PUT', (w) => `/api/cases/${w.P.base.id}`), null],
   ['POST /api/cases/:id/assessments', P('POST', (w) => `/api/cases/${w.P.base.id}/assessments`), null],
-  ['POST /api/cases/:id/clone-from', P('POST', (w) => `/api/cases/${w.P.base.id}/clone-from`), 'app/api/cases/[caseId]/clone-from/route.ts:21 request.json() unguarded; the catch answers 500'],
-  ['POST /api/cases/:id/scale', P('POST', (w) => `/api/cases/${w.P.base.id}/scale`), 'app/api/cases/[caseId]/scale/route.ts:44 request.json() unguarded; the catch answers 500'],
-  ['POST /api/cases/:id/components', P('POST', (w) => `/api/cases/${w.P.base.id}/components`), 'app/api/cases/[caseId]/components/route.ts:105 request.json() unguarded; the catch answers 500'],
-  ['PUT /api/components/:id', P('PUT', (w) => `/api/components/${w.P.base.op}`), 'app/api/components/[componentId]/route.ts:92 request.json() unguarded; the catch answers 500'],
-  ['POST /api/components/:id/flows', P('POST', (w) => `/api/components/${w.P.base.task}/flows`), 'app/api/components/[componentId]/flows/route.ts:95 request.json() unguarded; the catch answers 500'],
-  ['PUT /api/flows/:id', P('PUT', (w) => `/api/flows/${w.P.base.flow}`), 'app/api/flows/[flowId]/route.ts:40 request.json() unguarded; the catch answers 500'],
+  ['POST /api/cases/:id/clone-from', P('POST', (w) => `/api/cases/${w.P.base.id}/clone-from`), null],
+  ['POST /api/cases/:id/scale', P('POST', (w) => `/api/cases/${w.P.base.id}/scale`), null],
+  ['POST /api/cases/:id/components', P('POST', (w) => `/api/cases/${w.P.base.id}/components`), null],
+  ['PUT /api/components/:id', P('PUT', (w) => `/api/components/${w.P.base.op}`), null],
+  ['POST /api/components/:id/flows', P('POST', (w) => `/api/components/${w.P.base.task}/flows`), null],
+  ['PUT /api/flows/:id', P('PUT', (w) => `/api/flows/${w.P.base.flow}`), null],
   ['POST /api/comparisons', P('POST', () => '/api/comparisons'), null],
   ['POST /api/substances', P('POST', () => '/api/substances'), null],
   ['POST /api/ingest/apply', P('POST', () => '/api/ingest/apply'), null],
@@ -58,9 +58,8 @@ describe('malformed JSON body -> 4xx', () => {
       }
       expect(await rowCounts()).toEqual(before);
     };
-    // BUG (Low): each route below parses the body with an unguarded
-    // `await request.json()`, so invalid JSON lands in the catch-all and
-    // answers 500 "Failed to …" instead of 400. The cause is named per row.
+    // Fixed: every route reads its body with lib/http.ts readJson, which
+    // answers 400 for invalid JSON or a body that is not an object.
     if (bug) it.fails(`${name} (500 today: ${bug})`, test);
     else it(name, test);
   }

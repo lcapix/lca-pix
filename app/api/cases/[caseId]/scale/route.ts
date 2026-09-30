@@ -12,6 +12,7 @@
  * Capital cost (capex) does not scale with output and is left alone.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -42,7 +43,9 @@ export async function POST(
     const denied = await projectAccessDenied(userId, caseRow.project_id, 'editor', { notFound: 'Case not found' });
     if (denied) return denied;
 
-    const { from, to, mode } = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { from, to, mode } = json.body;
     const f = Number(from);
     const t = Number(to);
     if (!(f > 0) || !(t > 0)) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readJson } from '@/lib/http'
 import { requireAuth } from '@/lib/auth'
 import { query } from '@/lib/db-helpers'
 import { jsonArray } from '@/lib/compare/legacy'
@@ -17,8 +18,9 @@ const positiveInt = (v: unknown): number | null => {
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request)
-    const body = await request.json().catch(() => null)
-    const { comparison_name, case_ids, project_id } = (body ?? {}) as Record<string, any>
+    const json = await readJson(request)
+    if (!json.ok) return json.response
+    const { comparison_name, case_ids, project_id } = json.body
 
     if (!comparison_name || !case_ids || !project_id) {
       return NextResponse.json(

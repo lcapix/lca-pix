@@ -1,5 +1,6 @@
 // app/api/integrations/pubchem/enrich/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { z } from 'zod';
 import { guardAdmin } from '@/lib/integrations/admin-guard';
 import {
@@ -24,8 +25,10 @@ export async function POST(request: NextRequest) {
   const limited = await enforceRateLimit(RATE_LIMITS.pubchemEnrich, [userId]);
   if (limited) return limited;
 
-  const json = await request.json().catch(() => ({}));
-  const parsed = Body.safeParse(json);
+  // The body is optional: no body enriches every substance missing data.
+  const json = await readJson(request, { optional: true });
+  if (!json.ok) return json.response;
+  const parsed = Body.safeParse(json.body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid body', issues: parsed.error.issues }, { status: 400 });
   }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -74,7 +75,9 @@ export async function PUT(
     const denied = await projectAccessDenied(userId, projectId, 'admin', { notFound: 'Project not found' });
     if (denied) return denied;
 
-    const body = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const { project_name, description } = body;
 
     await execute(

@@ -5,6 +5,7 @@
 // cost_rates cache always comes from the upstream public API. So: requireAuth,
 // strict allowlisted input, and one per-user hourly budget across the three.
 import { NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
@@ -50,7 +51,9 @@ export async function parseLookupBody<T extends z.ZodTypeAny>(
   schema: T,
   hint: string,
 ): Promise<{ data: z.infer<T>; response?: undefined } | { data?: undefined; response: NextResponse }> {
-  const parsed = schema.safeParse(await request.json().catch(() => null));
+  const json = await readJson(request);
+  if (!json.ok) return { response: json.response };
+  const parsed = schema.safeParse(json.body);
   if (!parsed.success) {
     return { response: NextResponse.json({ error: `Invalid request: ${hint}` }, { status: 400 }) };
   }

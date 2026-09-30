@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -38,7 +39,9 @@ export async function PUT(
     if (denied) return denied;
 
     // Prod schema: flows columns are flow_type / quantity. Accept either key.
-    const body = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const substance_id = body.substance_id;
     const flow_type = body.flow_type ?? body.direction;
     const quantityProvided =

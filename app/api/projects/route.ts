@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError } from '@/lib/route-guard';
@@ -43,7 +44,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    const { project_name, description } = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { project_name, description } = json.body;
 
     if (!project_name || !String(project_name).trim()) {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });

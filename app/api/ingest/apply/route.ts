@@ -13,6 +13,7 @@
  * are skipped and reported the same way (mirrors the save-time unit guard).
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
@@ -104,13 +105,9 @@ function invalid(error: z.ZodError) {
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    let raw: unknown;
-    try {
-      raw = await request.json();
-    } catch {
-      return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 });
-    }
-    const parsed = bodySchema.safeParse(raw);
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const parsed = bodySchema.safeParse(json.body);
     if (!parsed.success) return invalid(parsed.error);
     const body = parsed.data;
 

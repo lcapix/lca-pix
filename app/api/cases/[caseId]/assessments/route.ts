@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -308,11 +309,9 @@ export async function POST(
     const limited = await enforceRateLimit(RATE_LIMITS.assessments, [userId]);
     if (limited) return limited;
 
-    const body = await request.json().catch(() => null);
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ error: 'Request body must be a JSON object' }, { status: 400 });
-    }
-    const { run_name, calculation_method, region_code } = body as Record<string, unknown>;
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { run_name, calculation_method, region_code } = json.body as Record<string, unknown>;
     for (const [field, value] of Object.entries({ run_name, calculation_method, region_code })) {
       if (value !== undefined && value !== null && typeof value !== 'string') {
         return NextResponse.json({ error: `${field} must be a string` }, { status: 400 });
