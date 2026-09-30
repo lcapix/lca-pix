@@ -1,0 +1,5 @@
+/* Injected into every toHaveScreenshot (playwright.config.ts expect.toHaveScreenshot.stylePath).
+   Hides chrome that belongs to the test harness, not the product. */
+
+/* next dev's build indicator and error overlay */
+nextjs-portal { display: none !important; }

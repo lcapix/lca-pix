@@ -13,6 +13,11 @@
     "test:ui": "vitest --ui",
     "test:db": "vitest run -c vitest.db.config.ts",
     "test:db:e2e-local": "DB_TESTS_E2E_LOCAL=1 vitest run -c vitest.db.config.ts",
+    "e2e": "playwright test --project=journeys --project=contracts",
+    "e2e:visual": "playwright test --project=visual",
+    "e2e:a11y": "playwright test --project=a11y",
+    "e2e:a11y:update": "A11Y_UPDATE_BASELINE=1 playwright test --project=a11y",
+    "e2e:update": "playwright test --project=visual --update-snapshots=all",
     "deploy:prod": "URL=$(vercel --prod --yes | tail -1 | grep -oE 'https://[^ ]+vercel.app') && [ -n \"$URL\" ] && vercel alias set \"${URL#https://}\" lcapix.vercel.app && echo \"Live at https://lcapix.vercel.app\""
   },
   "dependencies": {
@@ -80,6 +85,8 @@
     "zustand": "latest"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.59.1",
     "@tailwindcss/postcss": "^4.1.9",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",

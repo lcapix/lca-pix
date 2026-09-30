@@ -1,0 +1,250 @@
+{
+  "_comment": [
+    "Every screen in docs/design-revamp/CLAUDE_DESIGN_BRIEF.md §4, as a route on the seeded world (tests/e2e/support/seed.ts).",
+    "One list feeds the visual and accessibility baselines, the global-setup warm-up and scripts/capture-review.mjs.",
+    "slug: snapshot + a11y baseline key. path: {placeholders} come from the seed ids (support/routes.ts idsFromSeed).",
+    "as: who is signed in (owner by default; viewer, empty, newcomer, anon). ready: text that must be visible before the page counts as loaded. brief: the §4 item."
+  ],
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "name": "laptop",
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "name": "phone",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "routes": [
+    {
+      "slug": "landing",
+      "path": "/",
+      "as": "anon",
+      "brief": "1 Landing"
+    },
+    {
+      "slug": "product",
+      "path": "/product",
+      "as": "anon",
+      "brief": "2 Product"
+    },
+    {
+      "slug": "pricing",
+      "path": "/pricing",
+      "as": "anon",
+      "brief": "2 Pricing"
+    },
+    {
+      "slug": "changelog",
+      "path": "/changelog",
+      "as": "anon",
+      "brief": "2 Changelog"
+    },
+    {
+      "slug": "legal-privacy",
+      "path": "/legal/privacy",
+      "as": "anon",
+      "brief": "2 Legal"
+    },
+    {
+      "slug": "legal-security",
+      "path": "/legal/security",
+      "as": "anon",
+      "brief": "2 Legal"
+    },
+    {
+      "slug": "legal-terms",
+      "path": "/legal/terms",
+      "as": "anon",
+      "brief": "2 Legal"
+    },
+    {
+      "slug": "docs",
+      "path": "/docs",
+      "as": "anon",
+      "brief": "2 Docs"
+    },
+    {
+      "slug": "login",
+      "path": "/auth/login",
+      "as": "anon",
+      "ready": "Welcome back.",
+      "brief": "3 Login"
+    },
+    {
+      "slug": "signup",
+      "path": "/auth/signup",
+      "as": "anon",
+      "ready": "Create your account.",
+      "brief": "3 Sign up"
+    },
+    {
+      "slug": "onboarding",
+      "path": "/auth/onboarding",
+      "as": "newcomer",
+      "ready": "Continue to dashboard",
+      "brief": "3 Onboarding"
+    },
+    {
+      "slug": "home",
+      "path": "/home",
+      "ready": "Welcome back",
+      "brief": "5 Home"
+    },
+    {
+      "slug": "home-empty",
+      "path": "/home",
+      "as": "empty",
+      "ready": "Open the worked example",
+      "brief": "5 Home (empty state)"
+    },
+    {
+      "slug": "project-new",
+      "path": "/project/new",
+      "brief": "6 New project"
+    },
+    {
+      "slug": "project-start",
+      "path": "/project/{exampleProject}/start",
+      "brief": "7 Project start"
+    },
+    {
+      "slug": "project-workspace",
+      "path": "/project/{exampleProject}",
+      "brief": "8 Project workspace"
+    },
+    {
+      "slug": "project-workspace-five-tier",
+      "path": "/project/{fiveTierProject}",
+      "brief": "8 Project workspace (single case)"
+    },
+    {
+      "slug": "case-new-base",
+      "path": "/project/{exampleProject}/case/base/new",
+      "brief": "9 New base case"
+    },
+    {
+      "slug": "case-new-comparative",
+      "path": "/project/{exampleProject}/case/comparative/new",
+      "brief": "9 New comparative case"
+    },
+    {
+      "slug": "case-editor",
+      "path": "/project/{exampleProject}/case/{baseCase}",
+      "brief": "10 Case editor"
+    },
+    {
+      "slug": "case-editor-five-tier",
+      "path": "/project/{fiveTierProject}/case/{fiveTierCase}",
+      "brief": "10 Case editor (5 tiers)"
+    },
+    {
+      "slug": "component-new-page",
+      "path": "/project/{exampleProject}/case/{baseCase}/component/new",
+      "brief": "12 Add component (full page)"
+    },
+    {
+      "slug": "component-edit-page",
+      "path": "/project/{exampleProject}/case/{baseCase}/component/{cutBlank}/edit",
+      "brief": "12 Edit component (full page)"
+    },
+    {
+      "slug": "results",
+      "path": "/project/{exampleProject}/case/{baseCase}/results",
+      "brief": "13 Results"
+    },
+    {
+      "slug": "analytics",
+      "path": "/project/{exampleProject}/analytics",
+      "brief": "15 Analytics"
+    },
+    {
+      "slug": "compare",
+      "path": "/project/{exampleProject}/comparison",
+      "brief": "16 Compare"
+    },
+    {
+      "slug": "import",
+      "path": "/project/{exampleProject}/import",
+      "brief": "17 Import"
+    },
+    {
+      "slug": "class",
+      "path": "/project/{exampleProject}/class",
+      "brief": "18 Class"
+    },
+    {
+      "slug": "library-factors",
+      "path": "/library/factors",
+      "brief": "19 Library: factors"
+    },
+    {
+      "slug": "library-substances",
+      "path": "/library/substances",
+      "brief": "19 Library: substances"
+    },
+    {
+      "slug": "admin-integrations",
+      "path": "/admin/integrations",
+      "brief": "20 Integrations"
+    },
+    {
+      "slug": "profile",
+      "path": "/profile",
+      "brief": "21 Profile"
+    },
+    {
+      "slug": "about",
+      "path": "/about",
+      "brief": "21 About"
+    },
+    {
+      "slug": "guide",
+      "path": "/guide",
+      "brief": "21 Guide"
+    },
+    {
+      "slug": "guide-data-model",
+      "path": "/guide/data-model",
+      "brief": "21 Guide: data model"
+    },
+    {
+      "slug": "guide-first-assessment",
+      "path": "/guide/first-assessment",
+      "brief": "21 Guide: first assessment"
+    },
+    {
+      "slug": "guide-glossary",
+      "path": "/guide/glossary",
+      "brief": "21 Guide: glossary"
+    },
+    {
+      "slug": "guide-faq",
+      "path": "/guide/faq",
+      "brief": "21 Guide: FAQ"
+    },
+    {
+      "slug": "guide-api-reference",
+      "path": "/guide/api-reference",
+      "brief": "21 Guide: API reference"
+    },
+    {
+      "slug": "not-found",
+      "path": "/this-page-does-not-exist",
+      "brief": "4 404 page"
+    },
+    {
+      "slug": "project-not-found",
+      "path": "/project/{fiveTierProject}",
+      "as": "viewer",
+      "brief": "4 Project not found (non-member)"
+    }
+  ]
+}
