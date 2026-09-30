@@ -16,18 +16,50 @@ import { isBomHeader, structureBom } from '@/lib/ingest/bom';
 import { isRoutingHeader, structureRouting } from '@/lib/ingest/routing';
 import { isEquipmentHeader, structureEquipment, type CaseStep } from '@/lib/ingest/equipment';
 import { mapModel, type CatalogSubstance } from '@/lib/ingest/maplca';
-import { readSheet, workbookText, type SheetRead } from '@/lib/ingest/sheet-reader';
+import { readSheet, workbookText, limitedRange, SHEET_LIMITS, type SheetRead } from '@/lib/ingest/sheet-reader';
 import type { ProcessModel } from '@/lib/ingest/schema';
+import {
+  MAX_UPLOAD_BYTES,
+  MULTIPART_OVERHEAD_BYTES,
+  UPLOAD_TOO_LARGE_MESSAGE,
+  readUploadForm,
+  sniffUpload,
+} from '@/lib/ingest/extract-text';
+import {
+  PayloadTooLargeError,
+  RATE_LIMITS,
+  declaredContentLength,
+  enforceRateLimit,
+} from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
-// The real ITAC workbook is ~16MB; parsing takes a few seconds.
+// Uploads are capped at 12 MB (the full ITAC database workbook is ~16 MB and
+// has to be split; on Vercel the body limit is 4.5 MB). Parsing a large
+// workbook takes a few seconds; an AI-structured document can take longer.
 export const maxDuration = 60;
+
+const tooLarge = () => NextResponse.json({ error: UPLOAD_TOO_LARGE_MESSAGE }, { status: 413 });
 
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
 
-    const form = await request.formData();
+    // Refuse an oversized upload before reading it (M6, ING-3).
+    if ((declaredContentLength(request) ?? 0) > MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES) {
+      return tooLarge();
+    }
+
+    // Each preview can fan out to several LLM calls: 10 per user per hour.
+    const limited = await enforceRateLimit(RATE_LIMITS.ingestPreview, [userId]);
+    if (limited) return limited;
+
+    let form: FormData;
+    try {
+      form = await readUploadForm(request);
+    } catch (e) {
+      if (e instanceof PayloadTooLargeError) return tooLarge();
+      return NextResponse.json({ error: 'Could not read the upload' }, { status: 400 });
+    }
     const file = form.get('file');
     const connector = String(form.get('connector') ?? 'itac');
     const plantId = String(form.get('plant_id') ?? '').trim();
@@ -48,14 +80,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (file.size > MAX_UPLOAD_BYTES) return tooLarge();
     const buf = Buffer.from(await file.arrayBuffer());
+    // The bytes must match an allowed extension (no docx/zip/images read as text).
+    const sniffed = sniffUpload(buf, file.name);
+    if (!sniffed.ok) {
+      return NextResponse.json({ error: sniffed.error }, { status: 415 });
+    }
     let pm: ProcessModel | undefined;
     const lotSizeRaw = Number(form.get('lot_size'));
     const lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : null;
 
     // 'routing' is dual-mode: a spreadsheet routing is parsed deterministically;
     // a PDF/text traveler goes through the LLM path below.
-    const isSpreadsheet = /\.(csv|xlsx?|tsv)$/i.test(file.name);
+    const isSpreadsheet =
+      sniffed.kind === 'xlsx' || sniffed.kind === 'xls' || /\.(csv|tsv)$/i.test(file.name);
 
     if ((connector === 'bom' || connector === 'routing') && isSpreadsheet) {
       // Locate the table wherever it is (any sheet, header on any of the first
@@ -115,7 +154,7 @@ export async function POST(request: NextRequest) {
       const XLSX = await import('xlsx');
       let wb;
       try {
-        wb = XLSX.read(buf, { type: 'buffer' });
+        wb = XLSX.read(buf, { type: 'buffer', sheetRows: SHEET_LIMITS.maxRows + 30 });
       } catch (e: any) {
         return NextResponse.json(
           { error: `Could not open ${file.name} as a workbook (${e?.message ?? 'unreadable file'}).` },
@@ -136,7 +175,8 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(assess);
+        const { range } = limitedRange(assess);
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(assess, range ? { range } : {});
         try {
           pm = structureItac(rows, plantId, file.name);
         } catch {
@@ -213,8 +253,9 @@ export async function POST(request: NextRequest) {
       const { extractDocText } = await import('@/lib/ingest/extract-text');
       const { structureWithLLM } = await import('@/lib/ingest/llm-structure');
       let text = '';
+      let pages: { total: number; read: number } | undefined;
       try {
-        ({ text } = await extractDocText(buf, file.name));
+        ({ text, pages } = await extractDocText(buf, file.name));
       } catch (e: any) {
         return NextResponse.json(
           { error: `Could not read text from ${file.name} (${e?.message ?? 'unreadable file'}).` },
@@ -231,6 +272,11 @@ export async function POST(request: NextRequest) {
         pm = await structureWithLLM(text, connector as 'sds' | 'epd' | 'routing', file.name);
       } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 400 });
+      }
+      if (pages && pages.read < pages.total) {
+        pm.notes.push(
+          `Only the first ${pages.read} of ${pages.total} PDF pages were read; the rest of the document was not structured.`,
+        );
       }
     }
 

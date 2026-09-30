@@ -10,6 +10,62 @@ import { useToast } from "@/hooks/use-toast"
 import { AuthShell } from "@/components/lcapix/auth/auth-shell"
 import { Icon } from "@/components/lcapix/icon"
 
+type LoginError = { title: string; description: string }
+
+const GENERIC_LOGIN_ERROR: LoginError = {
+  title: "Sign-in error",
+  description: "Something went wrong while signing in. Please try again.",
+}
+
+// Every ?error= code the app sends to this page. Unknown values fall back to
+// GENERIC_LOGIN_ERROR and are never displayed.
+const LOGIN_ERRORS: Record<string, LoginError> = {
+  google_not_configured: {
+    title: "Google sign-in not yet configured",
+    description: "The Google OAuth keys haven't been set on the server. Use email + password for now.",
+  },
+  oauth_failed: {
+    title: "Google sign-in failed",
+    description: "We couldn't complete the Google handshake. Try again or use email + password.",
+  },
+  google_cancelled: {
+    title: "Google sign-in cancelled",
+    description: "You cancelled the Google sign-in. Try again whenever you're ready.",
+  },
+  oauth_state_mismatch: {
+    title: "Google sign-in expired",
+    description: "That sign-in link expired or was started in another tab. Please try again.",
+  },
+  userinfo_failed: {
+    title: "Google profile lookup failed",
+    description: "Google accepted the sign-in but we couldn't read your profile. Try again.",
+  },
+  google_email_unverified: {
+    title: "Google email not verified",
+    description: "Your Google account's email address isn't verified. Verify it with Google, or sign up with email and password.",
+  },
+  use_password_login: {
+    title: "Log in with your password",
+    description: "An account with this email already exists and uses a password. Log in with your email and password.",
+  },
+  account_inactive: {
+    title: "Account inactive",
+    description: "This account is inactive. Please contact support.",
+  },
+  server_error: {
+    title: "Server error during Google sign-in",
+    description: "Something went wrong on our side. Try email + password.",
+  },
+  oauth_sync_failed: {
+    title: "Couldn't finish Google sign-in",
+    description: "Session sync failed after the redirect. Try again.",
+  },
+  session_expired: {
+    title: "Session expired",
+    description: "Your session expired. Please log in again.",
+  },
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -21,42 +77,19 @@ export default function LoginPage() {
   const login = useAuthStore((state) => state.login)
   const { toast } = useToast()
 
-  // Surface OAuth-callback errors as toasts. The Google route bounces here
-  // with ?error=... when the handshake fails or env vars are missing. Reading
-  // window.location.search (instead of useSearchParams) avoids forcing the
-  // page off Next.js's static prerender path.
+  // Surface sign-in errors as toasts. The Google route and the API client
+  // bounce here with ?error=<code>. Only known codes are shown; anything else
+  // gets a generic message, so a crafted link cannot put its own words in an
+  // app-branded toast. Reading window.location.search (instead of
+  // useSearchParams) avoids forcing the page off Next.js's static prerender path.
   useEffect(() => {
     if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     const err = params.get("error")
     if (!err) return
-    const messages: Record<string, { title: string; description: string }> = {
-      google_not_configured: {
-        title: "Google sign-in not yet configured",
-        description:
-          "The Google OAuth keys haven't been set on the server. Use email + password for now.",
-      },
-      oauth_failed: {
-        title: "Google sign-in failed",
-        description: "We couldn't complete the Google handshake. Try again or use email + password.",
-      },
-      userinfo_failed: {
-        title: "Google profile lookup failed",
-        description: "Google accepted the sign-in but we couldn't read your profile. Try again.",
-      },
-      server_error: {
-        title: "Server error during Google sign-in",
-        description: "Something went wrong on our side. Try email + password.",
-      },
-      oauth_sync_failed: {
-        title: "Couldn't finish Google sign-in",
-        description: "Session sync failed after the redirect. Try again.",
-      },
-    }
-    const msg = messages[err] ?? {
-      title: "Sign-in error",
-      description: decodeURIComponent(err),
-    }
+    const msg = Object.prototype.hasOwnProperty.call(LOGIN_ERRORS, err)
+      ? LOGIN_ERRORS[err]
+      : GENERIC_LOGIN_ERROR
     toast({ title: msg.title, description: msg.description, variant: "destructive" })
     // Strip the param so reloads don't re-toast.
     const url = new URL(window.location.href)

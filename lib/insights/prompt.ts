@@ -159,3 +159,139 @@ export function buildInsightMessages(facts: InsightFacts): {
 
 export const INSIGHTS_DEFAULT_MODEL = 'openai/gpt-oss-120b:fastest';
 export const HF_ROUTER_URL = 'https://router.huggingface.co/v1/chat/completions';
+
+// ── Request validation ───────────────────────────────────────────────────────
+// The route accepts facts from the client, so bound them before they reach the
+// paid model: known mode, typed fields, capped lists and string lengths, and a
+// hard 500-character limit on the free-text question (INS-2).
+
+export const INSIGHT_LIMITS = {
+  /** Request body bytes (checked by the route before and while parsing). */
+  bodyBytes: 16 * 1024,
+  /** Free-text question in custom mode. Longer is rejected, not truncated. */
+  question: 500,
+  /** Names, labels, units, lever text: truncated to this many characters. */
+  text: 200,
+  /** contributors / materials / stepCosts entries kept. */
+  contributors: 25,
+  /** allCategories entries kept. */
+  categories: 40,
+  /** levers kept, and moves per lever. */
+  levers: 10,
+  moves: 10,
+  /** costSplit entries kept. */
+  costSplit: 10,
+} as const;
+
+const MODES: ReadonlyArray<InsightFacts['mode']> = ['summary', 'reduce', 'tradeoff', 'base', 'custom'];
+
+class FactsError extends Error {}
+
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+function text(v: unknown, field: string, max: number = INSIGHT_LIMITS.text): string {
+  if (typeof v !== 'string') throw new FactsError(`${field} must be text`);
+  return v.slice(0, max);
+}
+
+function num(v: unknown, field: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) throw new FactsError(`${field} must be a number`);
+  return v;
+}
+
+function optNum(v: unknown, field: string): number | undefined {
+  return v === undefined || v === null ? undefined : num(v, field);
+}
+
+function list<T>(v: unknown, field: string, max: number, item: (x: unknown, i: number) => T): T[] | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (!Array.isArray(v)) throw new FactsError(`${field} must be a list`);
+  return v.slice(0, max).map((x, i) => item(x, i));
+}
+
+function contributor(field: string) {
+  return (x: unknown, i: number): InsightContributor => {
+    if (!isObj(x)) throw new FactsError(`${field}[${i}] must be an object`);
+    return {
+      name: text(x.name, `${field}[${i}].name`),
+      pct: num(x.pct, `${field}[${i}].pct`),
+      value: num(x.value, `${field}[${i}].value`),
+    };
+  };
+}
+
+/** Validate and bound client-supplied facts. */
+export function sanitizeInsightFacts(
+  raw: unknown
+): { ok: true; facts: InsightFacts } | { ok: false; error: string } {
+  try {
+    if (!isObj(raw)) throw new FactsError('Body must be a JSON object');
+    const mode = raw.mode as InsightFacts['mode'];
+    if (!MODES.includes(mode)) throw new FactsError(`mode must be one of ${MODES.join(', ')}`);
+
+    let question: string | undefined;
+    if (raw.question !== undefined && raw.question !== null) {
+      if (typeof raw.question !== 'string') throw new FactsError('question must be text');
+      if (raw.question.length > INSIGHT_LIMITS.question) {
+        throw new FactsError(`question must be at most ${INSIGHT_LIMITS.question} characters`);
+      }
+      question = raw.question;
+    }
+
+    let total: InsightFacts['total'];
+    if (raw.total !== undefined && raw.total !== null) {
+      if (!isObj(raw.total)) throw new FactsError('total must be an object');
+      total = { value: num(raw.total.value, 'total.value'), unit: text(raw.total.unit ?? '', 'total.unit') };
+    }
+
+    const facts: InsightFacts = {
+      caseName: text(raw.caseName ?? '', 'caseName'),
+      method: text(raw.method ?? '', 'method'),
+      categoryLabel: text(raw.categoryLabel ?? '', 'categoryLabel'),
+      total,
+      totalCost: optNum(raw.totalCost, 'totalCost'),
+      contributors:
+        list(raw.contributors ?? [], 'contributors', INSIGHT_LIMITS.contributors, contributor('contributors')) ?? [],
+      materials: list(raw.materials, 'materials', INSIGHT_LIMITS.contributors, contributor('materials')),
+      levers: list(raw.levers, 'levers', INSIGHT_LIMITS.levers, (x, i) => {
+        if (!isObj(x)) throw new FactsError(`levers[${i}] must be an object`);
+        return {
+          title: text(x.title, `levers[${i}].title`),
+          why: text(x.why ?? '', `levers[${i}].why`, INSIGHT_LIMITS.question),
+          moves:
+            list(x.moves ?? [], `levers[${i}].moves`, INSIGHT_LIMITS.moves, (m, j) =>
+              text(m, `levers[${i}].moves[${j}]`)
+            ) ?? [],
+        };
+      }),
+      costSplit: list(raw.costSplit, 'costSplit', INSIGHT_LIMITS.costSplit, (x, i) => {
+        if (!isObj(x)) throw new FactsError(`costSplit[${i}] must be an object`);
+        return { name: text(x.name, `costSplit[${i}].name`), pct: num(x.pct, `costSplit[${i}].pct`) };
+      }),
+      stepCosts: list(raw.stepCosts, 'stepCosts', INSIGHT_LIMITS.contributors, (x, i) => {
+        if (!isObj(x)) throw new FactsError(`stepCosts[${i}] must be an object`);
+        return {
+          name: text(x.name, `stepCosts[${i}].name`),
+          costPct: num(x.costPct, `stepCosts[${i}].costPct`),
+          impactPct: num(x.impactPct, `stepCosts[${i}].impactPct`),
+        };
+      }),
+      mode,
+      reducePct: optNum(raw.reducePct, 'reducePct'),
+      question,
+      allCategories: list(raw.allCategories, 'allCategories', INSIGHT_LIMITS.categories, (x, i) => {
+        if (!isObj(x)) throw new FactsError(`allCategories[${i}] must be an object`);
+        return {
+          name: text(x.name, `allCategories[${i}].name`),
+          value: num(x.value, `allCategories[${i}].value`),
+          unit: text(x.unit ?? '', `allCategories[${i}].unit`),
+        };
+      }),
+    };
+    return { ok: true, facts };
+  } catch (e) {
+    if (e instanceof FactsError) return { ok: false, error: e.message };
+    throw e;
+  }
+}

@@ -23,9 +23,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    return NextResponse.json(
-      { error: 'Authentication failed', details: error.message },
-      { status: 401 }
-    );
+    console.error('Auth me error:', error);
+    return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
   }
 }

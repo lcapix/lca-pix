@@ -3,9 +3,10 @@
  * JWT token generation, verification, and password hashing
  */
 
-import { hash, compare } from 'bcrypt';
+import bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
-import { query, queryOne } from './db-helpers';
+import { exists, queryOne } from './db-helpers';
 
 // A guessable signing secret turns every account into a forgeable token; the
 // app refuses to start without a real one (tests may inject their own).
@@ -31,20 +32,50 @@ export interface User {
 }
 
 /**
+ * `password_hash` value for an account created through Google sign-in: it has
+ * no password. It is not a bcrypt hash, so no password can ever match it, and
+ * it is how the Google flow tells its own accounts from password accounts
+ * (the `account` table has no provider column).
+ */
+export const OAUTH_ONLY_PASSWORD_HASH = '!oauth-only';
+
+// A bcrypt hash (cost 10) of a random value nobody knows. Compared against when
+// there is no real hash to check, so an unknown email or an OAuth-only account
+// costs the same time as a wrong password (no timing oracle).
+const DUMMY_BCRYPT_HASH = '$2b$10$PRwZjBrwQEOAtk7Fp.OD.OrybgIheEo68NjzQuhFyByJ8NVJ2UTxi';
+const BCRYPT_HASH = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+
+/**
  * Hash a plain text password
  */
 export async function hashPassword(password: string): Promise<string> {
-  return hash(password, 10);
+  return bcrypt.hash(password, 10);
+}
+
+/** True when the stored hash is a real password (not the OAuth-only marker). */
+export function isPasswordLogin(passwordHash: string | null | undefined): boolean {
+  return !!passwordHash && passwordHash !== OAUTH_ONLY_PASSWORD_HASH;
+}
+
+/** Burn one bcrypt compare's worth of time; always false. */
+export async function dummyPasswordCheck(password: string): Promise<false> {
+  await bcrypt.compare(String(password ?? ''), DUMMY_BCRYPT_HASH);
+  return false;
 }
 
 /**
- * Compare a plain text password with a hash
+ * Compare a plain text password with a hash. Anything that is not a bcrypt
+ * hash (the OAuth-only marker, an empty column) never matches, after the same
+ * amount of work as a real compare.
  */
 export async function verifyPassword(
   password: string,
   hashedPassword: string
 ): Promise<boolean> {
-  return compare(password, hashedPassword);
+  if (typeof hashedPassword !== 'string' || !BCRYPT_HASH.test(hashedPassword)) {
+    return dummyPasswordCheck(password);
+  }
+  return bcrypt.compare(String(password ?? ''), hashedPassword);
 }
 
 /**
@@ -52,19 +83,57 @@ export async function verifyPassword(
  */
 export function createToken(payload: UserPayload): string {
   return jwt.sign(payload, JWT_SECRET, {
+    algorithm: 'HS256',
     expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
 }
 
 /**
- * Verify a JWT token and return the payload
+ * Verify a JWT token and return the payload. Only HS256 is accepted: the
+ * algorithm is ours to choose, never the token's.
  */
 export function verifyToken(token: string): UserPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as UserPayload;
+    return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as UserPayload;
   } catch (error) {
     return null;
   }
+}
+
+/**
+ * A username handle from an email address (or any seed): the local part
+ * without a +tag, lower-cased, letters/digits/._- only, at most 40 chars.
+ */
+export function usernameBase(seed: string): string {
+  const local = String(seed ?? '').split('@')[0].split('+')[0].toLowerCase();
+  const clean = local
+    .replace(/[^a-z0-9._-]/g, '')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 40)
+    .replace(/[._-]+$/g, '');
+  return clean.length >= 2 ? clean : 'user';
+}
+
+/**
+ * A username nobody has yet, derived server-side (the `username` column is
+ * UNIQUE, VARCHAR(50)). Collisions get a random suffix: jsmith, jsmith-3f9a1c.
+ * Callers still retry on a duplicate-key error, since two sign-ups can race.
+ */
+export async function generateUniqueUsername(seed: string): Promise<string> {
+  const base = usernameBase(seed);
+  if (!(await exists('SELECT 1 FROM account WHERE username = ?', [base]))) return base;
+  for (let i = 0; i < 8; i++) {
+    const candidate = `${base}-${randomBytes(3).toString('hex')}`;
+    if (!(await exists('SELECT 1 FROM account WHERE username = ?', [candidate]))) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}${randomBytes(2).toString('hex')}`.slice(0, 50);
+}
+
+/** A MySQL duplicate-key error, optionally on a named unique key. */
+export function isDuplicateKeyError(err: any, key?: string): boolean {
+  if (err?.code !== 'ER_DUP_ENTRY') return false;
+  if (!key) return true;
+  return new RegExp(`for key '(?:[\\w]+\\.)?${key}'`).test(String(err?.message ?? err?.sqlMessage ?? ''));
 }
 
 /**

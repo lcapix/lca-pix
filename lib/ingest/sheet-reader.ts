@@ -65,8 +65,52 @@ function decodeText(buf: Buffer): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
 }
 
+/**
+ * Bounds on what one upload may make the reader do. A few-KB xlsx can declare a
+ * range of the whole grid (A1:XFD1048576) and sheet_to_json with blank rows
+ * would try to materialise all of it; a workbook can hold hundreds of sheets.
+ * The row cap still fits the full ITAC ASSESS sheet (about 20k assessments).
+ */
+export interface SheetLimits {
+  maxSheets: number
+  maxRows: number
+  maxCols: number
+  maxCells: number
+}
+
+export const SHEET_LIMITS: SheetLimits = {
+  maxSheets: 30,
+  maxRows: 50_000,
+  maxCols: 256,
+  maxCells: 1_000_000,
+}
+
+/**
+ * The sheet's declared range clamped to the limits (columns first, then rows
+ * so rows x columns stays under maxCells). Pass `range` to sheet_to_json.
+ */
+export function limitedRange(
+  ws: XLSX.WorkSheet,
+  limits: SheetLimits = SHEET_LIMITS,
+): { range: string | undefined; truncated: boolean } {
+  const ref = ws?.['!ref']
+  if (!ref) return { range: undefined, truncated: false }
+  const r = XLSX.utils.decode_range(ref)
+  const cols = Math.min(r.e.c - r.s.c + 1, limits.maxCols)
+  const rows = Math.min(r.e.r - r.s.r + 1, limits.maxRows, Math.max(1, Math.floor(limits.maxCells / cols)))
+  const clamped = { s: r.s, e: { c: r.s.c + cols - 1, r: r.s.r + rows - 1 } }
+  const truncated = clamped.e.c < r.e.c || clamped.e.r < r.e.r
+  return { range: XLSX.utils.encode_range(clamped), truncated }
+}
+
 /** Workbook from any upload; text files are decoded as UTF-8 and read as raw strings. */
-export function readWorkbook(buf: Buffer, filename: string): { wb: XLSX.WorkBook; decimalComma: boolean } {
+export function readWorkbook(
+  buf: Buffer,
+  filename: string,
+  limits: SheetLimits = SHEET_LIMITS,
+): { wb: XLSX.WorkBook; decimalComma: boolean } {
+  // Parse at most maxRows rows per sheet (plus a header block).
+  const sheetRows = limits.maxRows + 30
   if (/\.(csv|tsv|txt)$/i.test(filename)) {
     const text = decodeText(buf)
     const first = text.split(/\r?\n/).find((l) => l.trim()) ?? ''
@@ -75,9 +119,12 @@ export function readWorkbook(buf: Buffer, filename: string): { wb: XLSX.WorkBook
     const decimalComma = semis > 0 && semis >= commas
     // raw: keep every cell as the text written, so "1/2" never becomes a date
     // and "0,5" is not read as 5. Values are parsed later by parse-values.
-    return { wb: XLSX.read(text, { type: 'string', raw: true, FS: decimalComma ? ';' : undefined }), decimalComma }
+    return {
+      wb: XLSX.read(text, { type: 'string', raw: true, FS: decimalComma ? ';' : undefined, sheetRows }),
+      decimalComma,
+    }
   }
-  return { wb: XLSX.read(buf, { type: 'buffer', cellDates: false }), decimalComma: false }
+  return { wb: XLSX.read(buf, { type: 'buffer', cellDates: false, sheetRows }), decimalComma: false }
 }
 
 /**
@@ -89,27 +136,41 @@ export function readSheet(
   buf: Buffer,
   filename: string,
   isKnownHeader: (cleaned: string) => boolean,
+  limits: SheetLimits = SHEET_LIMITS,
 ): SheetRead | null {
-  const { wb, decimalComma } = readWorkbook(buf, filename)
-  let best: { sheet: string; row: number; score: number; aoa: unknown[][] } | null = null
-  for (const sheet of wb.SheetNames) {
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheet], {
+  const { wb, decimalComma } = readWorkbook(buf, filename, limits)
+  let best: { sheet: string; row: number; score: number; aoa: unknown[][]; truncated: boolean } | null = null
+  for (const sheet of wb.SheetNames.slice(0, limits.maxSheets)) {
+    const ws = wb.Sheets[sheet]
+    const { range, truncated } = limitedRange(ws, limits)
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(ws, {
       header: 1,
       defval: '',
       raw: true,
       blankrows: true,
+      ...(range ? { range } : {}),
     })
     for (let r = 0; r < Math.min(aoa.length, 30); r++) {
       const score = (aoa[r] ?? []).filter((c) => {
         const h = cleanHeader(c).name
         return h && isKnownHeader(h)
       }).length
-      if (score >= 2 && (!best || score > best.score)) best = { sheet, row: r, score, aoa }
+      if (score >= 2 && (!best || score > best.score)) best = { sheet, row: r, score, aoa, truncated }
     }
   }
   if (!best) return null
 
   const notes: string[] = []
+  const fullRef = wb.Sheets[best.sheet]?.['!fullref'] as string | undefined
+  const cutAtParse =
+    !!fullRef && XLSX.utils.decode_range(fullRef).e.r > XLSX.utils.decode_range(wb.Sheets[best.sheet]['!ref'] ?? 'A1').e.r
+  const rowCap = best.row + 1 + limits.maxRows
+  if (best.truncated || cutAtParse || best.aoa.length > rowCap) {
+    notes.push(
+      `Read only the first ${limits.maxRows} rows and ${limits.maxCols} columns of sheet "${best.sheet}" (upload limit); split the file to read the rest.`,
+    )
+  }
+  if (best.aoa.length > rowCap) best.aoa = best.aoa.slice(0, rowCap)
   const rawHeaders = best.aoa[best.row] ?? []
   const timeHints: Record<string, TimeUnit> = {}
   const massHints: Record<string, string> = {}
@@ -167,10 +228,16 @@ export function readSheet(
   }
 }
 
-/** Plain text of a workbook (every sheet), for the AI fallback. */
-export function workbookText(buf: Buffer, filename: string): string {
-  const { wb } = readWorkbook(buf, filename)
-  return wb.SheetNames.map(
-    (s) => `Sheet: ${s}\n${XLSX.utils.sheet_to_csv(wb.Sheets[s], { blankrows: false })}`,
-  ).join('\n\n')
+/** Plain text of a workbook (up to maxSheets sheets, clamped ranges), for the AI fallback. */
+export function workbookText(buf: Buffer, filename: string, limits: SheetLimits = SHEET_LIMITS): string {
+  const { wb } = readWorkbook(buf, filename, limits)
+  return wb.SheetNames.slice(0, limits.maxSheets)
+    .map((s) => {
+      const ws = wb.Sheets[s]
+      const { range } = limitedRange(ws, limits)
+      // sheet_to_csv walks the sheet's own !ref, so hand it a clamped copy.
+      const csv = XLSX.utils.sheet_to_csv(range ? { ...ws, '!ref': range } : ws, { blankrows: false })
+      return `Sheet: ${s}\n${csv}`
+    })
+    .join('\n\n')
 }

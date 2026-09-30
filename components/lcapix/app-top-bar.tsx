@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Logo } from './logo'
 import { Icon } from './icon'
-import { useAuthStore } from '@/lib/store'
+import { useAuthStore, useProjectStore } from '@/lib/store'
 import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-store'
 
 export interface AppTopBarProps {
@@ -74,9 +74,21 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   }
 
   const handleLogout = () => {
+    // Expire the auth cookies server-side (httpOnly ones cannot be touched
+    // from JS). Fire-and-forget: local logout must not wait on the network.
+    try {
+      fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => {})
+    } catch {}
+    // Drop the previous user's cached projects so the next person on this
+    // browser does not see them: reset the in-memory store, then remove the
+    // persisted copies (projects and the activity feed).
+    useProjectStore.setState({ projects: [], currentProject: null, flows: [], nodes: [] })
+    useNotificationsStore.setState({ items: [] })
     try {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user')
+      localStorage.removeItem('lcapix-projects')
+      localStorage.removeItem('lcapix-notifications')
     } catch {}
     logout()
     setMenuOpen(false)

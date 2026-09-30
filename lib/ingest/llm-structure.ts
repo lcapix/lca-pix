@@ -88,6 +88,15 @@ export const LLM_STRUCTURE_DEFAULT_MODEL = INSIGHTS_DEFAULT_MODEL;
 export const CHUNK_CHARS = 12000;
 /** Upper bound on parts per document (keeps a preview inside the route's time limit). */
 export const MAX_CHUNKS = 8;
+/** Parts read in parallel. */
+export const LLM_CONCURRENCY = 4;
+/** One model call is aborted after this long; the other parts still count. */
+export const LLM_PART_TIMEOUT_MS = 25_000;
+/**
+ * No new part starts after this much time. With 8 parts, 4 at a time and a
+ * 25 s part timeout, the whole read ends before the route's 60 s maxDuration.
+ */
+export const LLM_BUDGET_MS = 50_000;
 
 /** Build the {system, user} messages for one structuring call. */
 export function buildStructurePrompt(
@@ -487,14 +496,18 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, i: number
 
 /**
  * Structure a document via the HF open model. Long documents are read in parts
- * (in parallel, merged in order). Returns the ProcessModel, or throws if no key
- * is configured or no part produced valid JSON (caller turns that into a clear
- * API error).
+ * (in parallel, merged in order). Each part has its own timeout, and a part
+ * that fails (network error, timeout, HTTP error, bad JSON) becomes a note
+ * instead of failing the others. Parts that would start after the overall
+ * budget are skipped and noted. Returns the ProcessModel, or throws if no key
+ * is configured or no part produced valid JSON (caller turns that into a
+ * clear API error). Upstream response bodies are logged, never returned.
  */
 export async function structureWithLLM(
   text: string,
   hint: DocHint,
   docName: string,
+  opts: { partTimeoutMs?: number; budgetMs?: number; concurrency?: number } = {},
 ): Promise<ProcessModel> {
   const token = process.env.HF_TOKEN;
   if (!token) {
@@ -505,33 +518,50 @@ export async function structureWithLLM(
   const model = process.env.HF_INSIGHTS_MODEL || LLM_STRUCTURE_DEFAULT_MODEL;
   const all = chunkText(text);
   const chunks = all.slice(0, MAX_CHUNKS);
+  const partTimeoutMs = opts.partTimeoutMs ?? LLM_PART_TIMEOUT_MS;
+  const deadline = Date.now() + (opts.budgetMs ?? LLM_BUDGET_MS);
 
   const callPart = async (chunk: string, index: number): Promise<{ json: any } | { error: string }> => {
-    const { system, user } = buildStructurePrompt(chunk, hint, docName, { index, total: chunks.length });
-    const res = await fetch(HF_ROUTER_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        stream: false,
-        temperature: 0.1, // deterministic extraction
-        max_tokens: 8000, // room for a long routing's every operation
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => res.statusText);
-      return { error: `HF structuring failed (HTTP ${res.status}): ${detail.slice(0, 200)}` };
+    if (Date.now() >= deadline) {
+      return { error: 'not read: the time budget for this preview ran out' };
     }
-    const body = await res.json();
-    const json = extractJson(body?.choices?.[0]?.message?.content ?? '');
-    return json ? { json } : { error: 'The model did not return parseable JSON for this part.' };
+    const { system, user } = buildStructurePrompt(chunk, hint, docName, { index, total: chunks.length });
+    try {
+      const res = await fetch(HF_ROUTER_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          temperature: 0.1, // deterministic extraction
+          max_tokens: 8000, // room for a long routing's every operation
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ],
+        }),
+        signal: AbortSignal.timeout(partTimeoutMs),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => res.statusText);
+        console.warn(`[llm-structure] part ${index + 1}: HTTP ${res.status}: ${String(detail).slice(0, 200)}`);
+        return { error: `HF structuring failed (HTTP ${res.status})` };
+      }
+      const body = await res.json();
+      const json = extractJson(body?.choices?.[0]?.message?.content ?? '');
+      return json ? { json } : { error: 'The model did not return parseable JSON for this part.' };
+    } catch (e: any) {
+      const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+      console.warn(`[llm-structure] part ${index + 1}:`, e?.message ?? e);
+      return {
+        error: timedOut
+          ? `the model call timed out after ${Math.round(partTimeoutMs / 1000)} s`
+          : 'the model could not be reached',
+      };
+    }
   };
 
-  const results = await mapLimit(chunks, 4, callPart);
+  const results = await mapLimit(chunks, opts.concurrency ?? LLM_CONCURRENCY, callPart);
   const good = results.filter((r): r is { json: any } => 'json' in r);
   if (!good.length) {
     const first = results.find((r): r is { error: string } => 'error' in r);
