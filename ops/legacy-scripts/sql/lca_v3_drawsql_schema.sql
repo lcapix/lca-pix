@@ -6,6 +6,12 @@
 -- Date: 2025-01-17
 -- Purpose: Production-ready schema for DrawSQL visualization
 -- Import this file into DrawSQL.io to see the complete ER diagram
+--
+-- Kept in step with the numbered migrations (documentation only; the
+-- database is changed by migrate-0NN-*.sql through scripts/db/migrate.mjs):
+--   026  assessment_results.impact_value / contribution_percentage -> DOUBLE
+--   027  assessment_results.component_id nullable, FK ON DELETE SET NULL
+--   030  flows.quantity / transport_mass_kg -> DOUBLE
 -- ============================================================================
 
 -- ============================================================================
@@ -213,10 +219,16 @@ CREATE TABLE flows (
     component_id BIGINT UNSIGNED NOT NULL COMMENT 'Elemental task component',
     substance_id BIGINT UNSIGNED NOT NULL COMMENT 'Substance being consumed/emitted',
     flow_type ENUM('input', 'output') NOT NULL COMMENT 'Flow type: input consumed, output produced',
-    quantity DECIMAL(15,6) NOT NULL COMMENT 'Quantity of substance',
+    -- DOUBLE since migrate-030: DECIMAL(15,6) stored anything below 5e-7 as 0.
+    quantity DOUBLE NOT NULL COMMENT 'Quantity of substance (full precision)',
     unit VARCHAR(50) NOT NULL COMMENT 'Flow unit (should match substance default_unit)',
     is_driver TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Whether this flow is a driver flow for LCA calculations',
     driver_description TEXT COMMENT 'Description of the driver factor',
+    -- Transport leg (migrate-022): quantity (tkm) = transport_mass_kg / 1000 x
+    -- transport_distance_km. The mass is DOUBLE since migrate-030.
+    transport_mass_kg DOUBLE NULL COMMENT 'Transport leg mass in kg',
+    transport_distance_km DECIMAL(18,3) NULL COMMENT 'Transport leg distance in km',
+    transport_mode VARCHAR(40) NULL COMMENT 'Transport mode (truck, rail, ship...)',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (flow_id),
@@ -326,11 +338,15 @@ COMMENT='Historical record of assessment calculations';
 CREATE TABLE assessment_results (
     result_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     run_id BIGINT UNSIGNED NOT NULL COMMENT 'Assessment run this result belongs to',
-    component_id BIGINT UNSIGNED NULL COMMENT 'Component being measured (NULL = case total)',
+    -- NULL for a case total, or once the step is deleted after the run
+    -- (migrate-027: ON DELETE SET NULL; the run snapshot keeps its name).
+    component_id BIGINT UNSIGNED NULL COMMENT 'Component being measured (NULL = case total or deleted step)',
     category_id BIGINT UNSIGNED NOT NULL COMMENT 'Impact category',
-    impact_value DECIMAL(20,6) NOT NULL COMMENT 'Calculated impact value',
+    -- DOUBLE since migrate-026: DECIMAL(20,6) stored ozone-depletion-scale
+    -- results (below 5e-7) as 0.
+    impact_value DOUBLE NOT NULL COMMENT 'Calculated impact value (full precision)',
     unit VARCHAR(50) NOT NULL COMMENT 'Unit of measurement',
-    contribution_percentage DECIMAL(5,2) NULL COMMENT 'Percentage of total impact for this category',
+    contribution_percentage DOUBLE NULL COMMENT 'Percentage of total impact for this category',
     PRIMARY KEY (result_id),
     INDEX idx_run (run_id),
     INDEX idx_component (component_id),
@@ -442,10 +458,12 @@ ALTER TABLE assessment_results
     FOREIGN KEY (run_id) REFERENCES assessment_runs(run_id)
     ON DELETE CASCADE;
 
+-- SET NULL since migrate-027: deleting a step keeps its rows in every
+-- historical run (CASCADE erased them and shrank old totals).
 ALTER TABLE assessment_results
     ADD CONSTRAINT fk_assessment_results_component
     FOREIGN KEY (component_id) REFERENCES component(component_id)
-    ON DELETE CASCADE;
+    ON DELETE SET NULL;
 
 ALTER TABLE assessment_results
     ADD CONSTRAINT fk_assessment_results_category
@@ -517,6 +535,9 @@ FROM component c
 LEFT JOIN component p ON c.parent_component_id = p.component_id;
 
 -- View: Latest assessment results by case
+-- Note: since migrate-027 a NULL component_id also marks the rows of a step
+-- deleted after the run, so this view no longer isolates case totals. The app
+-- does not use it; run totals come from the run snapshot (snapshot.totals).
 CREATE OR REPLACE VIEW v_latest_assessment_results AS
 SELECT
     ar.run_id,
