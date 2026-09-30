@@ -2,6 +2,8 @@
 // (serverless-friendly pdf.js), HTML by tag-stripping, everything else as UTF-8.
 // No interpretation here — just get readable text out.
 
+import { readBodyCapped } from '@/lib/rate-limit';
+
 export type DocKind = 'pdf' | 'html' | 'text';
 
 // ── Upload guards ────────────────────────────────────────────────────────────
@@ -21,6 +23,22 @@ export const UPLOAD_TOO_LARGE_MESSAGE =
   'That file is larger than 12 MB. Split very large workbooks (for example one sheet, ' +
   'plant or year per file) and upload the parts. On the hosted app the practical limit ' +
   'is lower: Vercel refuses request bodies over 4.5 MB.';
+
+/** Room for the multipart boundaries and the small form fields next to the file. */
+export const MULTIPART_OVERHEAD_BYTES = 64 * 1024;
+
+/**
+ * Parse a multipart upload without ever buffering more than the limit: the
+ * declared Content-Length is checked first, then the body is read with a cap
+ * (chunked uploads declare no length). Throws PayloadTooLargeError (from
+ * lib/rate-limit) when the body is too big.
+ */
+export async function readUploadForm(request: Request): Promise<FormData> {
+  const bytes = await readBodyCapped(request, MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES);
+  return new Response(bytes as unknown as BodyInit, {
+    headers: { 'content-type': request.headers.get('content-type') ?? '' },
+  }).formData();
+}
 
 export type UploadKind = 'pdf' | 'xlsx' | 'xls' | 'text';
 

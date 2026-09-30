@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
-import { extractDocText } from '@/lib/ingest/extract-text';
+import {
+  extractDocText,
+  readUploadForm,
+  sniffUpload,
+  MAX_UPLOAD_BYTES,
+  UPLOAD_TOO_LARGE_MESSAGE,
+} from '@/lib/ingest/extract-text';
 import { readSheet } from '@/lib/ingest/sheet-reader';
+import { PayloadTooLargeError } from '@/lib/rate-limit';
 
 /**
  * The documents a case was built from, kept so a person can read from them
@@ -15,23 +22,34 @@ import { readSheet } from '@/lib/ingest/sheet-reader';
 
 // Enough for a routing pack or a long EPD; well under MEDIUMTEXT's 16MB.
 const MAX_CHARS = 400_000;
-const MAX_BYTES = 12 * 1024 * 1024;
+const MAX_BYTES = MAX_UPLOAD_BYTES;
+// case_documents.doc_type is VARCHAR(64).
+const MAX_DOC_TYPE = 64;
 
 /** Migration 021 adds the table; until it is applied, say so plainly. */
 function missingTable(err: any) {
   return err?.code === 'ER_NO_SUCH_TABLE';
 }
 
-async function caseAccess(request: NextRequest, caseIdParam: string) {
+/**
+ * Any project member may read a case's documents; attaching and deleting
+ * them needs 'editor' (a viewer must not plant or remove reference material).
+ */
+async function caseAccess(request: NextRequest, caseIdParam: string, level?: 'editor') {
   const userId = await requireAuth(request);
   const caseId = parseInt(caseIdParam);
   const caseData = await queryOne<any>('SELECT project_id FROM case_table WHERE case_id = ?', [caseId]);
   if (!caseData) return { error: NextResponse.json({ error: 'Case not found' }, { status: 404 }) };
-  if (!(await checkProjectAccess(userId, caseData.project_id))) {
+  const allowed = level
+    ? await checkProjectAccess(userId, caseData.project_id, level)
+    : await checkProjectAccess(userId, caseData.project_id);
+  if (!allowed) {
     return { error: NextResponse.json({ error: 'Access denied' }, { status: 403 }) };
   }
   return { userId, caseId };
 }
+
+const tooLarge = () => NextResponse.json({ error: UPLOAD_TOO_LARGE_MESSAGE }, { status: 413 });
 
 // GET /api/cases/[caseId]/documents          -> the list (no content)
 // GET /api/cases/[caseId]/documents?id=12    -> one document with its text
@@ -75,29 +93,43 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
   try {
     const { caseId: caseIdParam } = await params;
-    const access = await caseAccess(request, caseIdParam);
+    const access = await caseAccess(request, caseIdParam, 'editor');
     if (access.error) return access.error;
 
-    const form = await request.formData();
+    // Size is checked before the body is buffered (Content-Length, then a
+    // capped read), not after request.formData() has read all of it.
+    let form: FormData;
+    try {
+      form = await readUploadForm(request);
+    } catch (e) {
+      if (e instanceof PayloadTooLargeError) return tooLarge();
+      return NextResponse.json({ error: 'Could not read the upload' }, { status: 400 });
+    }
     const file = form.get('file');
-    const docType = String(form.get('doc_type') ?? '').trim() || null;
+    const docTypeRaw = form.get('doc_type');
+    const docType = typeof docTypeRaw === 'string' ? docTypeRaw.trim() || null : null;
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
-    if (file.size > MAX_BYTES) {
+    if (docType && docType.length > MAX_DOC_TYPE) {
       return NextResponse.json(
-        { error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. The limit is 12 MB.` },
+        { error: `doc_type must be at most ${MAX_DOC_TYPE} characters` },
         { status: 400 },
       );
     }
+    if (file.size > MAX_BYTES) return tooLarge();
 
     const buf = Buffer.from(await file.arrayBuffer());
+    const sniffed = sniffUpload(buf, file.name);
+    if (!sniffed.ok) {
+      return NextResponse.json({ error: sniffed.error }, { status: 415 });
+    }
 
     // A spreadsheet's text is its rows; anything else goes through the same
     // extractor the importer uses, so what is stored is what the importer read.
     let text = '';
-    if (/\.(csv|tsv|xlsx?)$/i.test(file.name)) {
+    if (sniffed.kind === 'xlsx' || sniffed.kind === 'xls' || /\.(csv|tsv)$/i.test(file.name)) {
       try {
         const read = readSheet(buf, file.name, () => true);
         if (read?.rows?.length) {
@@ -158,16 +190,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
   try {
     const { caseId: caseIdParam } = await params;
-    const access = await caseAccess(request, caseIdParam);
+    const access = await caseAccess(request, caseIdParam, 'editor');
     if (access.error) return access.error;
 
     const id = new URL(request.url).searchParams.get('id');
-    if (!id) return NextResponse.json({ error: 'Missing document id' }, { status: 400 });
+    if (!id || !/^\d+$/.test(id)) {
+      return NextResponse.json({ error: 'Missing document id' }, { status: 400 });
+    }
 
-    await execute('DELETE FROM case_documents WHERE document_id = ? AND case_id = ?', [
+    const removed = await execute('DELETE FROM case_documents WHERE document_id = ? AND case_id = ?', [
       parseInt(id),
       access.caseId,
     ]);
+    if (!removed) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     if (missingTable(error)) return NextResponse.json({ success: true });
