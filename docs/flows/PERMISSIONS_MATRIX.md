@@ -198,8 +198,8 @@ These are kept as `it.fails` tests (the suite goes red when they are fixed, so t
 
 | Bug | Row | Test | Cause |
 |---|---|---|---|
-| Another user's private `substance_id` is accepted by ingest apply and written to the caller's case; its name then shows in `GET /api/components/:id/flows` (L3, ingest twin of FLOW-5) | R53, R53b | `tests/api-real/authz/cross-tenant.test.ts` › ingest/apply | `app/api/ingest/apply/route.ts` looks substances up with `SELECT unit FROM substances WHERE substance_id = ?`, with no `is_custom = 0 OR created_by = ?` scope |
-| Ingest preview offers other users' private substances as matches and review candidates (ING-9, L3) | R52 | same file › ingest/preview | `app/api/ingest/preview/route.ts` builds the match catalog from every substance |
+| Another user's private `substance_id` is accepted by ingest apply and written to the caller's case; its name then shows in `GET /api/components/:id/flows` (L3, ingest twin of FLOW-5) | R53, R53b | `tests/api-real/authz/cross-tenant.test.ts` › ingest/apply | `app/api/ingest/apply/route.ts:169` and `:301` look substances up with `SELECT unit FROM substances WHERE substance_id = ?`, with no `is_custom = 0 OR created_by = ?` scope |
+| Ingest preview offers other users' private substances as matches and review candidates (ING-9, L3) | R52 | same file › ingest/preview | `app/api/ingest/preview/route.ts:285-294` builds the match catalog from every substance |
 
 Other defects the suite found (500s on oversized fields and on non-finite numbers, and so on) are listed under "API suite" in `docs/testing/DATABASE_TESTS.md`; they are validation bugs, not permission rules.
 

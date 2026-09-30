@@ -166,7 +166,7 @@ describe('body-borne ids from another case or tenant', () => {
     expect(Number(row.substance_id)).toBe(w.substances.electricity);
   });
 
-  // BUG (L3 / FLOW-5, ingest twin; app/api/ingest/apply/route.ts:165 and :292
+  // BUG (L3 / FLOW-5, ingest twin; app/api/ingest/apply/route.ts:169 and :301
   // look substances up with no `is_custom = 0 OR created_by = ?` scope): a
   // plan may carry another user's private substance_id; the flow is written
   // and the name then shows up in the case (GET /api/components/:id/flows).
@@ -191,7 +191,7 @@ describe('body-borne ids from another case or tenant', () => {
     expect(leaked).toEqual([]);
   });
 
-  // BUG (ING-9 / L3; app/api/ingest/preview/route.ts:292-301 matches the
+  // BUG (ING-9 / L3; app/api/ingest/preview/route.ts:285-294 matches the
   // plan against every substance, private ones included): a BOM line that
   // resembles another user's private substance is matched to it, and the
   // plan returns its name and id.

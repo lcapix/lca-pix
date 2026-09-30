@@ -59,7 +59,7 @@ describe('F18 profile', () => {
     }
   });
 
-  // BUG PROF-1 (app/api/auth/profile/route.ts:84-110): no length check before
+  // BUG PROF-1 (app/api/auth/profile/route.ts:104): no length check before
   // the UPDATE, so a value longer than its column (full_name 120, company 160,
   // role 120, use_case 60, country 80) fails in MySQL strict mode and the
   // route answers 500 "Internal error" instead of 400.

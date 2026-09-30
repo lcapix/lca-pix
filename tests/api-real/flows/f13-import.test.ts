@@ -157,7 +157,7 @@ describe('F13 document import', () => {
     expect(await rowCounts()).toEqual(before);
   });
 
-  // BUG (app/api/ingest/apply/route.ts:45 lets a node name be 255 characters;
+  // BUG (app/api/ingest/apply/route.ts:52 lets a node name be 255 characters;
   // component.component_name is VARCHAR(200)): the INSERT fails inside the
   // transaction and the route answers 500 instead of 400. The rollback works
   // (the next test checks nothing is left behind).

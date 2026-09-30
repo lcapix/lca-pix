@@ -67,11 +67,11 @@ function callerFor(row: PermissionRow): Caller {
 /**
  * Routes that still put the error text in the body. Each is a real bug:
  *  - POST /api/cases/:id/assessments (L1): app/api/cases/[caseId]/assessments/route.ts
- *    returns `details: error.message` from its outer catch (:386) and from the
- *    engine-failure branch (:323).
+ *    returns `details: error.message` from its outer catch (:525) and from the
+ *    engine-failure branch (:462).
  */
 const LEAKS: Record<string, string> = {
-  R23: 'L1: app/api/cases/[caseId]/assessments/route.ts:386 returns details: error.message',
+  R23: 'L1: app/api/cases/[caseId]/assessments/route.ts:525 returns details: error.message',
 };
 
 describe('no internal detail in error bodies when the database fails', () => {

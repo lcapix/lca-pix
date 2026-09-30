@@ -60,7 +60,7 @@ describe('F8 costs', () => {
     }
   });
 
-  // BUG (FLOW-2 follow-up; lib/component-fields.ts nonNegative accepts any
+  // BUG (FLOW-2 follow-up; lib/component-fields.ts:32-37 nonNegative accepts any
   // finite number, and the cost columns are DECIMAL(15,2)): a cost above
   // 9,999,999,999,999.99 fails in MySQL ("Out of range value") and the route
   // answers 500 "Failed to update component" instead of 400.
@@ -148,7 +148,7 @@ describe('F8 costs', () => {
     }
   });
 
-  // BUG COST-7 (app/api/cases/[caseId]/scale/route.ts:52-58 scales by the
+  // BUG COST-7 (app/api/cases/[caseId]/scale/route.ts:53 scales by the
   // client's from/to, not by the stored product quantity): replaying the same
   // "1 -> 2" request (a retry, a double click) scales the inventory twice.
   it.fails('replaying a scale request does not scale twice (COST-7)', async () => {

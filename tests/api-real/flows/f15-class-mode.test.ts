@@ -92,7 +92,7 @@ describe('F15 class mode', () => {
     expect(await sqlOne('SELECT is_final, finalized_at FROM case_table WHERE case_id = ?', [caseId])).toEqual({ is_final: 0, finalized_at: null });
   });
 
-  // BUG WRITE-1 (app/api/cases/[caseId]/route.ts: is_final is set on one case
+  // BUG WRITE-1 (app/api/cases/[caseId]/route.ts:139-147: is_final is set on one case
   // with no regard for the project's other cases): marking a second case as
   // the hand-in leaves the first one marked too, so a project can hold two
   // hand-ins and the instructor cannot tell which one counts.
