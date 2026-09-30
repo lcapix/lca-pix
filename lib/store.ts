@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { useNotificationsStore } from "./notifications-store"
 
 export interface User {
   id: string
@@ -617,6 +618,25 @@ export const useProjectStore = create<ProjectState>()(
     },
   ),
 )
+
+/**
+ * Forget the signed-in user on this browser (AUTH-5): the auth store, the
+ * cached projects and the activity feed, in memory and in localStorage, and
+ * the token. The stores are reset before the keys are removed so their
+ * persist middleware cannot write the previous user's state back.
+ */
+export function clearClientSession(): void {
+  useAuthStore.getState().logout()
+  useProjectStore.setState({ projects: [], currentProject: null, flows: [], nodes: [] })
+  useNotificationsStore.setState({ items: [] })
+  try {
+    for (const key of ["auth_token", "user", "lcapix-projects", "lcapix-notifications"]) {
+      localStorage.removeItem(key)
+    }
+  } catch {
+    /* storage can be unavailable (private mode); the in-memory reset stands */
+  }
+}
 
 export const useThemeStore = create<ThemeState>()(
   persist(

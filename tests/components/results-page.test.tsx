@@ -133,6 +133,12 @@ describe('results page with runs', () => {
     }),
   )
 
+  it('"Duplicate and change one thing" opens the editor\'s Duplicate dialog (RES-6)', async () => {
+    render(<ResultsPage />)
+    const link = await screen.findByRole('link', { name: 'Duplicate and change one thing' })
+    expect(link).toHaveAttribute('href', '/project/1/case/3?duplicate=1')
+  })
+
   it('shows the latest completed run, not a newer failed one', async () => {
     render(<ResultsPage />)
     expect(await screen.findByText(/Run #8/)).toBeInTheDocument()

@@ -19,8 +19,8 @@ import { Badge } from "@/components/ui/badge"
 import { CommandPalette } from "@/components/command-palette"
 import { Breadcrumbs } from "@/components/breadcrumbs"
 import { useTheme } from "next-themes"
-import { useAuthStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
+import { clearClientSession, useAuthStore } from "@/lib/store"
+import { toast } from "sonner"
 import { Search, User, Settings, Keyboard, LogOut, Sun, Moon, Monitor, Contrast, Sparkles } from "lucide-react"
 
 interface AppLayoutProps {
@@ -31,15 +31,16 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [commandOpen, setCommandOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout } = useAuthStore()
-  const { toast } = useToast()
+  const { user } = useAuthStore()
 
   const handleLogout = () => {
-    logout()
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
-    })
+    // Expire the server-side auth cookies (fire-and-forget), then forget the
+    // user, their cached projects and feed on this browser (AUTH-5).
+    try {
+      fetch("/api/auth/logout", { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => {})
+    } catch {}
+    clearClientSession()
+    toast.success("Logged out", { description: "You have been successfully logged out." })
     router.push("/auth/login")
   }
 

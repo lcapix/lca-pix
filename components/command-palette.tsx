@@ -12,7 +12,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command"
 import { useProjectStore } from "@/lib/store"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { Home, BookOpen, Hammer, Info, Plus, FolderPlus, FileText, Component, Search } from "lucide-react"
 
 interface CommandPaletteProps {
@@ -24,7 +24,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [search, setSearch] = useState("")
   const router = useRouter()
   const { projects } = useProjectStore()
-  const { toast } = useToast()
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -83,11 +82,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem
             onSelect={() =>
               runCommand(() => {
-                toast({
-                  title: "Create Base Case",
-                  description: "Please select a project first",
-                  variant: "destructive",
-                })
+                toast.error("Create Base Case", { description: "Please select a project first" })
               })
             }
           >
@@ -98,11 +93,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <CommandItem
             onSelect={() =>
               runCommand(() => {
-                toast({
-                  title: "Create Component",
-                  description: "Please select a case first",
-                  variant: "destructive",
-                })
+                toast.error("Create Component", { description: "Please select a case first" })
               })
             }
           >

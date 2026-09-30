@@ -23,18 +23,39 @@ const STATUS_COLORS: Record<string, string> = {
 export function LogViewer({ refreshKey = 0 }: { refreshKey?: number }) {
   const [logs, setLogs] = useState<LogRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       setLoading(true);
+      setError(null);
       try {
         const data = await apiGet<any>('/api/integrations/log?limit=30');
-        setLogs(data.logs ?? []);
-      } finally { setLoading(false); }
+        if (!cancelled) setLogs(data?.logs ?? []);
+      } catch (e: any) {
+        // apiGet throws ApiError on a non-2xx answer (X-API-1).
+        if (!cancelled) {
+          setLogs([]);
+          setError(e?.message ?? 'Unknown error');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [refreshKey]);
 
   if (loading) return <div className="p-3 text-gray-500 text-sm">Loading logs…</div>;
+  if (error) {
+    return (
+      <div role="alert" className="p-3 text-sm text-red-700">
+        Couldn&apos;t load the integration log: {error}
+      </div>
+    );
+  }
   if (!logs.length) return <div className="p-3 text-gray-500 text-sm">No integration runs yet.</div>;
 
   return (

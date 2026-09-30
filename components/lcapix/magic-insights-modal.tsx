@@ -60,6 +60,7 @@ interface InsightChip {
 }
 
 const OVERALL_KEY = '__overall__'
+const REDUCE_DEBOUNCE_MS = 400
 const OVERALL_LABEL = 'Overall environmental load'
 
 export function MagicInsightsModal({
@@ -96,8 +97,20 @@ export function MagicInsightsModal({
   // automatic fallback whenever no model key is configured or a call fails.
   const [aiMode, setAiMode] = useState<boolean>(false)
   const [aiText, setAiText] = useState<string>('')
-  const [aiStatus, setAiStatus] = useState<'idle' | 'streaming' | 'done' | 'fallback'>('idle')
+  // 'limited': the server's per-user hourly narration limit answered 429.
+  const [aiStatus, setAiStatus] = useState<'idle' | 'streaming' | 'done' | 'fallback' | 'limited'>('idle')
   const [aiModel, setAiModel] = useState<string>('')
+
+  // The typed reduce target reaches reducePct (the insight text and the AI
+  // request) only after typing pauses, so each keystroke does not re-request
+  // a narration (INS-2). Presets set both at once.
+  useEffect(() => {
+    const n = parseFloat(reducePctInput)
+    if (Number.isNaN(n)) return
+    const next = Math.max(1, Math.min(100, Math.round(n)))
+    const t = setTimeout(() => setReducePct(next), REDUCE_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [reducePctInput])
 
   // Reset state when the modal re-opens with new context.
   useEffect(() => {
@@ -392,6 +405,11 @@ export function MagicInsightsModal({
           body: JSON.stringify(facts),
           signal: controller.signal,
         })
+        // 429 = this user's narrations for the hour are used up.
+        if (res.status === 429) {
+          setAiStatus('limited')
+          return
+        }
         const ct = res.headers.get('content-type') || ''
         // JSON response = fallback signal (no key / upstream error).
         if (ct.includes('application/json')) {
@@ -681,13 +699,7 @@ export function MagicInsightsModal({
               max={100}
               step={1}
               value={reducePctInput}
-              onChange={(e) => {
-                setReducePctInput(e.target.value)
-                const n = parseFloat(e.target.value)
-                if (!Number.isNaN(n)) {
-                  setReducePct(Math.max(1, Math.min(100, Math.round(n))))
-                }
-              }}
+              onChange={(e) => setReducePctInput(e.target.value)}
               style={{
                 width: 72,
                 fontSize: 13,
@@ -813,6 +825,8 @@ export function MagicInsightsModal({
                 Face, grounded on your computed figures — the model phrases the analysis, the
                 numbers come from the engine.
               </>
+            ) : aiMode && aiStatus === 'limited' ? (
+              <span role="status">You&apos;ve used this hour&apos;s insights — showing the computed summary</span>
             ) : aiMode && aiStatus === 'fallback' ? (
               <>AI narration unavailable (no model key configured) — showing the computed insight.</>
             ) : (

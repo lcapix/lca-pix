@@ -291,3 +291,34 @@ describe('Case editor deep link by id (FLOW-8)', () => {
     expect(await screen.findByDisplayValue('Paint')).toBeInTheDocument()
   })
 })
+
+describe('Case editor ?duplicate=1 (RES-6)', () => {
+  it('opens the Duplicate dialog once the case loads and drops the param from the URL', async () => {
+    search = 'duplicate=1&componentId=4'
+    render(<CaseViewPage />)
+    const dialog = await screen.findByRole('dialog', { name: 'Duplicate this case' })
+    expect(within(dialog).getByDisplayValue('Base (copy)')).toBeInTheDocument()
+    // Other params survive; a reload or Back does not reopen the dialog.
+    expect(router.replace).toHaveBeenCalledWith('/project/7/case/10?componentId=4', { scroll: false })
+  })
+
+  it('opens it only once even if the case is refetched', async () => {
+    search = 'duplicate=1'
+    render(<CaseViewPage />)
+    const dialog = await screen.findByRole('dialog', { name: 'Duplicate this case' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Duplicate this case' })).not.toBeInTheDocument())
+    act(() => {
+      window.dispatchEvent(new Event('lcapix:components-changed'))
+    })
+    await waitFor(() => expect(componentsGets).toBeGreaterThan(1))
+    expect(screen.queryByRole('dialog', { name: 'Duplicate this case' })).not.toBeInTheDocument()
+    expect(router.replace).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not open the dialog without the param', async () => {
+    await renderEditor()
+    expect(screen.queryByRole('dialog', { name: 'Duplicate this case' })).not.toBeInTheDocument()
+    expect(router.replace).not.toHaveBeenCalled()
+  })
+})
