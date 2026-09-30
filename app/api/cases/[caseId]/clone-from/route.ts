@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 
 // POST /api/cases/[caseId]/clone-from
@@ -38,20 +39,15 @@ export async function POST(
     if (!targetCase || !sourceCase) {
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
+    // Access before comparing projects, so a non-member learns nothing about
+    // either id (the 400 below would say both exist).
+    const denied = await projectAccessDenied(userId, targetCase.project_id, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
     if (targetCase.project_id !== sourceCase.project_id) {
       return NextResponse.json(
         { error: 'Cases must belong to the same project' },
         { status: 400 },
       );
-    }
-
-    const hasAccess = await checkProjectAccess(
-      userId,
-      targetCase.project_id,
-      'editor',
-    );
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     const existing = await query<any>(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 
 // GET /api/projects/[projectId] - Get single project details
@@ -13,10 +14,8 @@ export async function GET(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const project = await queryOne(
       `SELECT p.*, a.username as owner_username 
@@ -71,10 +70,8 @@ export async function PUT(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'admin');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'admin', { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const body = await request.json();
     const { project_name, description } = body;
@@ -180,10 +177,8 @@ export async function DELETE(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'owner');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Only project owner can delete' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'owner', { notFound: 'Project not found', forbidden: 'Only project owner can delete' });
+    if (denied) return denied;
 
     await execute(`DELETE FROM project WHERE project_id = ?`, [projectId]);
 

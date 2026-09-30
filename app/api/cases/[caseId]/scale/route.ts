@@ -13,7 +13,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 
 const PER_UNIT_COST_COLUMNS = [
   'labor_cost',
@@ -37,8 +38,8 @@ export async function POST(
 
     const caseRow = await queryOne<any>(`SELECT project_id FROM case_table WHERE case_id = ?`, [caseId]);
     if (!caseRow) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-    const canEdit = await checkProjectAccess(userId, caseRow.project_id, 'editor');
-    if (!canEdit) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const denied = await projectAccessDenied(userId, caseRow.project_id, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
 
     const { from, to, mode } = await request.json();
     const f = Number(from);

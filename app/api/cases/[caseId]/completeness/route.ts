@@ -5,7 +5,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 import { assessCompleteness } from '@/lib/ingest/completeness';
 
 export async function GET(
@@ -23,8 +24,8 @@ export async function GET(
       [id],
     );
     if (!caseRow) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-    const hasAccess = await checkProjectAccess(userId, caseRow.project_id);
-    if (!hasAccess) return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const denied = await projectAccessDenied(userId, caseRow.project_id, undefined, { notFound: 'Case not found' });
+    if (denied) return denied;
 
     const components = await query<any>(
       `SELECT component_type AS tier, labor_cost, energy_cost, material_cost,

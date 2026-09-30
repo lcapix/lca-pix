@@ -189,7 +189,7 @@ describe('GET /api/auth/google', () => {
         return null;
       });
       vi.mocked(db.execute).mockImplementation(async (sql: string, p?: any[]) => {
-        if (/UPDATE account SET password_hash = \? WHERE id = \?/.test(sql) && p?.[1] === row.id) {
+        if (p && /UPDATE account SET password_hash = \? WHERE id = \?/.test(sql) && p[1] === row.id) {
           row.password_hash = p[0];
           return 1;
         }

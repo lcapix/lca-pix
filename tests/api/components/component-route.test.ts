@@ -258,9 +258,19 @@ describe('DELETE /api/components/:id (EDIT-1 / FLOW-10)', () => {
 
   it('403 for a viewer', async () => {
     const conn = fakeDb(2)
-    vi.mocked(auth.checkProjectAccess).mockResolvedValue(false)
+    // A viewer: a member, but below editor.
+    vi.mocked(auth.checkProjectAccess).mockImplementation(async (_u, _p, level) => !level || level === 'viewer')
     const res = await del(2, 'delete')
     expect(res.status).toBe(403)
+    expect(writes(conn)).toHaveLength(0)
+  })
+
+  it('404 "Component not found" for a non-member, and writes nothing', async () => {
+    const conn = fakeDb(2)
+    vi.mocked(auth.checkProjectAccess).mockResolvedValue(false)
+    const res = await del(2, 'delete')
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Component not found' })
     expect(writes(conn)).toHaveLength(0)
   })
 })

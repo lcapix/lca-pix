@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
 export async function GET(
@@ -12,10 +13,8 @@ export async function GET(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     // driver_count must reflect REAL attached flows (the flows table), not the
     // legacy `drivers` JSON column — otherwise the UI showed "0 drivers" even
@@ -57,10 +56,8 @@ export async function POST(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const { case_name, case_type, parent_case_id, description } = await request.json();
 

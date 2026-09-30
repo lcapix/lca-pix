@@ -10,7 +10,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 import { structureItac, listPlantIds } from '@/lib/ingest/itac';
 import { isBomHeader, structureBom } from '@/lib/ingest/bom';
 import { isRoutingHeader, structureRouting } from '@/lib/ingest/routing';
@@ -203,9 +204,8 @@ export async function POST(request: NextRequest) {
       }
       const caseRow = await queryOne<any>(`SELECT project_id FROM case_table WHERE case_id = ?`, [targetCaseId]);
       if (!caseRow) return NextResponse.json({ error: 'Case not found' }, { status: 404 });
-      if (!(await checkProjectAccess(userId, caseRow.project_id, 'editor'))) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+      const denied = await projectAccessDenied(userId, caseRow.project_id, 'editor', { notFound: 'Case not found' });
+      if (denied) return denied;
       const comps = await query<any>(
         `SELECT c.component_id, c.component_name, c.component_type, c.description, c.labor_hours,
                 c.parent_component_id, p.component_name AS parent_name

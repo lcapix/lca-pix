@@ -262,7 +262,7 @@ export async function requireAdmin(request: Request): Promise<number> {
 export async function checkProjectAccess(
   userId: number,
   projectId: number,
-  requiredPermission?: 'owner' | 'admin' | 'editor' | 'viewer'
+  requiredPermission?: ProjectPermission
 ): Promise<boolean> {
   // First check if user is the project owner (direct ownership via owner_id)
   const project = await queryOne<any>(

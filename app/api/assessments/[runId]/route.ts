@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 import {
   hasFrozenResults,
   LEGACY_RESULTS_SOURCE,
@@ -41,10 +42,8 @@ export async function GET(
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, assessment.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, assessment.project_id, undefined, { notFound: 'Assessment not found' });
+    if (denied) return denied;
 
     const snapshot = parseRunSnapshot(assessment.run_snapshot);
     let results: any[];
