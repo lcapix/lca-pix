@@ -20,6 +20,7 @@ import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity } from '@/lib/units';
+import { findUsableSubstance, SUBSTANCE_ERROR } from '@/lib/flow-fields';
 import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
 import type { MappedFlow } from '@/lib/ingest/maplca';
 import { nodeDepths, validateProcessModel } from '@/lib/ingest/schema';
@@ -109,6 +110,33 @@ const bodySchema = z.object({
   attach_component_id: optionalId,
 });
 
+/**
+ * The factor unit of every substance the plan's flows name, provided the caller
+ * may use each one: a library substance or a custom one they created (security
+ * audit L3, the ingest twin of FLOW-5). Another user's private substance, or an
+ * id that does not exist, refuses the whole plan with 400 before anything is
+ * written, and the substance's name is never echoed.
+ */
+async function usableSubstanceUnits(
+  flows: Array<{ substance_id?: number | null }>,
+  userId: number,
+): Promise<{ ok: true; units: Map<number, string | null> } | { ok: false; response: NextResponse }> {
+  const units = new Map<number, string | null>();
+  for (const [i, f] of flows.entries()) {
+    const sid = f.substance_id;
+    if (!sid || units.has(sid)) continue;
+    const row = await findUsableSubstance(sid, userId);
+    if (!row) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: `Flow ${i + 1}: ${SUBSTANCE_ERROR}` }, { status: 400 }),
+      };
+    }
+    units.set(sid, row.default_unit ?? null);
+  }
+  return { ok: true, units };
+}
+
 function invalid(error: z.ZodError) {
   const issue = error.issues[0];
   const where = issue?.path?.length ? issue.path.join('.') : 'body';
@@ -172,13 +200,11 @@ export async function POST(request: NextRequest) {
         return attachComponentId && nameById.has(attachComponentId) ? attachComponentId : null;
       };
 
-      // Factor-unit lookup for the unit guard (same discipline as create mode).
-      const substanceIds = [...new Set(flows.map((f) => f.substance_id).filter(Boolean))] as number[];
-      const unitBySubstance = new Map<number, string | null>();
-      for (const sid of substanceIds) {
-        const row = await queryOne<any>(`SELECT unit FROM substances WHERE substance_id = ?`, [sid]);
-        unitBySubstance.set(sid, row?.unit ?? null);
-      }
+      // Factor-unit lookup for the unit guard (same discipline as create mode),
+      // over substances the caller may use only (L3).
+      const usable = await usableSubstanceUnits(flows, userId);
+      if (!usable.ok) return usable.response;
+      const unitBySubstance = usable.units;
 
       const skippedFlows: string[] = [];
       const appendResult = await transaction(async (conn) => {
@@ -304,13 +330,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Factor-unit lookup for the unit guard, outside the transaction.
-    const substanceIds = [...new Set(flows.map((f) => f.substance_id).filter(Boolean))] as number[];
-    const unitBySubstance = new Map<number, string | null>();
-    for (const sid of substanceIds) {
-      const row = await queryOne<any>(`SELECT unit FROM substances WHERE substance_id = ?`, [sid]);
-      unitBySubstance.set(sid, row?.unit ?? null);
-    }
+    // Factor-unit lookup for the unit guard, outside the transaction, over
+    // substances the caller may use only (L3).
+    const usable = await usableSubstanceUnits(flows, userId);
+    if (!usable.ok) return usable.response;
+    const unitBySubstance = usable.units;
 
     const skippedFlows: string[] = [];
 

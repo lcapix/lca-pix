@@ -166,11 +166,11 @@ describe('body-borne ids from another case or tenant', () => {
     expect(Number(row.substance_id)).toBe(w.substances.electricity);
   });
 
-  // BUG (L3 / FLOW-5, ingest twin; app/api/ingest/apply/route.ts:169 and :301
-  // look substances up with no `is_custom = 0 OR created_by = ?` scope): a
-  // plan may carry another user's private substance_id; the flow is written
-  // and the name then shows up in the case (GET /api/components/:id/flows).
-  it.fails("ingest/apply: another user's private substance_id is held for review, never written (L3, ingest twin of FLOW-5)", async () => {
+  // L3 / FLOW-5, ingest twin (fixed): a plan may name only library substances
+  // or the caller's own; another user's private substance_id is refused with
+  // 400 before anything is written, and its name is never echoed.
+  it("ingest/apply: another user's private substance_id is refused, never written (L3, ingest twin of FLOW-5)", async () => {
+    const before = await tableChecksums();
     const res = await api.post('/api/ingest/apply', {
       token: w.users.owner.token,
       json: {
@@ -182,7 +182,9 @@ describe('body-borne ids from another case or tenant', () => {
         notes: [],
       },
     });
-    expect([201, 400]).toContain(res.status);
+    expect(res.status, res.text).toBe(400);
+    expect(res.text).not.toContain(w.Q.substanceName);
+    expect(await tableChecksums()).toEqual(before);
     const leaked = await sql(
       `SELECT f.flow_id FROM flows f JOIN component c ON c.component_id = f.component_id
          JOIN case_table ct ON ct.case_id = c.case_id WHERE ct.project_id = ? AND f.substance_id = ?`,
@@ -191,11 +193,27 @@ describe('body-borne ids from another case or tenant', () => {
     expect(leaked).toEqual([]);
   });
 
-  // BUG (ING-9 / L3; app/api/ingest/preview/route.ts:285-294 matches the
-  // plan against every substance, private ones included): a BOM line that
-  // resembles another user's private substance is matched to it, and the
-  // plan returns its name and id.
-  it.fails("ingest/preview: another user's private substance is never a match candidate (ING-9)", async () => {
+  it("ingest/apply append: another user's private substance_id is refused, never written", async () => {
+    const before = await tableChecksums();
+    const res = await api.post('/api/ingest/apply', {
+      token: w.users.editor.token,
+      json: {
+        target_case_id: w.P.base.id,
+        attach_component_id: w.P.base.op,
+        flows: [{ substance_text: 'fibre', substance_id: w.Q.substance, direction: 'input', quantity: 1, unit: 'kg' }],
+        costs: [],
+        notes: [],
+      },
+    });
+    expect(res.status, res.text).toBe(400);
+    expect(res.text).not.toContain(w.Q.substanceName);
+    expect(await tableChecksums()).toEqual(before);
+  });
+
+  // ING-9 / L3 (fixed): the preview matches against the library and the
+  // caller's own substances only, so another user's private one is never the
+  // match nor a candidate on the review screen.
+  it("ingest/preview: another user's private substance is never a match candidate (ING-9)", async () => {
     const fd = new FormData();
     // The caller types only "Bamboo fibre"; the private row is "Bamboo fibre (B) <tag>".
     fd.append('file', new File(['Part,Material,Mass (kg)\nFrame,Bamboo fibre,1.2\n'], 'bom.csv', { type: 'text/csv' }));

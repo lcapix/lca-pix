@@ -283,7 +283,10 @@ export async function POST(request: NextRequest) {
 
     // Map against the live catalog, factor coverage included so the review
     // screen can warn about zero-factor matches before anything is created.
-    const substances = await query<any>(
+    // Only what the caller may use (ING-9, L3): the library and their own
+    // custom substances; another user's private one is never a match or a
+    // candidate, so its name and id never reach this response.
+    const catalogSql = (scoped: boolean) =>
       `SELECT s.substance_id, s.substance_name, s.unit, s.category,
               COALESCE(fc.factor_count, 0) AS factor_count
        FROM substances s
@@ -292,8 +295,16 @@ export async function POST(request: NextRequest) {
          FROM driver_impact_factors
          WHERE factor_value <> 0
          GROUP BY substance_id
-       ) fc ON fc.substance_id = s.substance_id`
-    );
+       ) fc ON fc.substance_id = s.substance_id
+       ${scoped ? 'WHERE s.is_custom = 0 OR s.created_by = ?' : ''}`;
+    let substances: any[];
+    try {
+      substances = await query<any>(catalogSql(true), [userId]);
+    } catch (err: any) {
+      // No migrate-020: there are no custom substances, so every row is library.
+      if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
+      substances = await query<any>(catalogSql(false));
+    }
     if (!pm) {
       return NextResponse.json({ error: 'Nothing could be read from this document.' }, { status: 400 });
     }

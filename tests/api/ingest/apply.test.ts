@@ -42,7 +42,8 @@ describe('POST /api/ingest/apply validation (L6, L7)', () => {
     vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(auth.checkProjectAccess).mockResolvedValue(true);
     vi.mocked(db.queryOne).mockImplementation(async (sql: string) =>
-      (/FROM case_table/.test(sql) ? { project_id: 9 } : { unit: 'kg' }) as any,
+      // A substance row, as lib/flow-fields findUsableSubstance selects it.
+      (/FROM case_table/.test(sql) ? { project_id: 9 } : { unit: 'kg', default_unit: 'kg' }) as any,
     );
     vi.mocked(db.query).mockResolvedValue([{ component_id: 100, component_name: 'Weld' }] as any);
     let id = 500;
@@ -113,7 +114,7 @@ describe('POST /api/ingest/apply unit guard agrees with the engine (lib/units)',
     vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(auth.checkProjectAccess).mockResolvedValue(true);
     vi.mocked(db.queryOne).mockImplementation(async (sql: string) =>
-      (/FROM case_table/.test(sql) ? { project_id: 9 } : { unit: factorUnit }) as any,
+      (/FROM case_table/.test(sql) ? { project_id: 9 } : { unit: factorUnit, default_unit: factorUnit }) as any,
     );
     vi.mocked(db.query).mockResolvedValue([{ component_id: 100, component_name: 'Weld' }] as any);
     let id = 500;
