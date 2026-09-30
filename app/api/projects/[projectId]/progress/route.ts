@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { LESSONS, parseLearningState } from '@/lib/lessons';
 import { parseId } from '@/lib/ids';
 
@@ -19,15 +19,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { projectId: projectIdParam } = await params;
     const projectId = parseId(projectIdParam);
 
-    const project = await queryOne<any>('SELECT owner_id FROM project WHERE project_id = ?', [projectId]);
+    const project = await queryOne<any>('SELECT owner_id, members_see_own_cases FROM project WHERE project_id = ?', [projectId]);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
     if (denied) return denied;
+    // With "members see only their own cases" on, a student's view holds only
+    // their own cases; the instructor's (owner, admins) holds every case (B-A1).
+    const only = await reachableCasesFilter(userId, projectId);
 
     // The write-up and lesson columns arrive with migrations 021 and 022; on a
     // database without them the view still lists the cases and their runs.
     const sql = (withWriteup: boolean, withFinal: boolean) =>
-      `SELECT c.case_id, c.case_name, c.case_type, c.created_at, c.updated_at
+      `SELECT c.case_id, c.case_name, c.case_type, c.created_at, c.updated_at, c.created_by,
+              COALESCE(NULLIF(TRIM(creator.full_name), ''), creator.username) AS author
               ${withWriteup ? ', c.interpretation, c.assumptions, c.learning_state' : ''}
               ${withFinal ? ', c.is_final, c.finalized_at' : ''},
               (SELECT COUNT(*) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS run_count,
@@ -37,19 +41,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                  JOIN component cm ON cm.component_id = f.component_id
                 WHERE cm.case_id = c.case_id) AS flow_count
          FROM case_table c
-        WHERE c.project_id = ?
+         LEFT JOIN account creator ON creator.id = c.created_by
+        WHERE c.project_id = ?${only.sql}
         ORDER BY c.created_at`;
 
     let rows: any[];
     try {
-      rows = await query<any>(sql(true, true), [projectId]);
+      rows = await query<any>(sql(true, true), [projectId, ...only.params]);
     } catch (err: any) {
       if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
       try {
-        rows = await query<any>(sql(true, false), [projectId]);
+        rows = await query<any>(sql(true, false), [projectId, ...only.params]);
       } catch (err2: any) {
         if (err2?.code !== 'ER_BAD_FIELD_ERROR') throw err2;
-        rows = await query<any>(sql(false, false), [projectId]);
+        rows = await query<any>(sql(false, false), [projectId, ...only.params]);
       }
     }
 
@@ -60,6 +65,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         case_id: r.case_id,
         case_name: r.case_name,
         case_type: r.case_type,
+        // Who made the case, so an instructor can tell submissions apart.
+        created_by: r.created_by == null ? null : Number(r.created_by),
+        author: r.author ?? null,
         steps: Number(r.step_count ?? 0),
         flows: Number(r.flow_count ?? 0),
         runs: Number(r.run_count ?? 0),
@@ -77,7 +85,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       };
     });
 
-    return NextResponse.json({ success: true, cases });
+    return NextResponse.json({
+      success: true,
+      members_see_own_cases: Number(project.members_see_own_cases) === 1,
+      cases,
+    });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

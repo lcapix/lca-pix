@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
 
@@ -42,7 +42,7 @@ export async function POST(
     }
     // Access before comparing projects, so a non-member learns nothing about
     // either id (the 400 below would say both exist).
-    const denied = await projectAccessDenied(userId, targetCase.project_id, 'editor', { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, targetCaseId, 'editor', { notFound: 'Case not found' });
     if (denied) return denied;
     if (targetCase.project_id !== sourceCase.project_id) {
       return NextResponse.json(
@@ -50,6 +50,10 @@ export async function POST(
         { status: 400 },
       );
     }
+    // The source must be a case the caller reaches too: in a project that keeps
+    // members' cases apart, another student's case is as good as missing (B-A1).
+    const sourceDenied = await caseAccessDenied(userId, parseId(sourceCaseId), undefined, { notFound: 'Case not found' });
+    if (sourceDenied) return sourceDenied;
 
     const existing = await query<any>(
       `SELECT COUNT(*) AS n FROM component WHERE case_id = ?`,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import {
   extractDocText,
   readUploadForm,
@@ -42,9 +42,10 @@ async function caseAccess(request: NextRequest, caseIdParam: string, level?: 'ed
   const caseId = parseId(caseIdParam);
   const caseData = await queryOne<any>('SELECT project_id FROM case_table WHERE case_id = ?', [caseId]);
   if (!caseData) return { error: NextResponse.json({ error: 'Case not found' }, { status: 404 }) };
-  // A non-member gets the same 404 as a missing case; a viewer who tries to
-  // attach or delete gets 403.
-  const denied = await projectAccessDenied(userId, caseData.project_id, level, { notFound: 'Case not found' });
+  // A non-member (or a member the project's own-cases rule hides this case
+  // from) gets the same 404 as a missing case; a viewer who tries to attach or
+  // delete gets 403.
+  const denied = await caseAccessDenied(userId, caseId, level, { notFound: 'Case not found' });
   if (denied) return { error: denied };
   return { userId, caseId };
 }

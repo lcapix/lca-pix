@@ -52,7 +52,9 @@ vi.mock('@/lib/db-helpers', async (importOriginal) => {
   };
 });
 
-const { rows } = loadPermissions();
+// own_cases rows repeat base rows' routes with a project setting that only
+// changes which member gets 404; the handlers and ids here are the same.
+const rows = loadPermissions().rows.filter((r) => !r.own_cases);
 
 let w: World;
 beforeAll(async () => {

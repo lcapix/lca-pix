@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
   parseFlowQuantity,
@@ -22,7 +22,7 @@ export async function GET(
     const componentId = parseId(componentIdParam);
 
     const component = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM component c
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
        WHERE c.component_id = ?`,
@@ -33,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, component.project_id, undefined, { notFound: 'Component not found' });
+    const denied = await caseAccessDenied(userId, component.case_id, undefined, { notFound: 'Component not found' });
     if (denied) return denied;
 
     // The live `flows` table columns are `direction` and `amount` (a migration
@@ -77,7 +77,7 @@ export async function POST(
     const componentId = parseId(componentIdParam);
 
     const component = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM component c
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
        WHERE c.component_id = ?`,
@@ -88,7 +88,7 @@ export async function POST(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, component.project_id, 'editor', { notFound: 'Component not found' });
+    const denied = await caseAccessDenied(userId, component.case_id, 'editor', { notFound: 'Component not found' });
     if (denied) return denied;
 
     // Prod schema: the flows table columns are flow_type / quantity (NOT

@@ -2,11 +2,11 @@
 
 Every `app/api/**/route.ts` handler, by HTTP method and by caller role, with the status the endpoint returns. The machine-readable copy is the `permissions:` section of [`flows.yaml`](flows.yaml). The generated authorization tests (`tests/api-real/authz/matrix.test.ts`, run with `pnpm test:api`) read that section and call every handler against a real MySQL database, so the two files must change together.
 
-- **State described:** branch `v1-hardening-kavish` @ `2009f63`, with every fix branch merged (fix/authz, fix/platform, fix/auth, fix/runs, fix/editor, fix/factors, fix/int-auth, fix/int-client, fix/int-routes).
+- **State described:** branch `v1-hardening-kavish` @ `2009f63`, with every fix branch merged (fix/authz, fix/platform, fix/auth, fix/runs, fix/editor, fix/factors, fix/int-auth, fix/int-client, fix/int-routes), plus fix/isolation (B-A1 student isolation, migrate-032: §1 "Case ownership", §2.10).
 - **Verified:** 2026-09-30, by running every row × role in `tests/api-real/authz/matrix.test.ts` against a database built from nothing (`scripts/db/fresh.mjs`). Every cell below is what the code returned; §3 lists where the code and the earlier documents disagreed and how each was resolved.
-- **Scope:** 45 route files, **66 route × method pairs**. Three pairs have mode-dependent rules and get extra rows (R03b, R52b, R53b), so the table has **69 rows**.
+- **Scope:** 45 route files, **66 route × method pairs**. Three pairs have mode-dependent rules and get extra rows (R03b, R52b, R53b), so §2.1–§2.7 have **69 rows**. §2.10 adds the student-isolation rule (B-A1): R10b for the setting and 36 *own-cases* rows (suffix `o`) that run the case-scoped and list routes with the setting on, **106 rows** in all.
 - **Supersedes:** the baseline matrix written against `704a964` (in git history) and `docs/flows-updates/permissions-404.md` (merged here and removed).
-- **Sources:** `lib/auth.ts` (`requireAuth`, `requireAdmin`, `checkProjectAccess`), `lib/route-guard.ts` (`projectAccessDenied`, `isAuthError`), `lib/integrations/admin-guard.ts`, `lib/integrations/rate-lookup.ts`, `lib/rate-limit.ts`, and every route handler.
+- **Sources:** `lib/auth.ts` (`requireAuth`, `requireAdmin`, `checkProjectAccess`), `lib/route-guard.ts` (`projectAccessDenied`, `caseAccessDenied`, `reachableCasesFilter`, `REACHABLE_CASE_SQL`, `unreachableCaseIds`, `isAuthError`), `lib/integrations/admin-guard.ts`, `lib/integrations/rate-lookup.ts`, `lib/rate-limit.ts`, and every route handler.
 
 ## 1. Roles and conventions
 
@@ -30,6 +30,7 @@ Three more callers run on every row that needs a sign-in. They are not columns; 
 - `requireAuth` (`lib/auth.ts`) throws a typed `AuthError` (401) for no token, a bad, expired or revoked token, or an unknown or deactivated account. Every route maps it to **401**, never 500, through `isAuthError` (`lib/route-guard.ts`) or the integration guards.
 - `checkProjectAccess` gives full access to `project.owner_id`, otherwise ranks the caller's `project_members.permission_name` (`owner 4 > admin 3 > editor 2 > viewer 1`) against the required level. `account_type` is never consulted, so a platform admin has no implicit access to tenant data (D1).
 - `projectAccessDenied` (`lib/route-guard.ts`) turns a refusal into **404** for a non-member (with the route's own "X not found" body) and **403** for a member whose role is too low.
+- **Case ownership (B-A1, student isolation).** Every case records `case_table.created_by` (migrate-032; existing cases were backfilled to the project owner). When `project.members_see_own_cases = 1`, a member whose role is **editor or viewer** reaches only the cases they created, and everything under them (steps, flows, runs, exports, documents, completeness, duplicate/clone/scale, import into a case). The **owner and admin** members reach every case. `caseAccessDenied` (`lib/route-guard.ts`) resolves the case to its project, applies `projectAccessDenied`, then the ownership rule: a hidden case answers **404 with the missing-id body, whatever the action and role** (a viewer never gets a 403 that would confirm it exists). Component, flow and run routes check through their case. Lists (`GET …/cases`, `…/progress`, `…/compare`, the home project counts, legacy saved comparisons) leave hidden cases out (`reachableCasesFilter`, `REACHABLE_CASE_SQL`, `unreachableCaseIds`). A case name clashes only with cases the caller reaches. With the setting at 0 (the default) every answer is what §2.1–§2.7 say.
 
 ### Status conventions
 - `200`/`201`/`307`: success, with the code the handler actually uses. Several creates return 200; the Google redirects are 307 (`NextResponse.redirect`).
@@ -66,8 +67,8 @@ Abbreviations in the Rule column: **P** public, **A** any signed-in user, **M** 
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | R07 | GET | `/api/projects` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Only owned or member projects: the NonMem and PAdmin lists do not contain P. |
 | R08 | POST | `/api/projects` | A | 401 | 201 | 201 | 201 | 201 | 201 | 201 | 400 empty name; 409 when the owner already has the name (case-insensitive, trimmed). |
-| R09 | GET | `/api/projects/:projectId` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 404 `Project not found`, the same for a missing project. Returns member emails to viewers, by design. |
-| R10 | PUT | `/api/projects/:projectId` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | Name, description, goal & scope (`goal_statement`, `functional_unit`, `system_boundary`, `boundary_notes`), `lcia_method`, `region_code`. 400: bad boundary or method. Editors cannot set the functional unit (see F5). |
+| R09 | GET | `/api/projects/:projectId` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 404 `Project not found`, the same for a missing project. Returns member emails to viewers, by design, and `members_see_own_cases` as a boolean. |
+| R10 | PUT | `/api/projects/:projectId` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | Name, description, goal & scope (`goal_statement`, `functional_unit`, `system_boundary`, `boundary_notes`), `lcia_method`, `region_code`, `members_see_own_cases` (R10b). 400: bad boundary or method. Editors cannot set the functional unit (see F5). |
 | R11 | DELETE | `/api/projects/:projectId` | O | 401 | 404 | 403 | 403 | 403 | 200 | 404 | 403 body `Only project owner can delete`. A stale `owner` member row still passes (D2). |
 | R12 | GET | `/api/projects/:projectId/cases` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | |
 | R13 | POST | `/api/projects/:projectId/cases` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 400: missing name or type, type not `base`/`comparative`. 409: duplicate name. A second base case is allowed (PROJ-6). |
@@ -75,7 +76,7 @@ Abbreviations in the Rule column: **P** public, **A** any signed-in user, **M** 
 | R15 | GET | `/api/projects/:projectId/members` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | `canManage` for the owner and admin members; `canManageAdmins` for the owner only. |
 | R16 | POST | `/api/projects/:projectId/members` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | Body `{email, role ∈ viewer/editor/admin}`. Returns 200; an existing member's role is updated (`updated:true`). **Granting or changing the admin role is owner-only**: an admin member gets 403 `Only the project owner can grant the admin role`. 404 unknown email; 409 target is the owner. |
 | R17 | DELETE | `/api/projects/:projectId/members?user_id=` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | 400 without a numeric `user_id`; **404 `Member not found`** when that user is not a member. Removing an admin is owner-only (403 for an admin member). |
-| R18 | GET | `/api/projects/:projectId/progress` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Class-mode progress for every case in the project (D4). |
+| R18 | GET | `/api/projects/:projectId/progress` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Class-mode progress for every case the caller reaches (all of them unless the project keeps members' cases apart, R18o), with each case's `created_by` and `author`, and the project's `members_see_own_cases`. |
 
 ### 2.3 Cases
 
@@ -163,6 +164,32 @@ There is no `middleware.ts`. Every app page is a client component behind `compon
 | Password reset and change | F2, F18 | No route exists (AUTH-8, PROF-1). A password change would revoke every earlier token through `pv`. |
 | Email verification | F1, F3 | Not needed for Google linking any more (a verified Google email takes the account over), but signup still never verifies an address. |
 
+### 2.10 Student isolation: the setting and own-cases mode (B-A1)
+
+`R10b` is the setting itself. The `o` rows are the rows above run on a project with `members_see_own_cases = 1` (`own_cases: true` in `flows.yaml`: the generated test switches it on for the call and off after). The target cases were made by the owner, so an editor or viewer reaches none of them. The exhaustive version, with two students' own cases, a TA and the switch back off, is `tests/api-real/authz/isolation.test.ts`.
+
+**O** = the owner or an admin member, or the member who created the case (editors and viewers reach only their own).
+
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| R10b | PUT | `/api/projects/:projectId` `{members_see_own_cases}` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | `true`/`false`/`1`/`0`, else 400 before anything is written. Default off: nothing changes for a project until its owner or an admin turns it on. |
+| R07o | GET | `/api/projects` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | `case_count` and `component_count` count only the cases the caller reaches. |
+| R12o | GET | `/api/projects/:projectId/cases` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Editors and viewers list only cases they created; owner and admins all. |
+| R13o | POST | `/api/projects/:projectId/cases` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | Students create their own submission. Every new case (here, duplicate, example project, import) records `created_by` = the caller. A name clashes (409) only with cases the caller reaches. |
+| R14o | GET | `/api/projects/:projectId/compare?cases=…` | M, cases O | 401 | 404 | 404 | 404 | 200 | 200 | 404 | Hidden cases are dropped like missing ids; with none left, 404 `No such cases in this project` (the missing-id body). |
+| R18o | GET | `/api/projects/:projectId/progress` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Editors and viewers see only their own cases. |
+| R19o–R32o | all | `/api/cases/:caseId…` (R19–R32) | O, then the base rule | 401 | 404 | 404 | 404 | 200/201 | 200/201 | 404 | 404 `Case not found`, byte-identical to a missing case, for every method: also where the base row gives a viewer or editor 403 (PUT, DELETE, runs, clone-from, documents, duplicate, scale). Clone-from also needs the **source** case to be reachable. |
+| R33o–R40o | all | `/api/components/:componentId…`, `/api/flows/:flowId` (R33–R40) | O (through the case), then the base rule | 401 | 404 | 404 | 404 | 200/201 | 200/201 | 404 | 404 `Component not found` / `Flow not found`. |
+| R41o, R42o | GET | `/api/assessments/:runId`, `…/export` | O (through the case) | 401 | 404 | 404 | 404 | 200 | 200 | 404 | 404 `Assessment not found`. |
+| R43o | POST | `/api/comparisons` (legacy) | M, cases O | 401 | 404 | 400 | 400 | 200 | 200 | 404 | A hidden case counts as not in the project (the missing-id 400). |
+| R44o | GET | `/api/comparisons?project_id=` (legacy) | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | A saved comparison that names a hidden case is left out. |
+| R45o, R46o | GET, DELETE | `/api/comparisons/:comparisonId` (legacy) | M/Ad, cases O | 401 | 404 | 404 | 404 | 200 | 200 | 404 | 404 `Comparison not found` when it names a hidden case. |
+| R52bo | POST | `/api/ingest/preview` (equipment) | E, case O | 401 | 404 | 404 | 404 | 200 | 200 | 404 | 404 `Case not found`. |
+| R53o | POST | `/api/ingest/apply` (create) | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | The imported case belongs to the caller. |
+| R53bo | POST | `/api/ingest/apply` (append) | E, case O | 401 | 404 | 404 | 404 | 200 | 200 | 404 | 404 `Target case not found`. |
+
+What the rule does not cover (unchanged, see §5 D4): `GET /api/projects/:id/members` still lists every member's username and email to every member, and the project itself (name, goal and scope) is shared.
+
 ---
 
 ## 3. Where the code and the earlier documents disagreed
@@ -212,7 +239,7 @@ Other defects the suite found (500s on oversized fields and on non-finite number
 - **D1 Platform admin and tenant data:** unchanged. A platform admin who is not a member gets 404, like any non-member. Support access would need an explicit, audited path.
 - **D2 Stale `owner` member rows:** open. `checkProjectAccess` still gives owner level to any member row named `owner`, even when `project.owner_id` is someone else. `POST /api/projects` inserts one for the real owner, which is harmless; a row left behind after an ownership change keeps delete rights.
 - **D3 403 vs 404:** decided (owner, 2026-09-30). 404 for non-members everywhere with the missing-id body; 403 only for members whose role is too low.
-- **D4 Class-mode visibility:** open. Students added as editors to one instructor project can read and edit each other's cases; F15 uses setup B (each student owns a project and adds the instructor as a viewer).
+- **D4 Class-mode visibility:** decided and built (B-A1, migrate-032). A project setting, `members_see_own_cases` (default off), keeps each editor's and viewer's cases to that member; the owner and admins see all (§1, §2.10). The class page has the switch ("Students see only their own case") and shows each case's author. Still open: whether students in such a project should see each other's names and emails in the members list (R15).
 - **D5 Who may delete a component:** decided. Editor and above.
 - **D6 BLS/EIA/Metals rate lookups:** decided, option (c). Any signed-in user, 60 lookups per user per hour across the three, strict allowlisted bodies; the stored value always comes from upstream (a static fallback is returned but never cached).
 

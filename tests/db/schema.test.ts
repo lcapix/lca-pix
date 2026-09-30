@@ -90,6 +90,7 @@ const EXPECTED_FKS: [string, string, string, string][] = [
   ['project_members', 'user_id', 'account', 'CASCADE'],
   ['case_documents', 'case_id', 'case_table', 'CASCADE'],
   ['process_template_flows', 'template_id', 'process_templates', 'CASCADE'],
+  ['case_table', 'created_by', 'account', 'SET NULL'], // B-A1 student isolation, migrate-032
 ];
 
 describe('schema after baseline + all migrations', () => {
@@ -189,6 +190,19 @@ describe('schema after baseline + all migrations', () => {
       expect(c, `account.${name}`).toBeDefined();
       expect(c!.IS_NULLABLE, `account.${name}`).toBe('YES');
     }
+  });
+
+  it('has per-case ownership and the per-project isolation setting (B-A1 student isolation, migrate-032)', async () => {
+    const createdBy = await column('case_table', 'created_by');
+    expect(createdBy?.DATA_TYPE).toBe('int');
+    expect(createdBy?.IS_NULLABLE).toBe('YES');
+    const [setting] = await rows<any>(
+      conn,
+      `SELECT LOWER(COLUMN_TYPE) AS type, IS_NULLABLE AS nullable, COLUMN_DEFAULT AS dflt FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'project' AND COLUMN_NAME = 'members_see_own_cases'`,
+      [db],
+    );
+    expect(setting).toEqual({ type: 'tinyint(1)', nullable: 'NO', dflt: '0' });
   });
 
   it('has the columns later migrations added (spot checks across 009-030)', async () => {

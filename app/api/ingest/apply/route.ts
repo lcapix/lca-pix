@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { convertQuantity } from '@/lib/units';
 import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
 import type { MappedFlow } from '@/lib/ingest/maplca';
@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
       if (!caseRow) {
         return NextResponse.json({ error: 'Target case not found' }, { status: 404 });
       }
-      const denied = await projectAccessDenied(userId, caseRow.project_id, 'editor', { notFound: 'Target case not found' });
+      const denied = await caseAccessDenied(userId, targetCaseId, 'editor', { notFound: 'Target case not found' });
       if (denied) return denied;
       // Each line goes to its own step (chosen at review); every step must be
       // part of this case. The body's attach_component_id is the default for
@@ -276,6 +276,8 @@ export async function POST(request: NextRequest) {
 
     const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
     if (denied) return denied;
+    // The name is numbered against the cases the caller reaches only (B-A1).
+    const onlyReachable = await reachableCasesFilter(userId, projectId, 'case_table');
 
     // Re-validate structure server-side — the client may have edited the plan.
     const structural = validateProcessModel({
@@ -316,16 +318,16 @@ export async function POST(request: NextRequest) {
       for (let n = 2; n < 50; n++) {
         const [[taken]]: any = await conn.query(
           `SELECT case_id FROM case_table
-            WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
-          [projectId, uniqueName]
+            WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${onlyReachable.sql} LIMIT 1`,
+          [projectId, uniqueName, ...onlyReachable.params]
         );
         if (!taken) break;
         uniqueName = `${caseName} (${n})`;
       }
       const [caseIns]: any = await conn.query(
-        `INSERT INTO case_table (project_id, case_name, case_type, description)
-         VALUES (?, ?, 'base', ?)`,
-        [projectId, uniqueName, `Built from ${sourceDoc}.`.slice(0, 1000)]
+        `INSERT INTO case_table (project_id, created_by, case_name, case_type, description)
+         VALUES (?, ?, ?, 'base', ?)`,
+        [projectId, userId, uniqueName, `Built from ${sourceDoc}.`.slice(0, 1000)]
       );
       const caseId = caseIns.insertId;
       // The case is made where the study says (project region), until changed.

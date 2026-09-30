@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
 
@@ -33,7 +33,7 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await projectAccessDenied(userId, sourceCase.project_id, 'editor', { notFound: 'Case not found' });
+    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
     if (denied) return denied;
 
     // Copying a case whose steps have not landed yet produces a silently empty
@@ -55,10 +55,12 @@ export async function POST(
     const askedName = typeof body.case_name === 'string' ? body.case_name.trim().slice(0, 255) : '';
     const newName: string = askedName || `${sourceCase.case_name} (Copy)`;
 
+    // Only among the cases the caller reaches (B-A1), as on create.
+    const only = await reachableCasesFilter(userId, sourceCase.project_id, 'case_table');
     const clash = await queryOne<any>(
       `SELECT case_id FROM case_table
-        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
-      [sourceCase.project_id, newName]
+        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
+      [sourceCase.project_id, newName, ...only.params]
     );
     if (clash) {
       return NextResponse.json(
@@ -72,10 +74,11 @@ export async function POST(
 
     const result = await transaction(async (conn) => {
       const [caseIns]: any = await conn.query(
-        `INSERT INTO case_table (project_id, case_name, case_type, description, region_code)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO case_table (project_id, created_by, case_name, case_type, description, region_code)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           sourceCase.project_id,
+          userId,
           newName,
           newType,
           sourceCase.description

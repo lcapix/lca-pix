@@ -190,3 +190,71 @@ describe('migration chain on an empty database', () => {
     );
   });
 });
+
+describe('migrate-032 case ownership on a database that already has projects and cases', () => {
+  let name: string;
+  let c: Awaited<ReturnType<typeof connect>>;
+  let dir: string;
+
+  beforeAll(() => {
+    name = createDb(['--no-migrate']);
+    dir = mkdtempSync(path.join(tmpdir(), 'lcapix-migrations-'));
+    // Everything before 032, as a database in production has it today.
+    for (const m of MIGRATIONS.filter((m) => m.number < 32)) copyFileSync(m.path, path.join(dir, m.filename));
+  });
+  afterAll(async () => {
+    await c?.end();
+    rmSync(dir, { recursive: true, force: true });
+    if (name) dropDb(name);
+  });
+
+  it('backfills created_by to the project owner, turns the setting off everywhere, and a second raw apply changes nothing', async () => {
+    const before = runMigrate(name, [`--dir=${dir}`]);
+    expect(before.status, before.stderr).toBe(0);
+    c = await connect(name);
+    const [owner]: any = await c.query(
+      `INSERT INTO account (username, email, password_hash) VALUES ('mig032owner', 'mig032owner@lcapix.test', 'x')`,
+    );
+    const [student]: any = await c.query(
+      `INSERT INTO account (username, email, password_hash) VALUES ('mig032student', 'mig032student@lcapix.test', 'x')`,
+    );
+    const [project]: any = await c.query(`INSERT INTO project (project_name, owner_id) VALUES ('Class', ?)`, [owner.insertId]);
+    await c.query(
+      `INSERT INTO case_table (project_id, case_name, case_type, updated_at)
+       VALUES (?, 'Student A', 'base', '2026-01-02 03:04:05'), (?, 'Student B', 'base', '2026-01-02 03:04:05')`,
+      [project.insertId, project.insertId],
+    );
+
+    const r = runMigrate(name);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('migrate-032-case-ownership.sql');
+
+    const cases = await rows<any>(c, 'SELECT case_name, created_by FROM case_table ORDER BY case_name');
+    expect(cases).toEqual([
+      { case_name: 'Student A', created_by: owner.insertId },
+      { case_name: 'Student B', created_by: owner.insertId },
+    ]);
+    // The backfill is not activity: "last updated" stays what it was.
+    const stamps = await rows<any>(c, 'SELECT DISTINCT CAST(updated_at AS CHAR) AS t FROM case_table');
+    expect(stamps).toEqual([{ t: '2026-01-02 03:04:05' }]);
+    const [p] = await rows<any>(c, 'SELECT members_see_own_cases FROM project WHERE project_id = ?', [project.insertId]);
+    expect(p.members_see_own_cases).toBe(0);
+
+    // Ownership an app wrote after the migration survives a hand re-apply.
+    await c.query(`UPDATE case_table SET created_by = ? WHERE case_name = 'Student B'`, [student.insertId]);
+    const schemaBefore = await schemaSnapshot(c, name);
+    const file = MIGRATIONS.find((m) => m.number === 32)!;
+    const again = mysqlCli(name, readFileSync(file.path, 'utf8'));
+    expect(again.stderr.replace(/^mysql: \[Warning\].*$/gm, '').trim()).toBe('');
+    expect(again.status).toBe(0);
+    expect(await schemaSnapshot(c, name)).toEqual(schemaBefore);
+    expect(await rows<any>(c, 'SELECT case_name, created_by FROM case_table ORDER BY case_name')).toEqual([
+      { case_name: 'Student A', created_by: owner.insertId },
+      { case_name: 'Student B', created_by: student.insertId },
+    ]);
+
+    // Deleting an account keeps its cases (the project owner still reaches them).
+    await c.query('DELETE FROM account WHERE id = ?', [student.insertId]);
+    expect(await rows<any>(c, `SELECT created_by FROM case_table WHERE case_name = 'Student B'`)).toEqual([{ created_by: null }]);
+  });
+});

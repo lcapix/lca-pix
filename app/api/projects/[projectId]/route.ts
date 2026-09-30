@@ -5,6 +5,19 @@ import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { parseId } from '@/lib/ids';
 
+/** members_see_own_cases as a boolean (the column is TINYINT(1)). */
+function withOwnCasesFlag(project: any) {
+  if (!project || !Object.prototype.hasOwnProperty.call(project, 'members_see_own_cases')) return project;
+  return { ...project, members_see_own_cases: Number(project.members_see_own_cases) === 1 };
+}
+
+/** true/false/1/0 -> 1/0; anything else -> null (400). */
+function parseOwnCasesFlag(v: unknown): 0 | 1 | null {
+  if (v === true || v === 1) return 1;
+  if (v === false || v === 0) return 0;
+  return null;
+}
+
 // GET /api/projects/[projectId] - Get single project details
 export async function GET(
   request: NextRequest,
@@ -51,7 +64,7 @@ export async function GET(
       members = [];
     }
 
-    return NextResponse.json({ success: true, project: { ...project, members } });
+    return NextResponse.json({ success: true, project: { ...withOwnCasesFlag(project), members } });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -76,6 +89,15 @@ export async function PUT(
 
     const body = await request.json();
     const { project_name, description } = body;
+
+    // "Members see only their own cases" (B-A1): checked before anything is
+    // written, so a bad value changes nothing. Admin-level, like every field here.
+    const ownCases = Object.prototype.hasOwnProperty.call(body ?? {}, 'members_see_own_cases')
+      ? parseOwnCasesFlag(body.members_see_own_cases)
+      : undefined;
+    if (ownCases === null) {
+      return NextResponse.json({ error: 'members_see_own_cases must be true or false' }, { status: 400 });
+    }
 
     await execute(
       `UPDATE project
@@ -150,6 +172,10 @@ export async function PUT(
       }
     }
 
+    if (ownCases !== undefined) {
+      await execute(`UPDATE project SET members_see_own_cases = ? WHERE project_id = ?`, [ownCases, projectId]);
+    }
+
     const updatedProject = await queryOne(
       `SELECT p.*, a.username as owner_username
        FROM project p 
@@ -158,7 +184,7 @@ export async function PUT(
       [projectId]
     );
 
-    return NextResponse.json({ success: true, project: updatedProject });
+    return NextResponse.json({ success: true, project: withOwnCasesFlag(updatedProject) });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

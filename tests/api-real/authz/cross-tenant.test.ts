@@ -20,7 +20,9 @@ import { sql, tableChecksums } from '../support/db';
 import { buildRowRequest, loadPermissions, type PermissionRow } from '../support/permissions';
 import { buildWorld, createCase, createComponent, addFlow, type World } from '../support/world';
 
-const { rows } = loadPermissions();
+// own_cases rows repeat base rows' routes with a project setting that only
+// changes which member gets 404; the handlers and ids here are the same.
+const rows = loadPermissions().rows.filter((r) => !r.own_cases);
 const idRows = rows.filter((r) => Object.keys(r.params ?? {}).length > 0 || /^(body|form)\./.test(r.primary ?? '') || r.multipart === 'equipment_csv');
 
 let w: World;
