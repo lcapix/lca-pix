@@ -161,7 +161,7 @@ export interface SnapshotStep {
   stage: string | null;
   quantity: number | null;
   unit: string | null;
-  /** Flow × category contributions the engine processed on this step. */
+  /** Distinct flows of this step that a factor characterized in the run. */
   flows_processed: number;
   impacts: SnapshotStepImpact[];
   costs: SnapshotStepCosts;
@@ -284,7 +284,7 @@ export function buildRunSnapshot(
       stage: c.life_cycle_stage ?? r?.life_cycle_stage ?? null,
       quantity: numOrNull(c.quantity),
       unit: c.unit ?? null,
-      flows_processed: r?.total_flows_processed ?? 0,
+      flows_processed: new Set((r?.flow_contributions ?? []).map((f) => f.flow_id)).size,
       impacts: (r?.impacts ?? []).map((i) => ({
         category_id: i.category_id,
         category_name: i.category_name,

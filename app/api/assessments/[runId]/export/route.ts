@@ -13,7 +13,19 @@ import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
 import { generateAssessmentPPTX } from '@/lib/pptx-generator';
-import { parseRunSnapshot } from '@/lib/run-snapshot';
+import {
+  buildInventoryCsv,
+  LEGACY_RESULTS_SOURCE,
+  parseRunSnapshot,
+  snapshotReportParts,
+} from '@/lib/run-snapshot';
+
+const FORMATS = new Set(['pdf', 'pptx', 'ppt', 'csv']);
+
+/** Printed beside the process tree and flow list of a run that did not freeze them (EXP-1). */
+const LEGACY_INVENTORY_NOTE =
+  'This run was made before its inventory was frozen with it: the process tree and flows below are ' +
+  `${LEGACY_RESULTS_SOURCE} and may differ from what the run computed. Re-run the assessment to freeze them.`;
 
 // "EPA eGRID 2023 US national average (0.350 kg CO2e/kWh) [EGRID-2023]; added by
 // audit 2026-09-09" → "EPA eGRID 2023 US national average": the citation a
@@ -38,6 +50,9 @@ export async function GET(
 
     // format=pdf (default) | pptx — committees often want an editable deck.
     const format = (new URL(request.url).searchParams.get('format') || 'pdf').toLowerCase();
+    if (!FORMATS.has(format)) {
+      return NextResponse.json({ error: `Unknown export format "${format.slice(0, 16)}": use pdf, pptx or csv` }, { status: 400 });
+    }
 
     // 1. Get assessment run with case and project info
     const assessment = await queryOne<any>(
@@ -49,8 +64,8 @@ export async function GET(
        FROM assessment_runs ar
        JOIN case_table ct ON ar.case_id = ct.case_id
        JOIN project p ON ct.project_id = p.project_id
-       JOIN account a ON ar.executed_by = a.id
-       JOIN account owner ON p.owner_id = owner.id
+       LEFT JOIN account a ON ar.executed_by = a.id
+       LEFT JOIN account owner ON p.owner_id = owner.id
        WHERE ar.run_id = ?`,
       [runId]
     );
@@ -66,58 +81,75 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // 2. Get all components for the case. The life-cycle stage comes along so
-    // the report can split the result by stage; a database without migrate-022
-    // falls back and every step reads as production.
-    const componentSql = (withStage: boolean) =>
-      `SELECT component_id, component_name, component_type, hierarchy_level,
-              quantity, unit, opex, capex${withStage ? ', life_cycle_stage' : ''}
-       FROM component
-       WHERE case_id = ?
-       ORDER BY hierarchy_level, component_id`;
+    // 2-5. The inventory and results the report prints. A frozen run
+    // (snapshot v3) reads all of it from the snapshot: the tree, stages, costs
+    // and flows as they were when the run was made (EXP-1). A run made before
+    // that reads the live tables and the report says so beside them.
+    const snapshot = parseRunSnapshot(assessment.run_snapshot);
+    const frozen = snapshotReportParts(snapshot);
+
     let components: any[];
-    try {
-      components = await query<any>(componentSql(true), [assessment.case_id]);
-    } catch (stageErr: any) {
-      if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
-      components = await query<any>(componentSql(false), [assessment.case_id]);
+    let results: any[];
+    let totalImpacts: Array<{ category_name: string; total_value: number; unit: string }>;
+    let flows: any[];
+    if (frozen) {
+      ({ components, results, flows } = frozen);
+      totalImpacts = frozen.total_impacts;
+    } else {
+      // The life-cycle stage comes along so the report can split the result by
+      // stage; a database without migrate-022 falls back and every step reads
+      // as production.
+      const componentSql = (withStage: boolean) =>
+        `SELECT component_id, component_name, component_type, hierarchy_level,
+                quantity, unit, opex, capex${withStage ? ', life_cycle_stage' : ''}
+         FROM component
+         WHERE case_id = ?
+         ORDER BY hierarchy_level, component_id`;
+      try {
+        components = await query<any>(componentSql(true), [assessment.case_id]);
+      } catch (stageErr: any) {
+        if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
+        components = await query<any>(componentSql(false), [assessment.case_id]);
+      }
+
+      results = await query<any>(
+        `SELECT ar.component_id, COALESCE(c.component_name, 'Removed step') AS component_name,
+                ic.category_name, ar.impact_value, ar.unit
+         FROM assessment_results ar
+         LEFT JOIN component c ON ar.component_id = c.component_id
+         JOIN impact_categories ic ON ar.category_id = ic.category_id
+         WHERE ar.run_id = ?
+         ORDER BY ic.category_name, c.hierarchy_level`,
+        [runId]
+      );
+
+      totalImpacts = (
+        await query<any>(
+          `SELECT ic.category_name, SUM(ar.impact_value) as total_value, ar.unit
+           FROM assessment_results ar
+           JOIN impact_categories ic ON ar.category_id = ic.category_id
+           WHERE ar.run_id = ?
+           GROUP BY ic.category_id, ic.category_name, ar.unit
+           ORDER BY total_value DESC`,
+          [runId]
+        )
+      ).map((r: any) => ({
+        category_name: r.category_name,
+        total_value: parseFloat(r.total_value),
+        unit: r.unit,
+      }));
+
+      flows = await query<any>(
+        `SELECT c.component_id, c.component_name, s.substance_name,
+                f.flow_type AS direction, f.quantity AS amount, f.unit
+         FROM flows f
+         JOIN component c ON f.component_id = c.component_id
+         JOIN substances s ON f.substance_id = s.substance_id
+         WHERE c.case_id = ?
+         ORDER BY c.hierarchy_level, c.component_id, f.flow_type`,
+        [assessment.case_id]
+      );
     }
-
-    // 3. Get assessment results
-    const results = await query<any>(
-      `SELECT c.component_name, ic.category_name, ar.impact_value, ar.unit
-       FROM assessment_results ar
-       JOIN component c ON ar.component_id = c.component_id
-       JOIN impact_categories ic ON ar.category_id = ic.category_id
-       WHERE ar.run_id = ?
-       ORDER BY ic.category_name, c.hierarchy_level`,
-      [runId]
-    );
-
-    // 4. Get total impacts aggregated by category
-    const totalImpacts = await query<any>(
-      `SELECT ic.category_name, SUM(ar.impact_value) as total_value, ar.unit
-       FROM assessment_results ar
-       JOIN impact_categories ic ON ar.category_id = ic.category_id
-       WHERE ar.run_id = ?
-       GROUP BY ic.category_id, ic.category_name, ar.unit
-       ORDER BY total_value DESC`,
-      [runId]
-    );
-
-    // 5. Get all flows for the case. The live `flows` table uses `direction`
-    // and `amount` columns (a prior migration renamed them from
-    // flow_type/quantity); querying the old names 500'd the export.
-    const flows = await query<any>(
-      `SELECT c.component_name, s.substance_name,
-              f.flow_type AS direction, f.quantity AS amount, f.unit
-       FROM flows f
-       JOIN component c ON f.component_id = c.component_id
-       JOIN substances s ON f.substance_id = s.substance_id
-       WHERE c.case_id = ?
-       ORDER BY c.hierarchy_level, c.component_id, f.flow_type`,
-      [assessment.case_id]
-    );
 
     // 6. Data sources for attribution. These two lookups touch columns/tables
     // that vary across environments (schema drift left some DBs without
@@ -163,11 +195,6 @@ export async function GET(
       costSources = [];
     }
 
-    // Goal & scope and the data-quality statement as frozen with the run, so
-    // the report states what the result is per and how far to trust it
-    // (ISO 14044 clause 5 reporting).
-    const snapshot = parseRunSnapshot(assessment.run_snapshot);
-
     // The author's own interpretation and assumptions (ISO 14044 5.1). Asked
     // for separately and tolerantly: a database that has not run migration 021
     // still exports a report, just without these two sections filled in.
@@ -192,7 +219,7 @@ export async function GET(
         project_id: assessment.project_id,
         project_name: assessment.project_name,
         description: assessment.project_description,
-        owner_username: assessment.owner_username,
+        owner_username: assessment.owner_username ?? 'Removed account',
         created_at: assessment.project_created_at,
       },
       case_info: {
@@ -208,16 +235,13 @@ export async function GET(
         // in some DBs. Fall back so the report always shows a date.
         run_at: assessment.run_at ?? assessment.run_date,
         calculation_method: assessment.calculation_method || 'CML 2001',
-        executed_by_username: assessment.executed_by_username,
+        executed_by_username: assessment.executed_by_username ?? 'Removed account',
       },
-      components: components as any[],
-      results: results as any[],
-      total_impacts: (totalImpacts as any[]).map(r => ({
-        category_name: r.category_name,
-        total_value: parseFloat(r.total_value),
-        unit: r.unit,
-      })),
-      flows: flows as any[],
+      components,
+      results,
+      total_impacts: totalImpacts,
+      flows,
+      inventory_note: frozen ? null : LEGACY_INVENTORY_NOTE,
       dataSources: {
         valuation_method: methodName,
         region_code: regionCode,
@@ -237,70 +261,31 @@ export async function GET(
     // what a student pastes into a write-up or checks in a spreadsheet, and
     // what a reviewer asks for when they doubt a number.
     if (format === 'csv') {
-      const esc = (v: unknown) => {
-        const t = v === null || v === undefined ? '' : String(v);
-        return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-      };
-      const stageByStep = new Map<string, string | null>(
-        (components as any[]).map((c) => [c.component_name, c.life_cycle_stage ?? null]),
-      );
-
-      const header = [
-        `# LCAPIX assessment run ${runId}`,
-        `# Project: ${reportData.project.project_name}`,
-        `# Case: ${reportData.case_info.case_name}`,
-        `# Method: ${methodName}; Region: ${regionCode}`,
-        `# Functional unit: ${reportData.goal_scope?.functional_unit ?? 'not set'}`,
-        `# Exported: ${new Date().toISOString()}`,
-      ].join('\n');
-
-      const columns = [
-        'step',
-        'life_cycle_stage',
-        'substance',
-        'direction',
-        'amount_entered',
-        'unit_entered',
-        'unit_conversion',
-        'factor',
-        'factor_scope',
-        'factor_source',
-        'source_tier',
-        'allocation',
-        'impact_category',
-        'impact_value',
-      ];
-
-      const rows = (snapshot?.flow_detail ?? []).map((f) =>
-        [
-          f.component,
-          stageByStep.get(f.component) ?? '',
-          f.substance,
-          f.dir === 'IN' ? 'input' : 'output',
-          f.amount,
-          f.unit,
-          f.conversion ?? '',
-          f.factor,
-          f.scope,
-          f.source ?? '',
-          f.source_tier ?? '',
-          f.allocation ?? '',
-          f.category_name,
-          f.impact,
-        ]
-          .map(esc)
-          .join(','),
-      );
-
-      // A run made before snapshots exist has no flow detail; say so in the
-      // file rather than handing back an empty table.
-      const body = rows.length
-        ? [header, columns.join(','), ...rows].join('\n')
-        : [
-            header,
-            '# This run was made before flow-level detail was recorded. Re-run the assessment to export its rows.',
-            columns.join(','),
-          ].join('\n');
+      // Stage per step id (STAGE-2): from the frozen steps for a v3 run, from
+      // the live steps (and said so in the file) for an older one.
+      const stageById = new Map<number, string | null>();
+      const stageByName = new Map<string, string | null>();
+      for (const c of components) {
+        stageById.set(Number(c.component_id), c.life_cycle_stage ?? null);
+        if (!stageByName.has(c.component_name)) stageByName.set(c.component_name, c.life_cycle_stage ?? null);
+      }
+      const unitByCategory = new Map(totalImpacts.map((t) => [t.category_name, t.unit]));
+      const body = buildInventoryCsv({
+        runId,
+        projectName: reportData.project.project_name,
+        caseName: reportData.case_info.case_name,
+        method: methodName,
+        region: regionCode,
+        functionalUnit: reportData.goal_scope?.functional_unit ?? null,
+        exportedAt: new Date().toISOString(),
+        rows: snapshot?.flow_detail ?? [],
+        stageFor: (f) =>
+          f.component_id != null && stageById.has(f.component_id)
+            ? stageById.get(f.component_id) ?? null
+            : stageByName.get(f.component) ?? null,
+        unitFor: (category) => unitByCategory.get(category) ?? null,
+        note: frozen ? null : `Life-cycle stages ${LEGACY_RESULTS_SOURCE}: this run predates frozen stages.`,
+      });
 
       return new NextResponse(body, {
         status: 200,
@@ -353,7 +338,11 @@ export async function GET(
       doc.end();
     });
   } catch (error: any) {
-    if (error.message === 'No authentication token provided' || error.message === 'Invalid or expired token') {
+    if (
+      error.message === 'No authentication token provided' ||
+      error.message === 'Invalid or expired token' ||
+      error.message === 'User account not found or inactive'
+    ) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('PDF export error:', error);
