@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 
 /**
  * Who else can see a project.
@@ -12,10 +13,27 @@ import { requireAuth, checkProjectAccess } from '@/lib/auth';
  * An invitation is by email and the person must already have an account: we do
  * not send mail, and inviting into a void would be a promise the product does
  * not keep.
+ *
+ * Who may do what: any member reads the list; the owner and project admins add,
+ * change and remove viewers and editors; only the owner grants or revokes the
+ * admin role (REC L9). A non-member gets 404, as for a missing project.
  */
 
 const ROLES = ['viewer', 'editor', 'admin'] as const;
 type Role = (typeof ROLES)[number];
+/** Roles only the owner may grant, change or remove. */
+const OWNER_MANAGED = new Set(['admin', 'owner']);
+
+/** The person's role row on the project, or null when they are not a member. */
+async function memberRow(projectId: number, userId: number) {
+  return queryOne<any>(
+    `SELECT pm.member_id, perm.permission_name
+       FROM project_members pm
+       LEFT JOIN permissions perm ON pm.permission_id = perm.permission_id
+      WHERE pm.project_id = ? AND pm.user_id = ?`,
+    [projectId, userId],
+  );
+}
 
 async function guard(request: NextRequest, projectIdParam: string, need: 'viewer' | 'admin') {
   const userId = await requireAuth(request);
@@ -24,8 +42,12 @@ async function guard(request: NextRequest, projectIdParam: string, need: 'viewer
   if (!project) return { error: NextResponse.json({ error: 'Project not found' }, { status: 404 }) };
 
   const isOwner = project.owner_id === userId;
-  const ok = isOwner || (await checkProjectAccess(userId, projectId, need === 'admin' ? 'admin' : 'viewer'));
-  if (!ok) return { error: NextResponse.json({ error: 'Access denied' }, { status: 403 }) };
+  const denied = isOwner
+    ? null
+    : await projectAccessDenied(userId, projectId, need === 'admin' ? 'admin' : 'viewer', {
+        notFound: 'Project not found',
+      });
+  if (denied) return { error: denied };
 
   return { userId, projectId, isOwner };
 }
@@ -58,9 +80,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       [g.projectId],
     );
 
-    return NextResponse.json({ success: true, owner, members, canManage: g.isOwner });
+    const canManage = g.isOwner || (await checkProjectAccess(g.userId, g.projectId, 'admin'));
+    return NextResponse.json({ success: true, owner, members, canManage, canManageAdmins: g.isOwner });
   } catch (error: any) {
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('List members error:', error);
@@ -82,6 +105,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!email) return NextResponse.json({ error: 'An email address is required' }, { status: 400 });
     if (!ROLES.includes(role)) {
       return NextResponse.json({ error: `Role must be one of: ${ROLES.join(', ')}` }, { status: 400 });
+    }
+    if (OWNER_MANAGED.has(role) && !g.isOwner) {
+      return NextResponse.json({ error: 'Only the project owner can grant the admin role' }, { status: 403 });
     }
 
     const person = await queryOne<any>(
@@ -114,10 +140,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
-    const existing = await queryOne<any>(
-      'SELECT member_id FROM project_members WHERE project_id = ? AND user_id = ?',
-      [g.projectId, person.id],
-    );
+    const existing = await memberRow(g.projectId, person.id);
+    if (existing && OWNER_MANAGED.has(existing.permission_name) && !g.isOwner) {
+      return NextResponse.json({ error: 'Only the project owner can change an admin' }, { status: 403 });
+    }
 
     if (existing) {
       await execute('UPDATE project_members SET permission_id = ? WHERE member_id = ?', [
@@ -137,7 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       updated: !!existing,
     });
   } catch (error: any) {
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Add member error:', error);
@@ -152,16 +178,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const g = await guard(request, p, 'admin');
     if (g.error) return g.error;
 
-    const userId = new URL(request.url).searchParams.get('user_id');
-    if (!userId) return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+    const raw = new URL(request.url).searchParams.get('user_id');
+    if (!raw || !/^\d+$/.test(raw)) return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+    const userId = parseInt(raw);
 
-    await execute('DELETE FROM project_members WHERE project_id = ? AND user_id = ?', [
-      g.projectId,
-      parseInt(userId),
-    ]);
+    const target = await memberRow(g.projectId, userId);
+    if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+    if (OWNER_MANAGED.has(target.permission_name) && !g.isOwner) {
+      return NextResponse.json({ error: 'Only the project owner can remove an admin' }, { status: 403 });
+    }
+
+    await execute('DELETE FROM project_members WHERE project_id = ? AND user_id = ?', [g.projectId, userId]);
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Remove member error:', error);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import {
   extractDocText,
   readUploadForm,
@@ -40,12 +41,10 @@ async function caseAccess(request: NextRequest, caseIdParam: string, level?: 'ed
   const caseId = parseInt(caseIdParam);
   const caseData = await queryOne<any>('SELECT project_id FROM case_table WHERE case_id = ?', [caseId]);
   if (!caseData) return { error: NextResponse.json({ error: 'Case not found' }, { status: 404 }) };
-  const allowed = level
-    ? await checkProjectAccess(userId, caseData.project_id, level)
-    : await checkProjectAccess(userId, caseData.project_id);
-  if (!allowed) {
-    return { error: NextResponse.json({ error: 'Access denied' }, { status: 403 }) };
-  }
+  // A non-member gets the same 404 as a missing case; a viewer who tries to
+  // attach or delete gets 403.
+  const denied = await projectAccessDenied(userId, caseData.project_id, level, { notFound: 'Case not found' });
+  if (denied) return { error: denied };
   return { userId, caseId };
 }
 
@@ -81,7 +80,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ success: true, documents });
   } catch (error: any) {
     if (missingTable(error)) return NextResponse.json({ success: true, documents: [] });
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('List case documents error:', error);
@@ -178,7 +177,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 503 },
       );
     }
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Attach case document error:', error);
@@ -206,7 +205,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     return NextResponse.json({ success: true });
   } catch (error: any) {
     if (missingTable(error)) return NextResponse.json({ success: true });
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete case document error:', error);
