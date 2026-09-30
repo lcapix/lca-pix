@@ -202,10 +202,20 @@ describe('body-borne ids from another case or tenant', () => {
     fd.append('connector', 'bom');
     const res = await api.post('/api/ingest/preview', { token: w.users.owner.token, form: fd });
     expect(res.status).toBe(200);
-    // Neither the chosen match nor the review screen's candidates.
-    expect(JSON.stringify(res.json.plan)).not.toContain(w.Q.substanceName);
-    const ids = (res.json.plan.flows as any[]).flatMap((f) => [f.substance_id, ...(f.candidates ?? []).map((c: any) => c.substance_id)]);
-    expect(ids.map(Number)).not.toContain(w.Q.substance);
+    // Neither the chosen match nor the review screen's candidates may be
+    // anyone else's private substance (the suite's database holds several
+    // "Bamboo fibre (B) <tag>" rows, one per world, all private).
+    const ids = (res.json.plan.flows as any[])
+      .flatMap((f) => [f.substance_id, ...(f.candidates ?? []).map((c: any) => c.substance_id)])
+      .filter((id) => id != null)
+      .map(Number);
+    expect(ids.length).toBeGreaterThan(0);
+    const foreign = await sql(
+      `SELECT substance_id, substance_name FROM substances
+        WHERE substance_id IN (${ids.map(() => '?').join(',')}) AND is_custom = 1 AND created_by <> ?`,
+      [...ids, w.users.owner.id],
+    );
+    expect(foreign).toEqual([]);
   });
 
   it('clone-from: sourceCaseId from another tenant -> 4xx, nothing copied, no names', async () => {
