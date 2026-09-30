@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
+import { isAuthError } from '@/lib/route-guard';
 import {
   EXAMPLE_CASE,
   EXAMPLE_POINTS,
@@ -169,7 +170,7 @@ export async function POST(request: NextRequest) {
       skipped_substances: missing,
     });
   } catch (error: any) {
-    if (/Unauthorized|token|User account not found or inactive/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Example project error:', error);

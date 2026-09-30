@@ -11,7 +11,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 
 export async function POST(
@@ -31,10 +32,8 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, sourceCase.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, sourceCase.project_id, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
 
     // Copying a case whose steps have not landed yet produces a silently empty
     // copy (seen live: Duplicate pressed while a new comparative case was still
@@ -104,12 +103,7 @@ export async function POST(
       flows_copied: result.flows,
     }, { status: 201 });
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Duplicate case error:', error);

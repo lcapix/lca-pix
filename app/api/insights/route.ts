@@ -19,6 +19,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
+import { isAuthError } from '@/lib/route-guard';
 import {
   buildInsightMessages,
   HF_ROUTER_URL,
@@ -183,12 +184,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    if (
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'Unauthorized' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Insights route error:', error);

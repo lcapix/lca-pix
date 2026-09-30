@@ -1,6 +1,7 @@
 // app/api/components/[componentId]/auto-costs/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { projectAccessDenied } from '@/lib/route-guard';
 import { queryOne } from '@/lib/db-helpers';
 import { autoPopulateCosts } from '@/lib/costs/auto-populate';
 import { logIntegration } from '@/lib/integrations/log';
@@ -35,10 +36,8 @@ export async function POST(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
     projectId = Number(owner.project_id);
-    const hasAccess = await checkProjectAccess(userId, projectId, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Component not found' });
+    if (denied) return denied;
   } catch (err) {
     console.error('auto-costs access check failed:', err);
     return NextResponse.json({ error: 'Failed to auto-populate costs' }, { status: 500 });

@@ -11,7 +11,7 @@
  * header is refused outright as a second guard.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { tokenMatchesPassword, verifyToken } from '@/lib/auth';
 import { queryOne } from '@/lib/db-helpers';
 import { AUTH_TOKEN_COOKIE, clearAuthCookies } from '../../cookies';
 
@@ -32,10 +32,11 @@ export async function POST(request: NextRequest) {
       return reply({ error: 'No sign-in to complete. Try signing in again.' }, 401);
     }
     const user = await queryOne<any>(
-      'SELECT id, username, email, is_active FROM account WHERE id = ?',
+      'SELECT id, username, email, is_active, password_hash FROM account WHERE id = ?',
       [payload.id]
     );
-    if (!user || !user.is_active) {
+    // Same checks as requireAuth: active, and not revoked by a hash change.
+    if (!user || !user.is_active || !tokenMatchesPassword(payload, user.password_hash)) {
       return reply({ error: 'No sign-in to complete. Try signing in again.' }, 401);
     }
     return reply(

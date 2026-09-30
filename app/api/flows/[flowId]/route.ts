@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
   parseFlowQuantity,
@@ -32,10 +33,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, existing.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Flow not found' });
+    if (denied) return denied;
 
     // Prod schema: flows columns are flow_type / quantity. Accept either key.
     const body = await request.json();
@@ -134,7 +133,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, flow: updatedFlow });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update flow error:', error);
@@ -165,16 +164,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, existing.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Flow not found' });
+    if (denied) return denied;
 
     await execute(`DELETE FROM flows WHERE flow_id = ?`, [flowId]);
 
     return NextResponse.json({ success: true, message: 'Flow deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete flow error:', error);
