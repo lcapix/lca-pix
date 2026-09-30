@@ -411,6 +411,59 @@ export default function ResultsPage() {
     }
   }
 
+  // Magic Insights keys its narration request on these props, so they are
+  // built once per run / case instead of inline on every render: new arrays
+  // on each parent render aborted and re-sent the request (INS-2). Hooks, so
+  // they sit above the early returns.
+  const numCost = (v: any) => Number(v ?? 0) || 0
+  const insightsRun = currentAssessment || latestCompletedRun(assessmentResults)
+  const caseComponents = currentCase?.components
+  const insightsBreakdown = useMemo(
+    () =>
+      insightsRun?.componentBreakdown?.map((c) => ({
+        component_id: c.component_id,
+        component_name: c.component_name,
+        impacts: c.impacts.map((i) => ({
+          category_name: i.category_name,
+          impact_value: i.impact_value,
+          unit: i.unit,
+        })),
+      })),
+    [insightsRun],
+  )
+  // Per-flow impacts, so the insight can name the lever by material
+  // (aluminum across six steps), not only by the step that books it.
+  const insightsMaterials = useMemo(
+    () =>
+      (insightsRun?.flowDetail || []).map((f) => ({
+        category_name: f.category_name,
+        name: f.substance,
+        value: Number(f.impact) || 0,
+        step: f.component,
+        tier: f.source_tier ?? null,
+      })),
+    [insightsRun],
+  )
+  // Each step's own cost columns, so the trade-off view sets cost against
+  // impact step by step instead of guessing.
+  const insightsStepCosts = useMemo(
+    () =>
+      (caseComponents || []).map((c: any) => ({
+        id: String(c.id),
+        name: c.name,
+        labor: numCost(c.laborCost),
+        material: numCost(c.materialCost),
+        energy: numCost(c.energyCost),
+        other:
+          numCost(c.overheadCost) +
+          numCost(c.equipmentCost) +
+          numCost(c.transportationCost) +
+          numCost(c.operationalCostUSD) +
+          numCost(c.capitalCostUSD),
+      })),
+    [caseComponents],
+  )
+
   // Loading state
   if (isLoadingCase) {
     return (
@@ -470,7 +523,7 @@ export default function ResultsPage() {
     )
   }
 
-  const mostRecentAssessment = currentAssessment || latestCompletedRun(assessmentResults)
+  const mostRecentAssessment = insightsRun
 
   // What a re-run starts from (RUN-5): the displayed run, else the study's
   // method and the case's (then the project's) region. Unknown stays unset so
@@ -602,7 +655,6 @@ export default function ResultsPage() {
   // shows). The assessment RUN has no cost fields, so mostRecentAssessment.costs
   // is always zero — feeding THAT to Magic Insights made it report "no costs"
   // even when the case clearly has them. Sum the real component columns instead.
-  const numCost = (v: any) => Number(v ?? 0) || 0
   const realCaseCost = allComponents.reduce(
     (s: number, c: any) =>
       s +
@@ -1236,40 +1288,10 @@ export default function ResultsPage() {
         caseName={currentCase?.name ?? 'this case'}
         method={mostRecentAssessment?.calculation_method ?? 'CML 2001'}
         impacts={mostRecentAssessment?.impacts}
-        componentBreakdown={mostRecentAssessment?.componentBreakdown?.map((c) => ({
-          component_id: c.component_id,
-          component_name: c.component_name,
-          impacts: c.impacts.map((i) => ({
-            category_name: i.category_name,
-            impact_value: i.impact_value,
-            unit: i.unit,
-          })),
-        }))}
-        // Per-flow impacts, so the insight can name the lever by material
-        // (aluminum across six steps), not only by the step that books it.
-        materialBreakdown={(mostRecentAssessment?.flowDetail || []).map((f) => ({
-          category_name: f.category_name,
-          name: f.substance,
-          value: Number(f.impact) || 0,
-          step: f.component,
-          tier: f.source_tier ?? null,
-        }))}
+        componentBreakdown={insightsBreakdown}
+        materialBreakdown={insightsMaterials}
         totalCost={realCaseCost > 0 ? realCaseCost : undefined}
-        // Each step's own cost columns, so the trade-off view sets cost
-        // against impact step by step instead of guessing.
-        stepCosts={allComponents.map((c: any) => ({
-          id: String(c.id),
-          name: c.name,
-          labor: numCost(c.laborCost),
-          material: numCost(c.materialCost),
-          energy: numCost(c.energyCost),
-          other:
-            numCost(c.overheadCost) +
-            numCost(c.equipmentCost) +
-            numCost(c.transportationCost) +
-            numCost(c.operationalCostUSD) +
-            numCost(c.capitalCostUSD),
-        }))}
+        stepCosts={insightsStepCosts}
         initialCategory={activeKey}
         projectId={projectId}
         caseId={caseId}
