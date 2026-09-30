@@ -90,8 +90,8 @@ export async function POST(request: NextRequest) {
     }
     if (!userId) throw new Error('could not allocate a unique username');
 
-    // Create JWT token
-    const token = createToken({ id: userId, email: normalizedEmail, account_type: 'user' });
+    // Create JWT token (bound to this password hash: a change revokes it)
+    const token = createToken({ id: userId, email: normalizedEmail, account_type: 'user' }, password_hash);
 
     return NextResponse.json({
       success: true,

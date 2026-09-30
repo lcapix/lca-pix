@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
+import { isAuthError } from '@/lib/route-guard';
 
 /**
  * The process library, in driver units (migrate-022 / 023).
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
     if (error?.code === 'ER_NO_SUCH_TABLE') {
       return NextResponse.json({ success: true, templates: [] });
     }
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Process template list error:', error);

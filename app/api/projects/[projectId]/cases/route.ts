@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
 export async function GET(
@@ -12,10 +13,8 @@ export async function GET(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     // driver_count must reflect REAL attached flows (the flows table), not the
     // legacy `drivers` JSON column — otherwise the UI showed "0 drivers" even
@@ -39,7 +38,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, cases });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get cases error:', error);
@@ -57,10 +56,8 @@ export async function POST(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const { case_name, case_type, parent_case_id, description } = await request.json();
 
@@ -104,7 +101,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, case: newCase }, { status: 201 });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Create case error:', error);

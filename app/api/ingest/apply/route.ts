@@ -15,7 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity } from '@/lib/units';
 import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
 import type { MappedFlow } from '@/lib/ingest/maplca';
@@ -137,10 +138,8 @@ export async function POST(request: NextRequest) {
       if (!caseRow) {
         return NextResponse.json({ error: 'Target case not found' }, { status: 404 });
       }
-      const canEdit = await checkProjectAccess(userId, caseRow.project_id, 'editor');
-      if (!canEdit) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-      }
+      const denied = await projectAccessDenied(userId, caseRow.project_id, 'editor', { notFound: 'Target case not found' });
+      if (denied) return denied;
       // Each line goes to its own step (chosen at review); every step must be
       // part of this case. The body's attach_component_id is the default for
       // lines without one; a line with neither is held, never guessed.
@@ -276,10 +275,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
+    if (denied) return denied;
 
     // Re-validate structure server-side — the client may have edited the plan.
     const structural = validateProcessModel({
@@ -478,10 +475,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    if (
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Ingest apply error:', error);

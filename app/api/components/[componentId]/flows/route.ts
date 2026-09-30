@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
   parseFlowQuantity,
@@ -31,10 +32,8 @@ export async function GET(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, component.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, component.project_id, undefined, { notFound: 'Component not found' });
+    if (denied) return denied;
 
     // The live `flows` table columns are `direction` and `amount` (a migration
     // renamed them from flow_type/quantity). Querying/ordering by the old names
@@ -58,7 +57,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, flows });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get flows error:', error);
@@ -88,10 +87,8 @@ export async function POST(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, component.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, component.project_id, 'editor', { notFound: 'Component not found' });
+    if (denied) return denied;
 
     // Prod schema: the flows table columns are flow_type / quantity (NOT
     // direction / amount). Accept either key from the client for resilience.
@@ -176,7 +173,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, flow: newFlow }, { status: 201 });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Create flow error:', error);

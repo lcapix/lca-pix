@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { LESSONS, parseLearningState } from '@/lib/lessons';
 
 /**
@@ -19,9 +20,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const project = await queryOne<any>('SELECT owner_id FROM project WHERE project_id = ?', [projectId]);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    if (!(await checkProjectAccess(userId, projectId))) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     // The write-up and lesson columns arrive with migrations 021 and 022; on a
     // database without them the view still lists the cases and their runs.
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, cases });
   } catch (error: any) {
-    if (/Unauthorized|token/i.test(error?.message ?? '')) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Project progress error:', error);
