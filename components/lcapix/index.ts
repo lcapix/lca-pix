@@ -1,6 +1,6 @@
 // Barrel export for all lcapix primitives.
 
-export { fmtNum, fmtInt } from './formatters'
+export { fmtNum, fmtInt, fmtSig } from './formatters'
 
 export { Logo, LogoMark } from './logo'
 export type { LogoProps, LogoMarkProps } from './logo'
