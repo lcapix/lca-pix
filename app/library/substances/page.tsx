@@ -21,7 +21,9 @@ interface SubstanceRow {
   substance_name: string
   cas_number: string | null
   category: string | null
-  default_unit: string | null
+  /** /api/substances returns the substances row as-is; the column is `unit`. */
+  unit?: string | null
+  default_unit?: string | null
   description?: string | null
   enriched_at?: string | null
 }
@@ -192,7 +194,7 @@ export default function SubstancesLibraryPage() {
             </p>
             <p style={{ margin: '10px 0 0' }}>
               CAS numbers (where available) link substances to regulatory and
-              chemistry databases. The <span className="mono">default_unit</span>{' '}
+              chemistry databases. The default unit{' '}
               is what the catalog assumes when a project doesn't override it.
             </p>
           </div>
@@ -378,7 +380,7 @@ export default function SubstancesLibraryPage() {
                       <Td>{s.substance_name}</Td>
                       <Td mono>{s.cas_number ?? '—'}</Td>
                       <Td>{s.category ?? '—'}</Td>
-                      <Td mono>{s.default_unit ?? '—'}</Td>
+                      <Td mono>{s.unit ?? s.default_unit ?? '—'}</Td>
                     </tr>
                   ))}
                 </tbody>

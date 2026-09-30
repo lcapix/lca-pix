@@ -65,30 +65,45 @@ export default function FactorsLibraryPage() {
     if (!user) return
     let cancelled = false
     setLoading(true)
+    // A failed request is an error, not an empty library: without the r.ok
+    // check a 401/500 body parsed fine and the page said "No factors match".
+    const load = (url: string) =>
+      apiRequest(url).then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
     Promise.all([
-      apiRequest('/api/integrations/status').then((r) => r.json()).catch(() => null),
-      apiRequest('/api/driver-factors').then((r) => r.json()).catch(() => null),
+      // The method chips are optional; the factor list is not.
+      load('/api/integrations/status').catch(() => null),
+      load('/api/driver-factors'),
     ])
       .then(([status, all]) => {
         if (cancelled) return
         if (status?.success) {
           setGroups(
-            (status.factorsByMethod ?? []).map((g: any) => ({
-              method_name: String(g.method_name ?? g.driver_name ?? 'Unknown'),
-              factors: Number(g.factors ?? 0),
-            })),
+            (status.factorsByMethod ?? [])
+              .map((g: any) => ({
+                method_name: String(g.method_name ?? g.driver_name ?? 'Unknown'),
+                factors: Number(g.factors ?? 0),
+              }))
+              // Quarantined rows (migrate-017/024) are not a method to browse.
+              .filter((g: MethodGroup) => !g.method_name.startsWith('QUARANTINE')),
           )
         }
         if (all?.success && Array.isArray(all.factors)) {
           setFactors(all.factors)
         } else if (Array.isArray(all)) {
           setFactors(all)
+        } else {
+          throw new Error('Unexpected response')
         }
         setLoading(false)
       })
       .catch((e) => {
         if (cancelled) return
-        setError(e?.message ?? 'Failed to load factor library.')
+        setError(
+          `Couldn't load the factor library${e?.message ? ` (${e.message})` : ''}. Refresh to try again.`,
+        )
         setLoading(false)
       })
     return () => {
