@@ -54,8 +54,11 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
 /**
- * The limits the app applies. Assessments and PubChem enrichment are defined
- * here for the routes that will adopt them; the rest are wired already.
+ * The limits the app applies, each enforced by one route (or the helper it
+ * calls): login and signup (app/api/auth), insights, ingest preview,
+ * assessment runs (POST /api/cases/:id/assessments), PubChem enrichment, and
+ * the BLS / EIA / Metals cost lookups (lib/integrations/rate-lookup.ts).
+ * tests/lib/rate-limit-wiring.test.ts fails if a policy here is not enforced.
  */
 export const RATE_LIMITS = {
   /** Per IP + email. */
