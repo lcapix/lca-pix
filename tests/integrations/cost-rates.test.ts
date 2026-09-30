@@ -44,6 +44,30 @@ describe('getOrFetchRate', () => {
     expect(insertSpy).toHaveBeenCalledOnce();
   });
 
+  it('does not write the static fallback into the shared cache', async () => {
+    // Any signed-in user can trigger a lookup, so the shared cost_rates cache
+    // only ever holds values an upstream API returned. A reference value would
+    // otherwise shadow the live rate for 30 days once a key is configured.
+    vi.mocked(db.queryOne).mockResolvedValueOnce(null);
+    const insertSpy = vi.mocked(db.insert).mockResolvedValue(1);
+    const fetcher = vi.fn().mockRejectedValue(new Error('BLS_API_KEY not configured'));
+
+    const r = await getOrFetchRate({
+      type: 'labor', key: '51-4121', region: 'NY', fetcher,
+      staticFallback: () => ({ rateValue: 25.83, unit: '$/hr', source: 'Reference 2024', effectiveDate: '2024-01' }),
+    });
+    expect(r.rateValue).toBe(25.83);
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it('still throws when the fetcher fails and there is no fallback', async () => {
+    vi.mocked(db.queryOne).mockResolvedValueOnce(null);
+    await expect(
+      getOrFetchRate({ type: 'labor', key: '51-4121', region: 'NY', fetcher: vi.fn().mockRejectedValue(new Error('down')) }),
+    ).rejects.toThrow('down');
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
   it('fetches fresh when nothing cached', async () => {
     vi.mocked(db.queryOne).mockResolvedValueOnce(null);
     vi.mocked(db.insert).mockResolvedValue(1);

@@ -56,15 +56,15 @@ export async function getOrFetchRate(params: GetOrFetchParams): Promise<CostRate
   // Try the live fetcher; if it can't run (no API key, network error, no data)
   // fall back to the static reference value so cost lookups always resolve in
   // the keyless MVP. Only if there's no fallback either do we surface the error.
+  // The fallback is returned but never cached: any signed-in user can trigger
+  // a lookup, so the shared cache holds only what an upstream API returned,
+  // and a reference value never shadows the live rate once a key is set.
   let fresh: CostRate;
   try {
     fresh = await params.fetcher();
   } catch (err) {
-    if (params.staticFallback) {
-      fresh = await params.staticFallback();
-    } else {
-      throw err;
-    }
+    if (params.staticFallback) return await params.staticFallback();
+    throw err;
   }
   await insert(
     `INSERT INTO cost_rates
