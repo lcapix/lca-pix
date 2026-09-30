@@ -12,7 +12,8 @@ import path from 'node:path';
 import { REPO_ROOT, SERVER_STATE } from './paths';
 
 export default async function globalTeardown() {
-  if (process.env.E2E_KEEP_DB === '1' || !existsSync(SERVER_STATE)) return;
+  // E2E_REUSE=1: the server (and its database) belong to whoever started it.
+  if (process.env.E2E_KEEP_DB === '1' || process.env.E2E_REUSE === '1' || !existsSync(SERVER_STATE)) return;
   const envFile = path.join(REPO_ROOT, '.env.local');
   if (existsSync(envFile)) process.loadEnvFile(envFile);
   const { database } = JSON.parse(readFileSync(SERVER_STATE, 'utf8')) as { database: string };

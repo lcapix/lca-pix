@@ -32,7 +32,7 @@ export function inspector(page: Page): Locator {
   return page.getByRole('complementary').filter({ has: page.getByRole('button', { name: 'Save', exact: true }) });
 }
 
-/** Outline rows are buttons named "<tier letter> <name>". */
+/** Outline rows are buttons named "<tier letter> <name>" ("Add Component" is not one). */
 export function outlineRow(page: Page, name: string): Locator {
   return outline(page).getByRole('button', { name: new RegExp(`^\\S ${escapeRe(name)}$`) });
 }

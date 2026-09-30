@@ -68,7 +68,9 @@ export default defineConfig({
   webServer: {
     command: 'node tests/e2e/support/serve.mjs',
     url: `${BASE_URL}/auth/login`,
-    reuseExistingServer: false,
+    // E2E_REUSE=1: attach to a server you started yourself with
+    // `node tests/e2e/support/serve.mjs` (fast edit-run loop; see E2E_TESTS.md).
+    reuseExistingServer: process.env.E2E_REUSE === '1',
     timeout: 240_000,
     stdout: process.env.E2E_SERVER_LOG ? 'pipe' : 'ignore',
     stderr: 'pipe',

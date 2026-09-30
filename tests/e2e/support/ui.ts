@@ -47,6 +47,25 @@ export async function settle(page: Page, opts: { timeout?: number } = {}): Promi
     await page.waitForTimeout(100);
   }
   await page.evaluate(() => document.fonts.ready.then(() => undefined)).catch(() => undefined);
+  await waitForHydration(page, Math.max(1_000, deadline - Date.now()));
+}
+
+/**
+ * Server-rendered HTML shows every label before React has attached a single
+ * handler; a click in that window does nothing. React marks each hydrated DOM
+ * node with a `__reactProps$…` key, so wait until the page's controls have one.
+ */
+export async function waitForHydration(page: Page, timeout = 30_000): Promise<void> {
+  await page
+    .waitForFunction(
+      () => {
+        const controls = Array.from(document.querySelectorAll('button, input, a[href]')).slice(0, 20);
+        return controls.length === 0 || controls.every((el) => Object.keys(el).some((k) => k.startsWith('__reactProps')));
+      },
+      undefined,
+      { timeout, polling: 100 },
+    )
+    .catch(() => undefined);
 }
 
 /** goto + settle, with the API tracker attached before the first request. */

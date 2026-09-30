@@ -9,13 +9,13 @@
  *      other workers have open. E2E_WARM=0 skips this (quicker single-test
  *      debugging).
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { chromium, request } from '@playwright/test';
 import { storageStateFor } from './api';
 import { installNetGuard } from './net';
 import { buildSeed } from './seed';
-import { BASE_URL, SEED_STATE, STATE_DIR } from './paths';
+import { BASE_URL, SEED_STATE, SERVER_STATE, STATE_DIR } from './paths';
 import { ROUTES, idsFromSeed, resolvePath } from './routes';
 import { settle } from './ui';
 
@@ -27,10 +27,20 @@ export default async function globalSetup() {
   const started = Date.now();
   const log = (s: string) => process.stderr.write(`[e2e setup] ${s} (${((Date.now() - started) / 1000).toFixed(1)} s)\n`);
   mkdirSync(STATE_DIR, { recursive: true });
+  const { database } = JSON.parse(readFileSync(SERVER_STATE, 'utf8')) as { database: string };
+
+  // E2E_REUSE=1 against a server that was already seeded: keep its world.
+  if (process.env.E2E_REUSE === '1' && existsSync(SEED_STATE)) {
+    const previous = JSON.parse(readFileSync(SEED_STATE, 'utf8')) as { database?: string };
+    if (previous.database === database) {
+      log(`reusing the seed in ${database}`);
+      return;
+    }
+  }
 
   const ctx = await request.newContext({ baseURL: BASE_URL });
   const seed = await buildSeed(ctx, BASE_URL).finally(() => ctx.dispose());
-  writeFileSync(SEED_STATE, JSON.stringify(seed, null, 2));
+  writeFileSync(SEED_STATE, JSON.stringify({ ...seed, database }, null, 2));
   for (const [actor, user] of Object.entries(seed.users)) {
     writeFileSync(storageFile(actor), JSON.stringify(storageStateFor(user, BASE_URL), null, 2));
   }
