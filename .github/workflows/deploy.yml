@@ -82,6 +82,63 @@ jobs:
           # Only needed if the repo moves to a GitHub organization account.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
+  # Optional: not a dependency of deploy. Builds a throwaway database from
+  # nothing (db/baseline + every migrate-NNN file) in a MySQL 8.0 service
+  # container and runs tests/db against it. See docs/testing/DATABASE_TESTS.md.
+  # The root password is empty on purpose: the container only lives for this
+  # job and is reachable only from the runner.
+  db-tests:
+    name: Database tests (MySQL 8.0)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '3306'
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # migrate.mjs and fresh.mjs apply SQL through the mysql client (some
+      # migrations use DELIMITER). The runner image usually has it.
+      - name: mysql client
+        run: |
+          if ! command -v mysql >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y mysql-client
+          fi
+          mysql --version
+          mysql --host=127.0.0.1 --port=3306 --user=root -e 'SELECT VERSION()'
+
+      - name: Database tests
+        run: pnpm test:db
+
   deploy:
     name: Deploy to Vercel (production)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
