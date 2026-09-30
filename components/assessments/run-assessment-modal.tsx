@@ -5,7 +5,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { apiPost, apiRequest } from '@/lib/api-client';
+import { apiRequest } from '@/lib/api-client';
 import { HelpTip } from '@/components/lcapix/help-tip';
 
 // Regions the engine recognises (see normalizeRegion in lib/lca-engine). The
@@ -94,14 +94,22 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
   const run = async () => {
     setRunning(true); setError(null);
     try {
-      const result = await apiPost<any>(
-        `/api/cases/${caseId}/assessments`,
-        {
+      // RUN-4: check the status here. The shared JSON helpers hand a 403/500
+      // body back as if it were a result, which closed the modal, saved the
+      // prefs and crashed the results page on a missing run_id.
+      const res = await apiRequest(`/api/cases/${caseId}/assessments`, {
+        method: 'POST',
+        body: JSON.stringify({
           run_name: `Assessment ${new Date().toLocaleString()}`,
           calculation_method: method,
           region_code: region,
-        },
-      );
+        }),
+      });
+      const result = await res.json().catch(() => null);
+      if (!res.ok) {
+        const reason = [result?.error, result?.details].filter(Boolean).join(': ');
+        throw new Error(reason || `Assessment failed (${res.status})`);
+      }
       try {
         localStorage.setItem(
           `lcapix-run-prefs:${caseId}`,
@@ -111,7 +119,7 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
       onCompleted?.(result);
       onClose();
     } catch (e: any) {
-      setError(e.message ?? 'Failed to run assessment');
+      setError(e?.message ?? 'Failed to run assessment');
     } finally {
       setRunning(false);
     }
