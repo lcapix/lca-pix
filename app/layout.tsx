@@ -8,6 +8,7 @@ import { GlobalCommandPalette } from "@/components/global/command-palette"
 import { ShortcutHelp } from "@/components/global/shortcut-help"
 import { RouteProgress } from "@/components/global/route-progress"
 import { ScrollProgress } from "@/components/global/scroll-progress"
+import { Toaster } from "@/components/ui/sonner"
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -45,6 +46,8 @@ export default function RootLayout({
           {children}
           <GlobalCommandPalette />
           <ShortcutHelp />
+          {/* The one toast container: every toast() call in the app renders here. */}
+          <Toaster position="bottom-right" closeButton />
         </ThemeProvider>
       </body>
     </html>

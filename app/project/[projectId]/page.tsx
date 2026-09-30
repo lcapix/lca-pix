@@ -19,7 +19,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useProjectStore } from '@/lib/store'
-import { toast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
 import { transformProjectFromDB, transformCaseFromDB } from '@/lib/data-transformers'
 import { normalizeComponentType } from '@/lib/hierarchy-colors'
@@ -32,7 +32,7 @@ import {
   fmtInt,
 } from '@/components/lcapix'
 import { type DemoTreeNode } from '@/lib/lcapix-demo'
-import { componentsToTree } from '@/lib/case-tree-adapter'
+import { componentsToTree, componentCostUSD, summarizeCaseCosts } from '@/lib/case-tree-adapter'
 import { transformComponentFromDB } from '@/lib/data-transformers'
 import { pastelFor } from '@/lib/hierarchy-pastels'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
@@ -125,20 +125,12 @@ export default function ProjectPage() {
             })
           }
         } else {
-          toast({
-            title: 'Project not found',
-            description: 'The requested project could not be found.',
-            variant: 'destructive',
-          })
+          toast.error('Project not found', { description: 'The requested project could not be found.' })
           router.push('/home')
         }
       } catch (error) {
         console.error('Failed to fetch project:', error)
-        toast({
-          title: 'Error loading project',
-          description: 'Failed to load project details',
-          variant: 'destructive',
-        })
+        toast.error('Error loading project', { description: 'Failed to load project details' })
         router.push('/home')
       } finally {
         setIsLoading(false)
@@ -237,10 +229,9 @@ export default function ProjectPage() {
   // (Impact Overview / Top contributors / Cost summary) shows actual numbers
   // per-case instead of the hardcoded 126.82 demo value.
   useEffect(() => {
-    if (!activeCaseId) {
-      setCaseImpact(null)
-      return
-    }
+    // The previous case's numbers must never show under the new one (PROJ-5).
+    setCaseImpact(null)
+    if (!activeCaseId) return
     let cancelled = false
     // Cost summary from REAL component cost columns, never synthesized (the old
     // fallback fabricated a $192/kg-CO2 breakdown; removed). Per unit of
@@ -257,21 +248,9 @@ export default function ProjectPage() {
         const cr = await apiRequest(`/api/cases/${activeCaseId}/components`)
         const cd = await cr.json()
         const comps: any[] = cd?.components || cd?.data || []
-        const num = (v: any) => Number(v ?? 0) || 0
-        const labor = comps.reduce((s, c) => s + num(c.labor_cost), 0)
-        const energy = comps.reduce((s, c) => s + num(c.energy_cost), 0)
-        const material = comps.reduce((s, c) => s + num(c.material_cost), 0)
-        const overhead = comps.reduce(
-          (s, c) =>
-            s +
-            num(c.overhead_cost) +
-            num(c.equipment_cost) +
-            num(c.transportation_cost) +
-            num(c.opex),
-          0,
-        )
-        const t = labor + energy + material + overhead
-        return t > 0 ? { labor, energy, material, overhead, total: t } : null
+        // DECIMAL strings summed as numbers; opex only where nothing is
+        // itemized (PROJ-4).
+        return summarizeCaseCosts(comps)
       } catch {
         return null
       }
@@ -419,16 +398,9 @@ export default function ProjectPage() {
           : p,
       )
       if (activeCaseId === caseId) setActiveCaseId(null)
-      toast({
-        title: 'Case deleted',
-        description: 'The case has been removed from your project.',
-      })
+      toast.success('Case deleted', { description: 'The case has been removed from your project.' })
     } catch (err: any) {
-      toast({
-        title: 'Could not delete case',
-        description: err?.message || 'Something went wrong. Please try again.',
-        variant: 'destructive',
-      })
+      toast.error('Could not delete case', { description: err?.message || 'Something went wrong. Please try again.' })
     }
   }
 
@@ -457,7 +429,7 @@ export default function ProjectPage() {
           : p,
       )
       setRenameOpen(false)
-      toast({ title: 'Case renamed', description: `Now called "${name}".` })
+      toast.success('Case renamed', { description: `Now called "${name}".` })
     } catch (err: any) {
       setRenameError(err?.message || 'Something went wrong. Please try again.')
     } finally {
@@ -484,17 +456,10 @@ export default function ProjectPage() {
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.error || `Delete failed (${res.status})`)
       }
-      toast({
-        title: 'Project deleted',
-        description: `"${name}" and all its cases have been removed.`,
-      })
+      toast.success('Project deleted', { description: `"${name}" and all its cases have been removed.` })
       router.push('/home')
     } catch (err: any) {
-      toast({
-        title: 'Could not delete project',
-        description: err?.message || 'Something went wrong. Please try again.',
-        variant: 'destructive',
-      })
+      toast.error('Could not delete project', { description: err?.message || 'Something went wrong. Please try again.' })
     }
   }
 
@@ -541,11 +506,7 @@ export default function ProjectPage() {
       }
     } catch (error) {
       console.error('Failed to fetch tree data:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to load tree visualization',
-        variant: 'destructive',
-      })
+      toast.error('Error', { description: 'Failed to load tree visualization' })
     } finally {
       setIsLoadingModal(false)
     }
@@ -596,15 +557,8 @@ export default function ProjectPage() {
         elemental_task: 'ELEMENTAL TASK',
       }
       const flowsCount = Array.isArray(node.flows) ? node.flows.length : node.flow_count ?? 0
-      const cost =
-        (node.labor_cost ?? 0) +
-        (node.energy_cost ?? 0) +
-        (node.material_cost ?? 0) +
-        (node.overhead_cost ?? 0) +
-        (node.equipment_cost ?? 0) +
-        (node.transportation_cost ?? 0) +
-        (node.operational_cost_usd ?? 0) +
-        (node.capital_cost_usd ?? 0)
+      // Numbers, not concatenated DECIMAL strings; the canvas's rule (PROJ-4).
+      const cost = componentCostUSD(node)
 
       return (
         <div key={node.component_id} className="flex flex-col items-center relative">
@@ -1284,9 +1238,9 @@ export default function ProjectPage() {
                           },
                         )
                         if (r.ok) {
-                          toast({
-                            title: 'Cloned from base',
-                            description: `Copied components from ${baseCase.name}.`,
+                          const j = await r.json().catch(() => ({}))
+                          toast.success('Cloned from base', {
+                            description: `Copied ${j?.cloned ?? 'the'} steps and ${j?.flows_copied ?? 'their'} flows from ${baseCase.name}.`,
                           })
                           // re-trigger tree fetch by toggling activeCaseId
                           setActiveCaseId((id) => {
@@ -1295,19 +1249,11 @@ export default function ProjectPage() {
                             return null
                           })
                         } else {
-                          toast({
-                            title: 'Clone failed',
-                            description:
-                              'Server does not yet support clone-from-base. Use Open editor.',
-                            variant: 'destructive',
-                          })
+                          const j = await r.json().catch(() => ({}))
+                          toast.error('Clone failed', { description: j?.error || 'Could not copy the base case. Nothing was changed.' })
                         }
                       } catch {
-                        toast({
-                          title: 'Clone failed',
-                          description: 'Network error while cloning.',
-                          variant: 'destructive',
-                        })
+                        toast.error('Clone failed', { description: 'Network error while cloning.' })
                       }
                     }}
                   />
@@ -1923,28 +1869,26 @@ export default function ProjectPage() {
                       },
                     )
                     if (r.ok) {
-                      toast({
-                        title: 'Assessment complete',
+                      toast.success('Assessment complete', {
                         description: `Calculated impacts for ${activeCase.name}.`,
                       })
+                      // Results only after a run that worked (PROJ-5): a
+                      // failed run used to land on an empty or stale results page.
+                      router.push(
+                        `/project/${projectId}/case/${activeCase.id}/results`,
+                      )
                     } else {
-                      toast({
-                        title: 'Assessment failed',
-                        description: 'Could not run the assessment.',
-                        variant: 'destructive',
+                      const j = await r.json().catch(() => ({}))
+                      toast.error('Assessment failed', {
+                        description: j?.error || 'Could not run the assessment.',
                       })
                     }
                   } catch {
-                    toast({
-                      title: 'Assessment failed',
+                    toast.error('Assessment failed', {
                       description: 'Network error.',
-                      variant: 'destructive',
                     })
                   } finally {
                     setIsRunningAssessment(false)
-                    router.push(
-                      `/project/${projectId}/case/${activeCase.id}/results`,
-                    )
                   }
                 }}
               >

@@ -20,7 +20,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { apiRequest } from '@/lib/api-client';
 
 import { useProjectStore, type ComponentNode } from '@/lib/store';
@@ -146,7 +146,6 @@ export function ComponentForm({
 }: ComponentFormProps) {
   const isModal = variant === 'modal';
   const router = useRouter();
-  const { toast } = useToast();
   const { projects, addComponentNode, updateComponentNode } = useProjectStore();
 
   const isEditMode = mode === 'edit';
@@ -160,15 +159,16 @@ export function ComponentForm({
     drivers:            initial?.drivers ?? [],
     mass:               initial?.mass ?? 0,
     massUnit:           initial?.massUnit ?? '',
-    operationalCostUSD: initial?.operationalCostUSD ?? 0,
-    capitalCostUSD:     initial?.capitalCostUSD ?? 0,
+    // Costs: undefined = unknown (blank), 0 = a real zero (FLOW-7).
+    operationalCostUSD: initial?.operationalCostUSD as number | undefined,
+    capitalCostUSD:     initial?.capitalCostUSD as number | undefined,
     // Advanced ABC costs
-    laborCost:          initial?.laborCost ?? 0,
-    energyCost:         initial?.energyCost ?? 0,
-    transportationCost: initial?.transportationCost ?? 0,
-    materialCost:       initial?.materialCost ?? 0,
-    equipmentCost:      initial?.equipmentCost ?? 0,
-    overheadCost:       initial?.overheadCost ?? 0,
+    laborCost:          initial?.laborCost as number | undefined,
+    energyCost:         initial?.energyCost as number | undefined,
+    transportationCost: initial?.transportationCost as number | undefined,
+    materialCost:       initial?.materialCost as number | undefined,
+    equipmentCost:      initial?.equipmentCost as number | undefined,
+    overheadCost:       initial?.overheadCost as number | undefined,
     currency:           initial?.currency ?? 'USD',
   });
 
@@ -349,14 +349,15 @@ export function ComponentForm({
         drivers: formData.drivers.length > 0 ? formData.drivers : undefined,
         mass: formData.mass || undefined,
         massUnit: formData.massUnit || undefined,
-        operationalCostUSD: formData.operationalCostUSD || undefined,
-        capitalCostUSD: formData.capitalCostUSD || undefined,
-        laborCost: formData.laborCost || undefined,
-        energyCost: formData.energyCost || undefined,
-        transportationCost: formData.transportationCost || undefined,
-        materialCost: formData.materialCost || undefined,
-        equipmentCost: formData.equipmentCost || undefined,
-        overheadCost: formData.overheadCost || undefined,
+        // `?? undefined`, not `|| undefined`: 0 is a cost (FLOW-7).
+        operationalCostUSD: formData.operationalCostUSD ?? undefined,
+        capitalCostUSD: formData.capitalCostUSD ?? undefined,
+        laborCost: formData.laborCost ?? undefined,
+        energyCost: formData.energyCost ?? undefined,
+        transportationCost: formData.transportationCost ?? undefined,
+        materialCost: formData.materialCost ?? undefined,
+        equipmentCost: formData.equipmentCost ?? undefined,
+        overheadCost: formData.overheadCost ?? undefined,
         currency: formData.currency || undefined,
       };
 
@@ -375,16 +376,27 @@ export function ComponentForm({
         drivers: payload.drivers && payload.drivers.length > 0 ? payload.drivers : null,
         quantity: payload.mass ?? 1,
         unit: payload.massUnit || 'unit',
-        opex: payload.operationalCostUSD ?? null,
-        capex: payload.capitalCostUSD ?? null,
-        labor_cost: payload.laborCost ?? null,
-        energy_cost: payload.energyCost ?? null,
-        material_cost: payload.materialCost ?? null,
-        transportation_cost: payload.transportationCost ?? null,
-        equipment_cost: payload.equipmentCost ?? null,
-        overhead_cost: payload.overheadCost ?? null,
         currency: payload.currency || 'USD',
       };
+      // Costs: a number (0 included) is saved; a blank is NULL (unknown). The
+      // API clears a column when its key is sent as null, so on edit a blank
+      // is only sent for a cost this form loaded (and the user emptied): a
+      // cost it never loaded is left alone rather than wiped.
+      const COST_KEYS: Array<[keyof ComponentFormInitialValues, string]> = [
+        ['operationalCostUSD', 'opex'],
+        ['capitalCostUSD', 'capex'],
+        ['laborCost', 'labor_cost'],
+        ['energyCost', 'energy_cost'],
+        ['materialCost', 'material_cost'],
+        ['transportationCost', 'transportation_cost'],
+        ['equipmentCost', 'equipment_cost'],
+        ['overheadCost', 'overhead_cost'],
+      ];
+      for (const [key, col] of COST_KEYS) {
+        const v = (payload as any)[key] as number | undefined;
+        if (v != null) (dbBody as any)[col] = v;
+        else if (!isEditMode || initial?.[key] != null) (dbBody as any)[col] = null;
+      }
 
       if (isEditMode && editingId) {
         const res = await apiRequest(`/api/components/${editingId}`, {
@@ -393,8 +405,7 @@ export function ComponentForm({
         });
         if (!res.ok) throw new Error(`PUT /api/components/${editingId} → ${res.status}`);
         updateComponentNode(editingId, payload);
-        toast({
-          title: 'Component updated',
+        toast.success('Component updated', {
           description: `${formData.processName} saved to database`,
         });
       } else {
@@ -407,8 +418,7 @@ export function ComponentForm({
         const newDbId = data?.component?.component_id ?? data?.component_id;
         // Keep Zustand in sync for optimistic UI; use server id when available
         addComponentNode(caseId, { ...payload, id: newDbId ? String(newDbId) : undefined } as any);
-        toast({
-          title: 'Component created',
+        toast.success('Component created', {
           description: `${formData.processName} saved to database`,
         });
       }
@@ -419,10 +429,8 @@ export function ComponentForm({
       }
     } catch (err: any) {
       console.error('Component save failed:', err);
-      toast({
-        title: 'Save failed',
-        description: err?.message || `Could not ${isEditMode ? 'update' : 'create'} component. Check console.`,
-        variant: 'destructive',
+      toast.error('Save failed', {
+        description: err?.message || `Could not ${isEditMode ? 'update' : 'create'} component.`,
       });
     } finally {
       setIsSubmitting(false);
@@ -1105,13 +1113,14 @@ function CostField({
   label, value, currency, onChange,
 }: {
   label: string;
-  value: number;
+  value: number | undefined;
   currency: string;
-  onChange: (v: number) => void;
+  onChange: (v: number | undefined) => void;
 }) {
+  const id = React.useId();
   return (
     <div>
-      <label className="label">{label}</label>
+      <label className="label" htmlFor={id}>{label}</label>
       <div style={{ position: 'relative' }}>
         <span
           className="mono"
@@ -1128,15 +1137,18 @@ function CostField({
           {currency || 'USD'}
         </span>
         <input
+          id={id}
           className="input mono"
           type="number"
           min="0"
           step="0.01"
-          value={value || ''}
+          value={value ?? ''}
           placeholder="0.00"
-          onChange={(e) =>
-            onChange(e.target.value === '' ? 0 : parseFloat(e.target.value))
-          }
+          onChange={(e) => {
+            // Blank is unknown; 0 is a real cost (FLOW-7).
+            const n = e.target.value === '' ? undefined : parseFloat(e.target.value);
+            onChange(n !== undefined && Number.isFinite(n) ? n : undefined);
+          }}
           style={{ paddingLeft: 46 }}
         />
       </div>
@@ -1145,14 +1157,14 @@ function CostField({
 }
 
 function formatCostSummary(f: {
-  operationalCostUSD: number;
-  capitalCostUSD: number;
-  laborCost: number;
-  energyCost: number;
-  materialCost: number;
-  transportationCost: number;
-  equipmentCost: number;
-  overheadCost: number;
+  operationalCostUSD?: number;
+  capitalCostUSD?: number;
+  laborCost?: number;
+  energyCost?: number;
+  materialCost?: number;
+  transportationCost?: number;
+  equipmentCost?: number;
+  overheadCost?: number;
 }) {
   const total =
     (f.operationalCostUSD || 0) +

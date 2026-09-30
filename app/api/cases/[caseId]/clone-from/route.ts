@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, insert } from '@/lib/db-helpers';
+import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 
 // POST /api/cases/[caseId]/clone-from
 // Body: { sourceCaseId: number }
-// Duplicates every component from sourceCaseId into caseId, preserving the
-// parent/child hierarchy. Target case must be empty.
+// Deep-copies sourceCaseId's inventory into caseId: every step (costs, labor,
+// allocation, life-cycle stage), every flow (with its transport leg) and the
+// reference flow / data basis, in one transaction, with the same copy code as
+// Duplicate. Target case must be empty.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -28,7 +31,7 @@ export async function POST(
       [targetCaseId],
     );
     const sourceCase = await queryOne<any>(
-      `SELECT project_id FROM case_table WHERE case_id = ?`,
+      `SELECT * FROM case_table WHERE case_id = ?`,
       [sourceCaseId],
     );
 
@@ -62,41 +65,12 @@ export async function POST(
       );
     }
 
-    const source = await query<any>(
-      `SELECT * FROM component WHERE case_id = ? ORDER BY hierarchy_level, component_id`,
-      [sourceCaseId],
-    );
-
-    const idMap = new Map<number, number>();
-    for (const c of source) {
-      const newParent =
-        c.parent_component_id != null
-          ? idMap.get(c.parent_component_id) ?? null
-          : null;
-      const newId = await insert(
-        `INSERT INTO component
-         (case_id, parent_component_id, component_name, component_type, hierarchy_level, description,
-          process_type, driver_category, driver_type, drivers, quantity, unit, opex, capex)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          targetCaseId,
-          newParent,
-          c.component_name,
-          c.component_type,
-          c.hierarchy_level,
-          c.description ?? null,
-          c.process_type ?? null,
-          c.driver_category ?? null,
-          c.driver_type ?? null,
-          c.drivers ? (typeof c.drivers === 'string' ? c.drivers : JSON.stringify(c.drivers)) : null,
-          c.quantity ?? 1.0,
-          c.unit ?? 'unit',
-          c.opex ?? null,
-          c.capex ?? null,
-        ],
-      );
-      idMap.set(c.component_id, newId);
-    }
+    // All or nothing: a half-copied case used to block the retry with the
+    // "not empty" guard above.
+    const copied = await transaction(async (conn) => {
+      await copyCaseReferenceFields(conn, sourceCase, targetCaseId);
+      return copyCaseInventory(conn, Number(sourceCaseId), targetCaseId);
+    });
 
     // A cloned case has NO results until someone runs it. This used to copy
     // the source case's latest run and multiply every impact by 0.72 "to
@@ -106,7 +80,8 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      cloned: idMap.size,
+      cloned: copied.components,
+      flows_copied: copied.flows,
       clonedRunId: null,
     });
   } catch (error: any) {

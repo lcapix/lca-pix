@@ -58,6 +58,7 @@ export function GoalScopeCard({
   caseId,
   openSignal = 0,
   onChange,
+  onSaved,
 }: {
   projectId: string
   caseId: string
@@ -65,6 +66,8 @@ export function GoalScopeCard({
   openSignal?: number
   /** Called with what is saved, or null when the database has no goal & scope fields. */
   onChange?: (summary: GoalScopeSummary | null) => void
+  /** Called after a successful save (the data basis also rewrites the product's quantity). */
+  onSaved?: () => void
 }) {
   const [saved, setSaved] = useState<FormState | null>(null)
   const [form, setForm] = useState<FormState | null>(null)
@@ -182,6 +185,7 @@ export function GoalScopeCard({
       setForm(next)
       setOpen(false)
       onChangeRef.current?.(toSummary(next))
+      onSaved?.()
       toast.success('Goal & scope saved')
     } catch (e: any) {
       toast.error(e?.message || 'Could not save goal & scope.')

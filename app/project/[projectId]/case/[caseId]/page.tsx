@@ -86,6 +86,8 @@ export default function CaseViewPage() {
   // Deep-link target: the results page links each flow row to
   // ?component=<name> so "click a flow → edit its component" works.
   const preselectComponent = searchParams.get('component')
+  // ?componentId=<id>: the same, by id (the old /component/:id/edit URL lands here).
+  const preselectComponentId = searchParams.get('componentId')
 
   const { updateComponentNode, deleteComponentNode } = useProjectStore()
 
@@ -263,62 +265,93 @@ export default function CaseViewPage() {
   const [pendingScale, setPendingScale] = useState<(PendingScale & { fd: EditFormData }) | null>(null)
   const skipScaleCheck = useRef(false)
 
-  // ---------- Fetch on mount (unchanged logic) ----------
-  useEffect(() => {
-    const fetchCaseData = async () => {
-      setIsLoading(true)
-      try {
-        const [caseResponse, componentsResponse] = await Promise.all([
-          apiRequest(`/api/cases/${caseId}`),
-          apiRequest(`/api/cases/${caseId}/components`),
-        ])
+  // ---------- Fetch: full-page loader on the first load only ----------
+  // Later refetches (lcapix:components-changed, delete, goal & scope) run in
+  // the background with the editor mounted, so calculator and form state
+  // survive them (EDIT-6). Every components response carries a sequence
+  // number and only the newest one is applied, and the effect aborts its
+  // requests when it re-runs, so an older response can never overwrite a
+  // newer one.
+  const loadedCaseId = useRef<string | null>(null)
+  const componentsSeq = useRef(0)
 
+  /** Fetch the case's components; returns them, or null if a newer fetch won. */
+  const reloadComponents = async (signal?: AbortSignal): Promise<ComponentNode[] | null> => {
+    const seq = ++componentsSeq.current
+    const r = await apiRequest(`/api/cases/${caseId}/components`, signal ? { signal } : undefined)
+    const data = await r.json()
+    if (seq !== componentsSeq.current || signal?.aborted) return null
+    const list: ComponentNode[] =
+      data?.success && Array.isArray(data.components)
+        ? data.components.map((dbComp: any) => transformComponentFromDB(dbComp))
+        : []
+    setComponents(list)
+    return list
+  }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const firstLoad = loadedCaseId.current !== caseId
+    const fetchCaseData = async () => {
+      if (firstLoad) setIsLoading(true)
+      try {
+        const [caseResponse, list] = await Promise.all([
+          apiRequest(`/api/cases/${caseId}`, { signal: controller.signal }),
+          reloadComponents(controller.signal),
+        ])
         const caseData = await caseResponse.json()
-        const componentsData = await componentsResponse.json()
+        if (controller.signal.aborted) return
 
         if (caseData.success && caseData.case) {
           const transformedCase = transformCaseFromDB(caseData.case)
-          const transformedComponents =
-            componentsData.success && componentsData.components
-              ? componentsData.components.map((dbComp: any) =>
-                  transformComponentFromDB(dbComp),
-                )
-              : []
-
-          setCurrentCase({ ...transformedCase, components: transformedComponents })
-          setComponents(transformedComponents)
+          setCurrentCase((prev) => ({
+            ...transformedCase,
+            components: list ?? prev?.components ?? [],
+          }))
           setLearningState(caseData.case.learning_state ?? null)
           setHasWriteUp(!!String(caseData.case.interpretation ?? '').trim())
+          loadedCaseId.current = caseId
         } else {
           toast.error('Case not found')
           router.push(`/project/${projectId}`)
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (controller.signal.aborted || error?.name === 'AbortError') return
         console.error('Failed to fetch case:', error)
-        toast.error('Failed to load case details')
-        router.push(`/project/${projectId}`)
+        if (firstLoad) {
+          toast.error('Failed to load case details')
+          router.push(`/project/${projectId}`)
+        } else {
+          // A failed background refresh keeps what is on screen.
+          toast.error('Could not refresh the case. What you see may be out of date.')
+        }
       } finally {
-        setIsLoading(false)
+        if (!controller.signal.aborted) setIsLoading(false)
       }
     }
 
     fetchCaseData()
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, projectId, router, refreshKey])
 
   // ---------- Auto-select: the ?component=<name> deep-link target, else first root ----------
   useEffect(() => {
     if (components.length > 0 && !selectedNode) {
+      const byId = preselectComponentId
+        ? components.find((c) => c.id === preselectComponentId)
+        : null
       const named = preselectComponent
         ? components.find((c) => c.name === preselectComponent)
         : null
-      const target = named ?? components.find((c) => !c.parentId) ?? components[0]
+      const target = byId ?? named ?? components.find((c) => !c.parentId) ?? components[0]
       if (target) {
         setSelectedNode(target.id)
         loadFormFor(target)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [components.length, preselectComponent])
+  }, [components.length, preselectComponent, preselectComponentId])
 
   // ---------- Tree adapter (memoized) ----------
   const tree = useMemo(() => {
@@ -433,6 +466,7 @@ export default function CaseViewPage() {
       allocationMethod: c.allocationMethod ?? 'none',
       allocationFactor: c.allocationFactor ?? 1,
       allocationNote: c.allocationNote ?? undefined,
+      lifeCycleStage: c.lifeCycleStage ?? null,
     })
     setIsEditing(true)
     setIsCreating(false)
@@ -617,7 +651,7 @@ export default function CaseViewPage() {
             fd.drivers && fd.drivers.length > 0
               ? JSON.stringify(fd.drivers)
               : null,
-          quantity: fd.mass || null,
+          quantity: fd.mass ?? null,
           unit: fd.massUnit || null,
           opex: costOrNull(fd.operationalCostUSD),
           capex: costOrNull(fd.capitalCostUSD),
@@ -635,6 +669,8 @@ export default function CaseViewPage() {
           allocation_factor:
             fd.allocationMethod === 'none' ? 1 : fd.allocationFactor ?? null,
           allocation_note: fd.allocationNote ?? null,
+          // A step with no stage reads as production; null keeps it that way.
+          life_cycle_stage: fd.lifeCycleStage || null,
         }
 
         const response = await apiRequest(`/api/components/${selectedNode}`, {
@@ -645,11 +681,8 @@ export default function CaseViewPage() {
         const result = await response.json()
         if (!result.success) throw new Error(result.error || 'Failed to update component')
 
-        const componentsResponse = await apiRequest(`/api/cases/${caseId}/components`)
-        const componentsData = await componentsResponse.json()
-        if (componentsData.success && componentsData.components) {
-          const transformed = componentsData.components.map(transformComponentFromDB)
-          setComponents(transformed)
+        const transformed = await reloadComponents()
+        if (transformed) {
           // Re-fill the panel from what was just saved. It used to be cleared
           // (setEditFormData({}) below), so every field went blank after Save
           // and only came back when the step was selected again.
@@ -722,40 +755,106 @@ export default function CaseViewPage() {
     }
   }
 
-  // ---------- Delete (preserved, simplified for inspector button) ----------
-  const handleDeleteSelected = () => {
-    if (!selectedNode) return
+  // ---------- Delete ----------
+  // Deletes on the server (DELETE /api/components/:id), then refetches; the
+  // node only disappears once the server says it is gone (EDIT-1). A step
+  // with children asks two plain questions, and Cancel on the last one never
+  // does anything: delete everything under it, or keep the children by
+  // moving them up to this step's parent.
+  const [isDeleting, setIsDeleting] = useState(false)
+  const handleDeleteSelected = async () => {
+    if (!selectedNode || isDeleting) return
     const comp = components.find((c) => c.id === selectedNode)
     if (!comp) return
-    if (!confirm(`Delete "${comp.name}"? This action cannot be undone.`)) return
 
     const children = components.filter((c) => c.parentId === comp.id)
-    if (children.length > 0) {
-      const cascade = confirm(
-        `"${comp.name}" has ${children.length} child component(s). OK = cascade delete all, Cancel = convert children to floating components.`,
-      )
-      if (cascade) {
-        const deleteRecursively = (nodeId: string) => {
-          components
-            .filter((c) => c.parentId === nodeId)
-            .forEach((ch) => deleteRecursively(ch.id))
-          deleteComponentNode(nodeId)
+    const below = new Set<string>()
+    const stack = [comp.id]
+    while (stack.length) {
+      const cur = stack.pop()!
+      for (const c of components) {
+        if (c.parentId === cur && !below.has(c.id)) {
+          below.add(c.id)
+          stack.push(c.id)
         }
-        deleteRecursively(comp.id)
-        toast.success(`Deleted with ${children.length} child(ren)`)
-      } else {
-        children.forEach((ch) => updateComponentNode(ch.id, { parentId: null }))
-        deleteComponentNode(comp.id)
-        toast.success(`Deleted. ${children.length} child(ren) now floating`)
       }
-    } else {
-      deleteComponentNode(comp.id)
-      toast.success('Component deleted')
     }
+    const steps = (n: number) => `${n} step${n === 1 ? '' : 's'}`
 
-    setSelectedNode(null)
-    setIsEditing(false)
-    setEditFormData({})
+    let mode: 'delete' | 'reparent' | null = null
+    if (children.length === 0) {
+      if (confirm(`Delete "${comp.name}"? This cannot be undone.`)) mode = 'delete'
+    } else {
+      const parentName = comp.parentId
+        ? components.find((c) => c.id === comp.parentId)?.name
+        : null
+      if (
+        confirm(
+          `Delete "${comp.name}" and the ${steps(below.size)} under it, with their flows and costs? This cannot be undone.\n\nOK deletes them all. Cancel lets you keep the steps under it instead.`,
+        )
+      ) {
+        mode = 'delete'
+      } else if (
+        confirm(
+          `Keep the ${steps(children.length)} directly under "${comp.name}" by moving ${children.length === 1 ? 'it' : 'them'} up ${parentName ? `under "${parentName}"` : 'to the top level'}, and delete only "${comp.name}"?\n\nOK moves ${children.length === 1 ? 'it' : 'them'} and deletes "${comp.name}". Cancel does nothing.`,
+        )
+      ) {
+        mode = 'reparent'
+      }
+    }
+    if (!mode) return
+
+    setIsDeleting(true)
+    try {
+      const res = await apiRequest(
+        `/api/components/${encodeURIComponent(comp.id)}?children=${mode}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error || `Could not delete "${comp.name}" (${res.status})`)
+      }
+      // Keep the persisted local cache in step with the server.
+      if (mode === 'delete') {
+        ;[comp.id, ...below].forEach((id) => deleteComponentNode(id))
+      } else {
+        children.forEach((ch) => updateComponentNode(ch.id, { parentId: comp.parentId ?? null }))
+        deleteComponentNode(comp.id)
+      }
+      toast.success(
+        mode === 'delete'
+          ? below.size > 0
+            ? `Deleted "${comp.name}" and the ${steps(below.size)} under it`
+            : `Deleted "${comp.name}"`
+          : `Deleted "${comp.name}"; ${steps(children.length)} moved up`,
+      )
+      setSelectedNode(null)
+      setIsEditing(false)
+      setEditFormData({})
+      // Background refetch of the tree, completeness and journey.
+      setRefreshKey((k) => k + 1)
+    } catch (e: any) {
+      // The node stays: nothing was removed locally.
+      toast.error(e?.message || `Could not delete "${comp.name}"`)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // ---------- Goal & scope saved (EDIT-8) ----------
+  // Saving the data basis also rewrites the product's quantity on the server.
+  // Pull the tree again and carry the new quantity into an open product form,
+  // or the next inspector Save would send the old one and revert it.
+  const handleGoalScopeSaved = async () => {
+    try {
+      const list = await reloadComponents()
+      const product = list?.find((c) => c.type === COMPONENT_TYPES.PRODUCT && !c.parentId)
+      if (product && product.id === selectedNode) {
+        setEditFormData((f) => ({ ...f, mass: product.mass }))
+      }
+    } catch {
+      toast.error('Could not refresh the steps after saving goal & scope')
+    }
   }
 
   // ---------- Render ----------
@@ -1202,6 +1301,7 @@ export default function CaseViewPage() {
         caseId={caseId}
         openSignal={goalOpenSignal}
         onChange={setGoalScope}
+        onSaved={handleGoalScopeSaved}
       />
 
       {learnOpen && (
@@ -1459,7 +1559,7 @@ export default function CaseViewPage() {
           {isCreating ? (
             <CreateComponentBanner
               formData={editFormData}
-              onChange={(patch) => setEditFormData({ ...editFormData, ...patch })}
+              onChange={(patch) => setEditFormData((f) => ({ ...f, ...patch }))}
               onSave={() => handleSaveComponent()}
               onCancel={() => {
                 setIsCreating(false)
@@ -1474,7 +1574,7 @@ export default function CaseViewPage() {
               editFormData={selectedComponent ? editFormData : undefined}
               onChange={
                 selectedComponent
-                  ? (patch) => setEditFormData({ ...editFormData, ...patch })
+                  ? (patch) => setEditFormData((f) => ({ ...f, ...patch }))
                   : undefined
               }
               onSave={selectedComponent ? () => handleSaveComponent() : undefined}
@@ -1485,7 +1585,7 @@ export default function CaseViewPage() {
               onApplyCosts={
                 selectedComponent
                   ? (patch) => {
-                      setEditFormData({ ...editFormData, ...patch })
+                      setEditFormData((f) => ({ ...f, ...patch }))
                       // Save with the patch merged directly (avoids stale state).
                       handleSaveComponent(patch as any)
                     }

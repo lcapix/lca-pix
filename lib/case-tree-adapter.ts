@@ -201,3 +201,72 @@ export function rollupTree(root: CaseTreeNode | null): Map<string, NodeRollup> {
   visit(root)
   return map
 }
+
+// ---------------------------------------------------------------------------
+// Costs of raw component rows (as the API returns them: mysql2 DECIMAL columns
+// arrive as strings, so `+` would concatenate them).
+
+type CostRow = {
+  labor_cost?: unknown
+  energy_cost?: unknown
+  material_cost?: unknown
+  transportation_cost?: unknown
+  equipment_cost?: unknown
+  overhead_cost?: unknown
+  opex?: unknown
+  capex?: unknown
+}
+
+const money = (v: unknown): number => {
+  const n = Number(v ?? 0)
+  return Number.isFinite(n) ? n : 0
+}
+
+function itemizedOf(r: CostRow) {
+  return {
+    labor: money(r.labor_cost),
+    energy: money(r.energy_cost),
+    material: money(r.material_cost),
+    other: money(r.transportation_cost) + money(r.equipment_cost) + money(r.overhead_cost),
+  }
+}
+
+/**
+ * One step's cost, by the same rule as the canvas (costOf above): the
+ * itemized activity costs when there are any, otherwise opex + capex, which
+ * migration 003 defines as the sum of the categories or a direct entry. Adding
+ * both would count the same money twice.
+ */
+export function componentCostUSD(r: CostRow): number {
+  const i = itemizedOf(r)
+  const itemized = i.labor + i.energy + i.material + i.other
+  return itemized > 0 ? itemized : money(r.opex) + money(r.capex)
+}
+
+/**
+ * The project page's per-case cost summary. Capex is a one-time investment,
+ * so it is left out; opex counts only for a step with no itemized costs.
+ * Null when the case has no cost data.
+ */
+export function summarizeCaseCosts(rows: CostRow[]): {
+  labor: number
+  energy: number
+  material: number
+  overhead: number
+  total: number
+} | null {
+  let labor = 0
+  let energy = 0
+  let material = 0
+  let overhead = 0
+  for (const r of rows || []) {
+    const i = itemizedOf(r)
+    const itemized = i.labor + i.energy + i.material + i.other
+    labor += i.labor
+    energy += i.energy
+    material += i.material
+    overhead += itemized > 0 ? i.other : money(r.opex)
+  }
+  const total = labor + energy + material + overhead
+  return total > 0 ? { labor, energy, material, overhead, total } : null
+}

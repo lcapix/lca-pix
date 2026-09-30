@@ -63,10 +63,15 @@ export function getTypeLabel(type: NodeType): string {
 // Build breadcrumb path for a node
 export function buildBreadcrumbPath(node: ProcessNode, allNodes: ProcessNode[]): string {
   const path: string[] = []
+  // A parent cycle (A under B under A) must end the walk, not hang the page.
+  const seen = new Set<string>([node.id])
   let current: ProcessNode | undefined = node
-  
+
   while (current && current.parentId) {
-    current = allNodes.find(n => n.id === current?.parentId)
+    const parentId: string = current.parentId
+    if (seen.has(parentId)) break
+    seen.add(parentId)
+    current = allNodes.find(n => n.id === parentId)
     if (current) {
       path.unshift(current.name)
     }

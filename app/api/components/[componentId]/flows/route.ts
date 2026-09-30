@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
+import {
+  parseFlowQuantity,
+  QUANTITY_ERROR,
+  findUsableSubstance,
+  SUBSTANCE_ERROR,
+} from '@/lib/flow-fields';
 
 // GET /api/components/[componentId]/flows - Get all flows for a component
 export async function GET(
@@ -92,11 +98,11 @@ export async function POST(
     const body = await request.json();
     const substance_id = body.substance_id;
     const flow_type = body.flow_type ?? body.direction;
-    const quantity = body.quantity ?? body.amount;
+    const rawQuantity = body.quantity ?? body.amount;
     const unit = body.unit;
     const driver_description = body.driver_description ?? null;
 
-    if (!substance_id || !flow_type || quantity === undefined || !unit) {
+    if (!substance_id || !flow_type || rawQuantity === undefined || !unit) {
       return NextResponse.json(
         { error: 'Substance, flow_type, quantity, and unit are required' },
         { status: 400 }
@@ -107,14 +113,22 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
 
+    // FLOW-4: null, words, NaN and negatives used to reach MySQL or the engine.
+    const quantity = parseFlowQuantity(rawQuantity);
+    if (quantity === null) {
+      return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
+    }
+
+    // L3: only a library substance or the caller's own custom one.
+    const substanceRow = await findUsableSubstance(substance_id, userId);
+    if (!substanceRow) {
+      return NextResponse.json({ error: SUBSTANCE_ERROR }, { status: 400 });
+    }
+
     // Unit guard: the entered unit must be convertible into the substance's
     // factor unit, or the assessment could only exclude this flow later. The
     // flow keeps the unit AS ENTERED (provenance); the engine converts at
     // calculation time.
-    const substanceRow = await queryOne<any>(
-      `SELECT unit AS default_unit, substance_name FROM substances WHERE substance_id = ?`,
-      [substance_id]
-    );
     if (substanceRow?.default_unit) {
       const conv = convertQuantity(1, unit, substanceRow.default_unit);
       if (!conv) {
@@ -132,7 +146,7 @@ export async function POST(
       `INSERT INTO flows
          (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [componentId, substance_id, flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
+      [componentId, Number(substance_id), flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
     );
 
     // What a transport leg was computed from (migrate-022). Its own statement,

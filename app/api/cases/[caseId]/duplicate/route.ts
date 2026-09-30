@@ -12,26 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
-
-/**
- * Copy columns that later migrations added, when the source row has them.
- * Column names come from fixed lists in this file, never from the request.
- */
-async function copyOptionalColumns(
-  conn: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
-  table: 'case_table' | 'component',
-  idColumn: 'case_id' | 'component_id',
-  id: number,
-  source: Record<string, unknown>,
-  columns: string[],
-): Promise<void> {
-  const present = columns.filter((c) => Object.prototype.hasOwnProperty.call(source, c));
-  if (present.length === 0) return;
-  await conn.query(
-    `UPDATE ${table} SET ${present.map((c) => `${c} = ?`).join(', ')} WHERE ${idColumn} = ?`,
-    [...present.map((c) => source[c] ?? null), id],
-  );
-}
+import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 
 export async function POST(
   request: NextRequest,
@@ -105,77 +86,13 @@ export async function POST(
       );
       const newCaseId = caseIns.insertId;
 
-      // Columns added by later migrations are copied only where they exist
-      // (SELECT * shows which): this alternative's reference flow and data basis.
-      await copyOptionalColumns(conn, 'case_table', 'case_id', newCaseId, sourceCase, [
-        'reference_flow',
-        'reference_flow_unit',
-        'modeled_output',
-      ]);
+      // This alternative's reference flow and data basis, then every step
+      // (costs, labor, allocation, stage) and flow (with its transport leg),
+      // parents before children: lib/case-copy.ts, shared with clone-from.
+      await copyCaseReferenceFields(conn, sourceCase, newCaseId);
+      const copied = await copyCaseInventory(conn, caseId, newCaseId);
 
-      // Copy components in hierarchy order so parents exist before children.
-      const [components]: any = await conn.query(
-        `SELECT * FROM component WHERE case_id = ? ORDER BY hierarchy_level, component_id`,
-        [caseId]
-      );
-      const idMap = new Map<number, number>();
-      let flowsCopied = 0;
-
-      for (const comp of components) {
-        const [compIns]: any = await conn.query(
-          `INSERT INTO component
-             (case_id, component_name, component_type, parent_component_id,
-              hierarchy_level, quantity, unit, description, process_type,
-              driver_category, driver_type, drivers,
-              opex, capex, labor_cost, energy_cost, transportation_cost,
-              material_cost, equipment_cost, overhead_cost, currency,
-              cost_allocation_type)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            newCaseId,
-            comp.component_name,
-            comp.component_type,
-            comp.parent_component_id ? (idMap.get(comp.parent_component_id) ?? null) : null,
-            comp.hierarchy_level,
-            comp.quantity,
-            comp.unit,
-            comp.description,
-            comp.process_type,
-            comp.driver_category,
-            comp.driver_type,
-            comp.drivers,
-            comp.opex,
-            comp.capex,
-            comp.labor_cost,
-            comp.energy_cost,
-            comp.transportation_cost,
-            comp.material_cost,
-            comp.equipment_cost ?? null,
-            comp.overhead_cost ?? null,
-            comp.currency,
-            comp.cost_allocation_type,
-          ]
-        );
-        idMap.set(comp.component_id, compIns.insertId);
-        // Labor multiplicands and allocation, from later migrations.
-        await copyOptionalColumns(conn, 'component', 'component_id', compIns.insertId, comp, [
-          'labor_hours',
-          'labor_occupation',
-          'allocation_method',
-          'allocation_factor',
-          'allocation_note',
-        ]);
-
-        const [flowIns]: any = await conn.query(
-          `INSERT INTO flows (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
-           SELECT ?, substance_id, flow_type, quantity, unit, is_driver, driver_description
-           FROM flows WHERE component_id = ?`,
-          [compIns.insertId, comp.component_id]
-        );
-        flowsCopied += flowIns.affectedRows ?? 0;
-      }
-
-      return { newCaseId, components: idMap.size, flows: flowsCopied };
+      return { newCaseId, components: copied.components, flows: copied.flows };
     });
 
     return NextResponse.json({
@@ -188,8 +105,10 @@ export async function POST(
     }, { status: 201 });
   } catch (error: any) {
     if (
+      error.message === 'Unauthorized' ||
       error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token'
+      error.message === 'Invalid or expired token' ||
+      error.message === 'User account not found or inactive'
     ) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
