@@ -10,7 +10,6 @@ import {
   StatusDot,
   MiniBar,
   fmtInt,
-  fmtNum,
 } from '@/components/lcapix';
 import { apiGet } from '@/lib/api-client';
 import { ImportButtons } from '@/components/integrations/import-buttons';
@@ -1019,6 +1018,67 @@ function SchemaTab({ status }: { status: Status | null }) {
 }
 
 export default function IntegrationsAdminPage() {
+  // The integration APIs are admin-only (they write the shared factor library,
+  // substance catalog and cost-rate cache). Ask the server who this is before
+  // rendering or loading anything; the client store has no account_type.
+  const [access, setAccess] = useState<'checking' | 'admin' | 'denied'>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<{ user?: { account_type?: string } }>('/api/auth/me')
+      .then((d) => {
+        if (!cancelled) setAccess(d?.user?.account_type === 'admin' ? 'admin' : 'denied');
+      })
+      .catch(() => {
+        if (!cancelled) setAccess('denied');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <AuthGuard>
+      {access === 'admin' ? (
+        <IntegrationsDashboard />
+      ) : (
+        <>
+          <AppTopBar current="integrations" />
+          <AccessNotice checking={access === 'checking'} />
+        </>
+      )}
+    </AuthGuard>
+  );
+}
+
+function AccessNotice({ checking }: { checking: boolean }) {
+  return (
+    <div style={{ padding: '32px 32px 80px', maxWidth: 720, margin: '0 auto' }}>
+      {checking ? (
+        <div
+          className="body"
+          style={{ color: 'var(--text-tertiary)', padding: '48px 0', textAlign: 'center' }}
+        >
+          Checking access…
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 24 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Admins only</h1>
+          <p
+            className="body"
+            style={{ fontSize: 13, color: 'var(--text-tertiary)', margin: '8px 0 0' }}
+          >
+            The integrations dashboard changes the shared factor library and
+            cost rates for every account, so it is limited to administrators.
+            Ask an administrator if a data source needs refreshing.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntegrationsDashboard() {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1044,7 +1104,7 @@ export default function IntegrationsAdminPage() {
   }, [refresh]);
 
   return (
-    <AuthGuard>
+    <>
       <AppTopBar current="integrations" />
 
       <div
@@ -1189,44 +1249,7 @@ export default function IntegrationsAdminPage() {
             {tab === 'schema' && <SchemaTab status={status} />}
           </>
         )}
-
-        {/* Systems Harmonized banner */}
-        <div
-          style={{
-            marginTop: 32,
-            padding: 20,
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 8,
-            background: 'var(--surface-overlay)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <StatusDot status="success" size={10} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>
-              Systems harmonized
-            </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                marginTop: 2,
-              }}
-            >
-              All global data sources verified against LCAPIX standards. Last
-              audit: 04:00 UTC.
-            </div>
-          </div>
-          <div
-            className="mono"
-            style={{ fontSize: 11, color: 'var(--text-tertiary)' }}
-          >
-            {fmtNum(99.94, 2)}% uptime
-          </div>
-        </div>
       </div>
-    </AuthGuard>
+    </>
   );
 }
