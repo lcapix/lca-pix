@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import {
   hasFrozenResults,
   LEGACY_RESULTS_SOURCE,
@@ -9,13 +9,6 @@ import {
   snapshotComponentBreakdown,
   snapshotResultRows,
 } from '@/lib/run-snapshot';
-
-const AUTH_ERRORS = new Set([
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-]);
 
 // GET /api/assessments/[runId]
 // Fetches detailed results for a specific assessment run
@@ -172,7 +165,7 @@ export async function GET(
     });
 
   } catch (error: any) {
-    if (AUTH_ERRORS.has(error?.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get assessment details error:', error);

@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 
 const PER_UNIT_COST_COLUMNS = [
   'labor_cost',
@@ -92,12 +92,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, mode, factor, flows_scaled: result.flowsScaled });
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Scale case error:', error);

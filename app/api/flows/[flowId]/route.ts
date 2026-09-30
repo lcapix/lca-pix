@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
   parseFlowQuantity,
@@ -133,7 +133,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, flow: updatedFlow });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update flow error:', error);
@@ -171,7 +171,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Flow deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete flow error:', error);

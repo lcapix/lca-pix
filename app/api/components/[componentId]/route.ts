@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { planPlacement, descendantsOf } from '@/lib/component-tree';
 import {
   BadRequest,
@@ -15,13 +15,6 @@ import {
   updateExistingColumns,
 } from '@/lib/component-fields';
 import type { TreeRow } from '@/lib/component-tree';
-
-const AUTH_ERRORS = [
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-];
 
 const ALLOCATION_METHODS = ['none', 'physical', 'economic', 'system_expansion'];
 
@@ -57,7 +50,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, component });
   } catch (error: any) {
-    if (AUTH_ERRORS.includes(error.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get component error:', error);
@@ -278,7 +271,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, component: updatedComponent });
   } catch (error: any) {
-    if (AUTH_ERRORS.includes(error.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update component error:', error);
@@ -370,7 +363,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Component deleted', ...result });
   } catch (error: any) {
-    if (AUTH_ERRORS.includes(error.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete component error:', error);

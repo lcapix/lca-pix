@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 
 export async function POST(
@@ -103,12 +103,7 @@ export async function POST(
       flows_copied: result.flows,
     }, { status: 201 });
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Duplicate case error:', error);

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { assessCompleteness } from '@/lib/ingest/completeness';
 
 export async function GET(
@@ -45,11 +45,7 @@ export async function GET(
     const report = assessCompleteness(components, flows);
     return NextResponse.json({ success: true, case_id: id, case_name: caseRow.case_name, report });
   } catch (error: any) {
-    if (
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'Unauthorized'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Completeness error:', error);

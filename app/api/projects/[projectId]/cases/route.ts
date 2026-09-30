@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
 export async function GET(
@@ -38,7 +38,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, cases });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get cases error:', error);
@@ -101,7 +101,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, case: newCase }, { status: 201 });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Create case error:', error);

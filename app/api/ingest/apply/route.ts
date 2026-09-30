@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity } from '@/lib/units';
 import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
 import type { MappedFlow } from '@/lib/ingest/maplca';
@@ -475,10 +475,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    if (
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Ingest apply error:', error);

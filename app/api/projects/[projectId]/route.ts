@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 
 // GET /api/projects/[projectId] - Get single project details
@@ -52,7 +52,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, project: { ...project, members } });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get project error:', error);
@@ -159,7 +159,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, project: updatedProject });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update project error:', error);
@@ -184,7 +184,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Project deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete project error:', error);

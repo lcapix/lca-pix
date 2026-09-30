@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
+import { isAuthError } from '@/lib/route-guard';
 import { validateCustomSubstance } from '@/lib/substances/custom';
 
 // GET /api/substances - Get all substances
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, substances });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get substances error:', error);
@@ -193,12 +194,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Create substance error:', error);
