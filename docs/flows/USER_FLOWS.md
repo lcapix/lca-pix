@@ -165,7 +165,8 @@ flowchart TD
 - **400** when email or password is missing.
 - **`?error=` handling:** `?error=%25` crashes the page, because `decodeURIComponent` runs on an already-decoded value (AUTH-8). An arbitrary `?error=` string is shown verbatim in a (currently invisible) toast (L8).
 - **No password reset or change** exists anywhere (AUTH-8, PROF-1).
-- **Deactivated account with a still-valid token:** 401 on most routes, but 500 on the routes listed in PERMISSIONS_MATRIX §4 (X-API-2).
+- **Deactivated account with a still-valid token:** 401 on every route (PERMISSIONS_MATRIX §4; X-API-2 closed).
+- **Token revocation:** changing the password hash (a password change, or a Google takeover) revokes every earlier token (`pv` claim); those tokens get 401.
 - **Target, rate limit:** 429 after 5 attempts per minute per IP+email (H5).
 
 **Known bugs:** AUTH-3, AUTH-5, AUTH-6, AUTH-8, M4, L2, L8, H5, X-API-2.
@@ -191,8 +192,8 @@ flowchart TD
 **Linking rules (target):**
 1. No account with the email: create one with a **server-derived unique username** (AUTH-4) and `full_name` from Google, then send the user to onboarding.
 2. An account exists that was created through Google, or whose email is verified: sign in to it.
-3. An account exists that was created with a password and **never verified its email**: do **not** link silently. Ask the user to sign in with the password and confirm the link, or to verify the email first. This blocks pre-account takeover (H3, AUTH-2). *As merged at c4a7200: any account with a real password hash is refused with `error=use_password_login`, i.e. never linked.*
-4. `account.is_active = 0`: refuse, with no token (AUTH-8). *Merged: `error=account_inactive`.*
+3. An active account exists with a password hash (a pre-registered password, or the random hash the old Google flow stored) and Google reports `verified_email: true`: **take over** the account (owner decision, fix/int-auth `9d72783`). Set `password_hash='!oauth-only'`, so the password stops working and every earlier session is revoked (`pv`), then sign in. Google has proved the caller owns the address, which also defeats a pre-registered attacker account (H3, AUTH-2). `error=use_password_login` is no longer produced.
+4. `account.is_active = 0`: refuse with `error=account_inactive`, no token, and the account unchanged. This is checked before rule 3.
 5. Needs schema support: there is currently no `email_verified_at`/`auth_provider` column and no migration for one. This is a prerequisite for fix/auth.
 
 **Current behaviour** (baseline, `app/api/auth/google/route.ts`):
@@ -606,38 +607,38 @@ flowchart TD
 | F14.3 | same | **Remove** (no confirmation) | `DELETE /api/projects/:id/members?user_id=` | W `project_members` | 200; the row disappears. |
 | F14.4 | New member's `/home` | Sign in | `GET /api/projects` | R | The shared project is listed. |
 
-**Permissions per action** (API-enforced; the UI shows every control to everyone). ✓ = allowed, ✗ = 403.
+**Permissions per action** (API-enforced). ✓ = allowed, ✗ = 403 for a member whose role is too low, **404** for a non-member (it gets the same body as for a missing id).
 
 | Action (UI) | API | Owner | Admin | Editor | Viewer | Non-member |
 |---|---|---|---|---|---|---|
-| Open workspace, editor, results, compare, analytics, class; export | GETs on project/case/component/flow/run; export | ✓ | ✓ | ✓ | ✓ | ✗ |
-| Goal & scope (FU, boundary, goal, exclusions), method and region, project rename | `PUT /api/projects/:id` | ✓ | ✓ | ✗ | ✗ | ✗ |
-| Delete project | `DELETE /api/projects/:id` | ✓ | ✗ | ✗ | ✗ | ✗ |
-| Add case, duplicate, clone from base, scale, run assessment, import (apply) | POST cases/duplicate/clone-from/scale/assessments, ingest/apply | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Rename case, reference flow, write-up, lessons, hand-in | `PUT /api/cases/:id` | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Delete case | `DELETE /api/cases/:id` | ✓ | ✓ | ✗ | ✗ | ✗ |
-| Add or edit components, flows, costs | POST/PUT components; POST/PUT/DELETE flows | ✓ | ✓ | ✓ | ✗ | ✗ |
-| Delete component | `DELETE /api/components/:id` | ✓ | ✓ | ✗ (D5: target ✓) | ✗ | ✗ |
-| Attach or remove reference documents | POST/DELETE documents | ✓ | ✓ | ✓ | **✗ target (✓ today, M2)** | ✗ |
-| Auto-costs | `POST /api/components/:id/auto-costs` | ✓ | ✓ | ✓ | **✗ target (✓ today, H2)** | **✗ target (✓ today)** |
-| Add or remove members | POST/DELETE members | ✓ | ✓ (API only; the UI hides it) | ✗ | ✗ | ✗ |
-| Grant or revoke the **admin** role | POST/DELETE members | ✓ | ✓ today; REC L9: ✗ | ✗ | ✗ | ✗ |
+| Open workspace, editor, results, compare, analytics, class; export | GETs on project/case/component/flow/run; export | ✓ | ✓ | ✓ | ✓ | 404 |
+| Goal & scope (FU, boundary, goal, exclusions), method and region, project rename | `PUT /api/projects/:id` | ✓ | ✓ | ✗ | ✗ | 404 |
+| Delete project | `DELETE /api/projects/:id` | ✓ | ✗ | ✗ | ✗ | 404 |
+| Add case, duplicate, clone from base, scale, run assessment, import (apply) | POST cases/duplicate/clone-from/scale/assessments, ingest/apply | ✓ | ✓ | ✓ | ✗ | 404 |
+| Rename case, reference flow, write-up, lessons, hand-in | `PUT /api/cases/:id` | ✓ | ✓ | ✓ | ✗ | 404 |
+| Delete case | `DELETE /api/cases/:id` | ✓ | ✓ | ✗ | ✗ | 404 |
+| Add or edit components, flows, costs | POST/PUT components; POST/PUT/DELETE flows | ✓ | ✓ | ✓ | ✗ | 404 |
+| Delete component | `DELETE /api/components/:id` | ✓ | ✓ | ✓ (D5 decided) | ✗ | 404 |
+| Attach or remove reference documents | POST/DELETE documents | ✓ | ✓ | ✓ | ✗ (M2 fixed) | 404 |
+| Auto-costs | `POST /api/components/:id/auto-costs` | ✓ | ✓ | ✓ | ✗ (H2 fixed) | 404 |
+| Add or remove members | POST/DELETE members | ✓ | ✓ | ✗ | ✗ | 404 |
+| Grant or revoke the **admin** role | POST/DELETE members | ✓ | ✗ (owner-only, L9 closed) | ✗ | ✗ | 404 |
 
 **Success criteria:**
 - Each role gets exactly the statuses in the permissions matrix.
 - The member list and `canManage` reflect the change.
-- Removed members get 403 on their next request.
+- Removed members get **404** on their next request.
 
 **Failure and edge cases:**
 - **404** "No account with that email. They need to sign up first…" (enumeration, L2).
 - **409** "That person owns this project already".
 - **400** for a missing email or a bad role. A blank email in the UI is a silent no-op.
 - The class page has no `catch`, so a 403 renders empty lists.
-- An admin member sees no management controls, although the API allows them (PROJ-8).
+- An admin member sees the Add form and Remove buttons (`canManage`); the **Admin** role option is offered to the owner only (`canManageAdmins`).
 - Adding an existing member updates their role.
 - A stale `owner` member row keeps owner rights (D2).
-- A comparison creator keeps delete rights after removal (L9).
-- A deactivated caller gets 500 instead of 401 (X-API-2).
+- A removed comparison creator gets 404 like any non-member (L9 closed).
+- A deactivated caller gets 401 (X-API-2 closed).
 
 **Known bugs:** PROJ-8, L2, L9, M2, H2, X-API-2, D2, D3, D5.
 

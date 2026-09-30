@@ -37,9 +37,10 @@ baseline:
 merged_fixes:
   fix/authz:    {merge: 10b3903, ids: [H1, H2, COST-1, E2, INT-2, INT-4, INT-5, INT-6, L4, FAC-1, FAC-2, FAC-3, FAC-4]}
   fix/platform: {merge: f4596ed, ids: [C1, C2, M3, M5, M7, M8, H4, L10]}
-  fix/auth:     {merge: 8b51f39, ids: [AUTH-1, AUTH-2, AUTH-3, AUTH-4, AUTH-5, AUTH-6, AUTH-8, H3, M4, L1, L2, L6, L7, L8, I4, M2, M6, DOC-1, DOC-2, DOC-3, ING-3, ING-10, ING-12, INS-1, INS-2], partial: {H5: 'login, signup, insights, ingest preview only; assessments and pubchem budgets defined but not enforced'}}
+  fix/auth:     {merge: 8b51f39, ids: [AUTH-1, AUTH-2, AUTH-3, AUTH-4, AUTH-5, AUTH-6, AUTH-8, H3, M4, L1, L2, L6, L7, L8, I4, M2, M6, DOC-1, DOC-2, DOC-3, ING-3, ING-10, ING-12, INS-1, INS-2], partial: {H5: 'login, signup, insights, ingest preview'}}
   fix/runs:     {merge: c4a7200, ids: [RUN-1, RUN-2, RUN-3, RUN-4, RUN-5, RUN-6, STAGE-2, EXP-1, EXP-2, EXP-3, EXP-4, RES-1, RES-2, RES-4, RES-5, RES-6, INS-5, ANA-1, ING-1]}
-  not_merged:   [fix/editor, fix/factors]
+  later:        'fix/editor, fix/factors, fix/int-auth (pv revocation, Google takeover, 404 policy, 401 mapping), fix/int-client, fix/int-routes (cost lookups reopened with limits, run and PubChem limits, compare on frozen results, 404 policy everywhere) are merged at 2009f63'
+  permissions_verified: '2026-09-30 at 2009f63 by tests/api-real/authz/matrix.test.ts (pnpm test:api); see the PERMISSIONS header below'
 
 environment:
   app_base_url: http://localhost:3002
@@ -1201,106 +1202,135 @@ flows:
         known_bugs: [TOUR-1, TOUR-2, TOUR-3]
 
 # ---------------------------------------------------------------------------
-# PERMISSIONS (machine form of PERMISSIONS_MATRIX.md; 64 baseline route x
-# method pairs + 2 added at c4a7200 (R63, R64) + 3 mode rows = 69 rows). Handles in `params`; fresh:true = build a new
-# target resource per role before the call.
+# PERMISSIONS: machine form of PERMISSIONS_MATRIX.md. tests/api-real/authz/
+# matrix.test.ts reads this section and runs every row x role against a real
+# MySQL database (pnpm test:api); change the two files together.
+#
+# State: v1-hardening-kavish @ 2009f63 with every fix branch merged
+# (fix/authz, fix/platform, fix/auth, fix/runs, fix/editor, fix/factors,
+# fix/int-auth, fix/int-client, fix/int-routes). Verified against the route
+# code by the generated tests on 2026-09-30. 45 route files, 66 route x
+# method pairs, 3 mode rows (R03b, R52b, R53b) = 69 rows.
+#
+# Row fields
+#   expect     role -> status for the 7 roles.
+#   callers    extra callers and their status. Every row that is not public
+#              also gets {deactivated: 401, revoked: 401, tampered: 401}
+#              (x_expect.auth_failures); a row may override one of them.
+#   params     path/query placeholder -> handle ($P, $P.base, $fresh.x, ...).
+#   fresh      a builder run before EACH call, so one role's success cannot
+#              change the next role's target: project, emptyCase, invitee,
+#              document, caseCopy, leaf, flow, legacyComparison. Its id is
+#              $fresh.<name>.
+#   body       JSON body; multipart: a named fixture (notes_txt, bom_csv,
+#              equipment_csv). '{run}' and '{role}' are filled per call.
+#   not_found  the body a non-member gets, byte-identical to the body for a
+#              missing id; primary names the id to replace with a missing
+#              one (default: the first path parameter).
+#   env        environment set for the call only.
+#   now        role -> status the code returns today when it differs from
+#              expect (the generator wraps that cell in it.fails, naming bug).
 # ---------------------------------------------------------------------------
 x_expect:
+  public_200: &PUB200 {anon: 200, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}
   public_201: &PUB201 {anon: 201, nonmem: 201, viewer: 201, editor: 201, adminm: 201, owner: 201, padmin: 201}
-  public_302: &PUB302 {anon: 302, nonmem: 302, viewer: 302, editor: 302, adminm: 302, owner: 302, padmin: 302}
+  public_307: &PUB307 {anon: 307, nonmem: 307, viewer: 307, editor: 307, adminm: 307, owner: 307, padmin: 307}
+  handoff_401: &H401 {anon: 401, nonmem: 401, viewer: 401, editor: 401, adminm: 401, owner: 401, padmin: 401}
   auth_200: &A200 {anon: 401, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}
   auth_201: &A201 {anon: 401, nonmem: 201, viewer: 201, editor: 201, adminm: 201, owner: 201, padmin: 201}
-  member_200: &M200 {anon: 401, nonmem: [403, 404], viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: [403, 404]}
-  editor_200: &E200 {anon: 401, nonmem: [403, 404], viewer: 403, editor: 200, adminm: 200, owner: 200, padmin: [403, 404]}
-  editor_201: &E201 {anon: 401, nonmem: [403, 404], viewer: 403, editor: 201, adminm: 201, owner: 201, padmin: [403, 404]}
-  admin_200: &AD200 {anon: 401, nonmem: [403, 404], viewer: 403, editor: 403, adminm: 200, owner: 200, padmin: [403, 404]}
-  owner_200: &O200 {anon: 401, nonmem: [403, 404], viewer: 403, editor: 403, adminm: 403, owner: 200, padmin: [403, 404]}
+  member_200: &M200 {anon: 401, nonmem: 404, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 404}
+  editor_200: &E200 {anon: 401, nonmem: 404, viewer: 403, editor: 200, adminm: 200, owner: 200, padmin: 404}
+  editor_201: &E201 {anon: 401, nonmem: 404, viewer: 403, editor: 201, adminm: 201, owner: 201, padmin: 404}
+  admin_200: &AD200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 200, owner: 200, padmin: 404}
+  owner_200: &O200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 403, owner: 200, padmin: 404}
   padmin_200: &PA200 {anon: 401, nonmem: 403, viewer: 403, editor: 403, adminm: 403, owner: 403, padmin: 200}
-  now_any_user_200: &NOWANY200 {nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200}
+  auth_failures: {deactivated: 401, revoked: 401, tampered: 401}
 
 permissions:
   # --- auth & account ---
-  - {id: R01, method: POST, path: /api/auth/signup, rule: public, sample_body: {username: 'u{run}{role}', email: 'u{run}{role}@lcapix.test', password: 'Passw0rd!x'}, expect: *PUB201, extra: {rate_limit: '429 after 3/hour/IP (H5)'}}
-  - {id: R02, method: POST, path: /api/auth/login, rule: public, sample_body: {email: '$caller.email', password: '$caller.password'}, expect: {anon: 401, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}, note: 'anon = wrong credentials; roles = their own credentials; deactivated with correct password -> 403 (fix/auth)', extra: {rate_limit: '429 after 5/min/IP+email (H5)'}}
-  - {id: R03, method: GET, path: /api/auth/google, rule: public, expect: *PUB302, assert: 'Location has state (FIX AUTH-1)', tag: FIX, fixed_by: fix/auth}
-  - {id: R03b, method: GET, path: '/api/auth/google?code=test-code&state={state}', rule: public, mode: callback, expect: *PUB302, assert: 'mismatched state -> /auth/login?error=…; no session cookie', tag: FIX, fixed_by: fix/auth}
+  - {id: R01, method: POST, path: /api/auth/signup, rule: public, body: {email: 'signup-{role}-{run}@lcapix.test', password: '$password', full_name: 'Signup {role}'}, expect: *PUB201, note: '409 (generic text) for a taken email; 400 for a bad email or a password under 8 characters or over 72 bytes; client username ignored (server derives it); 429 on the 4th signup per IP per hour'}
+  - {id: R02, method: POST, path: /api/auth/login, rule: public, body: {email: '$caller.email', password: '$caller.password'}, expect: {anon: 401, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}, callers: {deactivated: 403}, note: 'anon sends a wrong password; roles their own credentials. The same 401 body for an unknown email and a wrong password; 403 inactive only after a correct password; 429 on the 6th attempt per IP+email per minute'}
+  - {id: R03, method: GET, path: /api/auth/google, rule: public, expect: *PUB307, assert: 'NextResponse.redirect answers 307 (the older docs said 302). Location carries state and an S256 code_challenge; state cookie httpOnly, SameSite=Lax, Path=/api/auth/google, Max-Age=600'}
+  - {id: R03b, method: GET, path: '/api/auth/google?code=test-code&state=forged-state', rule: public, mode: callback, expect: *PUB307, assert: 'no state cookie -> /auth/login?error=oauth_state_mismatch and no auth_token cookie'}
   - {id: R04, method: GET, path: /api/auth/me, rule: authenticated, expect: *A200}
   - {id: R05, method: GET, path: /api/auth/profile, rule: authenticated, expect: *A200}
-  - {id: R06, method: PUT, path: /api/auth/profile, rule: authenticated, sample_body: {fullName: 'Test User', company: 'LCAPIX Test'}, expect: *A200}
-  - {id: R63, method: POST, path: /api/auth/logout, rule: public, expect: {anon: 200, nonmem: 200, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 200}, assert: 'Set-Cookie expires auth_token and user_data', exists_since: c4a7200}
-  - {id: R64, method: POST, path: /api/auth/google/session, rule: 'hand-off cookie', expect: {anon: 401, nonmem: 401, viewer: 401, editor: 401, adminm: 401, owner: 401, padmin: 401}, extra: {with_handoff_cookie: 200, second_call: 401, sec_fetch_site_cross_site: 403}, exists_since: c4a7200}
+  - {id: R06, method: PUT, path: /api/auth/profile, rule: authenticated, body: {fullName: 'Test User {role}', company: 'LCAPIX Test'}, expect: *A200}
+  - {id: R63, method: POST, path: /api/auth/logout, rule: public, expect: *PUB200, assert: 'Set-Cookie expires auth_token and user_data (Max-Age=0, httpOnly, SameSite=Lax, Path=/)'}
+  - {id: R64, method: POST, path: /api/auth/google/session, rule: 'hand-off cookie', expect: *H401, note: '200 {token, user} once with a valid hand-off cookie; 401 on the second call; 403 for Sec-Fetch-Site: cross-site'}
 
   # --- projects, members, progress ---
   - {id: R07, method: GET, path: /api/projects, rule: authenticated, expect: *A200, assert: 'nonmem and padmin lists exclude $P'}
-  - {id: R08, method: POST, path: /api/projects, rule: authenticated, sample_body: {project_name: 'P {run} {role}', description: x}, expect: *A201}
-  - {id: R09, method: GET, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: member, expect: *M200, note: 'missing project -> 403 today (D3)'}
-  - {id: R10, method: PUT, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: admin, sample_body: {description: 'updated'}, expect: *AD200}
-  - {id: R11, method: DELETE, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: owner, fresh: true, expect: *O200}
-  - {id: R12, method: GET, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: member, expect: *M200}
-  - {id: R13, method: POST, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: editor, sample_body: {case_name: 'C {run} {role}', case_type: comparative}, expect: *E201}
-  - {id: R14, method: GET, path: '/api/projects/{projectId}/compare?cases={base},{comp}', params: {projectId: $P, base: $P.base, comp: $P.comp}, rule: member, expect: *M200}
-  - {id: R15, method: GET, path: '/api/projects/{projectId}/members', params: {projectId: $P}, rule: member, expect: *M200, deactivated_now: 500}
-  - {id: R16, method: POST, path: '/api/projects/{projectId}/members', params: {projectId: $P}, rule: admin, sample_body: {email: '$user.userB.email', role: viewer}, expect: *AD200, note: 'returns 200 not 201; REC L9: role admin grant owner-only', deactivated_now: 500}
-  - {id: R17, method: DELETE, path: '/api/projects/{projectId}/members?user_id={userId}', params: {projectId: $P, userId: '$user.userB.id'}, rule: admin, fresh: true, expect: *AD200, deactivated_now: 500}
-  - {id: R18, method: GET, path: '/api/projects/{projectId}/progress', params: {projectId: $P}, rule: member, expect: *M200, deactivated_now: 500, decision: D4}
+  - {id: R08, method: POST, path: /api/projects, rule: authenticated, body: {project_name: 'P {run} {role}', description: x}, expect: *A201}
+  - {id: R09, method: GET, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R10, method: PUT, path: '/api/projects/{projectId}', params: {projectId: $P}, rule: admin, body: {description: 'updated by {role}'}, expect: *AD200, not_found: 'Project not found'}
+  - {id: R11, method: DELETE, path: '/api/projects/{projectId}', params: {projectId: $fresh.project}, fresh: project, rule: owner, expect: *O200, not_found: 'Project not found', note: '403 body "Only project owner can delete"'}
+  - {id: R12, method: GET, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R13, method: POST, path: '/api/projects/{projectId}/cases', params: {projectId: $P}, rule: editor, body: {case_name: 'C {run} {role}', case_type: comparative}, expect: *E201, not_found: 'Project not found'}
+  - {id: R14, method: GET, path: '/api/projects/{projectId}/compare?cases={base},{comp}', params: {projectId: $P, base: $P.base, comp: $P.comp}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R15, method: GET, path: '/api/projects/{projectId}/members', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  - {id: R16, method: POST, path: '/api/projects/{projectId}/members', params: {projectId: $P}, rule: admin, body: {email: '$user.invitee.email', role: viewer}, expect: *AD200, not_found: 'Project not found', note: 'returns 200; granting or changing the admin role is owner-only (an admin member gets 403)'}
+  - {id: R17, method: DELETE, path: '/api/projects/{projectId}/members?user_id={userId}', params: {projectId: $P, userId: $fresh.invitee}, fresh: invitee, rule: admin, expect: *AD200, not_found: 'Project not found', note: '404 "Member not found" when user_id is not a member; removing an admin is owner-only'}
+  - {id: R18, method: GET, path: '/api/projects/{projectId}/progress', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
 
   # --- cases ---
-  - {id: R19, method: GET, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: member, expect: *M200}
-  - {id: R20, method: PUT, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: editor, sample_body: {description: 'updated'}, expect: *E200}
-  - {id: R21, method: DELETE, path: '/api/cases/{caseId}', params: {caseId: $P.empty}, rule: admin, fresh: true, expect: *AD200}
-  - {id: R22, method: GET, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: member, expect: *M200}
-  - {id: R23, method: POST, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: editor, sample_body: {calculation_method: 'CML 2001', region_code: US}, expect: *E201, extra: {rate_limit: '429 after 30/hour/user (H5)'}}
-  - {id: R24, method: POST, path: '/api/cases/{caseId}/clone-from', params: {caseId: $P.empty}, rule: editor, fresh: true, sample_body: {sourceCaseId: $P.base}, expect: *E200}
-  - {id: R25, method: GET, path: '/api/cases/{caseId}/completeness', params: {caseId: $P.base}, rule: member, expect: *M200, deactivated_now: 500}
-  - {id: R26, method: GET, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: member, expect: *M200}
-  - {id: R27, method: POST, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: editor, sample_body: {component_name: 'Glazing {role}', component_type: operation, parent_component_id: $P.base.subprocess}, expect: *E201, body_rule: 'parent_component_id from $Q.case -> 400 (now 201)', tag: FIX, fixed_by: 'fix-first 1.5 (M1)'}
-  - {id: R28, method: GET, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: member, expect: *M200, deactivated_now: 500}
-  - {id: R29, method: POST, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: editor, multipart: {file: 'notes.txt (text/plain, 1 KB)', doc_type: other}, expect: *E200, now: {viewer: 200}, tag: FIX, fixed_by: 'fix-first 1.5 (M2)', deactivated_now: 500, extra: {size: '413 before buffering above 12 MB (M6/DOC-2)'}}
-  - {id: R30, method: DELETE, path: '/api/cases/{caseId}/documents?id={docId}', params: {caseId: $P.base, docId: '$fresh.document'}, rule: editor, fresh: true, expect: *E200, now: {viewer: 200}, tag: FIX, fixed_by: 'fix-first 1.5 (M2)', deactivated_now: 500}
-  - {id: R31, method: POST, path: '/api/cases/{caseId}/duplicate', params: {caseId: $P.base}, rule: editor, sample_body: {case_name: 'Dup {run} {role}'}, expect: *E201, deactivated_now: 500}
-  - {id: R32, method: POST, path: '/api/cases/{caseId}/scale', params: {caseId: '$fresh.case_copy'}, rule: editor, fresh: true, sample_body: {from: 1, to: 2, mode: data-covers}, expect: *E200}
+  - {id: R19, method: GET, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R20, method: PUT, path: '/api/cases/{caseId}', params: {caseId: $P.base}, rule: editor, body: {description: 'updated by {role}'}, expect: *E200, not_found: 'Case not found'}
+  - {id: R21, method: DELETE, path: '/api/cases/{caseId}', params: {caseId: $fresh.emptyCase}, fresh: emptyCase, rule: admin, expect: *AD200, not_found: 'Case not found'}
+  - {id: R22, method: GET, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R23, method: POST, path: '/api/cases/{caseId}/assessments', params: {caseId: $P.base}, rule: editor, body: {calculation_method: 'CML 2001', region_code: US}, expect: *E201, not_found: 'Case not found', note: '400 for an unknown method; 429 on the 31st run per user per hour'}
+  - {id: R24, method: POST, path: '/api/cases/{caseId}/clone-from', params: {caseId: $fresh.emptyCase}, fresh: emptyCase, rule: editor, body: {sourceCaseId: $P.base}, expect: *E200, not_found: 'Case not found'}
+  - {id: R25, method: GET, path: '/api/cases/{caseId}/completeness', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R26, method: GET, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R27, method: POST, path: '/api/cases/{caseId}/components', params: {caseId: $P.base}, rule: editor, body: {component_name: 'Glazing {role} {run}', component_type: operation, parent_component_id: $P.base.subprocess}, expect: *E201, not_found: 'Case not found', note: 'parent_component_id outside the case -> 400 with no name echoed'}
+  - {id: R28, method: GET, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R29, method: POST, path: '/api/cases/{caseId}/documents', params: {caseId: $P.base}, rule: editor, multipart: notes_txt, expect: *E200, not_found: 'Case not found', note: 'returns 200; 413 above 12 MB before the body is read; 415 for bytes that do not match the extension'}
+  - {id: R30, method: DELETE, path: '/api/cases/{caseId}/documents?id={docId}', params: {caseId: $P.base, docId: $fresh.document}, fresh: document, rule: editor, expect: *E200, not_found: 'Case not found', note: '404 "Document not found" for an id not in the case'}
+  - {id: R31, method: POST, path: '/api/cases/{caseId}/duplicate', params: {caseId: $P.base}, rule: editor, body: {case_name: 'Dup {run} {role}'}, expect: *E201, not_found: 'Case not found'}
+  - {id: R32, method: POST, path: '/api/cases/{caseId}/scale', params: {caseId: $fresh.caseCopy}, fresh: caseCopy, rule: editor, body: {from: 1, to: 2, mode: data-covers}, expect: *E200, not_found: 'Case not found'}
 
   # --- components, flows, costs ---
-  - {id: R33, method: GET, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: member, expect: *M200}
-  - {id: R34, method: PUT, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: editor, sample_body: {component_description: 'x'}, expect: *E200, body_rule: 'parent_component_id from $Q -> 400 (now 200 + name leak)', tag: FIX, fixed_by: 'fix-first 1.5 (M1)'}
-  - {id: R35, method: DELETE, path: '/api/components/{componentId}', params: {componentId: '$fresh.leaf'}, rule: admin, fresh: true, expect: *AD200, decision: 'D5 (REC FLOW-10: editor -> 200)'}
-  - {id: R36, method: GET, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: member, expect: *M200}
-  - {id: R37, method: POST, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: editor, sample_body: {substance_id: $substance.electricity, flow_type: input, quantity: 1, unit: kWh}, expect: *E201, body_rule: 'substance_id $Q.substance -> 400/404 (REC L3); quantity null/NaN/-1 -> 400 (FLOW-4)'}
-  - {id: R38, method: POST, path: '/api/components/{componentId}/auto-costs', params: {componentId: $P.base.op}, rule: editor, expect: *E200, now: {nonmem: 200, viewer: 200, padmin: 200}, tag: FIX, fixed_by: fix/authz, note: 'missing component -> 404 (now 500)'}
-  - {id: R39, method: PUT, path: '/api/flows/{flowId}', params: {flowId: $P.base.flow}, rule: editor, sample_body: {quantity: 2.5}, expect: *E200}
-  - {id: R40, method: DELETE, path: '/api/flows/{flowId}', params: {flowId: '$fresh.flow'}, rule: editor, fresh: true, expect: *E200}
+  - {id: R33, method: GET, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: member, expect: *M200, not_found: 'Component not found'}
+  - {id: R34, method: PUT, path: '/api/components/{componentId}', params: {componentId: $P.base.op}, rule: editor, body: {component_description: 'set by {role}'}, expect: *E200, not_found: 'Component not found', note: 'parent in another case, itself or a descendant -> 400'}
+  - {id: R35, method: DELETE, path: '/api/components/{componentId}', params: {componentId: $fresh.leaf}, fresh: leaf, rule: editor, expect: *E200, not_found: 'Component not found', note: 'editor since D5 (fix/editor); ?children=delete|reparent, else 400'}
+  - {id: R36, method: GET, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: member, expect: *M200, not_found: 'Component not found'}
+  - {id: R37, method: POST, path: '/api/components/{componentId}/flows', params: {componentId: $P.base.task}, rule: editor, body: {substance_id: $substance.electricity, flow_type: input, quantity: 0.1, unit: kWh}, expect: *E201, not_found: 'Component not found', note: 'another user''s private substance_id -> 400 "Unknown substance" without its name; quantity null/NaN/negative -> 400'}
+  - {id: R38, method: POST, path: '/api/components/{componentId}/auto-costs', params: {componentId: $P.base.op}, rule: editor, expect: *E200, not_found: 'Component not found'}
+  - {id: R39, method: PUT, path: '/api/flows/{flowId}', params: {flowId: $P.base.flow}, rule: editor, body: {quantity: 2.5}, expect: *E200, not_found: 'Flow not found'}
+  - {id: R40, method: DELETE, path: '/api/flows/{flowId}', params: {flowId: $fresh.flow}, fresh: flow, rule: editor, expect: *E200, not_found: 'Flow not found'}
 
   # --- runs, export, legacy comparisons ---
-  - {id: R41, method: GET, path: '/api/assessments/{runId}', params: {runId: $P.base.run}, rule: member, expect: *M200}
-  - {id: R42, method: GET, path: '/api/assessments/{runId}/export?format=csv', params: {runId: $P.base.run}, rule: viewer, expect: *M200, also_formats: [pdf, pptx], deactivated_now: 500}
-  - {id: R43, method: POST, path: /api/comparisons, rule: member, legacy: true, sample_body: {comparison_name: x, case_ids: [$P.base, $P.comp], project_id: $P}, expect: {anon: 401, nonmem: 404, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 404}, now: {anon: 500}, tag: BUG, note: 'REC: delete legacy comparisons (CMP-7)'}
-  - {id: R44, method: GET, path: '/api/comparisons?project_id={projectId}', params: {projectId: $P}, rule: member, legacy: true, expect: {anon: 401, nonmem: 404, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 404}, now: {anon: 500}, tag: BUG}
-  - {id: R45, method: GET, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $legacy.comparison}, rule: member, legacy: true, expect: {anon: 401, nonmem: 403, viewer: 200, editor: 200, adminm: 200, owner: 200, padmin: 403}, now: {anon: 500}, tag: BUG, note: 'JSON.parse on JSON columns may 500 (CMP-7)'}
-  - {id: R46, method: DELETE, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $legacy.comparison}, rule: 'owner | admin member | creator', legacy: true, fresh: true, expect: {anon: 401, nonmem: 403, viewer: 403, editor: 403, adminm: 200, owner: 200, padmin: 403}, now: {anon: 500}, tag: BUG, note: 'creator keeps delete after removal (L9)'}
+  - {id: R41, method: GET, path: '/api/assessments/{runId}', params: {runId: $P.base.run}, rule: member, expect: *M200, not_found: 'Assessment not found'}
+  - {id: R42, method: GET, path: '/api/assessments/{runId}/export?format=csv', params: {runId: $P.base.run}, rule: viewer, expect: *M200, not_found: 'Assessment not found', note: 'pdf and pptx too; unknown format -> 400'}
+  - {id: R43, method: POST, path: /api/comparisons, rule: member, legacy: true, body: {comparison_name: 'Legacy {run} {role}', case_ids: [$P.base, $P.comp], project_id: $P}, primary: body.project_id, expect: *M200, not_found: 'Project not found', note: 'saves nothing (CMP-7); REC: delete the legacy routes'}
+  - {id: R44, method: GET, path: '/api/comparisons?project_id={projectId}', params: {projectId: $P}, rule: member, legacy: true, primary: query.projectId, expect: *M200, not_found: 'Project not found'}
+  - {id: R45, method: GET, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $legacy.comparison}, rule: member, legacy: true, expect: *M200, not_found: 'Comparison not found'}
+  - {id: R46, method: DELETE, path: '/api/comparisons/{comparisonId}', params: {comparisonId: $fresh.legacyComparison}, fresh: legacyComparison, rule: 'admin, or the creator while still a member', legacy: true, expect: *AD200, not_found: 'Comparison not found', note: 'the owner is the creator here'}
 
   # --- global reference data ---
-  - {id: R47, method: GET, path: /api/driver-factors, rule: authenticated, expect: *A200, assert: "other users' custom factors absent (REC FAC-1)"}
+  - {id: R47, method: GET, path: /api/driver-factors, rule: authenticated, expect: *A200, assert: "userB's private factor absent for everyone else; no QUARANTINE rows"}
   - {id: R48, method: GET, path: /api/impact-categories, rule: authenticated, expect: *A200}
-  - {id: R49, method: GET, path: /api/substances, rule: authenticated, expect: *A200, assert: "userB's private substance absent"}
-  - {id: R49b, method: POST, path: /api/substances, rule: authenticated, sample_body: {name: 'Cork {run} {role}', kind: input, unit: kg, method: 'CML 2001', impactCategory: 'Global Warming', factorValue: 0.5, source: 'Supplier EPD 2025'}, expect: *A201}
-  - {id: R50, method: GET, path: /api/process-templates, rule: authenticated, expect: *A200, deactivated_now: 500}
-  - {id: R50b, method: POST, path: /api/example-project, rule: authenticated, expect: *A200, note: 'returns 200 (not 201); repeat -> existed:true', deactivated_now: 500}
-  - {id: R51, method: POST, path: /api/insights, rule: authenticated, sample_body: {caseName: x, method: 'CML 2001', categoryLabel: 'Global Warming', contributors: [], materials: [], levers: [], mode: summary, allCategories: []}, expect: *A200, extra: {rate_limit: '429 after ~20/hour/user', size: '413 > 16 KB; 400 question > 500 chars (H5/INS-2)'}}
-  - {id: R52, method: POST, path: /api/ingest/preview, rule: authenticated, mode: 'connector != equipment', multipart: {file: bom.csv, connector: bom}, expect: *A200, extra: {size: '413 over cap (ING-3/M6)', rate_limit: '429 after 10/hour/user'}}
-  - {id: R52b, method: POST, path: /api/ingest/preview, rule: 'editor on target case', mode: 'connector = equipment', multipart: {file: equipment.csv, connector: equipment, target_case_id: $P.base}, expect: *E200}
-  - {id: R53, method: POST, path: /api/ingest/apply, rule: 'editor on project_id', mode: create, sample_body: {project_id: $P, case_name: 'Import {run} {role}', nodes: [{name: 'Mug', tier: product}], flows: [], costs: [], notes: []}, expect: *E201, deactivated_now: 500}
-  - {id: R53b, method: POST, path: /api/ingest/apply, rule: 'editor on target case', mode: append, sample_body: {target_case_id: $P.base, attach_component_id: $P.base.op, flows: [], costs: [], notes: []}, expect: *E200}
+  - {id: R49, method: GET, path: /api/substances, rule: authenticated, expect: *A200, assert: "userB's private substance absent for everyone else"}
+  - {id: R49b, method: POST, path: /api/substances, rule: authenticated, body: {name: 'Cork {run} {role}', kind: input, unit: kg, method: 'CML 2001', impactCategory: 'Global Warming', factorValue: 0.5, source: 'Supplier EPD 2025'}, expect: *A201, note: '409 for a library or own name (not other users'' private names)'}
+  - {id: R50, method: GET, path: /api/process-templates, rule: authenticated, expect: *A200}
+  - {id: R50b, method: POST, path: /api/example-project, rule: authenticated, expect: *A200, note: 'returns 200; a repeat returns existed:true'}
+  - {id: R51, method: POST, path: /api/insights, rule: authenticated, body: {caseName: x, method: 'CML 2001', categoryLabel: 'Global Warming', contributors: [], materials: [], levers: [], mode: summary, allCategories: []}, expect: *A200, note: 'no HF_TOKEN -> 200 {fallback:true}; 413 over 16 KB; 400 question over 500 chars; 429 on the 21st call per user per hour'}
+  - {id: R52, method: POST, path: /api/ingest/preview, rule: authenticated, mode: 'connector != equipment', multipart: bom_csv, expect: *A200, note: '413 over 12 MB before parsing; 415 wrong bytes; 429 on the 11th preview per user per hour'}
+  - {id: R52b, method: POST, path: /api/ingest/preview, rule: 'editor on the target case', mode: 'connector = equipment', multipart: equipment_csv, primary: form.target_case_id, expect: *E200, not_found: 'Case not found'}
+  - {id: R53, method: POST, path: /api/ingest/apply, rule: 'editor on project_id', mode: create, body: {project_id: $P, case_name: 'Import {run} {role}', nodes: [{name: 'Mug {role}', tier: product, parent: null}], flows: [], costs: [], notes: []}, primary: body.project_id, expect: *E201, not_found: 'Project not found'}
+  - {id: R53b, method: POST, path: /api/ingest/apply, rule: 'editor on the target case', mode: append, body: {target_case_id: $P.base, attach_component_id: $P.base.op, flows: [], costs: [], notes: []}, primary: body.target_case_id, expect: *E200, not_found: 'Target case not found'}
 
-  # --- integrations (platform-wide) ---
+  # --- integrations: shared reference data writers are platform-admin only;
+  #     the BLS / EIA / Metals cost lookups are open to any signed-in user
+  #     with a shared 60/hour/user budget (owner decision, D6 option c) ---
   - {id: R54, method: GET, path: /api/integrations/status, rule: authenticated, expect: *A200}
-  - {id: R55, method: GET, path: '/api/integrations/log?limit=30', rule: platform_admin, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz}
-  - {id: R56, method: POST, path: /api/integrations/openlca/import, rule: platform_admin, sample_body: {method: 'CML 2001'}, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz}
-  - {id: R57, method: GET, path: /api/integrations/openlca/import, rule: authenticated, expect: *A200, now: {anon: 200}, tag: FIX, fixed_by: fix/authz}
-  - {id: R58, method: POST, path: /api/integrations/electricity/sync, rule: platform_admin, sample_body: {zone: US}, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz}
-  - {id: R59, method: POST, path: /api/integrations/pubchem/enrich, rule: platform_admin, sample_body: {only_missing: true, limit: 1}, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz}
-  - {id: R60, method: POST, path: /api/integrations/bls/fetch-wage, rule: platform_admin, sample_body: {occupation: '51-4121', state: US}, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz, decision: D6}
-  - {id: R61, method: POST, path: /api/integrations/eia/fetch-energy-price, rule: platform_admin, sample_body: {fuel: electricity, state: NC}, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz, decision: D6}
-  - {id: R62, method: POST, path: /api/integrations/metals/fetch-price, rule: platform_admin, sample_body: {symbol: STL}, expect: *PA200, now: *NOWANY200, tag: FIX, fixed_by: fix/authz, decision: D6}
+  - {id: R55, method: GET, path: '/api/integrations/log?limit=30', rule: platform_admin, expect: *PA200, note: 'limit clamped to 1..200; ?limit=abc gives the default'}
+  - {id: R56, method: POST, path: /api/integrations/openlca/import, rule: platform_admin, body: {method: 'CML 2001'}, expect: *PA200, note: 'insert-only; never revives a row with a QUARANTINE twin'}
+  - {id: R57, method: GET, path: /api/integrations/openlca/import, rule: authenticated, expect: *A200}
+  - {id: R58, method: POST, path: /api/integrations/electricity/sync, rule: platform_admin, body: {zone: US-CAL-CISO}, env: {ELECTRICITY_MAPS_API_KEY: test-key}, expect: *PA200, note: '502 when every zone fails'}
+  - {id: R59, method: POST, path: /api/integrations/pubchem/enrich, rule: platform_admin, body: {only_missing: true, limit: 1}, expect: *PA200, note: '429 on the 6th call per admin per hour'}
+  - {id: R60, method: POST, path: /api/integrations/bls/fetch-wage, rule: authenticated, body: {occupation: '51-4121', state: US}, expect: *A200, decision: D6, note: '429 on the 61st lookup per user per hour (shared by R60-R62)'}
+  - {id: R61, method: POST, path: /api/integrations/eia/fetch-energy-price, rule: authenticated, body: {fuel: electricity, state: NC}, expect: *A200, decision: D6}
+  - {id: R62, method: POST, path: /api/integrations/metals/fetch-price, rule: authenticated, body: {symbol: STL}, expect: *A200, decision: D6}
 
 # Routes a flow needs that do not exist (see PERMISSIONS_MATRIX.md §2.9).
 missing_routes:

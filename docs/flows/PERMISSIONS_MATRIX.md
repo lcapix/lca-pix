@@ -1,46 +1,46 @@
 # LCAPIX API permissions matrix
 
-Every `app/api/**/route.ts` handler, by HTTP method and by caller role, with the status the endpoint should return. The machine-readable copy is the `permissions:` section of [`flows.yaml`](flows.yaml). The authz test generator reads that section, so the two files must change together.
+Every `app/api/**/route.ts` handler, by HTTP method and by caller role, with the status the endpoint returns. The machine-readable copy is the `permissions:` section of [`flows.yaml`](flows.yaml). The generated authorization tests (`tests/api-real/authz/matrix.test.ts`, run with `pnpm test:api`) read that section and call every handler against a real MySQL database, so the two files must change together.
 
-- **Baseline read:** branch `v1-hardening-kavish` @ `704a964`. The `fix/authz` branch (commits `2fe3ead`, `4274d9b`) was read to align the intended behaviour; no other fix branch has commits yet.
-- **Scope:** 43 route files at `704a964`, **64 route × method pairs** (R01–R62 plus R49b and R50b). Three pairs have mode-dependent rules and get extra rows (R03b, R52b, R53b), so the baseline table has 67 rows.
-- **Added after the baseline:** two route files arrived with the fix/auth merge: `POST /api/auth/logout` (R63) and `POST /api/auth/google/session` (R64). With them the table has **66 pairs and 69 rows**. See §6.
-- **Sources:** `lib/auth.ts` (`requireAuth`, `requireAdmin`, `checkProjectAccess`), every route handler, `docs/audit-2026-09-29/01-security.md` §3, and `02-features-qa.md`.
-- **The branch moved while this was written.** `v1-hardening-kavish` is now at `c4a7200`, with fix/authz, fix/platform, fix/auth and fix/runs merged. The cells here still describe the pre-fix baseline, per the brief. §6 lists what the merges claim to have fixed, so the test generator knows which `now` markers should already flip.
+- **State described:** branch `v1-hardening-kavish` @ `2009f63`, with every fix branch merged (fix/authz, fix/platform, fix/auth, fix/runs, fix/editor, fix/factors, fix/int-auth, fix/int-client, fix/int-routes).
+- **Verified:** 2026-09-30, by running every row × role in `tests/api-real/authz/matrix.test.ts` against a database built from nothing (`scripts/db/fresh.mjs`). Every cell below is what the code returned; §3 lists where the code and the earlier documents disagreed and how each was resolved.
+- **Scope:** 45 route files, **66 route × method pairs**. Three pairs have mode-dependent rules and get extra rows (R03b, R52b, R53b), so the table has **69 rows**.
+- **Supersedes:** the baseline matrix written against `704a964` (in git history) and `docs/flows-updates/permissions-404.md` (merged here and removed).
+- **Sources:** `lib/auth.ts` (`requireAuth`, `requireAdmin`, `checkProjectAccess`), `lib/route-guard.ts` (`projectAccessDenied`, `isAuthError`), `lib/integrations/admin-guard.ts`, `lib/integrations/rate-lookup.ts`, `lib/rate-limit.ts`, and every route handler.
 
-## 1. Roles
+## 1. Roles and conventions
 
 | Column | Who | How the test fixture creates it |
 |---|---|---|
 | **Anon** | No `Authorization` header | none |
-| **NonMem** | Signed-in `account_type='user'`, not the owner and no `project_members` row on the target project | signup (or direct insert) |
+| **NonMem** | Signed-in `account_type='user'`, not the owner and no `project_members` row on the target project | `POST /api/auth/signup` |
 | **Viewer** | `project_members` row with permission `viewer` | owner calls `POST /api/projects/:id/members {email, role:'viewer'}` |
 | **Editor** | member with permission `editor` | same, `role:'editor'` |
-| **AdminM** | member with permission `admin` (project-level admin) | same, `role:'admin'` |
+| **AdminM** | member with permission `admin` (project-level admin) | same, `role:'admin'` (only the owner may grant it) |
 | **Owner** | `project.owner_id` = caller | creates the project |
-| **PAdmin** | `account.account_type='admin'` (platform admin), **not** a member of the target project | direct insert or update in the test DB. No API creates one. |
+| **PAdmin** | `account.account_type='admin'` (platform admin), **not** a member of the target project | signup, then `UPDATE account SET account_type='admin'` in the test database; no API creates one |
 
-Two more callers are tested on every authenticated row. They are not columns:
+Three more callers run on every row that needs a sign-in. They are not columns; each must get **401**:
 
-- **Deactivated:** a valid JWT for an account with `is_active=0`. It must get **401** everywhere. §4 lists the routes that answer 500 today.
-- **Tampered token:** a JWT signed with the wrong secret, an expired token, or `alg:none`. It must get **401** everywhere.
+- **Deactivated:** a token minted while the account was active, then `is_active=0`. The fixture account is an *editor member* of the project, so the 401 can only come from authentication.
+- **Revoked:** a token minted, then the account's `password_hash` changed (as a password change or a Google takeover would). Also an editor member.
+- **Tampered:** a token for the owner signed with the wrong secret. (Expired, `alg:none`, HS512 and missing-`pv` tokens are in `tests/api-real/security/jwt.test.ts`.)
 
-### How `checkProjectAccess` decides (`lib/auth.ts:146-188`)
-1. If `project.owner_id === userId`, the caller has full access.
-2. Otherwise the caller needs a `project_members` row. The row's `permission_name` is ranked `owner 4 > admin 3 > editor 2 > viewer 1` and compared to the required level. With no required level, any member passes (shown as **M** below).
-3. `account_type` is never consulted, so a platform admin has **no** implicit access to other people's projects. The matrix keeps it that way (see §5, D1).
-4. A member row whose permission is `owner` passes owner-level checks even when `project.owner_id` is someone else. This is the stale-owner-row case in audit L9 (see §5, D2).
+### How access is decided
+- `requireAuth` (`lib/auth.ts`) throws a typed `AuthError` (401) for no token, a bad, expired or revoked token, or an unknown or deactivated account. Every route maps it to **401**, never 500, through `isAuthError` (`lib/route-guard.ts`) or the integration guards.
+- `checkProjectAccess` gives full access to `project.owner_id`, otherwise ranks the caller's `project_members.permission_name` (`owner 4 > admin 3 > editor 2 > viewer 1`) against the required level. `account_type` is never consulted, so a platform admin has no implicit access to tenant data (D1).
+- `projectAccessDenied` (`lib/route-guard.ts`) turns a refusal into **404** for a non-member (with the route's own "X not found" body) and **403** for a member whose role is too low.
 
 ### Status conventions
-- `200`/`201`/`302`: success (the code the handler actually uses; several creates return 200, noted per row).
-- `401`: not signed in, bad or expired token, or deactivated account.
-- `403`: signed in, but the role is too low, or the caller is not a member.
-- `404`: the resource does not exist. Case-, component-, flow- and run-scoped routes check existence **before** access, so a non-member gets 404 for a missing id and 403 for an existing one (an existence oracle; see D3). Project-scoped routes check access first, so a missing project gives **403**.
-- `400`/`409`/`413`/`429`: validation, conflict, payload too large, rate-limited. These are listed under Notes; the role columns assume a valid body.
-- **`X (now Y)`**: X is the intended status and the current code returns Y. The Refs column has the reason.
-- Tags in Refs: **FIX** = changed by an in-progress security fix (fix/authz, fix/auth, fix/platform). **REC** = an audit recommendation not yet assigned to a branch; confirm before tests assert it. **BUG** = a wrong status code in the current code, no policy change needed.
+- `200`/`201`/`307`: success, with the code the handler actually uses. Several creates return 200; the Google redirects are 307 (`NextResponse.redirect`).
+- `401`: not signed in; a bad, expired or **revoked** token; or an unknown or deactivated account. Every route, never 500.
+- `403`: signed in and a **member** of the project, but the role is too low for the action; or signed in but not a platform admin on an integrations writer.
+- `404`: the resource does not exist, **or the caller is not a member of its project** (owner decision D3). The body is **byte-identical** to the missing-id body for that route (`Project not found`, `Case not found`, `Component not found`, `Flow not found`, `Assessment not found`, `Comparison not found`, `Target case not found`), so an id reveals nothing. The generated test compares the two bodies for every such cell.
+- `400`/`409`/`413`/`415`/`429`: validation, conflict, payload too large, wrong file type, rate-limited. Listed under Notes; the role columns assume a valid body.
 
----
+> **Token revocation.** Every JWT carries `pv` = the first 16 hex characters of HMAC-SHA256(JWT_SECRET, password_hash) at issue time. `requireAuth` reads `password_hash` with the account row it already loads, and rejects a token whose `pv` differs or is missing. Login, signup and Google sign-in issue `pv`, and `POST /api/auth/google/session` checks it. Changing the hash (a password change, or a Google takeover) ends every earlier session. Tokens issued before `pv` existed are rejected, so every user signs in again after the deploy.
+
+> **How to read the columns.** NonMem and PAdmin (not a member): **404**. Viewer / Editor / AdminM below the rule: **403**. Deactivated, revoked and tampered tokens: **401** on every row that needs a sign-in.
 
 ## 2. Matrix
 
@@ -48,186 +48,174 @@ Abbreviations in the Rule column: **P** public, **A** any signed-in user, **M** 
 
 ### 2.1 Auth and account
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R01 | POST | `/api/auth/signup` | P | 201 | 201 | 201 | 201 | 201 | 201 | 201 | Needs no token; a signed-in caller can create another account. 400: missing field, password <8, username taken, email registered (L2 enumeration). **429** after 3/hour/IP (REC H5; no limiter today). Target: email verification before Google linking (FIX H3). |
-| R02 | POST | `/api/auth/login` | P | 200/401 | 200/401 | 200/401 | 200/401 | 200/401 | 200/401 | 200/401 | 200 with a valid password, 401 otherwise. The baseline returns the inactive-account message before the password check (AUTH-6/L2). Target, as merged in fix/auth `74f8b25`: a generic 401 for a wrong password or an unknown email (with a dummy bcrypt compare), and **403** "Account is inactive" only **after** a correct password. **429** after 5/min per IP+email (H5). |
-| R03 | GET | `/api/auth/google` (no `code`) | P | 302 | 302 | 302 | 302 | 302 | 302 | 302 | Redirects to `accounts.google.com` carrying `client_id`, `redirect_uri=${NEXT_PUBLIC_APP_URL}/api/auth/google`, `scope=openid email profile` and **`state`**. `state` is missing today (FIX H3/AUTH-1). Unconfigured: 302 to `/auth/login?error=google_not_configured`. |
-| R03b | GET | `/api/auth/google?code=…&state=…` | P | 302 | 302 | 302 | 302 | 302 | 302 | 302 | Success: 302 to `/auth/callback?next=/home` (or `/auth/onboarding`), with cookies `auth_token` and `user_data`. Target (FIX H3/AUTH-1/AUTH-2/M4): a missing or mismatched `state` redirects to `/auth/login?error=…` and sets no cookie; `verified_email !== true` is refused; no silent link to an unverified password account; `is_active=0` is refused; the cookie is httpOnly (FIX AUTH-3). |
-| R04 | GET | `/api/auth/me` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | No UI caller today. |
-| R05 | GET | `/api/auth/profile` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Self-scoped. Uses profile columns that no migration creates (AUTH-7), so it returns 500 on a DB built only from repo migrations. |
-| R06 | PUT | `/api/auth/profile` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | 400: `fullName` or `company` missing, `useCase` not in `product/facility/comparative/research/other`. Field lengths are unbounded (the DB enforces them, so long input gives 500). |
-| R63 | POST | `/api/auth/logout` *(added at `c4a7200`)* | P | 200 | 200 | 200 | 200 | 200 | 200 | 200 | Needs no token. Always returns 200 with `Set-Cookie` headers that expire `auth_token` and `user_data` (Max-Age=0, httpOnly, SameSite=Lax). JWTs stay valid until they expire; there is no revocation yet (C2). |
-| R64 | POST | `/api/auth/google/session` *(added at `c4a7200`)* | hand-off cookie | 401 | 401 | 401 | 401 | 401 | 401 | 401 | Returns **200** `{token, user}` only when the request carries a valid httpOnly `auth_token` hand-off cookie (2-minute life) set by R03b for an active account. Returns 401 without one. Returns **403** when `Sec-Fetch-Site: cross-site`. Every response clears the cookie, so a second call gets 401. The role columns assume no hand-off cookie; a Bearer token is irrelevant to this route. |
+| R01 | POST | `/api/auth/signup` | P | 201 | 201 | 201 | 201 | 201 | 201 | 201 | Body `{email, password, full_name?}`. The username is derived on the server (a client `username` is ignored). 400: missing or badly formed email, password under 8 characters or over 72 bytes. **409** for a registered email, with a generic message. **429** on the 4th signup per IP per hour. |
+| R02 | POST | `/api/auth/login` | P | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Anon = a wrong password; the roles use their own credentials. A wrong password and an unknown email get the same 401 body (`Invalid email or password`), after the same bcrypt work. **403** `Account is inactive…` only after a **correct** password on a deactivated account. **429** with `Retry-After` on the 6th attempt per IP + email per minute. |
+| R03 | GET | `/api/auth/google` | P | 307 | 307 | 307 | 307 | 307 | 307 | 307 | Redirects to `accounts.google.com` with `client_id`, `redirect_uri=${NEXT_PUBLIC_APP_URL}/api/auth/google`, `scope=openid email profile`, a random `state` and an S256 `code_challenge`; no `access_type=offline` or `prompt=consent`. Sets the `google_oauth` state cookie: httpOnly, SameSite=Lax, Path=/api/auth/google, Max-Age=600. Unconfigured: 307 to `/auth/login?error=google_not_configured`. |
+| R03b | GET | `/api/auth/google?code=…&state=…` | P | 307 | 307 | 307 | 307 | 307 | 307 | 307 | Success: 307 to `/auth/callback?next=/home` (or `/auth/onboarding`) with an httpOnly 2-minute `auth_token` hand-off cookie carrying a `pv` token; the state cookie is cleared on every outcome. A missing or mismatched `state` gives `error=oauth_state_mismatch` and no `auth_token`; `verified_email !== true` gives `google_email_unverified`; an `is_active=0` account gives `account_inactive` and is left unchanged. **Takeover (owner decision):** a verified email that matches an active account with a password hash sets `password_hash='!oauth-only'`, so the password stops working and every earlier token is revoked. |
+| R04 | GET | `/api/auth/me` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | No UI caller. |
+| R05 | GET | `/api/auth/profile` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Self-scoped; `needsOnboarding` until `full_name`, `company` and `onboarded_at` are set. |
+| R06 | PUT | `/api/auth/profile` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | 400: `fullName` or `company` missing, `useCase` not in `product/facility/comparative/research/other`. Field lengths are not checked before the UPDATE (PROF-1; see §3.2). |
+| R63 | POST | `/api/auth/logout` | P | 200 | 200 | 200 | 200 | 200 | 200 | 200 | Needs no token. Always 200, and expires `auth_token` and `user_data` (Max-Age=0, httpOnly, SameSite=Lax, Path=/). The bearer JWT stays valid until it expires or the password hash changes; there is no per-session logout. |
+| R64 | POST | `/api/auth/google/session` | hand-off cookie | 401 | 401 | 401 | 401 | 401 | 401 | 401 | 200 `{token, user}` only with a valid hand-off cookie for an active account whose `password_hash` still matches the token's `pv`; otherwise 401. 403 for `Sec-Fetch-Site: cross-site`. Every response clears the cookie, so a second call gets 401. A Bearer token is irrelevant here. |
 
 ### 2.2 Projects, members, class progress
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R07 | GET | `/api/projects` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | The list contains only owned or member projects. Assert that the NonMem and PAdmin lists do **not** contain P. |
-| R08 | POST | `/api/projects` | A | 401 | 201 | 201 | 201 | 201 | 201 | 201 | 400 when the name is empty; 409 when the same owner already has the name (case-insensitive). Not transactional (PROJ-2). |
-| R09 | GET | `/api/projects/:projectId` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | A missing project gives 403, because access is checked first (D3). Returns member emails to viewers, by design. |
-| R10 | PUT | `/api/projects/:projectId` | Ad | 401 | 403 | 403 | 403 | 200 | 200 | 403 | Carries name, description, goal & scope (`goal_statement`, `functional_unit`, `system_boundary`, `boundary_notes`) and `lcia_method`/`region_code`. **Editors cannot set the functional unit** (see F5). 400: bad boundary or method. 409: migration missing. The name is written before validation (PROJ-8). |
-| R11 | DELETE | `/api/projects/:projectId` | O | 401 | 403 | 403 | 403 | 403 | 200 | 403 | A stale `owner` member row passes this check (L9/D2). |
-| R12 | GET | `/api/projects/:projectId/cases` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | |
-| R13 | POST | `/api/projects/:projectId/cases` | E | 401 | 403 | 403 | 201 | 201 | 201 | 403 | 400: missing name or type, or type not `base`/`comparative`. 409: duplicate name in the project. A second base case is allowed (PROJ-6). |
-| R14 | GET | `/api/projects/:projectId/compare?cases=…` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 400: no case ids or a bad project id. 404: none of the cases are in the project. At most 8 cases, the rest silently dropped (CMP-6). |
-| R15 | GET | `/api/projects/:projectId/members` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 404 when the project is missing. `canManage` is true only for the owner, which disagrees with the admin-allowed POST and DELETE (PROJ-8). Deactivated: 500 today (BUG X-API-2). |
-| R16 | POST | `/api/projects/:projectId/members` | Ad | 401 | 403 | 403 | 403 | 200 | 200 | 403 | Body `{email, role ∈ viewer/editor/admin}`. Returns **200** (not 201); an existing member's role is updated. 404: unknown email (enumeration, L2). 409: target is the owner. REC L9: only the **owner** may grant `role:'admin'`, so AdminM would get 403 for that body. Deactivated: 500 today. |
-| R17 | DELETE | `/api/projects/:projectId/members?user_id=` | Ad | 401 | 403 | 403 | 403 | 200 | 200 | 403 | 400 when `user_id` is missing. Returns 200 even when no row matched. REC L9: only the owner removes an admin. Deactivated: 500 today. |
-| R18 | GET | `/api/projects/:projectId/progress` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | Class-mode progress for every case in the project, including other members' cases (see D4). 404 when the project is missing. Deactivated: 500 today. |
+| R07 | GET | `/api/projects` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Only owned or member projects: the NonMem and PAdmin lists do not contain P. |
+| R08 | POST | `/api/projects` | A | 401 | 201 | 201 | 201 | 201 | 201 | 201 | 400 empty name; 409 when the owner already has the name (case-insensitive, trimmed). |
+| R09 | GET | `/api/projects/:projectId` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 404 `Project not found`, the same for a missing project. Returns member emails to viewers, by design. |
+| R10 | PUT | `/api/projects/:projectId` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | Name, description, goal & scope (`goal_statement`, `functional_unit`, `system_boundary`, `boundary_notes`), `lcia_method`, `region_code`. 400: bad boundary or method. Editors cannot set the functional unit (see F5). |
+| R11 | DELETE | `/api/projects/:projectId` | O | 401 | 404 | 403 | 403 | 403 | 200 | 404 | 403 body `Only project owner can delete`. A stale `owner` member row still passes (D2). |
+| R12 | GET | `/api/projects/:projectId/cases` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | |
+| R13 | POST | `/api/projects/:projectId/cases` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 400: missing name or type, type not `base`/`comparative`. 409: duplicate name. A second base case is allowed (PROJ-6). |
+| R14 | GET | `/api/projects/:projectId/compare?cases=…` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 400: no case ids or a non-numeric project id. 404 `No such cases in this project`. At most 8 cases. A `runs=` override only picks among the case's own completed runs. A case with no flows (or no run) has `status:'incomplete'` and is never ranked. |
+| R15 | GET | `/api/projects/:projectId/members` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | `canManage` for the owner and admin members; `canManageAdmins` for the owner only. |
+| R16 | POST | `/api/projects/:projectId/members` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | Body `{email, role ∈ viewer/editor/admin}`. Returns 200; an existing member's role is updated (`updated:true`). **Granting or changing the admin role is owner-only**: an admin member gets 403 `Only the project owner can grant the admin role`. 404 unknown email; 409 target is the owner. |
+| R17 | DELETE | `/api/projects/:projectId/members?user_id=` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | 400 without a numeric `user_id`; **404 `Member not found`** when that user is not a member. Removing an admin is owner-only (403 for an admin member). |
+| R18 | GET | `/api/projects/:projectId/progress` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Class-mode progress for every case in the project (D4). |
 
 ### 2.3 Cases
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R19 | GET | `/api/cases/:caseId` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 404 when the case is missing, checked before access (D3). Adds `project_lcia_method` and `project_region_code`. |
-| R20 | PUT | `/api/cases/:caseId` | E | 401 | 403 | 403 | 200 | 200 | 200 | 403 | Name, description and type, plus `interpretation`/`assumptions`/`learning_state` (021), `is_final` (022) and `reference_flow`/`reference_flow_unit`/`modeled_output` (014). 400: empty name, or reference flow / modeled output ≤ 0. 409: duplicate name, or migration missing. `case_type` is not validated (L9). Not transactional (WRITE-1). |
-| R21 | DELETE | `/api/cases/:caseId` | Ad | 401 | 403 | 403 | 403 | 200 | 200 | 403 | Cascades to components, flows, runs and documents. |
-| R22 | GET | `/api/cases/:caseId/assessments` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | N+1 per run (RUN-8). |
-| R23 | POST | `/api/cases/:caseId/assessments` | E | 401 | 403 | 403 | 201 | 201 | 201 | 403 | Body `{calculation_method?, region_code?, run_name?}`. The method is not whitelisted (RUN-6); target: 400 for an unknown method. The server does not enforce the functional-unit gate; the UI does (see F9). **429** after 30/hour/user (REC H5). Returns `details: error.message` on 500 (L1). |
-| R24 | POST | `/api/cases/:caseId/clone-from` | E | 401 | 403 | 403 | 200 | 200 | 200 | 403 | Body `{sourceCaseId}`, which must be in the same project; otherwise 400, sent **before** the access check, so it is an oracle. 409 when the target case is not empty. Returns 200. Copies no flows (CMP-2). |
-| R25 | GET | `/api/cases/:caseId/completeness` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 400 for a non-numeric id. Deactivated: 500 today (BUG). |
-| R26 | GET | `/api/cases/:caseId/components` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | Joins `parent_component_name`; see R27 for the cross-case leak. |
-| R27 | POST | `/api/cases/:caseId/components` | E | 401 | 403 | 403 | 201 | 201 | 201 | 403 | 400: missing name or type, or type not in `product, machine_line, subprocess, operation, elemental_task`. **400 when `parent_component_id` is not in this case (now 201, which echoes the other tenant's parent name).** FIX M1/FLOW-1. Target: also reject cycles. |
-| R28 | GET | `/api/cases/:caseId/documents[?id=]` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 404 when the document is not in this case. Returns 200 with an empty list when migration 021 is missing. |
-| R29 | POST | `/api/cases/:caseId/documents` (multipart `file`, `doc_type`) | E | 401 | 403 | **403 (now 200)** | 200 | 200 | 200 | 403 | FIX M2/DOC-1. Returns 200, not 201. 400: no file, or no readable text. Size: **413 before buffering for bodies over 12 MB (now 400, after the whole body is buffered)**, plus a type allowlist (FIX M6/DOC-2). 503 when migration 021 is missing. |
-| R30 | DELETE | `/api/cases/:caseId/documents?id=` | E | 401 | 403 | **403 (now 200)** | 200 | 200 | 200 | 403 | FIX M2/DOC-1. 400 when `id` is missing. Returns 200 for a missing id (DOC-3); target 404. |
-| R31 | POST | `/api/cases/:caseId/duplicate` | E | 401 | 403 | 403 | 201 | 201 | 201 | 403 | Body `{case_name?, case_type?}`. 400 when the source has no steps; 409 on a name clash. Returns 500 whenever a step has `drivers` JSON (CMP-1). Deactivated: 500 today. |
-| R32 | POST | `/api/cases/:caseId/scale` | E | 401 | 403 | 403 | 200 | 200 | 200 | 403 | Body `{from>0, to>0, mode ∈ scale-inputs/data-covers}`, otherwise 400. It scales by the client's `from`, so it is not idempotent (COST-7). |
+| R19 | GET | `/api/cases/:caseId` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Adds `project_lcia_method` and `project_region_code`. |
+| R20 | PUT | `/api/cases/:caseId` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | Name, description, type, `interpretation`/`assumptions`/`learning_state`, `is_final`, `reference_flow`/`reference_flow_unit`/`modeled_output`. 400: empty name, reference flow or data basis ≤ 0. 409: duplicate name. |
+| R21 | DELETE | `/api/cases/:caseId` | Ad | 401 | 404 | 403 | 403 | 200 | 200 | 404 | Cascades to steps, flows, runs and documents. |
+| R22 | GET | `/api/cases/:caseId/assessments` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Frozen runs answer from their snapshot. |
+| R23 | POST | `/api/cases/:caseId/assessments` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 400 for an unknown `calculation_method` or a non-string field. **429** on the 31st run per user per hour. |
+| R24 | POST | `/api/cases/:caseId/clone-from` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | Body `{sourceCaseId}`. Access to the target is checked first, so a non-member gets 404. A member gets 400 `Cases must belong to the same project` for a source in another project. 409 when the target is not empty. |
+| R25 | GET | `/api/cases/:caseId/completeness` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 400 for a non-numeric id. |
+| R26 | GET | `/api/cases/:caseId/components` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | The parent name is joined only within the case. |
+| R27 | POST | `/api/cases/:caseId/components` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 400: missing name or type, bad type, a name over 200 characters, a negative or non-numeric quantity or cost, a `parent_component_id` that is not a step of this case (no name echoed). |
+| R28 | GET | `/api/cases/:caseId/documents[?id=]` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 404 `Document not found` for an id not in this case. |
+| R29 | POST | `/api/cases/:caseId/documents` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | Multipart `file`, `doc_type`. Returns 200. **413** above 12 MB, from the declared length or while reading, before the form is parsed. **415** for an extension outside the allowlist or bytes that do not match it. PDFs are read to at most 200 pages. |
+| R30 | DELETE | `/api/cases/:caseId/documents?id=` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | 400 without a numeric `id`; 404 `Document not found` for an id not in this case. |
+| R31 | POST | `/api/cases/:caseId/duplicate` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 400 when the source has no steps; 409 on a name clash. |
+| R32 | POST | `/api/cases/:caseId/scale` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | Body `{from>0, to>0, mode ∈ scale-inputs/data-covers}`, else 400. |
 
 ### 2.4 Components, flows, costs
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R33 | GET | `/api/components/:componentId` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 404 when missing (D3). |
-| R34 | PUT | `/api/components/:componentId` | E | 401 | 403 | 403 | 200 | 200 | 200 | 403 | **400 when `parent_component_id` is in another case, is itself, or would form a cycle (now 200, which echoes the other tenant's parent name).** FIX M1/FLOW-1. Cost-column errors are swallowed and success is still returned (FLOW-2). `COALESCE` means a field can't be cleared to NULL (FLOW-3). |
-| R35 | DELETE | `/api/components/:componentId` | Ad (REC E) | 401 | 403 | 403 | **200 (now 403)** | 200 | 200 | 403 | REC FLOW-10: create needs editor while delete needs admin. Once EDIT-1 (fix/editor) wires Delete to this route, **editor members get 403 from the editor's Delete button**. Decide (D5) before asserting. Cascades to children, flows and **historical `assessment_results`** (RUN-1). |
-| R36 | GET | `/api/components/:componentId/flows` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | |
-| R37 | POST | `/api/components/:componentId/flows` | E | 401 | 403 | 403 | 201 | 201 | 201 | 403 | 400: missing field, bad `flow_type`, or a unit that won't convert to the substance's unit. Target: 400 for a non-finite or negative quantity (now 201 or 500, FLOW-4/E9). REC L3/FLOW-5: 400 or 404 when `substance_id` is another user's private custom substance (now 201, which echoes its name). |
-| R38 | POST | `/api/components/:componentId/auto-costs` | E | 401 | **403 (now 200)** | **403 (now 200)** | 200 | 200 | 200 | **403 (now 200)** | FIX H2/COST-1 (fix/authz `2fe3ead`). Missing component: **404 (now 500 with `err.message`)**. No UI caller. |
-| R39 | PUT | `/api/flows/:flowId` | E | 401 | 403 | 403 | 200 | 200 | 200 | 403 | 404 when missing. The unit guard only runs when `unit` is sent (FLOW-10). REC L3: scope `substance_id`. |
-| R40 | DELETE | `/api/flows/:flowId` | E | 401 | 403 | 403 | 200 | 200 | 200 | 403 | 404 when missing. |
+| R33 | GET | `/api/components/:componentId` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | |
+| R34 | PUT | `/api/components/:componentId` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | A parent in another case, the step itself or one of its descendants → 400; re-parenting updates `hierarchy_level` for the whole subtree. A cost or description sent as `null` is cleared. |
+| R35 | DELETE | `/api/components/:componentId` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | Editor since D5 (fix/editor). `?children=delete` (default) removes the subtree; `?children=reparent` moves the children up; anything else → 400. Frozen runs keep their per-step results. |
+| R36 | GET | `/api/components/:componentId/flows` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | |
+| R37 | POST | `/api/components/:componentId/flows` | E | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 400: missing field, bad `flow_type`, quantity null/non-numeric/negative, a unit that will not convert to the substance's unit, or a `substance_id` that is not a library row or the caller's own (`Unknown substance…`, the name never echoed). |
+| R38 | POST | `/api/components/:componentId/auto-costs` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | 404 `Component not found` for a missing, non-numeric or invisible id. No UI caller. |
+| R39 | PUT | `/api/flows/:flowId` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | Same quantity, unit and substance checks as R37. |
+| R40 | DELETE | `/api/flows/:flowId` | E | 401 | 404 | 403 | 200 | 200 | 200 | 404 | |
 
 ### 2.5 Runs, exports, comparisons
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R41 | GET | `/api/assessments/:runId` | M | 401 | 403 | 200 | 200 | 200 | 200 | 403 | 404 when missing (D3). Totals are read live through `JOIN component` (RUN-1). |
-| R42 | GET | `/api/assessments/:runId/export?format=pdf\|pptx\|csv` | V | 401 | 403 | 200 | 200 | 200 | 200 | 403 | Content types: `application/pdf`, `application/vnd.openxmlformats-officedocument.presentationml.presentation`, `text/csv; charset=utf-8`. An unknown format silently returns a PDF (EXP-7); target 400. Returns 404 when the executing account was deleted (EXP-7). Deactivated: 500 today. CSV injection (L5/EXP-3). |
-| R43 | POST | `/api/comparisons` (legacy) | M (inline SQL) | **401 (now 500)** | 404 | 200 | 200 | 200 | 200 | 404 | BUG: the catch-all maps auth errors to 500. Saves nothing (CMP-7). 400: missing fields, fewer than 2 or more than 10 cases, or a case outside the project. **REC: delete the legacy comparisons feature.** |
-| R44 | GET | `/api/comparisons?project_id=` (legacy) | M | **401 (now 500)** | 404 | 200 | 200 | 200 | 200 | 404 | Same catch-all BUG. 400 when `project_id` is missing. `JSON.parse` on JSON columns gives 500 when rows exist (CMP-7). |
-| R45 | GET | `/api/comparisons/:comparisonId` (legacy) | M | **401 (now 500)** | 403 | 200 | 200 | 200 | 200 | 403 | 404 when missing. Same catch-all BUG, and CMP-7. |
-| R46 | DELETE | `/api/comparisons/:comparisonId` (legacy) | O, AdminM or creator | **401 (now 500)** | 403 (creator: 200) | 403 (creator: 200) | 403 (creator: 200) | 200 | 200 | 403 | A creator keeps delete rights after being removed from the project (L9). |
+| R41 | GET | `/api/assessments/:runId` | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | A frozen run answers from its snapshot, unchanged by later edits. |
+| R42 | GET | `/api/assessments/:runId/export?format=pdf\|pptx\|csv` | V | 401 | 404 | 200 | 200 | 200 | 200 | 404 | `application/pdf`, `application/vnd.openxmlformats-officedocument.presentationml.presentation`, `text/csv; charset=utf-8`. 400 for an unknown format. CSV cells that start with `= + - @ TAB CR` are prefixed with `'`. |
+| R43 | POST | `/api/comparisons` (legacy) | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | Validates and saves nothing (CMP-7). 400: missing fields, fewer than 2 or more than 10 cases, a case outside the project. REC: delete the legacy feature. |
+| R44 | GET | `/api/comparisons?project_id=` (legacy) | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 400 without a numeric `project_id`. |
+| R45 | GET | `/api/comparisons/:comparisonId` (legacy) | M | 401 | 404 | 200 | 200 | 200 | 200 | 404 | 404 `Comparison not found`. |
+| R46 | DELETE | `/api/comparisons/:comparisonId` (legacy) | Ad, or the creator while still a member | 401 | 404 | 403 | 403 | 200 | 200 | 404 | A creator who was removed from the project gets 404 like any non-member (closes L9). |
 
-### 2.6 Global reference data (no tenant scope)
+### 2.6 Global reference data, AI and ingestion
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R47 | GET | `/api/driver-factors` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | REC L3/FAC-1: exclude other users' private custom rows and QUARANTINE rows. Unpaginated (about 4.3k rows). |
+| R47 | GET | `/api/driver-factors` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Excludes other users' private factors and every `QUARANTINE%` row. |
 | R48 | GET | `/api/impact-categories` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | |
-| R49 | GET | `/api/substances` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Returns the library plus the caller's own custom substances (`is_custom=0 OR created_by=me`). Assert that user B's private substance is absent. |
-| R49b | POST | `/api/substances` | A | 401 | 201 | 201 | 201 | 201 | 201 | 201 | Body `{name, kind ∈ input/emission, unit, method, impactCategory, factorValue>0, factorUnit, source, casNumber?}`. 400 when validation fails. 409 on a duplicate name, which today includes **other users' private names** (L3/FAC-4); target: scope the check to the library plus the caller's own rows. Not transactional (FAC-4). |
-| R50 | GET | `/api/process-templates` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Returns `is_custom=0 OR created_by=me`, and `[]` when migration 022 is missing. |
-| R50b | POST | `/api/example-project` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Builds the worked example in the **caller's** account. Returns 200, and 200 with `existed:true` on a repeat. PROJ-1: the functional unit is never set. Deactivated: 500 today. |
-| R51 | POST | `/api/insights` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Returns a streamed `text/plain`, or JSON `{fallback:true}` with 200 when there is no `HF_TOKEN` or upstream fails. Target (REC H5/INS-2): **429** after about 20/hour/user, **413** for bodies over 16 KB or a `question` over 500 chars. The stream stalls today (INS-1). |
-| R52 | POST | `/api/ingest/preview` (connector ≠ equipment) | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Writes nothing. 400: bad connector, no file, or unreadable. 404: ITAC plant id not found. Target (REC M6/H5/ING-3): **413** over the size cap, checked before buffering; a type or magic-byte allowlist; **429** after 10/hour/user. |
-| R52b | POST | `/api/ingest/preview` (connector = equipment, `target_case_id`) | E on the target case's project | 401 | 403 | 403 | 200 | 200 | 200 | 403 | 400 without `target_case_id`; 404 when the case is missing. |
-| R53 | POST | `/api/ingest/apply` (create: `project_id`, `case_name`, `nodes`…) | E on `project_id` | 401 | 403 | 403 | 201 | 201 | 201 | 403 | Body validation (400) runs **before** the access check. Deactivated: 500 today. L6/L7. |
-| R53b | POST | `/api/ingest/apply` (append: `target_case_id`) | E on the target case's project | 401 | 403 | 403 | 200 | 200 | 200 | 403 | 404 when the target case is missing. 400 when the default step is not in the case. |
+| R49 | GET | `/api/substances` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | The library plus the caller's own custom substances. |
+| R49b | POST | `/api/substances` | A | 401 | 201 | 201 | 201 | 201 | 201 | 201 | 400 when validation fails. 409 naming the row for a library or own name; another user's private name gives a 409 that names nothing. The insert is atomic. |
+| R50 | GET | `/api/process-templates` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Library plus own templates. |
+| R50b | POST | `/api/example-project` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Builds the worked example in the caller's account (with its functional unit, so Run works). Returns 200; a repeat returns `existed:true`. |
+| R51 | POST | `/api/insights` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | No `HF_TOKEN`: 200 `{fallback:true}`. With one: a `text/plain` stream. **413** over 16 KB (declared or read), 400 for a question over 500 characters, **429** on the 21st call per user per hour. |
+| R52 | POST | `/api/ingest/preview` (connector ≠ equipment) | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Writes nothing. **413** over 12 MB before parsing, **415** for bytes that do not match the extension, **429** on the 11th preview per user per hour. Known bug ING-9: private substances of other users are match candidates (§3.2). |
+| R52b | POST | `/api/ingest/preview` (connector = equipment, `target_case_id`) | E on the target case's project | 401 | 404 | 403 | 200 | 200 | 200 | 404 | 404 `Case not found`, identical for a missing case. 400 without `target_case_id`. |
+| R53 | POST | `/api/ingest/apply` (create: `project_id`, `case_name`, `nodes`…) | E on `project_id` | 401 | 404 | 403 | 201 | 201 | 201 | 404 | 404 `Project not found`. Body validation (zod, 400) runs before the access check and reveals nothing about ids. One transaction. Known bug: another user's private `substance_id` is written (§3.2). |
+| R53b | POST | `/api/ingest/apply` (append: `target_case_id`) | E on the target case's project | 401 | 404 | 403 | 200 | 200 | 200 | 404 | 404 `Target case not found`. 400 when the default step, or a line's step, is not in the case. |
 
-### 2.7 Integrations (platform-wide data)
+### 2.7 Integrations
 
-After the security fix every mutator is **platform-admin only**, and so is the integration log (fix/authz `4274d9b`, `lib/integrations/admin-guard.ts`: 401 when not signed in, 403 `Admin privileges required` for everyone else). "Owner" and "AdminM" in this table mean an ordinary user who owns or administers a project; project roles do not matter here.
+The integrations that write platform-wide data (factor library, substances) and the integration log are **platform-admin only**: `lib/integrations/admin-guard.ts` answers 401 when not signed in and 403 `Admin privileges required` for everyone else. The BLS / EIA / Metals cost lookups are **open to any signed-in user** with a shared budget of 60 lookups per user per hour (owner decision D6, option c: `lib/integrations/rate-lookup.ts`): the caller only picks an allowlisted key, and the stored value always comes from the upstream API. "Owner" and "AdminM" here mean an ordinary user who owns or administers a project; project roles do not matter.
 
-| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes / Refs |
+| # | Method | Path | Rule | Anon | NonMem | Viewer | Editor | AdminM | Owner | PAdmin | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| R54 | GET | `/api/integrations/status` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Stays open to every signed-in user: `/home` (FACTORS tile) and `/library/factors` call it. It reveals which API keys are configured (INT-6, Info). |
-| R55 | GET | `/api/integrations/log` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | FIX H1/L4. `?limit=abc` gives 500 (BUG INT-6); target: clamp to 1..200. |
-| R56 | POST | `/api/integrations/openlca/import` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | FIX H1/E2. Body `{method ∈ CML 2001 / ReCiPe Midpoint (H) / TRACI 2.1}`, else 400. It must never re-create a row that has a `QUARANTINE:` twin (FIX). |
-| R57 | GET | `/api/integrations/openlca/import` | A | **401 (now 200)** | 200 | 200 | 200 | 200 | 200 | 200 | FIX (fix/authz): requires a login. |
-| R58 | POST | `/api/integrations/electricity/sync` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | FIX H1/INT-2. Body `{zone}` or `{zones[1..20]}`, else 400. Returns `success:true` even when every zone failed (INT-2). |
-| R59 | POST | `/api/integrations/pubchem/enrich` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | FIX H1. Body `{substance_id?, only_missing?, limit≤500}`. REC INT-4: default limit, skip custom substances. |
-| R60 | POST | `/api/integrations/bls/fetch-wage` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | FIX (fix/authz includes it because it upserts the shared `cost_rates` cache). **Side effect:** the inspector's state-wage picker (F8) and the component-form Suggest panel call this route as ordinary users. After the fix they get 403 and quietly keep the static national rate. See D6. |
-| R61 | POST | `/api/integrations/eia/fetch-energy-price` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | Same as R60 (component-form Suggest). Body `{fuel, state (2 letters), sector?}`. |
-| R62 | POST | `/api/integrations/metals/fetch-price` | PA | 401 | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | **403 (now 200)** | 200 | Same as R60. Body `{symbol ∈ ALU, XCU, ZNC, NIK, LEA, TIN, STL}`. |
+| R54 | GET | `/api/integrations/status` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | `/home` and `/library/factors` call it. Reveals which API keys are configured (Info). |
+| R55 | GET | `/api/integrations/log` | PA | 401 | 403 | 403 | 403 | 403 | 403 | 200 | `limit` clamped to 1..200; `limit=abc` gives the default 20. |
+| R56 | POST | `/api/integrations/openlca/import` | PA | 401 | 403 | 403 | 403 | 403 | 403 | 200 | Body `{method ∈ CML 2001 / ReCiPe Midpoint (H) / TRACI 2.1}`, else 400. Insert-only; never re-creates a row that has a `QUARANTINE:` twin. |
+| R57 | GET | `/api/integrations/openlca/import` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Lists the methods and seed counts. |
+| R58 | POST | `/api/integrations/electricity/sync` | PA | 401 | 403 | 403 | 403 | 403 | 403 | 200 | Body `{zone}` or `{zones[1..20]}` from the zone allowlist, else 400. **502** when every zone failed. |
+| R59 | POST | `/api/integrations/pubchem/enrich` | PA | 401 | 403 | 403 | 403 | 403 | 403 | 200 | Body `{substance_id?, only_missing?, limit ≤ 500}`; default limit 50. **429** on the 6th call per admin per hour. |
+| R60 | POST | `/api/integrations/bls/fetch-wage` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Body `{occupation: 'NN-NNNN', state: US state or 'US'}` (strict), else 400. **429** on the 61st lookup per user per hour, shared by R60–R62. |
+| R61 | POST | `/api/integrations/eia/fetch-energy-price` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Body `{fuel ∈ electricity/natural_gas, state, sector?}` (strict). |
+| R62 | POST | `/api/integrations/metals/fetch-price` | A | 401 | 200 | 200 | 200 | 200 | 200 | 200 | Body `{symbol ∈ ALU, XCU, ZNC, NIK, LEA, TIN, STL}` (strict). |
 
 ### 2.8 Pages (not API; client-side guard only)
 
-There is no `middleware.ts`. Every app page is a client component behind `components/auth-guard.tsx`, which reads a Zustand flag stored in localStorage. Page-level tests should assert **redirect to `/auth/login` for Anon**. They cannot assert role-based hiding, because the pages do not check roles. `/admin/integrations` renders for every signed-in user at the baseline (H1). Target: hidden from the nav, and non-admins redirected. fix/authz `7222b48` (merged at `c4a7200`) adds an "admins-only state" to the page; not re-verified here.
+There is no `middleware.ts`. Every app page is a client component behind `components/auth-guard.tsx`. Page tests assert the redirect to `/auth/login` for Anon; role-based hiding is cosmetic, because the API enforces every rule above. `/admin/integrations` shows an admins-only state to non-admins (fix/authz; a UI behaviour this suite does not cover). On `/project/:id/class` the Add form appears for `canManage`, and the **Admin** role option only for `canManageAdmins`, the owner (`tests/app/class-page.test.tsx`).
 
 ### 2.9 Routes a flow needs that do not exist
 
 | Proposed | Needed by | Why |
 |---|---|---|
-| `POST /api/auth/logout` | F2 | Missing at the baseline: logout cleared localStorage only, the Google-flow `auth_token` and `user_data` cookies survived, and `/auth/callback` signed the previous user back in (M4). **It now exists at `c4a7200` (R63).** |
-| Password reset and change | F2, F18 | No route exists (AUTH-8, PROF-1). |
-| Email verification | F1, F3 | Needed for the H3 linking rule. No route exists. |
+| Password reset and change | F2, F18 | No route exists (AUTH-8, PROF-1). A password change would revoke every earlier token through `pv`. |
+| Email verification | F1, F3 | Not needed for Google linking any more (a verified Google email takes the account over), but signup still never verifies an address. |
 
 ---
 
-## 3. Where current code differs from the intended matrix
+## 3. Where the code and the earlier documents disagreed
 
-| # | Route(s) | Baseline (`704a964`) | Intended | Tag / ID | Branch / status at `c4a7200` (from merge commit subjects, not re-verified) |
-|---|---|---|---|---|---|
-| 1 | R38 auto-costs | any signed-in user 200 | editor+ on the component's project; 404 for a missing component | FIX H2 COST-1 | fix/authz — merged `10b3903` |
-| 2 | R55–R62 integrations mutators and log | any signed-in user 200 | platform admin only (401/403) | FIX H1 E2 INT-1 L4 | fix/authz — merged `10b3903` |
-| 3 | R57 GET openlca/import | public 200 | signed-in user | FIX | fix/authz — merged `10b3903` |
-| 4 | R29, R30 documents POST/DELETE | any member (viewer too) | editor+ | FIX M2 DOC-1 | fix/auth — merged `8b51f39` (`d56c61f`) |
-| 5 | R27, R34 component parent | any id accepted; other tenant's name echoed | same-case parent only; no self-parent or cycles; 400 | FIX M1 FLOW-1 | not in any merged branch (still open at `c4a7200`) |
-| 6 | R03/R03b Google OAuth | no `state`; links by unverified email; ignores `is_active`; non-httpOnly 7-day cookies never cleared | `state` + PKCE; verified email; no silent linking; httpOnly cookie cleared on logout | FIX H3 AUTH-1..3 M4 | fix/auth — merged `8b51f39` (`02003dc`, `4b519bd`) |
-| 7 | R01, R02, R51, R52, R23, R59 | no rate limit | 429 per the H5 budgets | FIX H5 | fix/auth — merged `8b51f39`: enforced on login, signup, insights, ingest preview. `lib/rate-limit.ts` also defines `assessments` (30/h) and `pubchemEnrich` (5/h) budgets, but **no route calls them yet** (R23, R59 still open) |
-| 8 | R29, R52 upload size | size checked after buffering (R29), or not at all (R52) | 413 before parsing; type allowlist | FIX M6 | fix/auth — merged `8b51f39` (`cc71d85`, `d56c61f`, `4f008ee`) |
-| 9 | R43–R46 legacy comparisons | anon gets 500; feature is dead | 401; REC: delete the routes | BUG, CMP-7 | none (still open) |
-| 10 | Deactivated account on R15–R18, R25, R28–R31, R42, R50, R50b, R53 | 500 (regex misses "User account not found or inactive") | 401 | BUG X-API-2 | none (still open) |
-| 11 | R42 export, unknown `format` | PDF | 400 | EXP-7 | fix/runs? — safe export builder merged `c4a7200`; recheck |
-| 12 | R23 unknown `calculation_method` | 201 with an all-zero "completed" run | 400 | RUN-6 | fix/runs — merged `c4a7200` (`a9afc51`, `f3cb51a`) |
-| 13 | R37, R39 quantity | null, NaN, strings and negatives accepted | 400 | FLOW-4 E9 | fix/editor (not merged) |
-| 14 | R37, R39, R47, R49b substance privacy | other users' custom substances usable or visible | library + own only | REC L3 FLOW-5 FAC-1 FAC-4 | partly fix/authz (`dc9f831`, `da7a5ad`); flows `substance_id` still open |
-| 15 | R35 component DELETE | admin+ | editor+ (decision D5) | REC FLOW-10 | fix/editor must decide (not merged) |
-| 16 | R16, R17 admin grants | project admins can create and remove admins | owner-only for the admin role | REC L9 | none (still open) |
-| 17 | R30, R17 delete of a missing id | 200 | 404 | DOC-3 | fix/auth `d56c61f` for documents (DOC-3); members still open |
-| 18 | R55 `limit=abc` | 500 | clamped | INT-6 | fix/authz — merged (`157fd25`) |
-| 19 | R02 inactive account | distinct message before the password check | uniform 401 | AUTH-6 L2 | fix/auth — merged (`74f8b25`); intended now 401 wrong password / 403 inactive after a correct password |
-| 20 | R09–R18 missing project | 403 | 404 (or keep 403 everywhere; decision D3) | D3 | none (decision D3) |
+### 3.1 Resolved on 2026-09-30
 
-## 4. Deactivated-account behaviour (current)
+Each row was checked by the generated test against the code. The code is the source of truth, except where an owner decision says otherwise (non-members 404, low role 403, editors delete components, cost lookups open to signed-in users with limits, integrations writers admin-only, only the owner grants admin): then the code was checked against the decision.
 
-`requireAuth` throws `"User account not found or inactive"`. Routes that map only token errors to 401 answer **500** instead:
-- The regex `/Unauthorized|token/i` misses it: members (R15–R17), progress (R18), documents (R28–R30), process-templates (R50), example-project (R50b).
-- The explicit list omits it: completeness (R25), duplicate (R31), export (R42), ingest/apply (R53).
-- The catch-all returns 500: legacy comparisons (R43–R46).
+| Row(s) | Earlier document said | Code does | Resolution |
+|---|---|---|---|
+| R03, R03b | 302 | 307 (`NextResponse.redirect` default) | **Doc fixed**: 307 is correct for a GET redirect. |
+| R09–R46, R52b, R53, R53b | NonMem/PAdmin `{403, 404}`; several rows "404 (pending; now 403)" | 404 everywhere, byte-identical to the missing-id body | **Doc fixed** (D3 decided; the pending one-line changes have landed). |
+| R15–R17, R28–R30, R43–R46 | Deactivated: 500 (pending) | 401 | **Doc fixed** (X-API-2 closed). |
+| R16, R17 | Admin members can grant and remove admins (REC L9 open) | Owner-only for the admin role (403 for an admin member) | Matches the owner decision; **doc fixed**. |
+| R17 | 200 even when no row matched | 404 `Member not found` | **Doc fixed**. |
+| R35 | Admin (decision D5 open) | Editor | Matches the owner decision (editors delete components); **doc fixed**. |
+| R60–R62 | Platform admin only (fix/authz) | Any signed-in user, 60/hour/user, strict allowlisted body | Matches the owner decision (D6 option c); **doc fixed**. |
+| R01 | 400 for a registered email; the client username is stored | 409 with a generic message; the username is derived on the server | **Doc fixed** (AUTH-4 and L2 were closed by fix/auth). |
+| R23, R59 | Rate limits defined but not enforced | 30/hour/user (runs) and 5/hour/admin (PubChem) enforced | **Doc fixed**; `lib/rate-limit.ts`'s header comment said the same stale thing and was corrected. |
+| R30 | 200 for a missing document | 404 `Document not found` | **Doc fixed** (DOC-3). |
+| R38 | Missing component → 500 | 404 `Component not found` | **Doc fixed** (H2 follow-up). |
+| R42 | Unknown format → PDF | 400 | **Doc fixed** (EXP-7). |
+| R46 | Creator keeps delete rights after removal; handler read `params` without awaiting (404 for every id) | Creator must still be a member; params awaited | **Doc fixed**. |
+| R55 | `limit=abc` → 500 | Default 20 | **Doc fixed** (INT-6). |
+| R57 | Public | Requires a sign-in | **Doc fixed**. |
+| R64, R03b | `error=use_password_login` for a password account | Takeover: `!oauth-only` hash, earlier tokens revoked | **Doc fixed** (owner decision, fix/int-auth). |
 
-Routes whose catch-all returns 401 for any `requireAuth` error handle it correctly: integrations R54–R62 and auto-costs R38.
+No row needed a code change: after these doc fixes every one of the 674 generated cells passes.
 
-## 5. Open decisions (tests should not assert these until someone decides)
+### 3.2 Bugs the real-database suite found that touch this matrix
 
-- **D1 Platform admin and tenant data.** Today a platform admin cannot read or modify projects they are not a member of. The matrix keeps that (403). If support access is wanted, it needs an explicit, audited path, not a change to `checkProjectAccess`.
-- **D2 Stale `owner` member rows.** `checkProjectAccess` gives owner level to any member row named `owner`. `POST /api/projects` inserts one for the real owner, which is harmless, but a row left behind after `owner_id` changes keeps delete rights. Proposed: owner level only from `project.owner_id`. A DB test should flag `owner` member rows whose user ≠ `owner_id`.
-- **D3 403 vs 404 for resources the caller cannot see.** Case, component, flow and run routes answer 404 for missing ids and 403 for existing ones, so ids can be enumerated. Project routes answer 403 for both. Pick one, preferably 404 for non-members everywhere. Until then, the generated tests accept `{403, 404}` for NonMem and PAdmin and assert `!= 2xx`.
-- **D4 Class-mode visibility.** If students work as members of an instructor's project, `GET /cases`, `GET /progress` and editor rights let each student read, and as editor change, every other student's case. See F15 for the model the code implies. Decide whether students should be viewers, get per-case ownership, or each own a project shared with the instructor.
-- **D5 Who may delete a component.** Admin (current) or editor (REC FLOW-10). This matters as soon as EDIT-1 makes the editor's Delete call the API.
-- **D6 BLS/EIA/Metals rate lookups.** fix/authz makes them admin-only because they write the shared `cost_rates` cache. The labour calculator's state picker and the component-form Suggest panel call them as ordinary users. Options: (a) keep admin-only and accept static national rates for users; (b) split the route into a read-only lookup for any user, with the cache write admin-only or server-internal and upstream values only; (c) keep them open to any user, rate-limited, since the caller controls only the key (occupation/state/symbol, zod-validated) and never the stored value. Tests assert the fix/authz behaviour (403) and mark the F8 state-wage step `expected_change`.
+These are kept as `it.fails` tests (the suite goes red when they are fixed, so the marker can flip):
 
-## 6. Baseline drift: what changed at `c4a7200` (read-only note)
+| Bug | Row | Test | Cause |
+|---|---|---|---|
+| Another user's private `substance_id` is accepted by ingest apply and written to the caller's case; its name then shows in `GET /api/components/:id/flows` (L3, ingest twin of FLOW-5) | R53, R53b | `tests/api-real/authz/cross-tenant.test.ts` › ingest/apply | `app/api/ingest/apply/route.ts` looks substances up with `SELECT unit FROM substances WHERE substance_id = ?`, with no `is_custom = 0 OR created_by = ?` scope |
+| Ingest preview offers other users' private substances as matches and review candidates (ING-9, L3) | R52 | same file › ingest/preview | `app/api/ingest/preview/route.ts` builds the match catalog from every substance |
 
-While these documents were being written, `v1-hardening-kavish` moved from `704a964` to `c4a7200` (49 commits):
+Other defects the suite found (500s on oversized fields and on non-finite numbers, and so on) are listed under "API suite" in `docs/testing/DATABASE_TESTS.md`; they are validation bugs, not permission rules.
 
-| Merge | Branch | IDs its commits claim to fix |
-|---|---|---|
-| `10b3903` | fix/authz | H1, H2/COST-1, E2 (insert-only openLCA import that skips QUARANTINE twins), INT-2, INT-4, INT-5, INT-6/L4, FAC-1, FAC-2, FAC-3, FAC-4 (add-substance 409 and atomic insert), L1 on integration routes |
-| `f4596ed` | fix/platform | C1, C2 (secrets scrubbed), M5 (lazy env-only DB pool, optional TLS), M3 (headers + report-only CSP, no X-Powered-By), H4 (next 15.5.26, xlsx replaced, single pnpm lockfile), M7 (PR checks; production deploy only on push to main), M8 (root scripts moved behind a run guard), L10 |
-| `8b51f39` | fix/auth | AUTH-1…AUTH-6, AUTH-8, H3, M4, L1, L2, L6, L7, L8, I4, H5 (login, signup, insights, ingest preview only), M2/DOC-1…DOC-3, M6, ING-3, ING-10, ING-12, INS-1, INS-2 |
-| `c4a7200` | fix/runs | RUN-1, RUN-2 (`migrate-026` stores results as DOUBLE), RUN-3, RUN-4, RUN-5, RUN-6, STAGE-2, EXP-1, EXP-2, EXP-3, EXP-4, RES-1, RES-2, RES-4, RES-5, RES-6, INS-5, ANA-1, ING-1 |
+## 4. Deactivated, unknown and revoked accounts
 
-Not merged: fix/editor (EDIT-*, FLOW-*, D5) and fix/factors (E1, E4, E5, E11).
+`requireAuth` throws a typed `AuthError` (status 401) for every failure. Every route maps it to **401**: project routes through `isAuthError` (`lib/route-guard.ts`), the integration writers through `guardAdmin` (`lib/integrations/admin-guard.ts`), the cost lookups through `guardRateLookup`, and `auto-costs`, `status` and `openlca` GET with their own catch. The generated test runs a deactivated account and a revoked token on every row that needs a sign-in.
 
-This document did **not** re-verify those fixes. It checked only three things:
-- the two new routes (R63, R64);
-- the login order (password first, then 403 for an inactive account);
-- which routes call the rate limiter.
+## 5. Decisions
 
-For the generator:
-1. List `fix/authz`, `fix/platform`, `fix/auth` and `fix/runs` in `tests/authz/merged-fixes.json`. Their `now` markers are then asserted as the intended value; a failure there is a regression, not a known bug.
-2. Treat items 5, 9, 10, 13, 15, 16 and 20 of §3, the R23/R59 rate limits, and the decisions in §5 as still open.
+- **D1 Platform admin and tenant data:** unchanged. A platform admin who is not a member gets 404, like any non-member. Support access would need an explicit, audited path.
+- **D2 Stale `owner` member rows:** open. `checkProjectAccess` still gives owner level to any member row named `owner`, even when `project.owner_id` is someone else. `POST /api/projects` inserts one for the real owner, which is harmless; a row left behind after an ownership change keeps delete rights.
+- **D3 403 vs 404:** decided (owner, 2026-09-30). 404 for non-members everywhere with the missing-id body; 403 only for members whose role is too low.
+- **D4 Class-mode visibility:** open. Students added as editors to one instructor project can read and edit each other's cases; F15 uses setup B (each student owns a project and adds the instructor as a viewer).
+- **D5 Who may delete a component:** decided. Editor and above.
+- **D6 BLS/EIA/Metals rate lookups:** decided, option (c). Any signed-in user, 60 lookups per user per hour across the three, strict allowlisted bodies; the stored value always comes from upstream (a static fallback is returned but never cached).
 
+## 6. History
+
+The first version of this matrix described `704a964`, before any fix branch. It is in git history (`docs/flows/PERMISSIONS_MATRIX.md` in the first commit that added it). `docs/flows-updates/permissions-404.md` (fix/int-auth: pv revocation `bf10230`, Google takeover `9d72783`, 404 policy `1514f04`, 401 mapping `299722e`) is merged into §1–§5 and removed.
