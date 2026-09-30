@@ -14,11 +14,15 @@
  *     CHECKSUM unchanged.
  * A cell whose `now` differs from `expect` is a known bug: it runs as
  * it.fails naming the bug, so the suite goes red when the fix lands.
+ *
+ * `own_cases` rows run with P's members_see_own_cases switched on for the
+ * cell (B-A1 student isolation): P's cases were made by the owner, so an
+ * editor or viewer reaches none of them.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, setCookies } from '../support/http';
 import { loadHandler } from '../support/routes';
-import { tableChecksums } from '../support/db';
+import { sql, sqlOne, tableChecksums } from '../support/db';
 import { buildRowRequest, isPublic, loadPermissions, type PermissionRow } from '../support/permissions';
 import { buildWorld, ROLES, type Caller, type World } from '../support/world';
 
@@ -51,6 +55,31 @@ async function withEnv<T>(env: Record<string, string> | undefined, fn: () => Pro
 }
 
 async function runCell(row: PermissionRow, caller: Caller, expected: number) {
+  if (!row.own_cases) return runCellAsIs(row, caller, expected);
+  await sql('UPDATE project SET members_see_own_cases = 1 WHERE project_id = ?', [w.P.id]);
+  try {
+    await runCellAsIs(row, caller, expected);
+  } finally {
+    await sql('UPDATE project SET members_see_own_cases = 0 WHERE project_id = ?', [w.P.id]);
+  }
+}
+
+/** Case ids of P that `caller` created, and all of P's case ids. */
+async function casesOfP(caller: Caller): Promise<{ own: number[]; all: number[] }> {
+  const all = (await sql<{ case_id: number; created_by: number | null }>(
+    'SELECT case_id, created_by FROM case_table WHERE project_id = ? ORDER BY case_id',
+    [w.P.id],
+  )) as Array<{ case_id: number; created_by: number | null }>;
+  const id = w.user(caller)?.id;
+  return {
+    own: all.filter((c) => c.created_by != null && Number(c.created_by) === id).map((c) => Number(c.case_id)),
+    all: all.map((c) => Number(c.case_id)),
+  };
+}
+
+const restricted = (caller: Caller) => caller === 'editor' || caller === 'viewer';
+
+async function runCellAsIs(row: PermissionRow, caller: Caller, expected: number) {
   const fresh: Record<string, number> = {};
   if (row.fresh) fresh[row.fresh] = await w.fresh[row.fresh]();
   const { url, template, opts } = buildRowRequest(row, { w, caller, fresh });
@@ -84,6 +113,34 @@ async function runCell(row: PermissionRow, caller: Caller, expected: number) {
     expect(res.text).not.toContain(w.Q.substanceName);
     expect(res.text).not.toMatch(/QUARANTINE/);
   }
+  // Own-cases lists: editors and viewers get only what they created.
+  if ((row.id === 'R12o' || row.id === 'R18o') && res.status === 200) {
+    const ids = (res.json.cases as any[]).map((c) => Number(c.case_id)).sort((a, b) => a - b);
+    const { own, all } = await casesOfP(caller);
+    expect(ids).toEqual(restricted(caller) ? own : all);
+    if (restricted(caller)) expect(ids).not.toContain(w.P.base.id);
+  }
+  if (row.id === 'R07o' && res.status === 200) {
+    const p = (res.json.projects as any[]).find((x) => Number(x.project_id) === w.P.id);
+    if (p) {
+      const { own, all } = await casesOfP(caller);
+      expect(Number(p.case_count)).toBe(restricted(caller) ? own.length : all.length);
+    }
+  }
+  if (row.id === 'R44o' && res.status === 200) {
+    const ids = (res.json.comparisons as any[]).map((c) => Number(c.comparison_id));
+    if (restricted(caller)) expect(ids).not.toContain(w.legacyComparison);
+    else expect(ids).toContain(w.legacyComparison);
+  }
+  if (row.id === 'R10b' && res.status === 200) {
+    expect(res.json.project.members_see_own_cases).toBe(false);
+  }
+  // Every new case is recorded as the caller's.
+  if (['R13', 'R13o', 'R31', 'R31o', 'R53', 'R53o'].includes(row.id) && res.status === 201) {
+    const id = Number(res.json.case?.case_id ?? res.json.case_id);
+    const made = await sqlOne<{ created_by: number }>('SELECT created_by FROM case_table WHERE case_id = ?', [id]);
+    expect(Number(made?.created_by)).toBe(w.user(caller)!.id);
+  }
   if (row.id === 'R03') {
     const loc = new URL(res.headers.get('location')!);
     expect(loc.origin).toBe('https://accounts.google.com');
@@ -106,8 +163,9 @@ async function runCell(row: PermissionRow, caller: Caller, expected: number) {
 }
 
 describe('permissions matrix (docs/flows/flows.yaml)', () => {
-  it('has 69 rows covering 66 route x method pairs', () => {
-    expect(rows).toHaveLength(69);
+  it('has 106 rows covering 66 route x method pairs (69 base, 36 own-cases, R10b)', () => {
+    expect(rows).toHaveLength(106);
+    expect(rows.filter((r) => r.own_cases)).toHaveLength(36);
     expect(new Set(rows.map((r) => `${r.method} ${r.path.split('?')[0]}`)).size).toBe(66);
   });
 
