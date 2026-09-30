@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 
 import { AuthGuard } from '@/components/auth-guard'
 import { Icon } from '@/components/lcapix'
+import { fmtSig } from '@/components/lcapix/formatters'
 import type { IngestPlan, MappedFlow, SubstanceCandidate } from '@/lib/ingest/maplca'
 import { placeableSteps, suggestPlacement } from '@/lib/ingest/placement'
 import { LIVE_DOC_TYPES, getDocType, LAYER_LABEL } from '@/lib/ingest/doc-types'
@@ -898,7 +899,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                     <span style={{ color: 'var(--text-primary)' }}>{n.name}</span>
                     {n.quantity != null && (
                       <span className="mono" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        {Number(n.quantity).toLocaleString()} {n.unit}
+                        {fmtSig(Number(n.quantity))} {n.unit}
                       </span>
                     )}
                   </div>
@@ -961,7 +962,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                           <td style={{ padding: '8px', textTransform: 'uppercase', fontSize: 10.5 }}>{f.direction}</td>
                           <td style={{ padding: '8px' }}>
                             <span className="mono">
-                              {Number(f.quantity).toLocaleString()} {f.unit}
+                              {fmtSig(Number(f.quantity))} {f.unit}
                             </span>
                             {f.conversion_note && (
                               <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
