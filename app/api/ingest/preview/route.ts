@@ -16,7 +16,7 @@ import { isBomHeader, structureBom } from '@/lib/ingest/bom';
 import { isRoutingHeader, structureRouting } from '@/lib/ingest/routing';
 import { isEquipmentHeader, structureEquipment, type CaseStep } from '@/lib/ingest/equipment';
 import { mapModel, type CatalogSubstance } from '@/lib/ingest/maplca';
-import { readSheet, workbookText, type SheetRead } from '@/lib/ingest/sheet-reader';
+import { readSheet, workbookText, limitedRange, SHEET_LIMITS, type SheetRead } from '@/lib/ingest/sheet-reader';
 import type { ProcessModel } from '@/lib/ingest/schema';
 import {
   MAX_UPLOAD_BYTES,
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       const XLSX = await import('xlsx');
       let wb;
       try {
-        wb = XLSX.read(buf, { type: 'buffer' });
+        wb = XLSX.read(buf, { type: 'buffer', sheetRows: SHEET_LIMITS.maxRows + 30 });
       } catch (e: any) {
         return NextResponse.json(
           { error: `Could not open ${file.name} as a workbook (${e?.message ?? 'unreadable file'}).` },
@@ -175,7 +175,8 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(assess);
+        const { range } = limitedRange(assess);
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(assess, range ? { range } : {});
         try {
           pm = structureItac(rows, plantId, file.name);
         } catch {
