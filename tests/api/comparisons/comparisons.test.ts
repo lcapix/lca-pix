@@ -10,8 +10,8 @@ vi.mock('@/lib/db-helpers');
 // The routes must not reach for a raw pool connection any more.
 vi.mock('@/lib/db', () => ({ default: { getConnection: vi.fn(() => { throw new Error('raw pool used'); }) } }));
 
-const req = (url: string, init: RequestInit = {}) =>
-  new NextRequest(`http://t${url}`, { ...init, headers: { Authorization: 'Bearer x', ...(init.headers ?? {}) } });
+const req = (url: string, init: { method?: string; body?: string } = {}) =>
+  new NextRequest(`http://t${url}`, { ...init, headers: { Authorization: 'Bearer x' } });
 const idParams = (id: string) => ({ params: Promise.resolve({ comparisonId: id }) }) as any;
 
 // mysql2 hands JSON columns back already parsed; older rows may be strings.
