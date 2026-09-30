@@ -13,7 +13,7 @@
 // entry of the whole LCA. Self-contained (own fetches) to keep the inspector
 // presentational.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon } from '@/components/lcapix/icon'
 import { substanceSource } from '@/lib/substance-source'
 import { compatibleUnits } from '@/lib/units'
@@ -22,7 +22,7 @@ import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { toast } from 'sonner'
 import { ProcessLibrary } from '@/components/lcapix/case/process-library'
 
-interface FlowRow {
+export interface FlowRow {
   flow_id: number
   substance_id: number
   substance_name?: string
@@ -89,12 +89,15 @@ export function EnvironmentalFlowsEditor({
   componentName = '',
   componentType = '',
   studyMethod,
+  onFlowsChange,
 }: {
   componentId: string
   componentName?: string
   componentType?: string
   /** The study's LCIA method, used as the default for a hand-added factor. */
   studyMethod?: string
+  /** Told the step's flows each time they load, so other panels (Suggest costs) see them. */
+  onFlowsChange?: (flows: FlowRow[]) => void
 }) {
   const [flows, setFlows] = useState<FlowRow[]>([])
   const [substances, setSubstances] = useState<Substance[]>([])
@@ -160,6 +163,12 @@ export function EnvironmentalFlowsEditor({
   useEffect(() => {
     loadFlows()
   }, [loadFlows])
+
+  const onFlowsChangeRef = useRef(onFlowsChange)
+  onFlowsChangeRef.current = onFlowsChange
+  useEffect(() => {
+    onFlowsChangeRef.current?.(flows)
+  }, [flows])
 
   // Other panels (e.g. the machine-energy calculator) add flows too; reload
   // when they announce it so the list never goes stale.

@@ -115,6 +115,40 @@ const COST_HELP: Record<string, string> = {
     'Shared costs assigned to this step (supervision, building, unmetered utilities), spread by a rule such as labor hours.',
 }
 
+/** Fields typed as text and parsed as numbers (EDIT-5). */
+type NumberFieldKey =
+  | 'mass'
+  | 'laborCost'
+  | 'energyCost'
+  | 'materialCost'
+  | 'transportationCost'
+  | 'equipmentCost'
+  | 'overheadCost'
+
+type NumberDraft = { raw: string; sent: number | undefined }
+
+/**
+ * '' → unknown (undefined); a plain decimal ≥ 0 → that number; anything else
+ * is not a number. "12." and "0." parse (to 12 and 0) so they can be typed.
+ */
+export function parseNumberDraft(raw: string): { ok: true; value: number | undefined } | { ok: false } {
+  const t = raw.trim()
+  if (t === '') return { ok: true, value: undefined }
+  if (!/^(\d+\.?\d*|\.\d+)$/.test(t)) return { ok: false }
+  const n = Number(t)
+  return Number.isFinite(n) ? { ok: true, value: n } : { ok: false }
+}
+
+/** The inline message for a typed value, or null when it can be saved. */
+function numberDraftError(key: NumberFieldKey, raw: string): string | null {
+  const p = parseNumberDraft(raw)
+  if (!p.ok) return 'Not a number of 0 or more.'
+  if (key === 'mass' && !(p.value !== undefined && p.value > 0)) {
+    return 'Quantity must be above 0: it is how many units your data describe.'
+  }
+  return null
+}
+
 export function InspectorPanel({
   node,
   studyMethod,
@@ -128,6 +162,18 @@ export function InspectorPanel({
   hasChildren = false,
   rolled = null,
 }: InspectorPanelProps) {
+  // Raw text of the number inputs while typing, per node (EDIT-5). A draft is
+  // shown only while the form still holds the value it produced, so a value
+  // applied from elsewhere (Suggest, the calculators, another node) wins.
+  const nodeId = node?.id ?? null
+  const [drafts, setDrafts] = useState<{ nodeId: string | null; map: Record<string, NumberDraft> }>({
+    nodeId: null,
+    map: {},
+  })
+  const [saveBlocked, setSaveBlocked] = useState(false)
+  // The step's flows as the flows editor last loaded them, for Suggest (EDIT-3).
+  const [liveFlows, setLiveFlows] = useState<{ nodeId: string | null; flows: InspectorFlow[] } | null>(null)
+
   if (!node) {
     return (
       <div style={{ padding: 24, fontSize: 13, color: 'var(--text-tertiary)' }}>
@@ -138,6 +184,47 @@ export function InspectorPanel({
 
   const t = HIERARCHY_TYPES.find((h) => h.id === node.type)
   const controlled = !!editFormData && !!onChange
+
+  const draftMap = drafts.nodeId === nodeId ? drafts.map : {}
+  const activeDraft = (key: NumberFieldKey): NumberDraft | null => {
+    const d = draftMap[key]
+    return d && Object.is(d.sent, editFormData?.[key] as number | undefined) ? d : null
+  }
+  const numberValue = (key: NumberFieldKey): string => {
+    const d = activeDraft(key)
+    if (d) return d.raw
+    const v = editFormData?.[key] as number | undefined
+    return v == null ? '' : String(v)
+  }
+  const numberError = (key: NumberFieldKey): string | null => {
+    const d = activeDraft(key)
+    return d ? numberDraftError(key, d.raw) : null
+  }
+  const onNumberChange = (key: NumberFieldKey, raw: string) => {
+    if (!controlled) return
+    let sent = editFormData![key] as number | undefined
+    if (numberDraftError(key, raw) === null) {
+      const p = parseNumberDraft(raw)
+      if (p.ok) {
+        sent = p.value
+        onChange!({ [key]: p.value } as Partial<InspectorEditFormData>)
+      }
+    }
+    setSaveBlocked(false)
+    setDrafts({ nodeId, map: { ...draftMap, [key]: { raw, sent } } })
+  }
+  const invalidNumbers = (Object.keys(draftMap) as NumberFieldKey[]).some(
+    (k) => numberError(k) !== null,
+  )
+  const inlineError = (msg: string | null) =>
+    msg ? (
+      <div role="alert" style={{ fontSize: 11, color: 'var(--signal-error)', marginTop: 4, lineHeight: 1.4 }}>
+        {msg}
+      </div>
+    ) : null
+
+  const suggestFlows =
+    liveFlows && liveFlows.nodeId === nodeId ? liveFlows.flows : flows
 
   return (
     <div style={{ padding: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -194,13 +281,14 @@ export function InspectorPanel({
                 <input
                   className="input"
                   style={{ height: 32, fontSize: 13 }}
-                  value={controlled ? editFormData!.mass ?? '' : '1'}
-                  onChange={(e) =>
-                    controlled &&
-                    onChange!({ mass: e.target.value === '' ? undefined : Number(e.target.value) })
-                  }
+                  inputMode="decimal"
+                  aria-label="Product quantity"
+                  aria-invalid={!!numberError('mass')}
+                  value={controlled ? numberValue('mass') : '1'}
+                  onChange={(e) => onNumberChange('mass', e.target.value)}
                   readOnly={!controlled}
                 />
+                {inlineError(numberError('mass'))}
               </div>
               <div>
                 <label className="label">Unit</label>
@@ -321,10 +409,23 @@ export function InspectorPanel({
         ) : controlled && node.id && node.id !== '__root__' ? (
           // Live editor: list + add (substance picker from the catalog) + delete.
           <EnvironmentalFlowsEditor
+            key={node.id}
             componentId={node.id}
             componentName={node.label ?? ''}
             componentType={(node.type as string) ?? ''}
             studyMethod={studyMethod}
+            onFlowsChange={(rows) =>
+              setLiveFlows({
+                nodeId: node.id,
+                flows: rows.map((f) => ({
+                  id: String(f.flow_id),
+                  substance: f.substance_name ?? '',
+                  dir: f.flow_type === 'output' ? 'OUT' : 'IN',
+                  amount: Number(f.quantity) || 0,
+                  unit: f.unit,
+                })),
+              })
+            }
           />
         ) : flows.length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)', padding: '4px 0' }}>
@@ -412,9 +513,11 @@ export function InspectorPanel({
         )}
         {controlled && !hasChildren && (
           <InlineSuggestStrip
+            key={`suggest-${node.id}`}
             componentType={(node?.type as string) ?? ''}
             nodeName={(node?.label as string) ?? ''}
-            flows={flows}
+            flows={suggestFlows}
+            laborHours={editFormData!.laborHours}
             onApply={(s) => {
               const patch = {
                 laborCost: s.labor ?? editFormData!.laborCost,
@@ -471,16 +574,15 @@ export function InspectorPanel({
                 <input
                   className="input mono"
                   style={{ height: 30, fontSize: 12, paddingLeft: 22 }}
-                  value={controlled ? (editFormData![key] as number | undefined) ?? '' : ''}
-                  onChange={(e) =>
-                    controlled &&
-                    onChange!({
-                      [key]: e.target.value === '' ? undefined : Number(e.target.value),
-                    } as Partial<InspectorEditFormData>)
-                  }
+                  inputMode="decimal"
+                  aria-label={`${label} cost`}
+                  aria-invalid={!!numberError(key as NumberFieldKey)}
+                  value={controlled ? numberValue(key as NumberFieldKey) : ''}
+                  onChange={(e) => onNumberChange(key as NumberFieldKey, e.target.value)}
                   readOnly={!controlled}
                 />
               </div>
+              {inlineError(numberError(key as NumberFieldKey))}
             </div>
           ))}
         </div>
@@ -547,8 +649,23 @@ export function InspectorPanel({
             </button>
           )}
           <div style={{ flex: 1 }} />
+          {saveBlocked && invalidNumbers && (
+            <span role="alert" style={{ fontSize: 11, color: 'var(--signal-error)', alignSelf: 'center' }}>
+              Fix the highlighted number first.
+            </span>
+          )}
           {onSave && (
-            <button className="btn btn-primary btn-sm" type="button" onClick={onSave}>
+            <button
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={() => {
+                if (invalidNumbers) {
+                  setSaveBlocked(true)
+                  return
+                }
+                onSave()
+              }}
+            >
               Save
             </button>
           )}
@@ -756,10 +873,12 @@ function LaborBreakdown({
   editFormData: InspectorEditFormData
   onChange: (patch: Partial<InspectorEditFormData>) => void
 }) {
+  // Node types reach here normalized ('Operation', 'Task'); the raw DB names
+  // are accepted too (EDIT-4: only the raw names were checked, so the
+  // calculator never showed on a step with no labor yet).
   const nodeType = (node?.type as string) ?? ''
   const isLaborNode =
-    nodeType === 'operation' ||
-    nodeType === 'elemental_task' ||
+    ['Operation', 'Task', 'operation', 'elemental_task'].includes(nodeType) ||
     editFormData.laborCost != null ||
     editFormData.laborHours != null
 
@@ -1080,11 +1199,14 @@ function InlineSuggestStrip({
   componentType,
   nodeName,
   flows,
+  laborHours,
   onApply,
 }: {
   componentType: string
   nodeName?: string
   flows: InspectorFlow[]
+  /** Hours worked on this step: the only way labor gets costed. */
+  laborHours?: number
   onApply: (s: {
     labor?: number
     energy?: number
@@ -1117,7 +1239,7 @@ function InlineSuggestStrip({
         amount: f.amount,
         unit: f.unit,
       })),
-      { nodeName, nodeType: componentType },
+      { nodeName, nodeType: componentType, laborHours },
     )
     setResult({
       lines: s.lines,
