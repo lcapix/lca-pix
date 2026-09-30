@@ -32,6 +32,9 @@ export default function CreateComparativeCasePage() {
     name: "",
     description: "",
     baseCaseId: "",
+    // A comparative case is "the base with one change": start from a copy of
+    // the reference case's steps, flows and costs unless the user opts out.
+    copyFromBase: true,
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [baseCases, setBaseCases] = useState<
@@ -99,6 +102,24 @@ export default function CreateComparativeCasePage() {
       }
       const data = await res.json().catch(() => ({}))
       const newId = data?.case?.case_id ?? data?.case_id
+      // CMP-2: without this the new case opened empty, only linked by id.
+      if (newId && formData.baseCaseId && formData.copyFromBase) {
+        const baseName = baseCases.find((c) => c.id === formData.baseCaseId)?.name ?? "the reference case"
+        try {
+          const cr = await apiRequest(`/api/cases/${newId}/clone-from`, {
+            method: "POST",
+            body: JSON.stringify({ sourceCaseId: Number(formData.baseCaseId) }),
+          })
+          if (!cr.ok) {
+            const j = await cr.json().catch(() => ({}))
+            throw new Error(j?.error || `copy failed (${cr.status})`)
+          }
+        } catch (copyErr: any) {
+          toast.error(`The case was created, but copying ${baseName} into it failed`, {
+            description: `${copyErr?.message || "Unknown error"}. Open the project page and use Clone from base, or build it by hand.`,
+          })
+        }
+      }
       // Mirror to Zustand for optimistic UI
       const caseData = {
         id: newId ? String(newId) : crypto.randomUUID(),
@@ -320,6 +341,22 @@ export default function CreateComparativeCasePage() {
                   </option>
                 ))}
             </select>
+            <label
+              htmlFor="copyFromBase"
+              className="body"
+              style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, fontSize: 13 }}
+            >
+              <input
+                id="copyFromBase"
+                type="checkbox"
+                checked={formData.copyFromBase}
+                disabled={!formData.baseCaseId}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, copyFromBase: e.target.checked }))
+                }
+              />
+              Start from a copy of the reference case (steps, flows and costs)
+            </label>
           </section>
 
           {/* Action footer */}
