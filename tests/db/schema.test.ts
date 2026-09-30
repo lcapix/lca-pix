@@ -191,7 +191,7 @@ describe('schema after baseline + all migrations', () => {
     }
   });
 
-  it('has the columns later migrations added (spot checks across 009-029)', async () => {
+  it('has the columns later migrations added (spot checks across 009-030)', async () => {
     const expected: [string, string, string][] = [
       ['driver_impact_factors', 'factor_basis', 'enum'], // 009
       ['assessment_runs', 'run_snapshot', 'json'], // 010
@@ -202,7 +202,8 @@ describe('schema after baseline + all migrations', () => {
       ['substances', 'is_custom', 'tinyint'], // 020
       ['case_table', 'learning_state', 'json'], // 021
       ['component', 'life_cycle_stage', 'varchar'], // 022
-      ['flows', 'transport_mass_kg', 'decimal'], // 022
+      ['flows', 'transport_mass_kg', 'double'], // added by 022, widened to DOUBLE by 030
+      ['flows', 'quantity', 'double'], // 030
       ['substances', 'variant_of', 'int'], // 022
       ['case_table', 'is_final', 'tinyint'], // 022
     ];
