@@ -5,7 +5,7 @@ import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { syncZoneFactor } from '@/lib/integrations/electricity-maps/sync';
 import { SYNC_ZONES, isSyncZone } from '@/lib/integrations/electricity-maps/zones';
 import { SUPPORTED_METHODS } from '@/lib/integrations/openlca/methods';
-import { logIntegration } from '@/lib/integrations/log';
+import { logSafely, errorText } from '@/lib/integrations/route-errors';
 
 // Accept either `zones: string[]` (the batch interface) OR a single `zone: string`
 // (convenient for one-off lookups from the UI / curl).
@@ -37,25 +37,29 @@ export async function POST(request: NextRequest) {
   const zonesToFetch = parsed.data.zones ?? (parsed.data.zone ? [parsed.data.zone] : []);
 
   const results: Array<{ zone: string; factorValue?: number; inserted?: boolean; error?: string }> = [];
+  const errors: Array<{ zone: string; error: string }> = [];
   let failed = 0;
   for (const zone of zonesToFetch) {
     try {
       const r = await syncZoneFactor(zone, parsed.data.method);
       results.push(r);
-    } catch (e: any) {
+    } catch (e) {
       failed++;
-      results.push({ zone, error: e.message });
+      console.error(`Electricity sync failed for zone ${zone}:`, e);
+      errors.push({ zone, error: errorText(e) });
+      results.push({ zone, error: 'Sync failed for this zone' });
     }
   }
   const written = results.filter(r => r.inserted === true).length;
   const allFailed = results.length > 0 && failed === results.length;
-  await logIntegration({
+  // The real per-zone errors go to the admin-only log, not the response.
+  await logSafely({
     source: 'electricity_maps', action: 'sync_zones',
     recordsAffected: written,
     executedBy: userId,
     status: failed === 0 ? 'success' : allFailed ? 'failed' : 'partial',
-    details: { zones: zonesToFetch, results },
-  });
+    details: { zones: zonesToFetch, results, errors },
+  }, 'Electricity sync');
   if (allFailed) {
     return NextResponse.json({ success: false, error: 'No zone could be synced', results }, { status: 502 });
   }

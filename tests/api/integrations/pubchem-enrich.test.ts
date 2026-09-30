@@ -33,6 +33,31 @@ describe('POST /api/integrations/pubchem/enrich', () => {
     expect(enrich.enrichSubstance).not.toHaveBeenCalled();
   });
 
+
+  it('500 hides the internal error from the client (pubchem)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(enrich.enrichSubstance).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
+    const res = await POST(mkRequest({ substance_id: 5 }) as any);
+    expect(res.status).toBe(500);
+    const text = JSON.stringify(await res.json());
+    expect(text).not.toContain('ETIMEDOUT');
+    expect(text).not.toContain('lca-dev-db');
+    expect(log.logIntegration).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
+  });
+
+  it('still answers with a generic 500 when writing the failure log also fails (pubchem)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(enrich.enrichSubstance).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockRejectedValue(new Error('log table missing'));
+
+    const res = await POST(mkRequest({ substance_id: 5 }) as any);
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toMatch(/ETIMEDOUT|log table missing/);
+  });
   it('enriches a single substance when substance_id provided', async () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(enrich.enrichSubstance).mockResolvedValue({ status: 'enriched', cid: 297 });

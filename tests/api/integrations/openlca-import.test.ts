@@ -55,6 +55,47 @@ describe('POST /api/integrations/openlca/import', () => {
     expect(imp.importFactorMethod).not.toHaveBeenCalled();
   });
 
+
+  it('500 hides the internal error from the client (openlca)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(imp.importFactorMethod).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
+    const res = await POST(req({ method: 'CML 2001' }) as any);
+    expect(res.status).toBe(500);
+    const text = JSON.stringify(await res.json());
+    expect(text).not.toContain('ETIMEDOUT');
+    expect(text).not.toContain('lca-dev-db');
+    expect(log.logIntegration).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
+  });
+
+  it('still answers with a generic 500 when writing the failure log also fails (openlca)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(imp.importFactorMethod).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockRejectedValue(new Error('log table missing'));
+
+    const res = await POST(req({ method: 'CML 2001' }) as any);
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toMatch(/ETIMEDOUT|log table missing/);
+  });
+
+  it('reports per-row failures as a count, not raw DB messages', async () => {
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(imp.importFactorMethod).mockResolvedValue({
+      method: 'CML 2001', inserted: 1, substancesMatched: 1,
+      skippedNoSubstance: 0, skippedNoCategory: 0, skippedExisting: 0, skippedQuarantined: 0,
+      errors: ["Methane → Global Warming: Unknown column 'factor_basis' in 'field list'"],
+    });
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
+    const res = await POST(req({ method: 'CML 2001' }) as any);
+    const body = await res.json();
+    expect(body.result.failed).toBe(1);
+    expect(JSON.stringify(body)).not.toContain('Unknown column');
+  });
+
   it('400 on unknown method', async () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     const res = await POST(req({ method: 'NotARealMethod' }) as any);

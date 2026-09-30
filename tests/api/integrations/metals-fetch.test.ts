@@ -57,6 +57,31 @@ describe('POST /api/integrations/metals/fetch-price', () => {
     expect(arg.region).toBe('Global');
   });
 
+
+  it('500 hides the internal error from the client (metals)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
+    const res = await POST(req({ symbol: 'ALU' }) as any);
+    expect(res.status).toBe(500);
+    const text = JSON.stringify(await res.json());
+    expect(text).not.toContain('ETIMEDOUT');
+    expect(text).not.toContain('lca-dev-db');
+    expect(log.logIntegration).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
+  });
+
+  it('still answers with a generic 500 when writing the failure log also fails (metals)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockRejectedValue(new Error('log table missing'));
+
+    const res = await POST(req({ symbol: 'ALU' }) as any);
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toMatch(/ETIMEDOUT|log table missing/);
+  });
   it('500 on fetch failure, logs failed', async () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(rates.getOrFetchRate).mockRejectedValue(new Error('metals api down'));

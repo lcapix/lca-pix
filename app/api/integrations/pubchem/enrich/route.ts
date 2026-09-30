@@ -6,6 +6,7 @@ import {
   enrichSubstance, enrichAllSubstances, ENRICH_DEFAULT_LIMIT, ENRICH_MAX_LIMIT,
 } from '@/lib/integrations/pubchem/enrich';
 import { logIntegration } from '@/lib/integrations/log';
+import { logFailure } from '@/lib/integrations/route-errors';
 
 const Body = z.object({
   substance_id: z.number().int().positive().optional(),
@@ -48,12 +49,12 @@ export async function POST(request: NextRequest) {
       details: summary,
     });
     return NextResponse.json({ success: true, summary });
-  } catch (err: any) {
-    await logIntegration({
-      source: 'pubchem', action: 'enrich',
-      recordsAffected: 0, executedBy: userId, status: 'failed',
-      details: { error: err.message },
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    await logFailure(
+      { source: 'pubchem', action: 'enrich', executedBy: userId,
+        details: { substance_id: parsed.data.substance_id ?? null } },
+      err, 'PubChem enrich failed',
+    );
+    return NextResponse.json({ error: 'Enrichment failed' }, { status: 500 });
   }
 }

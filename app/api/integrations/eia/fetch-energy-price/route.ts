@@ -6,6 +6,7 @@ import { fetchElectricityPrice, fetchNaturalGasPrice } from '@/lib/integrations/
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
 import { ENERGY_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 import { logIntegration } from '@/lib/integrations/log';
+import { logFailure } from '@/lib/integrations/route-errors';
 
 const Body = z.object({
   fuel: z.enum(['electricity', 'natural_gas']),
@@ -65,12 +66,11 @@ export async function POST(request: NextRequest) {
       details: { fuel, state, sector, rate: rate.rateValue },
     });
     return NextResponse.json({ success: true, rate });
-  } catch (err: any) {
-    await logIntegration({
-      source: 'eia', action: 'fetch_energy_price',
-      recordsAffected: 0, executedBy: userId, status: 'failed',
-      details: { fuel, state, sector, error: err.message },
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    await logFailure(
+      { source: 'eia', action: 'fetch_energy_price', executedBy: userId, details: { fuel, state, sector } },
+      err, 'EIA fetch-energy-price failed',
+    );
+    return NextResponse.json({ error: 'Could not fetch the energy price' }, { status: 500 });
   }
 }

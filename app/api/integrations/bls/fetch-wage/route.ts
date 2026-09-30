@@ -6,6 +6,7 @@ import { fetchMedianHourlyWage } from '@/lib/integrations/bls/client';
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
 import { LABOR_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 import { logIntegration } from '@/lib/integrations/log';
+import { logFailure } from '@/lib/integrations/route-errors';
 
 const Body = z.object({
   occupation: z.string().regex(/^\d{2}-\d{4}$/, 'Occupation must be in BLS OEWS format e.g. 51-4121'),
@@ -61,12 +62,11 @@ export async function POST(request: NextRequest) {
       details: { occupation, state, rate: rate.rateValue },
     });
     return NextResponse.json({ success: true, rate });
-  } catch (err: any) {
-    await logIntegration({
-      source: 'bls', action: 'fetch_wage',
-      recordsAffected: 0, executedBy: userId, status: 'failed',
-      details: { occupation, state, error: err.message },
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    await logFailure(
+      { source: 'bls', action: 'fetch_wage', executedBy: userId, details: { occupation, state } },
+      err, 'BLS fetch-wage failed',
+    );
+    return NextResponse.json({ error: 'Could not fetch the wage rate' }, { status: 500 });
   }
 }

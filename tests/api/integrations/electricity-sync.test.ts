@@ -71,6 +71,34 @@ describe('POST /api/integrations/electricity/sync', () => {
     expect(log.logIntegration).toHaveBeenCalledWith(expect.objectContaining({ status: 'failed' }));
   });
 
+
+  it('per-zone errors do not echo internal messages', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(sync.syncZoneFactor)
+      .mockResolvedValueOnce({ zone: 'DE', factorValue: 0.38, inserted: true, source: 'live', sourceRef: 'Electricity Maps API 2026-09-11' })
+      .mockRejectedValueOnce(new Error('connect ETIMEDOUT lca-dev-db.internal:3306'));
+    vi.mocked(log.logIntegration).mockResolvedValue(1);
+
+    const res = await POST(req({ zones: ['DE', 'FR'] }) as any);
+    const body = await res.json();
+    expect(body.results[1].error).toBeTruthy();
+    expect(JSON.stringify(body)).not.toContain('ETIMEDOUT');
+  });
+
+  it('a failing integration_log write does not turn a sync into an unhandled error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(auth.requireAdmin).mockResolvedValue(1);
+    vi.mocked(sync.syncZoneFactor).mockResolvedValue({
+      zone: 'FR', factorValue: 0.056, inserted: true, source: 'live', sourceRef: 'Electricity Maps API 2026-09-11',
+    });
+    vi.mocked(log.logIntegration).mockRejectedValue(new Error('log table missing'));
+
+    const res = await POST(req({ zones: ['FR'] }) as any);
+    expect(res.status).toBe(200);
+    expect((await res.json()).success).toBe(true);
+  });
+
   it('syncs zones and returns results', async () => {
     vi.mocked(auth.requireAdmin).mockResolvedValue(1);
     vi.mocked(sync.syncZoneFactor).mockResolvedValue({

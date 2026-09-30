@@ -6,6 +6,7 @@ import { fetchMetalPrice, METAL_SYMBOL_TO_SUBSTANCE } from '@/lib/integrations/m
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
 import { pickMaterialRate, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 import { logIntegration } from '@/lib/integrations/log';
+import { logFailure } from '@/lib/integrations/route-errors';
 
 const VALID_SYMBOLS = Object.keys(METAL_SYMBOL_TO_SUBSTANCE) as [string, ...string[]];
 
@@ -62,12 +63,11 @@ export async function POST(request: NextRequest) {
       details: { symbol, rate: rate.rateValue },
     });
     return NextResponse.json({ success: true, rate });
-  } catch (err: any) {
-    await logIntegration({
-      source: 'metals', action: 'fetch_price',
-      recordsAffected: 0, executedBy: userId, status: 'failed',
-      details: { symbol, error: err.message },
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    await logFailure(
+      { source: 'metals', action: 'fetch_price', executedBy: userId, details: { symbol } },
+      err, 'Metals fetch-price failed',
+    );
+    return NextResponse.json({ error: 'Could not fetch the metal price' }, { status: 500 });
   }
 }
