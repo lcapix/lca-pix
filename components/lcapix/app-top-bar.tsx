@@ -22,11 +22,35 @@ const defaultRoutes: Record<string, string> = {
   guide: '/guide',
 }
 
-const links: { id: string; label: string }[] = [
+const links: { id: string; label: string; adminOnly?: boolean }[] = [
   { id: 'home', label: 'Projects' },
-  { id: 'integrations', label: 'Integrations' },
+  { id: 'integrations', label: 'Integrations', adminOnly: true },
   { id: 'guide', label: 'Docs' },
 ]
+
+/**
+ * True once /api/auth/me says the signed-in account is a platform admin. The
+ * integration page's actions are admin-only, so its nav entries stay hidden
+ * until then (and on any failure).
+ */
+function usePlatformAdmin(): boolean {
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+    if (!token) return
+    let cancelled = false
+    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setIsAdmin(d?.user?.account_type === 'admin')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return isAdmin
+}
 
 const menuItemStyle: React.CSSProperties = {
   display: 'flex',
@@ -47,6 +71,7 @@ const menuItemStyle: React.CSSProperties = {
 export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   const router = useRouter()
   const { user, logout } = useAuthStore()
+  const isPlatformAdmin = usePlatformAdmin()
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -235,7 +260,7 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
           alignItems: 'center',
         }}
       >
-        {links.map((l) => {
+        {links.filter((l) => !l.adminOnly || isPlatformAdmin).map((l) => {
           const active = current === l.id
           return (
             <button
@@ -557,17 +582,19 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
             >
               <Icon name="box" size={14} /> Projects
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false)
-                router.push('/admin/integrations')
-              }}
-              style={menuItemStyle}
-            >
-              <Icon name="settings" size={14} /> Integrations
-            </button>
+            {isPlatformAdmin && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  router.push('/admin/integrations')
+                }}
+                style={menuItemStyle}
+              >
+                <Icon name="settings" size={14} /> Integrations
+              </button>
+            )}
             <div className="divider-tonal" />
             <button
               type="button"
