@@ -14,6 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, fitToColumn } from '@/lib/field-limits';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
@@ -46,16 +47,21 @@ const costColumn = (category: unknown): string | undefined =>
 const id = z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]);
 const optionalId = z.union([id, z.null(), z.literal('')]).optional().transform((v) => (v ? v : null));
 const text = (max: number) => z.string().max(max);
-const provenance = z.object({ doc: z.string(), locator: z.string().optional(), snippet: z.string().optional() }).passthrough();
+// Strings stored in a column are capped at the column's size (lib/field-limits.ts):
+// a longer one is a 400 naming the field, never a failure inside the transaction.
+const K = COLUMN_LIMITS.component;
+const provenance = z
+  .object({ doc: z.string().max(1000), locator: z.string().max(1000).optional(), snippet: z.string().max(5000).optional() })
+  .passthrough();
 
 const nodeSchema = z
   .object({
-    name: text(255).min(1),
+    name: text(K.component_name.max).min(1),
     tier: z.enum(['product', 'machine_line', 'subprocess', 'operation', 'elemental_task']),
-    parent: text(255).nullable(),
+    parent: text(K.component_name.max).nullable(),
     description: z.string().max(5000).nullable().optional(),
     quantity: z.number().finite().nullable().optional(),
-    unit: text(64).nullable().optional(),
+    unit: text(K.unit.max).nullable().optional(),
     provenance: provenance.optional(),
   })
   .passthrough();
@@ -67,7 +73,7 @@ const flowSchema = z
     substance_id: z.number().int().positive().nullable().optional(),
     direction: z.enum(['input', 'output']),
     quantity: z.number().finite(),
-    unit: text(64),
+    unit: text(COLUMN_LIMITS.flows.unit.max),
     provenance: z.string().max(1000).nullable().optional(),
     attach_component_id: optionalId,
   })
@@ -79,7 +85,7 @@ const costSchema = z
     category: z.enum(['labor', 'energy', 'material', 'transportation', 'opex', 'capex']),
     amount: z.number().finite().nullable(),
     hours: z.number().finite().nullable().optional(),
-    occupation: text(32).nullable().optional(),
+    occupation: text(K.labor_occupation.max).nullable().optional(),
     provenance: provenance.nullable().optional(),
     attach_component_id: optionalId,
   })
@@ -87,7 +93,7 @@ const costSchema = z
 
 const bodySchema = z.object({
   project_id: optionalId,
-  case_name: z.string().max(255).optional().default(''),
+  case_name: z.string().max(COLUMN_LIMITS.case_table.case_name.max).optional().default(''),
   nodes: z.array(nodeSchema).max(5000).optional().default([]),
   flows: z.array(flowSchema).max(20000).optional().default([]),
   costs: z.array(costSchema).max(20000).optional().default([]),
@@ -317,7 +323,9 @@ export async function POST(request: NextRequest) {
           [projectId, uniqueName]
         );
         if (!taken) break;
-        uniqueName = `${caseName} (${n})`;
+        // The number is added here, so the base is cut to leave room for it.
+        const suffix = ` (${n})`;
+        uniqueName = `${fitToColumn(caseName, { kind: 'chars', max: COLUMN_LIMITS.case_table.case_name.max - suffix.length })}${suffix}`;
       }
       const [caseIns]: any = await conn.query(
         `INSERT INTO case_table (project_id, case_name, case_type, description)

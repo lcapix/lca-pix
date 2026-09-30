@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -152,6 +153,15 @@ export async function POST(
       if (typeof component_name !== 'string' || !component_name.trim() || component_name.length > 200) {
         throw new BadRequest('Component name must be 1 to 200 characters');
       }
+      const K = COLUMN_LIMITS.component;
+      const tooLong = firstLengthError([
+        ['Unit', unit, K.unit],
+        ['Description', component_description ?? descriptionField, K.description],
+        ['Process type', process_type, K.process_type],
+        ['Driver category', driver_category, K.driver_category],
+        ['Driver type', driver_type, K.driver_type],
+      ]);
+      if (tooLong) throw new BadRequest(tooLong);
       if (parentId !== null) {
         if (!Number.isInteger(parentId)) throw new BadRequest('parent_component_id must be a step id');
         const plan = planPlacement(await loadCaseTree(caseId), null, parentId);

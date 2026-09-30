@@ -6,7 +6,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
-import { rowCounts } from '../support/db';
+import { rowCounts, tableChecksums } from '../support/db';
 import { buildWorld, type World } from '../support/world';
 
 let w: World;
@@ -68,39 +68,26 @@ describe('malformed JSON body -> 4xx', () => {
 // ── Oversized fields ───────────────────────────────────────────────────────
 const LONG = (n: number) => 'L'.repeat(n);
 
-const FIELD_PROBES: Array<[string, Probe, (w: World) => unknown, string | null]> = [
-  ['POST /api/projects project_name 101 chars (VARCHAR 100)', P('POST', () => '/api/projects'), () => ({ project_name: LONG(101) }),
-    'app/api/projects/route.ts:48 checks only that the name is not empty; the INSERT at :67 fails, project.project_name is VARCHAR(100)'],
-  ['POST /api/projects description 70 KB (TEXT)', P('POST', () => '/api/projects'), () => ({ project_name: 'ok name', description: LONG(70_000) }),
-    'app/api/projects/route.ts:67 writes description unchecked; project.description is TEXT (64 KB)'],
-  ['PUT /api/projects/:id functional_unit 256 chars (VARCHAR 255)', P('PUT', (w) => `/api/projects/${w.P.id}`), () => ({ functional_unit: LONG(256) }),
-    'app/api/projects/[projectId]/route.ts:107 writes functional_unit unchecked (VARCHAR(255)); the catch at :119 reports every failure as "needs migrate-014" (409)'],
-  ['PUT /api/projects/:id project_name 101 chars', P('PUT', (w) => `/api/projects/${w.P.id}`), () => ({ project_name: LONG(101) }),
-    'app/api/projects/[projectId]/route.ts:81 writes the name unchecked; VARCHAR(100)'],
-  ['POST /api/projects/:id/cases case_name 101 chars (VARCHAR 100)', P('POST', (w) => `/api/projects/${w.P.id}/cases`), () => ({ case_name: LONG(101), case_type: 'base' }),
-    'app/api/projects/[projectId]/cases/route.ts:64 checks only presence; the INSERT at :90 fails, case_table.case_name is VARCHAR(100)'],
-  ['PUT /api/cases/:id case_name 101 chars', P('PUT', (w) => `/api/cases/${w.P.base.id}`), () => ({ case_name: LONG(101) }),
-    'app/api/cases/[caseId]/route.ts:78 checks only that the name is not blank; VARCHAR(100)'],
-  ['PUT /api/cases/:id reference_flow_unit 51 chars', P('PUT', (w) => `/api/cases/${w.P.base.id}`), () => ({ reference_flow_unit: LONG(51) }),
-    'app/api/cases/[caseId]/route.ts:175 writes reference_flow_unit unchecked (VARCHAR(50)); the catch at :188 reports it as "needs migrate-014" (409)'],
-  ['POST /api/cases/:id/duplicate case_name 150 chars', P('POST', (w) => `/api/cases/${w.P.base.id}/duplicate`), () => ({ case_name: LONG(150) }),
-    'app/api/cases/[caseId]/duplicate/route.ts:54 slices the name to 255 characters; the column holds 100'],
-  ['POST /api/cases/:id/components unit 51 chars', P('POST', (w) => `/api/cases/${w.P.base.id}/components`), () => ({ component_name: 'ok', component_type: 'operation', unit: LONG(51) }),
-    'app/api/cases/[caseId]/components/route.ts:186 POST writes unit unchecked (PUT checks it); component.unit is VARCHAR(50)'],
-  ['POST /api/cases/:id/components process_type 101 chars', P('POST', (w) => `/api/cases/${w.P.base.id}/components`), () => ({ component_name: 'ok', component_type: 'operation', process_type: LONG(101) }),
-    'app/api/cases/[caseId]/components/route.ts:181 writes process_type/driver_category/driver_type unchecked; VARCHAR(100)'],
-  ['PUT /api/components/:id process_type 101 chars', P('PUT', (w) => `/api/components/${w.P.base.op}`), () => ({ process_type: LONG(101) }),
-    'app/api/components/[componentId]/route.ts:192 writes process_type/driver_* unchecked; VARCHAR(100)'],
-  ['PUT /api/components/:id component_description 70 KB', P('PUT', (w) => `/api/components/${w.P.base.op}`), () => ({ component_description: LONG(70_000) }),
-    'app/api/components/[componentId]/route.ts:135 writes the description unchecked; component.description is TEXT'],
+// The fourth column: the 400 error a too-long value must get (the route names
+// the field), or null where 2xx (a safe truncation) or any other 4xx is fine.
+const FIELD_PROBES: Array<[string, Probe, (w: World) => unknown, RegExp | null]> = [
+  ['POST /api/projects project_name 101 chars (VARCHAR 100)', P('POST', () => '/api/projects'), () => ({ project_name: LONG(101) }), /project name.*100 characters/i],
+  ['POST /api/projects description 70 KB (TEXT)', P('POST', () => '/api/projects'), () => ({ project_name: 'ok name', description: LONG(70_000) }), /description is too long/i],
+  ['PUT /api/projects/:id functional_unit 256 chars (VARCHAR 255)', P('PUT', (w) => `/api/projects/${w.P.id}`), () => ({ functional_unit: LONG(256) }), /functional unit.*255 characters/i],
+  ['PUT /api/projects/:id project_name 101 chars', P('PUT', (w) => `/api/projects/${w.P.id}`), () => ({ project_name: LONG(101) }), /project name.*100 characters/i],
+  ['POST /api/projects/:id/cases case_name 101 chars (VARCHAR 100)', P('POST', (w) => `/api/projects/${w.P.id}/cases`), () => ({ case_name: LONG(101), case_type: 'base' }), /case name.*100 characters/i],
+  ['PUT /api/cases/:id case_name 101 chars', P('PUT', (w) => `/api/cases/${w.P.base.id}`), () => ({ case_name: LONG(101) }), /case name.*100 characters/i],
+  ['PUT /api/cases/:id reference_flow_unit 51 chars', P('PUT', (w) => `/api/cases/${w.P.base.id}`), () => ({ reference_flow_unit: LONG(51) }), /reference flow unit.*50 characters/i],
+  ['POST /api/cases/:id/duplicate case_name 150 chars', P('POST', (w) => `/api/cases/${w.P.base.id}/duplicate`), () => ({ case_name: LONG(150) }), /case name.*100 characters/i],
+  ['POST /api/cases/:id/components unit 51 chars', P('POST', (w) => `/api/cases/${w.P.base.id}/components`), () => ({ component_name: 'ok', component_type: 'operation', unit: LONG(51) }), /unit.*50 characters/i],
+  ['POST /api/cases/:id/components process_type 101 chars', P('POST', (w) => `/api/cases/${w.P.base.id}/components`), () => ({ component_name: 'ok', component_type: 'operation', process_type: LONG(101) }), /process type.*100 characters/i],
+  ['PUT /api/components/:id process_type 101 chars', P('PUT', (w) => `/api/components/${w.P.base.op}`), () => ({ process_type: LONG(101) }), /process type.*100 characters/i],
+  ['PUT /api/components/:id component_description 70 KB', P('PUT', (w) => `/api/components/${w.P.base.op}`), () => ({ component_description: LONG(70_000) }), /description is too long/i],
   ['POST /api/components/:id/flows driver_description 70 KB', P('POST', (w) => `/api/components/${w.P.base.task}/flows`),
-    (w) => ({ substance_id: w.substances.electricity, flow_type: 'input', quantity: 1, unit: 'kWh', driver_description: LONG(70_000) }),
-    'app/api/components/[componentId]/flows/route.ts:100 takes driver_description unchecked; flows.driver_description is TEXT'],
+    (w) => ({ substance_id: w.substances.electricity, flow_type: 'input', quantity: 1, unit: 'kWh', driver_description: LONG(70_000) }), /description is too long/i],
   ['POST /api/ingest/apply case_name 150 chars', P('POST', () => '/api/ingest/apply'),
-    (w) => ({ project_id: w.P.id, case_name: LONG(150), nodes: [{ name: 'A', tier: 'product', parent: null }], flows: [], costs: [], notes: [] }),
-    'app/api/ingest/apply/route.ts:89 allows a 255-character case name; case_table.case_name is VARCHAR(100)'],
-  ['PUT /api/auth/profile company 161 chars', P('PUT', () => '/api/auth/profile'), () => ({ fullName: 'ok', company: LONG(161) }),
-    'PROF-1: app/api/auth/profile/route.ts:104 UPDATE with no length checks'],
+    (w) => ({ project_id: w.P.id, case_name: LONG(150), nodes: [{ name: 'A', tier: 'product', parent: null }], flows: [], costs: [], notes: [] }), /case_name.*100/i],
+  ['PUT /api/auth/profile company 161 chars', P('PUT', () => '/api/auth/profile'), () => ({ fullName: 'ok', company: LONG(161) }), /company.*160 characters/i],
   ['POST /api/projects/:id/members email 5 KB', P('POST', (w) => `/api/projects/${w.P.id}/members`), () => ({ email: `${LONG(5000)}@x.test`, role: 'viewer' }), null],
   ['POST /api/auth/signup email 5 KB', P('POST', () => '/api/auth/signup'), () => ({ email: `${LONG(5000)}@x.test`, password: 'Long-enough-1' }), null],
   ['POST /api/auth/login password 5 KB', P('POST', () => '/api/auth/login'), () => ({ email: 'a@b.test', password: LONG(5000) }), null],
@@ -111,18 +98,21 @@ const FIELD_PROBES: Array<[string, Probe, (w: World) => unknown, string | null]>
 ];
 
 describe('oversized fields -> 4xx or a safe truncation, never 500', () => {
-  for (const [name, probe, body, bug] of FIELD_PROBES) {
-    const test = async () => {
+  // Each route checks string lengths against the column sizes in
+  // lib/field-limits.ts before it writes anything, and answers 400 naming the
+  // field (it used to answer 500, or a misleading 409 "needs migrate-014").
+  for (const [name, probe, body, refusal] of FIELD_PROBES) {
+    it(name, async () => {
+      const before = refusal ? await tableChecksums() : null;
       const res = await send(probe, { json: body(w) });
       expect(res.status, `${name}: ${res.text.slice(0, 160)}`).toBeLessThan(500);
       expect(res.status === 200 || res.status === 201 || (res.status >= 400 && res.status < 500 && res.status !== 409)).toBe(true);
-    };
-    // BUG (Medium, validation): the route writes a client string into a
-    // column without checking its length; MySQL strict mode refuses it and the
-    // route answers 500 (or, where the catch assumes a missing migration, a
-    // misleading 409). Cause per row.
-    if (bug) it.fails(`${name} (${bug})`, test);
-    else it(name, test);
+      if (refusal) {
+        expect(res.status, res.text.slice(0, 160)).toBe(400);
+        expect(res.json.error).toMatch(refusal);
+        expect(await tableChecksums(), `${name}: a refused write must change nothing`).toEqual(before);
+      }
+    });
   }
 });
 

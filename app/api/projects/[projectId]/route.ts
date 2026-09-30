@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 
 // GET /api/projects/[projectId] - Get single project details
 export async function GET(
@@ -80,6 +81,35 @@ export async function PUT(
     const body = json.body;
     const { project_name, description } = body;
 
+    // Validate every field before the first write, so a refused field never
+    // leaves the ones before it saved. Strings must fit their columns (MySQL
+    // strict mode refuses a longer one, which used to surface as a 500 or as
+    // the "needs migrate-014" 409 below).
+    const P = COLUMN_LIMITS.project;
+    if (body.region_code != null && typeof body.region_code !== 'string') {
+      return NextResponse.json({ error: 'region_code must be text' }, { status: 400 });
+    }
+    const tooLong = firstLengthError([
+      ['Project name', project_name, P.project_name],
+      ['Description', description, P.description],
+      ['Goal statement', body.goal_statement, P.goal_statement],
+      ['Functional unit', body.functional_unit, P.functional_unit],
+      ['Boundary notes', body.boundary_notes, P.boundary_notes],
+      ['Region', body.region_code ? canonicalizeRegion(body.region_code) : null, P.region_code],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
+    const boundary = body.system_boundary ?? null;
+    if (boundary !== null && !['cradle-to-gate', 'gate-to-gate', 'cradle-to-grave'].includes(boundary)) {
+      return NextResponse.json(
+        { error: 'system_boundary must be cradle-to-gate, gate-to-gate or cradle-to-grave' },
+        { status: 400 }
+      );
+    }
+    const METHODS = ['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1'];
+    if (body.lcia_method != null && !METHODS.includes(body.lcia_method)) {
+      return NextResponse.json({ error: `lcia_method must be one of: ${METHODS.join(', ')}` }, { status: 400 });
+    }
+
     await execute(
       `UPDATE project
        SET project_name = COALESCE(?, project_name),
@@ -94,16 +124,6 @@ export async function PUT(
     // rename a project; it only runs when one of these fields was sent.
     const GOAL_FIELDS = ['goal_statement', 'functional_unit', 'system_boundary', 'boundary_notes'];
     if (GOAL_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
-      const boundary = body.system_boundary ?? null;
-      if (
-        boundary !== null &&
-        !['cradle-to-gate', 'gate-to-gate', 'cradle-to-grave'].includes(boundary)
-      ) {
-        return NextResponse.json(
-          { error: 'system_boundary must be cradle-to-gate, gate-to-gate or cradle-to-grave' },
-          { status: 400 }
-        );
-      }
       try {
         await execute(
           `UPDATE project
@@ -132,10 +152,6 @@ export async function PUT(
     // The study's impact method and region (ISO 14044 4.2.3: LCIA methodology
     // and geographical coverage are scope choices). Runs use them by default.
     if (['lcia_method', 'region_code'].some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
-      const METHODS = ['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1'];
-      if (body.lcia_method != null && !METHODS.includes(body.lcia_method)) {
-        return NextResponse.json({ error: `lcia_method must be one of: ${METHODS.join(', ')}` }, { status: 400 });
-      }
       try {
         await execute(
           `UPDATE project

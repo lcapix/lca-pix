@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError } from '@/lib/route-guard';
@@ -51,6 +52,11 @@ export async function POST(request: NextRequest) {
     if (!project_name || !String(project_name).trim()) {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
     }
+    const tooLong = firstLengthError([
+      ['Project name', project_name, COLUMN_LIMITS.project.project_name],
+      ['Description', description, COLUMN_LIMITS.project.description],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
     // One name, one project. Two studies with the same name are impossible to
     // tell apart in the project list, in a comparison and in an export.

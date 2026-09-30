@@ -4,6 +4,7 @@ import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 
 // GET /api/cases/[caseId] - Get single case details
 export async function GET(
@@ -77,6 +78,19 @@ export async function PUT(
     if (!json.ok) return json.response;
     const body = json.body;
     const { case_name, description, case_type } = body;
+
+    // Every string must fit its column before anything is written (strict
+    // mode refuses a longer one: a 500, or the "needs migrate-014" 409 below).
+    const C = COLUMN_LIMITS.case_table;
+    const tooLong = firstLengthError([
+      ['Case name', case_name, C.case_name],
+      ['Description', description, C.description],
+      ['Reference flow unit', body.reference_flow_unit, C.reference_flow_unit],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
+    if (case_type != null && !['base', 'comparative'].includes(case_type)) {
+      return NextResponse.json({ error: 'Invalid case type' }, { status: 400 });
+    }
 
     if (case_name !== undefined && case_name !== null) {
       if (!String(case_name).trim()) {

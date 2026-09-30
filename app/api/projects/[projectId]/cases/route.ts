@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -75,6 +76,11 @@ export async function POST(
     if (!['base', 'comparative'].includes(case_type)) {
       return NextResponse.json({ error: 'Invalid case type' }, { status: 400 });
     }
+    const tooLong = firstLengthError([
+      ['Case name', case_name, COLUMN_LIMITS.case_table.case_name],
+      ['Description', description, COLUMN_LIMITS.case_table.description],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
     // Two cases with the same name inside one project cannot be told apart in
     // the case list or in a comparison.

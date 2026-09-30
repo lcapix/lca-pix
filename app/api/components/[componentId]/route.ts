@@ -17,6 +17,7 @@ import {
 } from '@/lib/component-fields';
 import type { TreeRow } from '@/lib/component-tree';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 
 const ALLOCATION_METHODS = ['none', 'physical', 'economic', 'system_expansion'];
 
@@ -124,6 +125,14 @@ export async function PUT(
       ) {
         throw new BadRequest('Component name must be 1 to 200 characters');
       }
+      const K = COLUMN_LIMITS.component;
+      const tooLong = firstLengthError([
+        ['Description', body.component_description ?? body.description, K.description],
+        ['Process type', process_type, K.process_type],
+        ['Driver category', driver_category, K.driver_category],
+        ['Driver type', driver_type, K.driver_type],
+      ]);
+      if (tooLong) throw new BadRequest(tooLong);
       if (quantity !== undefined && quantity !== null && quantity !== '') {
         quantityValue = nonNegative('quantity', quantity);
         const type = component_type ?? existing.component_type;

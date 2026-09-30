@@ -16,6 +16,7 @@ import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, fitToColumn, lengthError } from '@/lib/field-limits';
 
 export async function POST(
   request: NextRequest,
@@ -55,8 +56,13 @@ export async function POST(
     const json = await readJson(request, { optional: true });
     if (!json.ok) return json.response;
     const body = json.body;
-    const askedName = typeof body.case_name === 'string' ? body.case_name.trim().slice(0, 255) : '';
-    const newName: string = askedName || `${sourceCase.case_name} (Copy)`;
+    const C = COLUMN_LIMITS.case_table;
+    const askedName = typeof body.case_name === 'string' ? body.case_name.trim() : '';
+    const nameError = lengthError('Case name', askedName, C.case_name);
+    if (nameError) return NextResponse.json({ error: nameError }, { status: 400 });
+    // The default name is composed here, so it is cut to fit rather than refused.
+    const newName: string =
+      askedName || `${fitToColumn(sourceCase.case_name, { kind: 'chars', max: C.case_name.max - ' (Copy)'.length })} (Copy)`;
 
     const clash = await queryOne<any>(
       `SELECT case_id FROM case_table
@@ -81,9 +87,12 @@ export async function POST(
           sourceCase.project_id,
           newName,
           newType,
-          sourceCase.description
-            ? `${sourceCase.description} [duplicated from "${sourceCase.case_name}"]`
-            : `Duplicated from "${sourceCase.case_name}"`,
+          fitToColumn(
+            sourceCase.description
+              ? `${sourceCase.description} [duplicated from "${sourceCase.case_name}"]`
+              : `Duplicated from "${sourceCase.case_name}"`,
+            C.description,
+          ),
           sourceCase.region_code ?? null,
         ]
       );

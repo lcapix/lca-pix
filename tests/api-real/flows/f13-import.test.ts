@@ -157,16 +157,16 @@ describe('F13 document import', () => {
     expect(await rowCounts()).toEqual(before);
   });
 
-  // BUG (app/api/ingest/apply/route.ts:52 lets a node name be 255 characters;
-  // component.component_name is VARCHAR(200)): the INSERT fails inside the
-  // transaction and the route answers 500 instead of 400. The rollback works
-  // (the next test checks nothing is left behind).
-  it.fails('a node name longer than the column gets 400, not 500', async () => {
+  // Fixed: the plan schema allows a node name of 200 characters, the size of
+  // component.component_name, so a longer one gets 400 before anything is
+  // written (it used to fail inside the transaction and answer 500).
+  it('a node name longer than the column gets 400, not 500', async () => {
     const r = await api.post('/api/ingest/apply', {
       token: w.users.editor.token,
       json: { project_id: w.P.id, case_name: `Long ${w.tag}`, nodes: [{ name: 'N'.repeat(230), tier: 'product', parent: null }], flows: [], costs: [], notes: [] },
     });
     expect(r.status).toBe(400);
+    expect(r.json.error).toMatch(/nodes\.0\.name/);
   });
 
   it('a failure mid-apply leaves no partial case (one transaction)', async () => {
@@ -176,12 +176,18 @@ describe('F13 document import', () => {
       json: {
         project_id: w.P.id,
         case_name: `Atomic ${w.tag}`,
+        // Each cost fits labor_cost DECIMAL(15,2); their sum on one step does
+        // not, which only the UPDATE inside the transaction finds out, after
+        // the case and both steps were inserted.
         nodes: [
           { name: 'Fine product', tier: 'product', parent: null },
-          { name: 'N'.repeat(230), tier: 'operation', parent: 'Fine product' },
+          { name: 'Weld', tier: 'operation', parent: 'Fine product' },
         ],
         flows: [],
-        costs: [],
+        costs: [
+          { node: 'Weld', category: 'labor', amount: 9e12 },
+          { node: 'Weld', category: 'labor', amount: 9e12 },
+        ],
         notes: [],
       },
     });

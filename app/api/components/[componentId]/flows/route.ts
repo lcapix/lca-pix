@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -113,6 +114,13 @@ export async function POST(
     if (!['input', 'output'].includes(flow_type)) {
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
+    const F = COLUMN_LIMITS.flows;
+    const tooLong = firstLengthError([
+      ['Unit', unit, F.unit],
+      ['Driver description', driver_description, F.driver_description],
+      ['Transport mode', body.transport_mode, F.transport_mode],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
     // FLOW-4: null, words, NaN and negatives used to reach MySQL or the engine.
     const quantity = parseFlowQuantity(rawQuantity);
