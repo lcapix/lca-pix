@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, insert } from '@/lib/db-helpers';
+import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { validateCustomSubstance } from '@/lib/substances/custom';
 
@@ -94,11 +94,26 @@ export async function POST(request: NextRequest) {
     }
     const v = checked.value;
 
-    const existing = await queryOne<any>(
-      `SELECT substance_id, substance_name FROM substances
-        WHERE LOWER(TRIM(substance_name)) = LOWER(TRIM(?)) LIMIT 1`,
-      [v.name]
-    );
+    // Duplicates are checked among what the caller can see: the library and
+    // their own custom rows. Another user's private substance stays private.
+    let existing: any;
+    try {
+      existing = await queryOne<any>(
+        `SELECT substance_id, substance_name FROM substances
+          WHERE LOWER(TRIM(substance_name)) = LOWER(TRIM(?))
+            AND (is_custom = 0 OR created_by = ?)
+          LIMIT 1`,
+        [v.name, userId]
+      );
+    } catch (e: any) {
+      // Before migrate-020 there are no custom substances to hide.
+      if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e;
+      existing = await queryOne<any>(
+        `SELECT substance_id, substance_name FROM substances
+          WHERE LOWER(TRIM(substance_name)) = LOWER(TRIM(?)) LIMIT 1`,
+        [v.name]
+      );
+    }
     if (existing) {
       return NextResponse.json(
         {
@@ -117,37 +132,56 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `No impact category called "${v.impactCategory}".` }, { status: 400 });
     }
 
+    // The substance is useless without its factor: both rows or neither.
     let substanceId: number;
     try {
-      substanceId = await insert(
-        `INSERT INTO substances (substance_name, category, unit, cas_number, is_custom, created_by)
-         VALUES (?, ?, ?, ?, 1, ?)`,
-        [v.name, v.category, v.unit, v.casNumber, userId]
-      );
-    } catch (e: any) {
-      // Before migrate-020 there is nowhere to record who added it.
-      if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e;
-      substanceId = await insert(
-        `INSERT INTO substances (substance_name, category, unit, cas_number) VALUES (?, ?, ?, ?)`,
-        [v.name, v.category, v.unit, v.casNumber]
-      );
-    }
+      substanceId = await transaction(async (conn) => {
+        let id: number;
+        try {
+          const [res]: any = await conn.execute(
+            `INSERT INTO substances (substance_name, category, unit, cas_number, is_custom, created_by)
+             VALUES (?, ?, ?, ?, 1, ?)`,
+            [v.name, v.category, v.unit, v.casNumber, userId]
+          );
+          id = res.insertId;
+        } catch (e: any) {
+          // Before migrate-020 there is nowhere to record who added it.
+          if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e;
+          const [res]: any = await conn.execute(
+            `INSERT INTO substances (substance_name, category, unit, cas_number) VALUES (?, ?, ?, ?)`,
+            [v.name, v.category, v.unit, v.casNumber]
+          );
+          id = res.insertId;
+        }
 
-    await insert(
-      `INSERT INTO driver_impact_factors
-         (substance_id, category_id, method_name, factor_value, unit,
-          geographic_scope, source_reference, factor_basis)
-       VALUES (?, ?, ?, ?, ?, 'Global', ?, ?)`,
-      [
-        substanceId,
-        category.category_id,
-        v.method,
-        v.factorValue,
-        v.factorUnit,
-        v.sourceReference,
-        v.factorBasis,
-      ]
-    );
+        await conn.execute(
+          `INSERT INTO driver_impact_factors
+             (substance_id, category_id, method_name, factor_value, unit,
+              geographic_scope, source_reference, factor_basis)
+           VALUES (?, ?, ?, ?, ?, 'Global', ?, ?)`,
+          [
+            id,
+            category.category_id,
+            v.method,
+            v.factorValue,
+            v.factorUnit,
+            v.sourceReference,
+            v.factorBasis,
+          ]
+        );
+        return id;
+      });
+    } catch (e: any) {
+      // substance_name is globally unique, so a name another user already
+      // uses privately still collides. Say so without naming their row.
+      if (e?.code === 'ER_DUP_ENTRY') {
+        return NextResponse.json(
+          { error: 'That name is already taken. Add a distinguishing detail (supplier, grade, region) to the name.' },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
 
     const substance = await queryOne<any>(`SELECT * FROM substances WHERE substance_id = ?`, [substanceId]);
     return NextResponse.json(

@@ -1,23 +1,23 @@
 // app/api/integrations/pubchem/enrich/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/auth';
-import { enrichSubstance, enrichAllSubstances } from '@/lib/integrations/pubchem/enrich';
+import { guardAdmin } from '@/lib/integrations/admin-guard';
+import {
+  enrichSubstance, enrichAllSubstances, ENRICH_DEFAULT_LIMIT, ENRICH_MAX_LIMIT,
+} from '@/lib/integrations/pubchem/enrich';
 import { logIntegration } from '@/lib/integrations/log';
+import { logFailure } from '@/lib/integrations/route-errors';
 
 const Body = z.object({
   substance_id: z.number().int().positive().optional(),
   only_missing: z.boolean().optional(),
-  limit: z.number().int().positive().max(500).optional(),
+  limit: z.number().int().positive().max(ENRICH_MAX_LIMIT).optional(),
 });
 
 export async function POST(request: NextRequest) {
-  let userId: number;
-  try {
-    userId = await requireAuth(request);
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const guard = await guardAdmin(request);
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
   const json = await request.json().catch(() => ({}));
   const parsed = Body.safeParse(json);
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const summary = await enrichAllSubstances({
       onlyMissing: parsed.data.only_missing ?? true,
-      limit: parsed.data.limit,
+      limit: parsed.data.limit ?? ENRICH_DEFAULT_LIMIT,
     });
     await logIntegration({
       source: 'pubchem', action: 'enrich_all',
@@ -49,12 +49,12 @@ export async function POST(request: NextRequest) {
       details: summary,
     });
     return NextResponse.json({ success: true, summary });
-  } catch (err: any) {
-    await logIntegration({
-      source: 'pubchem', action: 'enrich',
-      recordsAffected: 0, executedBy: userId, status: 'failed',
-      details: { error: err.message },
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    await logFailure(
+      { source: 'pubchem', action: 'enrich', executedBy: userId,
+        details: { substance_id: parsed.data.substance_id ?? null } },
+      err, 'PubChem enrich failed',
+    );
+    return NextResponse.json({ error: 'Enrichment failed' }, { status: 500 });
   }
 }

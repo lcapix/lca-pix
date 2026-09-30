@@ -35,6 +35,14 @@ describe('fetchCarbonIntensity', () => {
     await expect(fetchCarbonIntensity('US-NY')).rejects.toThrow(/403/);
   });
 
+  it.each([null, undefined, 'n/a', -5])('throws instead of reporting 0 when carbonIntensity is %j', async (ci) => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ zone: 'US-NY', carbonIntensity: ci, datetime: '', updatedAt: '' }),
+    } as Response);
+    await expect(fetchCarbonIntensity('US-NY')).rejects.toThrow(/intensity/i);
+  });
+
   it('passes auth-token header', async () => {
     const fetchMock = vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true, status: 200,
