@@ -2,9 +2,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
+// The router's search params, which can differ from window.location while a
+// soft navigation (the /comparisons redirect) is still committing.
+const routerSearch = vi.hoisted(() => ({ value: '' }))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }),
   useParams: () => ({ projectId: '7' }),
+  useSearchParams: () => new URLSearchParams(routerSearch.value),
 }))
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 
@@ -90,6 +94,7 @@ const card = async (name: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  routerSearch.value = ''
   window.history.replaceState(null, '', '/project/7/comparison')
 })
 
@@ -253,7 +258,10 @@ describe('Compare page: saved comparisons (the legacy list, folded in)', () => {
   })
 
   it('arriving from the old Saved page (?tab=saved) with none says so', async () => {
-    window.history.replaceState(null, '', '/project/7/comparison?tab=saved')
+    // Redirected from /comparisons: the router already has tab=saved while the
+    // address bar still shows the old path.
+    window.history.replaceState(null, '', '/project/7/comparisons')
+    routerSearch.value = 'tab=saved'
     routeApi(three(), [])
     render(<ComparisonPage />)
     const section = await screen.findByRole('region', { name: 'Saved comparisons' })

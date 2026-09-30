@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { apiRequest } from '@/lib/api-client'
 import { transformCaseFromDB } from '@/lib/data-transformers'
@@ -88,10 +88,10 @@ export default function ComparisonPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [tab, setTab] = useState<Tab>('differs')
-  // The old /comparisons pages land here with ?tab=saved.
-  const [savedTab] = useState(
-    () => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'saved',
-  )
+  // The old /comparisons pages land here with ?tab=saved. Read from the router,
+  // not window.location: after their redirect the address bar catches up late.
+  const searchParams = useSearchParams()
+  const [savedTab] = useState(() => searchParams?.get('tab') === 'saved')
   const [saved, setSaved] = useState<SavedComparison[] | null>(null)
   const [category, setCategory] = useState('Global Warming')
 
