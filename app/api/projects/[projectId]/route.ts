@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 
 // GET /api/projects/[projectId] - Get single project details
@@ -13,10 +14,8 @@ export async function GET(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const project = await queryOne(
       `SELECT p.*, a.username as owner_username 
@@ -53,7 +52,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, project: { ...project, members } });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get project error:', error);
@@ -71,10 +70,8 @@ export async function PUT(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'admin');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'admin', { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const body = await request.json();
     const { project_name, description } = body;
@@ -162,7 +159,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, project: updatedProject });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update project error:', error);
@@ -180,16 +177,14 @@ export async function DELETE(
     const { projectId: projectIdParam } = await params;
     const projectId = parseInt(projectIdParam);
 
-    const hasAccess = await checkProjectAccess(userId, projectId, 'owner');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Only project owner can delete' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, 'owner', { notFound: 'Project not found', forbidden: 'Only project owner can delete' });
+    if (denied) return denied;
 
     await execute(`DELETE FROM project WHERE project_id = ?`, [projectId]);
 
     return NextResponse.json({ success: true, message: 'Project deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete project error:', error);

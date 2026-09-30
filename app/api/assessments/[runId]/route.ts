@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import {
   hasFrozenResults,
   LEGACY_RESULTS_SOURCE,
@@ -8,13 +9,6 @@ import {
   snapshotComponentBreakdown,
   snapshotResultRows,
 } from '@/lib/run-snapshot';
-
-const AUTH_ERRORS = new Set([
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-]);
 
 // GET /api/assessments/[runId]
 // Fetches detailed results for a specific assessment run
@@ -41,10 +35,8 @@ export async function GET(
       return NextResponse.json({ error: 'Assessment not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, assessment.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, assessment.project_id, undefined, { notFound: 'Assessment not found' });
+    if (denied) return denied;
 
     const snapshot = parseRunSnapshot(assessment.run_snapshot);
     let results: any[];
@@ -173,7 +165,7 @@ export async function GET(
     });
 
   } catch (error: any) {
-    if (AUTH_ERRORS.has(error?.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get assessment details error:', error);

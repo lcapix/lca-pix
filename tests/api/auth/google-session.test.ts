@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/auth/google/session/route';
 import * as db from '@/lib/db-helpers';
-import { createToken } from '@/lib/auth';
+import { createToken, OAUTH_ONLY_PASSWORD_HASH } from '@/lib/auth';
+
+const MARK = OAUTH_ONLY_PASSWORD_HASH;
 
 vi.mock('@/lib/db-helpers');
 
@@ -24,8 +26,8 @@ describe('POST /api/auth/google/session (Google sign-in hand-off)', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('returns the token and user once, and clears the hand-off cookies', async () => {
-    const token = createToken({ id: 3, email: 'jo@corp.com' });
-    vi.mocked(db.queryOne).mockResolvedValue({ id: 3, username: 'jo', email: 'jo@corp.com', is_active: 1 } as any);
+    const token = createToken({ id: 3, email: 'jo@corp.com' }, MARK);
+    vi.mocked(db.queryOne).mockResolvedValue({ id: 3, username: 'jo', email: 'jo@corp.com', is_active: 1, password_hash: MARK } as any);
     const res = await POST(req(`auth_token=${token}; user_data=%7B%7D`));
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -48,13 +50,24 @@ describe('POST /api/auth/google/session (Google sign-in hand-off)', () => {
   });
 
   it('401 when the account is gone or inactive', async () => {
-    const token = createToken({ id: 4, email: 'x@corp.com' });
-    vi.mocked(db.queryOne).mockResolvedValue({ id: 4, username: 'x', email: 'x@corp.com', is_active: 0 } as any);
+    const token = createToken({ id: 4, email: 'x@corp.com' }, MARK);
+    vi.mocked(db.queryOne).mockResolvedValue({ id: 4, username: 'x', email: 'x@corp.com', is_active: 0, password_hash: MARK } as any);
     expect((await POST(req(`auth_token=${token}`))).status).toBe(401);
   });
 
+  it('401 when the password hash changed after the hand-off token was issued (revoked)', async () => {
+    const token = createToken({ id: 3, email: 'jo@corp.com' }, MARK);
+    vi.mocked(db.queryOne).mockResolvedValue({
+      id: 3, username: 'jo', email: 'jo@corp.com', is_active: 1,
+      password_hash: '$2b$10$bbbbbbbbbbbbbbbbbbbbbObbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    } as any);
+    const res = await POST(req(`auth_token=${token}`));
+    expect(res.status).toBe(401);
+    expect((await res.json()).token).toBeUndefined();
+  });
+
   it('refuses cross-site callers', async () => {
-    const token = createToken({ id: 3, email: 'jo@corp.com' });
+    const token = createToken({ id: 3, email: 'jo@corp.com' }, MARK);
     const res = await POST(req(`auth_token=${token}`, { 'sec-fetch-site': 'cross-site' }));
     expect(res.status).toBe(403);
   });

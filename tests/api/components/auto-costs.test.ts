@@ -32,14 +32,26 @@ describe('POST /api/components/:id/auto-costs', () => {
     expect(ap.autoPopulateCosts).not.toHaveBeenCalled();
   });
 
-  it('403 when the caller is not an editor on the component\'s project, and writes nothing', async () => {
+  it('403 when the caller is a viewer on the component\'s project, and writes nothing', async () => {
+    vi.mocked(auth.requireAuth).mockResolvedValue(2);
+    vi.mocked(db.queryOne).mockResolvedValue({ project_id: 7 } as any);
+    // A viewer: a member, but below editor.
+    vi.mocked(auth.checkProjectAccess).mockImplementation(async (_u, _p, level) => !level || level === 'viewer');
+
+    const res = await POST(req() as any, ctx());
+    expect(res.status).toBe(403);
+    expect(auth.checkProjectAccess).toHaveBeenCalledWith(2, 7, 'editor');
+    expect(ap.autoPopulateCosts).not.toHaveBeenCalled();
+  });
+
+  it('404 "Component not found" for a non-member, the same as an unknown id, and writes nothing', async () => {
     vi.mocked(auth.requireAuth).mockResolvedValue(2);
     vi.mocked(db.queryOne).mockResolvedValue({ project_id: 7 } as any);
     vi.mocked(auth.checkProjectAccess).mockResolvedValue(false);
 
     const res = await POST(req() as any, ctx());
-    expect(res.status).toBe(403);
-    expect(auth.checkProjectAccess).toHaveBeenCalledWith(2, 7, 'editor');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Component not found' });
     expect(ap.autoPopulateCosts).not.toHaveBeenCalled();
   });
 

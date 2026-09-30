@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/auth/signup/route';
 import * as db from '@/lib/db-helpers';
 import { MemoryRateLimitStore, setRateLimitStore } from '@/lib/rate-limit';
-import { verifyToken } from '@/lib/auth';
+import { passwordFingerprint, verifyToken } from '@/lib/auth';
 
 vi.mock('@/lib/db-helpers');
 
@@ -43,6 +43,14 @@ describe('POST /api/auth/signup', () => {
     const [sql, params] = vi.mocked(db.insert).mock.calls[0];
     expect(sql).toMatch(/full_name/);
     expect(params).toEqual(['jo.smith', 'Jo Smith', 'jo.smith@corp.com', expect.stringMatching(/^\$2/)]);
+  });
+
+  it('the token carries pv, the fingerprint of the hash it stored (revocation)', async () => {
+    dbWith();
+    const res = await POST(req(GOOD) as any);
+    const body = await res.json();
+    const stored = vi.mocked(db.insert).mock.calls[0][1]![3] as string;
+    expect(verifyToken(body.token)?.pv).toBe(passwordFingerprint(stored));
   });
 
   it('suffixes the username when the email local part is taken (AUTH-4)', async () => {

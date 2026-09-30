@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { planPlacement } from '@/lib/component-tree';
 import {
   BadRequest,
@@ -31,10 +32,8 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, undefined, { notFound: 'Case not found' });
+    if (denied) return denied;
 
     const components = await query<any>(
       `SELECT c.*,
@@ -73,7 +72,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, components });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get components error:', error);
@@ -100,10 +99,8 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
 
     const body = await request.json();
     const {
@@ -220,7 +217,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, component: newComponent }, { status: 201 });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Create component error:', error);

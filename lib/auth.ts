@@ -4,7 +4,7 @@
  */
 
 import bcrypt from 'bcrypt';
-import { randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { exists, queryOne } from './db-helpers';
 
@@ -20,6 +20,24 @@ export interface UserPayload {
   id: number;
   email: string;
   account_type?: 'user' | 'admin';
+  /** Fingerprint of the password hash the token was issued against. */
+  pv?: string;
+}
+
+export type ProjectPermission = 'owner' | 'admin' | 'editor' | 'viewer';
+
+/**
+ * Why a request is not authenticated: no token, a bad or expired token, a
+ * revoked token (the password hash changed), or an unknown or deactivated
+ * account. Always a 401. Routes map it with `isAuthError` from
+ * lib/route-guard; the messages are the ones routes used to match on.
+ */
+export class AuthError extends Error {
+  readonly status = 401;
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthError';
+  }
 }
 
 export interface User {
@@ -79,10 +97,32 @@ export async function verifyPassword(
 }
 
 /**
- * Create a JWT token for a user
+ * `pv` claim: the first 16 hex chars of HMAC-SHA256(JWT_SECRET, password_hash).
+ * Keyed, so a copy of the account table does not let anyone mint it, and short,
+ * since it only has to change when the hash does.
  */
-export function createToken(payload: UserPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
+export function passwordFingerprint(passwordHash: string): string {
+  return createHmac('sha256', JWT_SECRET).update(String(passwordHash ?? '')).digest('hex').slice(0, 16);
+}
+
+/**
+ * True when the token was issued against the account's current password hash.
+ * A token without `pv` (issued before revocation existed) never matches.
+ */
+export function tokenMatchesPassword(payload: { pv?: unknown }, passwordHash: string): boolean {
+  if (typeof payload?.pv !== 'string') return false;
+  const expected = Buffer.from(passwordFingerprint(passwordHash));
+  const got = Buffer.from(payload.pv);
+  return got.length === expected.length && timingSafeEqual(got, expected);
+}
+
+/**
+ * Create a JWT for a user. `passwordHash` is the account's stored
+ * password_hash (or the OAuth-only marker): the token carries its fingerprint,
+ * and stops working as soon as the stored hash changes.
+ */
+export function createToken(payload: UserPayload, passwordHash: string): string {
+  return jwt.sign({ ...payload, pv: passwordFingerprint(passwordHash) }, JWT_SECRET, {
     algorithm: 'HS256',
     expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
@@ -148,28 +188,35 @@ export function extractToken(request: Request): string | null {
 }
 
 /**
- * Verify authentication and return user ID
- * Throws error if not authenticated
+ * Verify authentication and return the user id. Throws an AuthError (401) when
+ * there is no token, the token is bad or expired, the account is unknown or
+ * inactive, or the account's password hash changed since the token was issued
+ * (`pv` mismatch: password change, Google takeover).
  */
 export async function requireAuth(request: Request): Promise<number> {
   const token = extractToken(request);
   if (!token) {
-    throw new Error('No authentication token provided');
+    throw new AuthError('No authentication token provided');
   }
 
   const payload = verifyToken(token);
   if (!payload) {
-    throw new Error('Invalid or expired token');
+    throw new AuthError('Invalid or expired token');
   }
 
   // Verify user still exists and is active
   const user = await queryOne<any>(
-    'SELECT id, is_active FROM account WHERE id = ?',
+    'SELECT id, is_active, password_hash FROM account WHERE id = ?',
     [payload.id]
   );
 
   if (!user || !user.is_active) {
-    throw new Error('User account not found or inactive');
+    throw new AuthError('User account not found or inactive');
+  }
+
+  // Revoked: issued against another password hash, or before pv existed.
+  if (!tokenMatchesPassword(payload, user.password_hash)) {
+    throw new AuthError('Invalid or expired token');
   }
 
   return payload.id;
@@ -215,7 +262,7 @@ export async function requireAdmin(request: Request): Promise<number> {
 export async function checkProjectAccess(
   userId: number,
   projectId: number,
-  requiredPermission?: 'owner' | 'admin' | 'editor' | 'viewer'
+  requiredPermission?: ProjectPermission
 ): Promise<boolean> {
   // First check if user is the project owner (direct ownership via owner_id)
   const project = await queryOne<any>(

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { planPlacement, descendantsOf } from '@/lib/component-tree';
 import {
   BadRequest,
@@ -14,13 +15,6 @@ import {
   updateExistingColumns,
 } from '@/lib/component-fields';
 import type { TreeRow } from '@/lib/component-tree';
-
-const AUTH_ERRORS = [
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-];
 
 const ALLOCATION_METHODS = ['none', 'physical', 'economic', 'system_expansion'];
 
@@ -51,14 +45,12 @@ export async function GET(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, (component as any).project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, (component as any).project_id, undefined, { notFound: 'Component not found' });
+    if (denied) return denied;
 
     return NextResponse.json({ success: true, component });
   } catch (error: any) {
-    if (AUTH_ERRORS.includes(error.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get component error:', error);
@@ -94,10 +86,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, existing.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Component not found' });
+    if (denied) return denied;
 
     const body = await request.json();
     const {
@@ -281,7 +271,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, component: updatedComponent });
   } catch (error: any) {
-    if (AUTH_ERRORS.includes(error.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update component error:', error);
@@ -327,10 +317,8 @@ export async function DELETE(
     // Editor, the same level that creates and edits steps (FLOW-10): an
     // editor could already empty a step of flows and costs, so admin-only
     // delete protected nothing and left editors unable to undo their own adds.
-    const hasAccess = await checkProjectAccess(userId, existing.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, existing.project_id, 'editor', { notFound: 'Component not found' });
+    if (denied) return denied;
 
     const rows = await loadCaseTree(Number(existing.case_id));
     const below = [...descendantsOf(rows, componentId)];
@@ -375,7 +363,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Component deleted', ...result });
   } catch (error: any) {
-    if (AUTH_ERRORS.includes(error.message)) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete component error:', error);

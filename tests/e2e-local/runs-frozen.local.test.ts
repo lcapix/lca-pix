@@ -74,9 +74,9 @@ d('frozen runs (local DB, post-migrations 026/027)', () => {
     exportRoute = await import('@/app/api/assessments/[runId]/export/route');
 
     const [[acct]]: any = await conn.query(
-      `SELECT id, email FROM account WHERE is_active = 1 ORDER BY id LIMIT 1`,
+      `SELECT id, email, password_hash FROM account WHERE is_active = 1 ORDER BY id LIMIT 1`,
     );
-    token = createToken({ id: acct.id, email: acct.email });
+    token = createToken({ id: acct.id, email: acct.email }, acct.password_hash);
 
     const [p]: any = await conn.query(
       `INSERT INTO project (project_name, description, owner_id) VALUES (?, 'frozen-run e2e throwaway', ?)`,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 
 // GET /api/cases/[caseId] - Get single case details
 export async function GET(
@@ -23,10 +24,8 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, undefined, { notFound: 'Case not found' });
+    if (denied) return denied;
 
     // The study's method and region, so a run dialog can start from them.
     try {
@@ -42,7 +41,7 @@ export async function GET(
 
     return NextResponse.json({ success: true, case: caseData });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get case error:', error);
@@ -69,10 +68,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
 
     const body = await request.json();
     const { case_name, description, case_type } = body;
@@ -206,7 +203,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, case: updatedCase });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update case error:', error);
@@ -233,16 +230,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'admin');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, caseData.project_id, 'admin', { notFound: 'Case not found' });
+    if (denied) return denied;
 
     await execute(`DELETE FROM case_table WHERE case_id = ?`, [caseId]);
 
     return NextResponse.json({ success: true, message: 'Case deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete case error:', error);
