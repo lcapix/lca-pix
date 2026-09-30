@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, checkProjectAccess } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import { query } from '@/lib/db-helpers'
-import { isAuthError, jsonArray } from '@/lib/compare/legacy'
+import { jsonArray } from '@/lib/compare/legacy'
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
 
 // Legacy saved comparisons. Nothing new is saved any more (Compare Cases at
 // /project/[id]/comparison reads live runs); these routes only list what was
@@ -40,9 +41,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'project_id and case_ids must be ids' }, { status: 400 })
     }
 
-    if (!(await checkProjectAccess(userId, projectId))) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' })
+    if (denied) return denied
 
     const caseRows = await query<any>(
       `SELECT case_id FROM case_table
@@ -77,9 +77,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Any member may read; to anyone else the project does not exist.
-    if (!(await checkProjectAccess(userId, projectId))) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' })
+    if (denied) return denied
 
     const rows = await query<any>(
       `SELECT

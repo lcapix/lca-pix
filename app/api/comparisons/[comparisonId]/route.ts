@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuth, checkProjectAccess } from '@/lib/auth'
+import { requireAuth } from '@/lib/auth'
 import { execute, query, queryOne } from '@/lib/db-helpers'
-import { isAuthError, jsonArray, jsonColumn } from '@/lib/compare/legacy'
+import { jsonArray, jsonColumn } from '@/lib/compare/legacy'
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
 
 // One legacy saved comparison (see app/api/comparisons/route.ts).
 
@@ -40,7 +41,11 @@ export async function GET(
       [comparisonId]
     )
     // A non-member learns nothing, not even that the comparison exists.
-    if (!comparison || !(await checkProjectAccess(userId, comparison.project_id))) return notFound()
+    if (!comparison) return notFound()
+    const denied = await projectAccessDenied(userId, comparison.project_id, undefined, {
+      notFound: 'Comparison not found',
+    })
+    if (denied) return denied
 
     const results = await query<any>(
       `SELECT result_id, category_id, category_name, case_results, best_case_id, worst_case_id
@@ -111,15 +116,15 @@ export async function DELETE(
       `SELECT comparison_id, created_by, project_id FROM comparison_runs WHERE comparison_id = ?`,
       [comparisonId]
     )
-    if (!comparison || !(await checkProjectAccess(userId, comparison.project_id))) return notFound()
-
-    const isCreator = comparison.created_by === userId
-    if (!isCreator && !(await checkProjectAccess(userId, comparison.project_id, 'admin'))) {
-      return NextResponse.json(
-        { error: 'Only the creator or a project admin can delete this comparison' },
-        { status: 403 }
-      )
-    }
+    if (!comparison) return notFound()
+    // The creator needs only to be a member still; anyone else a project admin.
+    const denied = await projectAccessDenied(
+      userId,
+      comparison.project_id,
+      comparison.created_by === userId ? undefined : 'admin',
+      { notFound: 'Comparison not found', forbidden: 'Access denied - only creator or project admin can delete' }
+    )
+    if (denied) return denied
 
     await execute(`DELETE FROM comparison_runs WHERE comparison_id = ?`, [comparisonId])
     return NextResponse.json({ success: true, message: 'Comparison deleted successfully' })

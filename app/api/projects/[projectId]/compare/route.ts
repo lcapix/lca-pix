@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { hasFrozenResults, parseRunSnapshot } from '@/lib/run-snapshot';
 import {
   diffInventories,
@@ -44,10 +45,8 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid project' }, { status: 400 });
     }
     // Any member may compare; to anyone else the project does not exist.
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-    }
+    const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+    if (denied) return denied;
 
     const sp = request.nextUrl.searchParams;
     const ids = Array.from(
@@ -354,14 +353,7 @@ export async function GET(
       diffs,
     });
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     console.error('Compare cases error:', error);
     return NextResponse.json({ error: 'Failed to compare cases' }, { status: 500 });
   }

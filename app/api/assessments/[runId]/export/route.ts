@@ -10,7 +10,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
 import { generateAssessmentPPTX } from '@/lib/pptx-generator';
 import {
@@ -76,10 +77,10 @@ export async function GET(
 
     // Exports carry the full report; require at least viewer access on the
     // owning project (this was the one resource route without the check).
-    const hasAccess = await checkProjectAccess(userId, assessment.project_id, 'viewer');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await projectAccessDenied(userId, assessment.project_id, 'viewer', {
+      notFound: 'Assessment not found',
+    });
+    if (denied) return denied;
 
     // 2-5. The inventory and results the report prints. A frozen run
     // (snapshot v3) reads all of it from the snapshot: the tree, stages, costs
@@ -338,11 +339,7 @@ export async function GET(
       doc.end();
     });
   } catch (error: any) {
-    if (
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('PDF export error:', error);

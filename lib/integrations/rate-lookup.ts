@@ -8,13 +8,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireAuth } from '@/lib/auth';
 import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
-
-const AUTH_ERRORS = new Set([
-  'Unauthorized',
-  'No authentication token provided',
-  'Invalid or expired token',
-  'User account not found or inactive',
-]);
+import { isAuthError } from '@/lib/route-guard';
 
 /** The 50 states plus 'US' for the national figure. */
 export const RATE_STATE_CODES = [
@@ -39,7 +33,7 @@ export async function guardRateLookup(request: Request): Promise<RateLookupGuard
   try {
     userId = await requireAuth(request);
   } catch (err: any) {
-    if (AUTH_ERRORS.has(err?.message)) {
+    if (isAuthError(err)) {
       return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
     }
     console.error('Rate lookup auth check failed:', err);
