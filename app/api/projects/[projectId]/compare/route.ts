@@ -11,6 +11,7 @@ import {
   type RunScope,
 } from '@/lib/compare/diff';
 import { compareStatus, runResults, snapshotDrift, type LegacyRunRows } from '@/lib/compare/run-results';
+import { parseId } from '@/lib/ids';
 
 // GET /api/projects/[projectId]/compare?cases=209,212[&base=209][&runs=209:173,212:176]
 //
@@ -40,7 +41,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { projectId: projectIdParam } = await params;
-    const projectId = parseInt(projectIdParam);
+    const projectId = parseId(projectIdParam);
     if (!Number.isFinite(projectId)) {
       return NextResponse.json({ error: 'Invalid project' }, { status: 400 });
     }
@@ -53,7 +54,7 @@ export async function GET(
       new Set(
         (sp.get('cases') ?? '')
           .split(',')
-          .map((x) => parseInt(x))
+          .map((x) => parseId(x))
           .filter((x) => Number.isFinite(x))
       )
     ).slice(0, MAX_CASES);
@@ -62,7 +63,7 @@ export async function GET(
     }
     const runOverrides = new Map<number, number>();
     for (const pair of (sp.get('runs') ?? '').split(',')) {
-      const [c, r] = pair.split(':').map((x) => parseInt(x));
+      const [c, r] = pair.split(':').map((x) => parseId(x));
       if (Number.isFinite(c) && Number.isFinite(r)) runOverrides.set(c, r);
     }
 
@@ -77,7 +78,7 @@ export async function GET(
     if (!cases.length) {
       return NextResponse.json({ error: 'No such cases in this project' }, { status: 404 });
     }
-    const baseParam = parseInt(sp.get('base') ?? '');
+    const baseParam = parseId(sp.get('base') ?? '');
     const base =
       cases.find((c) => c.case_id === baseParam) ??
       cases.find((c) => c.case_type === 'base') ??

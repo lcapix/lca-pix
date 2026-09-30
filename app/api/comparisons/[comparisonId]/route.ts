@@ -3,12 +3,13 @@ import { requireAuth } from '@/lib/auth'
 import { execute, query, queryOne } from '@/lib/db-helpers'
 import { jsonArray, jsonColumn } from '@/lib/compare/legacy'
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
+import { parseId } from '@/lib/ids'
 
 // One legacy saved comparison (see app/api/comparisons/route.ts).
 
 const positiveInt = (v: unknown): number | null => {
-  const n = Number(v)
-  return Number.isInteger(n) && n > 0 ? n : null
+  const n = parseId(v)
+  return Number.isNaN(n) ? null : n
 }
 
 const notFound = () => NextResponse.json({ error: 'Comparison not found' }, { status: 404 })

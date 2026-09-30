@@ -20,6 +20,7 @@ import {
   parseRunSnapshot,
   snapshotReportParts,
 } from '@/lib/run-snapshot';
+import { parseId } from '@/lib/ids';
 
 const FORMATS = new Set(['pdf', 'pptx', 'ppt', 'csv']);
 
@@ -47,7 +48,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { runId: runIdParam } = await params;
-    const runId = parseInt(runIdParam);
+    const runId = parseId(runIdParam);
 
     // format=pdf (default) | pptx — committees often want an editable deck.
     const format = (new URL(request.url).searchParams.get('format') || 'pdf').toLowerCase();
@@ -342,10 +343,8 @@ export async function GET(
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // The error text can carry SQL, schema or host details: log it, never send it (L1).
     console.error('PDF export error:', error);
-    return NextResponse.json(
-      { error: 'Failed to generate PDF report', details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to generate the report' }, { status: 500 });
   }
 }

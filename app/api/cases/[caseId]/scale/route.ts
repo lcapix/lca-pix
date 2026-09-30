@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { parseId } from '@/lib/ids';
 
 const PER_UNIT_COST_COLUMNS = [
   'labor_cost',
@@ -34,7 +35,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseRow = await queryOne<any>(`SELECT project_id FROM case_table WHERE case_id = ?`, [caseId]);
     if (!caseRow) return NextResponse.json({ error: 'Case not found' }, { status: 404 });

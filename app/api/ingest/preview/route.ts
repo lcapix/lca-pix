@@ -32,6 +32,7 @@ import {
   declaredContentLength,
   enforceRateLimit,
 } from '@/lib/rate-limit';
+import { parseId } from '@/lib/ids';
 
 export const runtime = 'nodejs';
 // Uploads are capped at 12 MB (the full ITAC database workbook is ~16 MB and
@@ -195,7 +196,7 @@ export async function POST(request: NextRequest) {
     } else if (connector === 'equipment') {
       // An equipment list adds energy to the steps of an EXISTING case, joined
       // on the work center and using the hours the routing gave each step.
-      const targetCaseId = Number(form.get('target_case_id'));
+      const targetCaseId = parseId(form.get('target_case_id'));
       if (!targetCaseId) {
         return NextResponse.json(
           { error: 'An equipment list adds energy to the steps of an existing case: choose that case first.' },

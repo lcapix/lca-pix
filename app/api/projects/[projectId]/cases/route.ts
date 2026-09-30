@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { parseId } from '@/lib/ids';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
 export async function GET(
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { projectId: projectIdParam } = await params;
-    const projectId = parseInt(projectIdParam);
+    const projectId = parseId(projectIdParam);
 
     const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
     if (denied) return denied;
@@ -54,7 +55,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { projectId: projectIdParam } = await params;
-    const projectId = parseInt(projectIdParam);
+    const projectId = parseId(projectIdParam);
 
     const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
     if (denied) return denied;

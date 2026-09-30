@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { parseId } from '@/lib/ids';
 
 /**
  * Who else can see a project.
@@ -37,7 +38,7 @@ async function memberRow(projectId: number, userId: number) {
 
 async function guard(request: NextRequest, projectIdParam: string, need: 'viewer' | 'admin') {
   const userId = await requireAuth(request);
-  const projectId = parseInt(projectIdParam);
+  const projectId = parseId(projectIdParam);
   const project = await queryOne<any>('SELECT owner_id FROM project WHERE project_id = ?', [projectId]);
   if (!project) return { error: NextResponse.json({ error: 'Project not found' }, { status: 404 }) };
 

@@ -3,6 +3,7 @@ import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
+import { parseId } from '@/lib/ids';
 
 // POST /api/cases/[caseId]/clone-from
 // Body: { sourceCaseId: number }
@@ -17,7 +18,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const targetCaseId = parseInt(caseIdParam);
+    const targetCaseId = parseId(caseIdParam);
     const { sourceCaseId } = await request.json();
 
     if (!sourceCaseId || isNaN(targetCaseId)) {
@@ -65,7 +66,7 @@ export async function POST(
     // "not empty" guard above.
     const copied = await transaction(async (conn) => {
       await copyCaseReferenceFields(conn, sourceCase, targetCaseId);
-      return copyCaseInventory(conn, Number(sourceCaseId), targetCaseId);
+      return copyCaseInventory(conn, parseId(sourceCaseId), targetCaseId);
     });
 
     // A cloned case has NO results until someone runs it. This used to copy

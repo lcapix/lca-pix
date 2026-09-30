@@ -9,6 +9,7 @@ import {
   findUsableSubstance,
   SUBSTANCE_ERROR,
 } from '@/lib/flow-fields';
+import { parseId } from '@/lib/ids';
 
 // PUT /api/flows/[flowId] - Update flow
 export async function PUT(
@@ -18,7 +19,7 @@ export async function PUT(
   try {
     const userId = await requireAuth(request);
     const { flowId: flowIdParam } = await params;
-    const flowId = parseInt(flowIdParam);
+    const flowId = parseId(flowIdParam);
 
     const existing = await queryOne<any>(
       `SELECT ct.project_id 
@@ -149,7 +150,7 @@ export async function DELETE(
   try {
     const userId = await requireAuth(request);
     const { flowId: flowIdParam } = await params;
-    const flowId = parseInt(flowIdParam);
+    const flowId = parseId(flowIdParam);
 
     const existing = await queryOne<any>(
       `SELECT ct.project_id 

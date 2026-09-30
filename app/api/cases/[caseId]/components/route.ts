@@ -12,6 +12,7 @@ import {
   loadCaseTree,
   updateExistingColumns,
 } from '@/lib/component-fields';
+import { parseId } from '@/lib/ids';
 
 // GET /api/cases/[caseId]/components - Get all components for a case (hierarchy)
 export async function GET(
@@ -21,7 +22,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,
@@ -88,7 +89,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,

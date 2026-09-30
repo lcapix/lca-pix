@@ -9,6 +9,7 @@ import {
   snapshotComponentBreakdown,
   snapshotResultRows,
 } from '@/lib/run-snapshot';
+import { parseId } from '@/lib/ids';
 
 // GET /api/assessments/[runId]
 // Fetches detailed results for a specific assessment run
@@ -19,7 +20,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { runId: runIdParam } = await params;
-    const runId = parseInt(runIdParam);
+    const runId = parseId(runIdParam);
 
     // Get assessment run with access check
     const assessment = await queryOne<any>(
