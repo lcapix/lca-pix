@@ -238,38 +238,38 @@ function FlowSwapSelect({
   const { options, variants, others } = swapOptionsFor(substances, f.substance_id)
 
   return options.length > 1 ? (
-      <select
-        className="input"
-        value={editing.substanceId}
-        onChange={(e) => setEditing({ ...editing, substanceId: Number(e.target.value) })}
-        title="Swap the material: a version of the same material, or another substance with impact data"
-        aria-label="Swap substance"
-        style={{ width: 170, fontSize: 12, padding: '3px 6px' }}
-      >
-        {variants.length > 1 ? (
-          <optgroup label="Versions of this material">
-            {variants.map((s) => (
-              <option key={s.substance_id} value={s.substance_id}>
-                {substanceOptionLabel(s)}
-              </option>
-            ))}
-          </optgroup>
-        ) : (
-          variants.map((s) => (
+    <select
+      className="input"
+      value={editing.substanceId}
+      onChange={(e) => setEditing({ ...editing, substanceId: Number(e.target.value) })}
+      title="Swap the material: a version of the same material, or another substance with impact data"
+      aria-label="Swap substance"
+      style={{ width: 170, fontSize: 12, padding: '3px 6px' }}
+    >
+      {variants.length > 1 ? (
+        <optgroup label="Versions of this material">
+          {variants.map((s) => (
             <option key={s.substance_id} value={s.substance_id}>
               {substanceOptionLabel(s)}
             </option>
-          ))
-        )}
-        {others.length > 0 && (
-          <optgroup label="Other materials">
-            {others.map((s) => (
-              <option key={s.substance_id} value={s.substance_id}>
-                {substanceOptionLabel(s)}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
-    ) : null
+          ))}
+        </optgroup>
+      ) : (
+        variants.map((s) => (
+          <option key={s.substance_id} value={s.substance_id}>
+            {substanceOptionLabel(s)}
+          </option>
+        ))
+      )}
+      {others.length > 0 && (
+        <optgroup label="Other materials">
+          {others.map((s) => (
+            <option key={s.substance_id} value={s.substance_id}>
+              {substanceOptionLabel(s)}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  ) : null
 }
