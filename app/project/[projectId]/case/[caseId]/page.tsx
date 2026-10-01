@@ -21,7 +21,6 @@ import type { CompletenessReport, EditFormData } from '@/lib/case-editor/types'
 import {
   COMPONENT_TYPES,
   buildComponentUpdatePayload,
-  costOrNull,
   formDataFromComponent,
   pendingRescale,
   scaleSuccessMessage,
@@ -243,7 +242,6 @@ export default function CaseViewPage() {
 
   // ---------- Edit / create state (preserved) ----------
   const [isEditing, setIsEditing] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
   const [editFormData, setEditFormData] = useState<EditFormData>({})
   // A change to the product's quantity waits here until the user says what it
   // means (scale the inputs, or the data already covers that many units).
@@ -371,7 +369,6 @@ export default function CaseViewPage() {
   function loadFormFor(c: ComponentNode) {
     setEditFormData(formDataFromComponent(c))
     setIsEditing(true)
-    setIsCreating(false)
   }
 
   // ---------- Selection ----------
@@ -505,65 +502,7 @@ export default function CaseViewPage() {
           if (saved) loadFormFor(saved)
         }
         toast.success('Component updated successfully')
-      } else if (isCreating) {
-        if (editFormData.processType === COMPONENT_TYPES.PRODUCT) {
-          if (components.some((c) => c.type === COMPONENT_TYPES.PRODUCT)) {
-            toast.error('Only one Product component is allowed per case')
-            return
-          }
-        }
-        const createPayload = {
-          component_name: fd.processName!.trim(),
-          component_type: fd.processType,
-          component_description: fd.processDescription || null,
-          parent_component_id: fd.parentId
-            ? parseInt(fd.parentId)
-            : null,
-          process_type: fd.processType,
-          driver_category: fd.driverCategory || null,
-          driver_type: fd.selectedDriver || null,
-          drivers:
-            fd.drivers && fd.drivers.length > 0
-              ? JSON.stringify(fd.drivers)
-              : null,
-          quantity: fd.mass || null,
-          unit: fd.massUnit || null,
-          opex: costOrNull(fd.operationalCostUSD),
-          capex: costOrNull(fd.capitalCostUSD),
-          labor_cost: costOrNull(fd.laborCost),
-          energy_cost: costOrNull(fd.energyCost),
-          transportation_cost: costOrNull(fd.transportationCost),
-          material_cost: costOrNull(fd.materialCost),
-          equipment_cost: costOrNull(fd.equipmentCost),
-          overhead_cost: costOrNull(fd.overheadCost),
-          currency: fd.currency || 'USD',
-          cost_allocation_type: fd.costAllocationType || 'manual',
-        }
-
-        const response = await apiRequest(`/api/cases/${caseId}/components`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createPayload),
-        })
-        const result = await response.json()
-        if (!result.success) throw new Error(result.error || 'Failed to create component')
-
-        const componentsResponse = await apiRequest(`/api/cases/${caseId}/components`)
-        const componentsData = await componentsResponse.json()
-        if (componentsData.success && componentsData.components) {
-          const transformed = componentsData.components.map(transformComponentFromDB)
-          setComponents(transformed)
-          if (result.component?.component_id) {
-            const newId = String(result.component.component_id)
-            setSelectedNode(newId)
-            const made = transformed.find((c: any) => String(c.id) === newId)
-            if (made) loadFormFor(made)
-          }
-        }
-        toast.success('Component created successfully')
       }
-
-      setIsCreating(false)
     } catch (error: any) {
       console.error('Error saving component:', error)
       toast.error(error.message || 'Failed to save component')
@@ -1295,130 +1234,35 @@ export default function CaseViewPage() {
             minWidth: 0,
           }}
         >
-          {isCreating ? (
-            <CreateComponentBanner
-              formData={editFormData}
-              onChange={(patch) => setEditFormData((f) => ({ ...f, ...patch }))}
-              onSave={() => handleSaveComponent()}
-              onCancel={() => {
-                setIsCreating(false)
-                setEditFormData({})
-              }}
-              components={components}
-            />
-          ) : (
-            <InspectorPanel
-              node={selectedFlatNode}
-              studyMethod={studyMethod}
-              editFormData={selectedComponent ? editFormData : undefined}
-              onChange={
-                selectedComponent
-                  ? (patch) => setEditFormData((f) => ({ ...f, ...patch }))
-                  : undefined
-              }
-              onSave={selectedComponent ? () => handleSaveComponent() : undefined}
-              onDelete={selectedComponent ? handleDeleteSelected : undefined}
-              parentOptions={parentOptions}
-              hasChildren={!!selectedRollup?.hasChildren}
-              rolled={selectedRollup}
-              onApplyCosts={
-                selectedComponent
-                  ? (patch) => {
-                      setEditFormData((f) => ({ ...f, ...patch }))
-                      // Save with the patch merged directly (avoids stale state).
-                      handleSaveComponent(patch as any)
-                    }
-                  : undefined
-              }
-            />
-          )}
+          <InspectorPanel
+            node={selectedFlatNode}
+            studyMethod={studyMethod}
+            editFormData={selectedComponent ? editFormData : undefined}
+            onChange={
+              selectedComponent
+                ? (patch) => setEditFormData((f) => ({ ...f, ...patch }))
+                : undefined
+            }
+            onSave={selectedComponent ? () => handleSaveComponent() : undefined}
+            onDelete={selectedComponent ? handleDeleteSelected : undefined}
+            parentOptions={parentOptions}
+            hasChildren={!!selectedRollup?.hasChildren}
+            rolled={selectedRollup}
+            onApplyCosts={
+              selectedComponent
+                ? (patch) => {
+                    setEditFormData((f) => ({ ...f, ...patch }))
+                    // Save with the patch merged directly (avoids stale state).
+                    handleSaveComponent(patch as any)
+                  }
+                : undefined
+            }
+          />
         </aside>
 
         {referenceOpen && (
           <ReferencePane caseId={caseId} onClose={() => setReferenceOpen(false)} />
         )}
-      </div>
-    </div>
-  )
-}
-
-// Lightweight create-component panel (reuses the inspector sections' look
-// but wires the minimum fields required by the POST payload).
-function CreateComponentBanner({
-  formData,
-  onChange,
-  onSave,
-  onCancel,
-  components,
-}: {
-  formData: EditFormData
-  onChange: (patch: Partial<EditFormData>) => void
-  onSave: () => void
-  onCancel: () => void
-  components: ComponentNode[]
-}) {
-  const TYPE_OPTIONS = [
-    { value: 'product', label: 'Product' },
-    { value: 'machine_line', label: 'Machine/Line' },
-    { value: 'subprocess', label: 'Subprocess' },
-    { value: 'operation', label: 'Operation' },
-    { value: 'elemental_task', label: 'Elemental Task' },
-  ]
-  return (
-    <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
-        New Component
-      </div>
-      <label className="label">Type</label>
-      <select
-        className="input"
-        style={{ height: 32, fontSize: 13 }}
-        value={formData.processType || ''}
-        onChange={(e) => onChange({ processType: e.target.value })}
-      >
-        <option value="">— Select type —</option>
-        {TYPE_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <label className="label">Name</label>
-      <input
-        className="input"
-        style={{ height: 32, fontSize: 13 }}
-        value={formData.processName || ''}
-        onChange={(e) => onChange({ processName: e.target.value })}
-      />
-      <label className="label">Parent</label>
-      <select
-        className="input"
-        style={{ height: 32, fontSize: 13 }}
-        value={formData.parentId || ''}
-        onChange={(e) => onChange({ parentId: e.target.value })}
-      >
-        <option value="">(no parent — floating)</option>
-        {components.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      <label className="label">Description</label>
-      <textarea
-        className="input"
-        style={{ height: 60, padding: 8, fontSize: 12, resize: 'vertical' }}
-        value={formData.processDescription || ''}
-        onChange={(e) => onChange({ processDescription: e.target.value })}
-      />
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button className="btn btn-ghost btn-sm" type="button" onClick={onCancel}>
-          Cancel
-        </button>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-primary btn-sm" type="button" onClick={onSave}>
-          Create
-        </button>
       </div>
     </div>
   )
