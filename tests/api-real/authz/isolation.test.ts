@@ -393,6 +393,18 @@ describe('project-level lists only include reachable cases', () => {
   });
 });
 
+describe('members list in a restricted project', () => {
+  it('a student sees the instructor, the TA and themselves, not classmates; the instructor and TA see everyone', async () => {
+    const ids = (res: { json: any }) => [Number(res.json.owner.user_id), ...(res.json.members as any[]).map((m) => Number(m.user_id))].sort((a, b) => a - b);
+    const everyone = ids(expectStatus(await api.get(`/api/projects/${w.P.id}/members`, { token: instructor.token }), 200, 'instructor members'));
+    expect(everyone).toEqual(expect.arrayContaining([instructor.id, ta.id, studentA.id, studentB.id]));
+    expect(ids(expectStatus(await api.get(`/api/projects/${w.P.id}/members`, { token: ta.token }), 200, 'TA members'))).toEqual(everyone);
+    const seenByA = ids(expectStatus(await api.get(`/api/projects/${w.P.id}/members`, { token: studentA.token }), 200, 'student A members'));
+    expect(seenByA).toEqual([instructor.id, ta.id, studentA.id].sort((a, b) => a - b));
+    expect(seenByA).not.toContain(studentB.id);
+  });
+});
+
 describe('instructor and TA reach every case', () => {
   const reads = () => caseRows.filter((r) => r.method === 'GET');
   for (const caller of ['owner', 'adminm'] as const) {

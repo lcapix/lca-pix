@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { casesRestrictedFor, isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 
 /**
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // The owner is listed once, as the owner. A project_members row for the
     // owner exists in older data and would otherwise show them twice, the
     // second time with a Remove button that does nothing useful.
-    const members = await query<any>(
+    const all = await query<any>(
       `SELECT pm.member_id, pm.user_id, pm.added_at, a.username, a.email, perm.permission_name
          FROM project_members pm
          LEFT JOIN account a ON pm.user_id = a.id
@@ -81,6 +81,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         WHERE p.project_id = ?`,
       [g.projectId],
     );
+
+    // When members see only their own cases (a class project), they also see
+    // only the teaching staff and themselves here, not every classmate's name
+    // and email. The owner and admins still see everyone.
+    const members = (await casesRestrictedFor(g.userId, g.projectId))
+      ? all.filter((m: any) => Number(m.user_id) === g.userId || ['owner', 'admin'].includes(m.permission_name))
+      : all;
 
     const canManage = g.isOwner || (await checkProjectAccess(g.userId, g.projectId, 'admin'));
     return NextResponse.json({ success: true, owner, members, canManage, canManageAdmins: g.isOwner });
