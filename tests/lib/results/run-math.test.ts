@@ -5,7 +5,7 @@ import {
   latestCompletedRun,
   rankContributors,
   type RunLike,
-} from '@/components/lcapix/results/run-math'
+} from '@/lib/results/run-math'
 
 const run = (id: number, method: string, region: string, gw: number | null, status = 'completed'): RunLike => ({
   run_id: id,
