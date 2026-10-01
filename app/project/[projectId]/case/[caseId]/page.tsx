@@ -15,14 +15,39 @@ import {
   transformComponentFromDB,
 } from '@/lib/data-transformers'
 import { useProjectStore, type ComponentNode, type Case } from '@/lib/store'
-import {
-  componentsToTree,
-  flattenTree,
-  normalizeType,
-  rollupTree,
-  type ComponentLike,
-} from '@/lib/case-tree-adapter'
+import { componentsToTree, flattenTree, rollupTree } from '@/lib/case-tree-adapter'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
+import type { CompletenessReport, EditFormData } from '@/lib/case-editor/types'
+import {
+  COMPONENT_TYPES,
+  buildComponentUpdatePayload,
+  costOrNull,
+  formDataFromComponent,
+  pendingRescale,
+  scaleSuccessMessage,
+  validateComponentSave,
+} from '@/lib/case-editor/component-payload'
+import {
+  filterFlatByLabel,
+  lessonStepNames,
+  newComponentQuery,
+  parentOptionsFor,
+  pickInitialComponent,
+  toComponentLikes,
+} from '@/lib/case-editor/case-tree'
+import { chooseDeleteMode, deleteSuccessMessage, planDelete } from '@/lib/case-editor/delete-plan'
+import {
+  assessmentCompleteMessage,
+  buildRunBody,
+  completedRuns,
+  hasRunSibling,
+  isInventoryReady,
+  readRunPrefs,
+  runBlockedMessage,
+  runButtonTitle,
+  topClimateStep,
+} from '@/lib/case-editor/run-assessment'
+import { deriveCaseStatus } from '@/lib/case-editor/case-status'
 
 import { Breadcrumb, Icon } from '@/components/lcapix'
 import {
@@ -41,41 +66,8 @@ import { PhaseStepper } from '@/components/lcapix/case/phase-stepper'
 import { ScaleDialog, type PendingScale } from '@/components/lcapix/case/scale-dialog'
 import { CaseNameDialog } from '@/components/lcapix/case/case-name-dialog'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
-import { journeyPhases } from '@/lib/case-journey'
-import { LAYER_LABEL, type CaseLayer } from '@/lib/ingest/doc-types'
 import { ReferencePane } from '@/components/lcapix/case/reference-pane'
 import { LessonRail } from '@/components/lcapix/case/lesson-rail'
-
-// A typed 0 is a real cost ("this operation costs nothing"), distinct from an
-// empty field (unknown). `x || null` collapsed both to null, and the component
-// PUT's COALESCE then kept the previous number — so editing a cost to 0 silently
-// reverted. This preserves 0 and any valid number; only truly-empty inputs → null.
-const costOrNull = (v: unknown): number | null => {
-  if (v === '' || v === null || v === undefined) return null
-  const n = Number(v)
-  return Number.isNaN(n) ? null : n
-}
-
-// Component type constants matching DB enum.
-const COMPONENT_TYPES = {
-  PRODUCT: 'product',
-  MACHINE_LINE: 'machine_line',
-  SUBPROCESS: 'subprocess',
-  OPERATION: 'operation',
-  ELEMENTAL_TASK: 'elemental_task',
-} as const
-
-interface EditFormData extends InspectorEditFormData {
-  processType?: string
-  parentId?: string
-  driverCategory?: string
-  selectedDriver?: string
-  drivers?: string[]
-  operationalCostUSD?: number
-  capitalCostUSD?: number
-  currency?: string
-  costAllocationType?: 'manual' | 'calculated' | 'allocated'
-}
 
 export default function CaseViewPage() {
   const params = useParams()
@@ -151,10 +143,8 @@ export default function CaseViewPage() {
       try {
         const r = await apiRequest(`/api/projects/${projectId}/cases`)
         const d = await r.json().catch(() => ({}))
-        const others = (d?.cases ?? []).filter(
-          (c: any) => String(c.case_id) !== String(caseId) && Number(c.run_count ?? 0) > 0,
-        )
-        if (!cancelled) setHasComparableCase(others.length > 0)
+        const comparable = hasRunSibling(d?.cases, caseId)
+        if (!cancelled) setHasComparableCase(comparable)
       } catch {
         /* advisory only */
       }
@@ -186,11 +176,6 @@ export default function CaseViewPage() {
   // ---------- Case completeness (which layers present / missing) ----------
   // Drives the "what to add next" strip and gates Run Assessment. Re-fetched on
   // refreshKey so it tracks live edits (add a flow → strip and gate update).
-  type CompletenessReport = {
-    present: string[]
-    missing: Array<{ layer: string; label: string; suggestedDocs: string[] }>
-    score: number
-  }
   const [completeness, setCompleteness] = useState<CompletenessReport | null>(null)
   useEffect(() => {
     let cancelled = false
@@ -213,9 +198,7 @@ export default function CaseViewPage() {
   // characterize to nothing, so a run would return a misleading 0. This is the
   // honest gate; tightening it to require specific layers (e.g. block until
   // energy is present too) is a product decision — change IMPACT_LAYERS.
-  const IMPACT_LAYERS = ['materials', 'energy', 'emissions', 'transport']
-  const inventoryReady =
-    !completeness || completeness.present.some((l) => IMPACT_LAYERS.includes(l))
+  const inventoryReady = isInventoryReady(completeness)
 
   // ISO 14044 goal & scope (4.2.3.2): a run needs a functional unit, because a
   // result that is not "per" anything cannot be interpreted or compared. The
@@ -236,25 +219,13 @@ export default function CaseViewPage() {
         const d = await r.json()
         // A run that produced no results (nothing to characterize) does not
         // count as assessed.
-        const runs = (d?.assessments ?? []).filter(
-          (a: any) =>
-            (!a.status || a.status === 'completed') && Object.keys(a.impacts ?? {}).length > 0,
-        )
+        const runs = completedRuns(d?.assessments)
         if (!cancelled) setHasAssessment(runs.length > 0)
 
         // Which step actually carried the most climate impact, for the reveal
         // after a prediction. Newest run, headline category.
-        const newest = runs[0]
-        const climateKey = Object.keys(newest?.impacts ?? {}).find((k) =>
-          /global warming|climate/i.test(k),
-        )
-        if (newest && climateKey) {
-          const ranked = (newest.components ?? [])
-            .map((c: any) => ({ name: c.component_name, v: Number(c.impacts?.[climateKey] ?? 0) }))
-            .filter((c: any) => c.v > 0)
-            .sort((a: any, b: any) => b.v - a.v)
-          if (!cancelled) setTopStep(ranked[0]?.name ?? null)
-        }
+        const top = topClimateStep(runs[0])
+        if (top !== undefined && !cancelled) setTopStep(top)
       } catch {
         /* advisory — panel falls back to the Inventory phase */
       }
@@ -352,13 +323,10 @@ export default function CaseViewPage() {
   // ---------- Auto-select: the ?component=<name> deep-link target, else first root ----------
   useEffect(() => {
     if (components.length > 0 && !selectedNode) {
-      const byId = preselectComponentId
-        ? components.find((c) => c.id === preselectComponentId)
-        : null
-      const named = preselectComponent
-        ? components.find((c) => c.name === preselectComponent)
-        : null
-      const target = byId ?? named ?? components.find((c) => !c.parentId) ?? components[0]
+      const target = pickInitialComponent(components, {
+        id: preselectComponentId,
+        name: preselectComponent,
+      })
       if (target) {
         setSelectedNode(target.id)
         loadFormFor(target)
@@ -368,33 +336,11 @@ export default function CaseViewPage() {
   }, [components.length, preselectComponent, preselectComponentId])
 
   // ---------- Tree adapter (memoized) ----------
-  const tree = useMemo(() => {
-    const likes: ComponentLike[] = components.map((c) => ({
-      id: c.id,
-      name: c.name,
-      type: c.type,
-      parentId: c.parentId ?? null,
-      operationalCostUSD: c.operationalCostUSD ?? null,
-      capitalCostUSD: c.capitalCostUSD ?? null,
-      laborCost: (c as any).laborCost ?? null,
-      energyCost: (c as any).energyCost ?? null,
-      materialCost: (c as any).materialCost ?? null,
-      transportationCost: (c as any).transportationCost ?? null,
-      equipmentCost: (c as any).equipmentCost ?? null,
-      overheadCost: (c as any).overheadCost ?? null,
-      drivers: c.drivers ?? null,
-      flowCount: (c as any).flowCount ?? null,
-    }))
-    return componentsToTree(likes)
-  }, [components])
+  const tree = useMemo(() => componentsToTree(toComponentLikes(components)), [components])
 
   const flat: FlatCaseNode[] = useMemo(() => flattenTree(tree), [tree])
 
-  const filteredFlat = useMemo(() => {
-    if (!sidebarQuery.trim()) return flat
-    const q = sidebarQuery.toLowerCase()
-    return flat.filter((n) => n.label.toLowerCase().includes(q))
-  }, [flat, sidebarQuery])
+  const filteredFlat = useMemo(() => filterFlatByLabel(flat, sidebarQuery), [flat, sidebarQuery])
 
   const selectedFlatNode = useMemo(
     () => flat.find((n) => n.id === selectedNode) ?? null,
@@ -416,72 +362,14 @@ export default function CaseViewPage() {
   // any COARSER node (levels may be skipped — an Operation can sit directly
   // under a Product), across any branch of the tree, or made independent.
   // Self + descendants are excluded to prevent cycles.
-  const parentOptions = useMemo(() => {
-    if (!selectedComponent) return []
-    const RANK_DB: Record<string, number> = {
-      product: 1,
-      machine_line: 2,
-      subprocess: 3,
-      operation: 4,
-      elemental_task: 5,
-    }
-    const ownRank = RANK_DB[selectedComponent.type as string]
-    if (!ownRank || ownRank === 1) return []
-
-    const descendants = new Set<string>()
-    const stack = [selectedComponent.id]
-    while (stack.length) {
-      const cur = stack.pop()!
-      for (const c of components) {
-        if (c.parentId === cur && !descendants.has(c.id)) {
-          descendants.add(c.id)
-          stack.push(c.id)
-        }
-      }
-    }
-    return components
-      .filter(
-        (c) =>
-          c.id !== selectedComponent.id &&
-          !descendants.has(c.id) &&
-          (RANK_DB[c.type as string] ?? 99) < ownRank,
-      )
-      .map((c) => {
-        const tdef = HIERARCHY_TYPES.find(
-          (h) => (h.id as string) === (normalizeType(c.type) as unknown as string),
-        )
-        return { id: c.id, label: `${c.name} (${tdef?.label ?? c.type})` }
-      })
-  }, [components, selectedComponent])
+  const parentOptions = useMemo(
+    () => parentOptionsFor(components, selectedComponent),
+    [components, selectedComponent],
+  )
 
   // ---------- Form helpers ----------
   function loadFormFor(c: ComponentNode) {
-    setEditFormData({
-      processName: c.name,
-      processType: c.type,
-      processDescription: c.description || '',
-      driverCategory: c.driverCategory || '',
-      selectedDriver: c.selectedDriver || '',
-      mass: c.mass ?? undefined,
-      massUnit: c.massUnit || '',
-      operationalCostUSD: c.operationalCostUSD ?? undefined,
-      capitalCostUSD: c.capitalCostUSD ?? undefined,
-      parentId: c.parentId || undefined,
-      laborCost: (c as any).laborCost ?? undefined,
-      laborHours: (c as any).laborHours ?? undefined,
-      laborOccupation: (c as any).laborOccupation ?? undefined,
-      energyCost: (c as any).energyCost ?? undefined,
-      transportationCost: (c as any).transportationCost ?? undefined,
-      materialCost: (c as any).materialCost ?? undefined,
-      equipmentCost: (c as any).equipmentCost ?? undefined,
-      overheadCost: (c as any).overheadCost ?? undefined,
-      currency: (c as any).currency || 'USD',
-      costAllocationType: (c as any).costAllocationType ?? undefined,
-      allocationMethod: c.allocationMethod ?? 'none',
-      allocationFactor: c.allocationFactor ?? 1,
-      allocationNote: c.allocationNote ?? undefined,
-      lifeCycleStage: c.lifeCycleStage ?? null,
-    })
+    setEditFormData(formDataFromComponent(c))
     setIsEditing(true)
     setIsCreating(false)
   }
@@ -506,11 +394,7 @@ export default function CaseViewPage() {
   const handleRunAssessment = async () => {
     if (isRunning) return
     if (!canRun) {
-      toast.error(
-        fuMissing
-          ? 'Set the functional unit first (Goal & scope), so the result is per something.'
-          : 'Nothing to assess yet — add at least one input or emission (materials, energy, or a direct output). A case with no flows would return 0.',
-      )
+      toast.error(runBlockedMessage(fuMissing))
       if (fuMissing) setGoalOpenSignal((s) => s + 1)
       return
     }
@@ -521,31 +405,17 @@ export default function CaseViewPage() {
       // latest run non-comparable with its own history (live-caught: run 119).
       // Nothing remembered: the server uses the study's scope (the project's
       // method, the case's region).
-      let remembered: { method?: string; region?: string } = {}
-      try {
-        remembered = JSON.parse(localStorage.getItem(`lcapix-run-prefs:${caseId}`) || '{}')
-      } catch { /* corrupt prefs are ignorable */ }
+      const remembered = readRunPrefs(caseId)
       const res = await apiRequest(`/api/cases/${caseId}/assessments`, {
         method: 'POST',
-        body: JSON.stringify({
-          run_name: 'Assessment',
-          ...(remembered.method ? { calculation_method: remembered.method } : {}),
-          ...(remembered.region ? { region_code: remembered.region } : {}),
-        }),
+        body: JSON.stringify(buildRunBody(remembered)),
       })
       if (!res.ok) {
         const msg = await res.text().catch(() => res.statusText)
         throw new Error(msg || `Assessment failed (${res.status})`)
       }
       const data = await res.json().catch(() => ({}))
-      const total = data?.total_impacts?.find?.(
-        (t: any) => /global warming/i.test(t.category_name),
-      )?.impact_value
-      toast.success(
-        typeof total === 'number'
-          ? `Assessment complete — ${total.toFixed(3)} kg CO₂-eq`
-          : 'Assessment complete',
-      )
+      toast.success(assessmentCompleteMessage(data))
       router.push(`/project/${projectId}/case/${caseId}/results`)
     } catch (e: any) {
       console.error('Run assessment failed:', e)
@@ -563,23 +433,7 @@ export default function CaseViewPage() {
     // Carry the selection as placement context: a new component defaults to
     // being the CHILD of the node the user is standing on (or its sibling,
     // when a leaf is selected) — never a guess from elsewhere in the tree.
-    const CHILD_OF: Record<string, string> = {
-      product: 'machine_line',
-      machine_line: 'subprocess',
-      subprocess: 'operation',
-      operation: 'elemental_task',
-    }
-    const sel = selectedComponent
-    let query = ''
-    if (sel) {
-      const childType = CHILD_OF[sel.type as string]
-      if (childType) {
-        query = `?parent=${encodeURIComponent(sel.id)}&type=${encodeURIComponent(childType)}`
-      } else if (sel.parentId) {
-        // Leaf selected → suggest a sibling under the same parent.
-        query = `?parent=${encodeURIComponent(sel.parentId)}&type=${encodeURIComponent(sel.type as string)}`
-      }
-    }
+    const query = newComponentQuery(selectedComponent)
     router.push(`/project/${projectId}/case/${caseId}/component/new${query}`)
   }
 
@@ -596,11 +450,7 @@ export default function CaseViewPage() {
       })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j?.error || 'Could not rescale the case')
-      toast.success(
-        mode === 'scale-inputs'
-          ? `Scaled ${j.flows_scaled ?? 0} inputs/outputs and every per-unit cost ×${Number((to / from).toPrecision(3))} to ${to} units`
-          : `Kept the inputs as entered; they now count as ${to} units`,
-      )
+      toast.success(scaleSuccessMessage(mode, j.flows_scaled, from, to))
       // Save the rest of the edited fields; the quantity is already set.
       skipScaleCheck.current = true
       await handleSaveComponent({ ...fd, mass: to })
@@ -617,33 +467,18 @@ export default function CaseViewPage() {
   // waiting for a separate Save click or a React state flush.
   const handleSaveComponent = async (override?: Partial<EditFormData>) => {
     const fd = { ...editFormData, ...(override || {}) }
-    if (!fd.processType) {
-      toast.error('Please select a process type')
-      return
-    }
-    if (!fd.processName || !fd.processName.trim()) {
-      toast.error('Component name is required')
-      return
-    }
-    if (fd.processType !== COMPONENT_TYPES.PRODUCT && !fd.parentId) {
-      toast.error('Every step needs a parent. Pick one under Placement (only the product has none).')
-      return
-    }
-    if (
-      (fd.allocationMethod === 'physical' || fd.allocationMethod === 'economic') &&
-      !(Number(fd.allocationFactor) > 0 && Number(fd.allocationFactor) <= 1)
-    ) {
-      toast.error('Enter the share (0.1 to 100%) that belongs to this product, or set allocation to None')
+    const invalid = validateComponentSave(fd)
+    if (invalid) {
+      toast.error(invalid)
       return
     }
 
     // Changing the product's quantity rescales the case: ask first.
     const current = components.find((c) => c.id === selectedNode)
-    if (isEditing && current?.type === COMPONENT_TYPES.PRODUCT && !skipScaleCheck.current) {
-      const from = Number(current.mass ?? 1) || 1
-      const to = Number(fd.mass ?? from)
-      if (to > 0 && to !== from) {
-        setPendingScale({ from, to, fd })
+    if (isEditing && !skipScaleCheck.current) {
+      const change = pendingRescale(current, fd)
+      if (change) {
+        setPendingScale({ ...change, fd })
         return
       }
     }
@@ -651,41 +486,7 @@ export default function CaseViewPage() {
 
     try {
       if (isEditing && selectedNode) {
-        const updatePayload = {
-          component_name: fd.processName.trim(),
-          component_type: fd.processType,
-          component_description: fd.processDescription || null,
-          parent_component_id: fd.parentId
-            ? parseInt(fd.parentId)
-            : null,
-          process_type: fd.processType,
-          driver_category: fd.driverCategory || null,
-          driver_type: fd.selectedDriver || null,
-          drivers:
-            fd.drivers && fd.drivers.length > 0
-              ? JSON.stringify(fd.drivers)
-              : null,
-          quantity: fd.mass ?? null,
-          unit: fd.massUnit || null,
-          opex: costOrNull(fd.operationalCostUSD),
-          capex: costOrNull(fd.capitalCostUSD),
-          labor_cost: costOrNull(fd.laborCost),
-          labor_hours: fd.laborHours ?? null,
-          labor_occupation: fd.laborOccupation || null,
-          energy_cost: costOrNull(fd.energyCost),
-          transportation_cost: costOrNull(fd.transportationCost),
-          material_cost: costOrNull(fd.materialCost),
-          equipment_cost: costOrNull(fd.equipmentCost),
-          overhead_cost: costOrNull(fd.overheadCost),
-          currency: fd.currency || 'USD',
-          cost_allocation_type: fd.costAllocationType || 'manual',
-          allocation_method: fd.allocationMethod ?? null,
-          allocation_factor:
-            fd.allocationMethod === 'none' ? 1 : fd.allocationFactor ?? null,
-          allocation_note: fd.allocationNote ?? null,
-          // A step with no stage reads as production; null keeps it that way.
-          life_cycle_stage: fd.lifeCycleStage || null,
-        }
+        const updatePayload = buildComponentUpdatePayload(fd)
 
         const response = await apiRequest(`/api/components/${selectedNode}`, {
           method: 'PUT',
@@ -778,44 +579,11 @@ export default function CaseViewPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const handleDeleteSelected = async () => {
     if (!selectedNode || isDeleting) return
-    const comp = components.find((c) => c.id === selectedNode)
-    if (!comp) return
+    const plan = planDelete(components, selectedNode)
+    if (!plan) return
+    const { comp, children, below } = plan
 
-    const children = components.filter((c) => c.parentId === comp.id)
-    const below = new Set<string>()
-    const stack = [comp.id]
-    while (stack.length) {
-      const cur = stack.pop()!
-      for (const c of components) {
-        if (c.parentId === cur && !below.has(c.id)) {
-          below.add(c.id)
-          stack.push(c.id)
-        }
-      }
-    }
-    const steps = (n: number) => `${n} step${n === 1 ? '' : 's'}`
-
-    let mode: 'delete' | 'reparent' | null = null
-    if (children.length === 0) {
-      if (confirm(`Delete "${comp.name}"? This cannot be undone.`)) mode = 'delete'
-    } else {
-      const parentName = comp.parentId
-        ? components.find((c) => c.id === comp.parentId)?.name
-        : null
-      if (
-        confirm(
-          `Delete "${comp.name}" and the ${steps(below.size)} under it, with their flows and costs? This cannot be undone.\n\nOK deletes them all. Cancel lets you keep the steps under it instead.`,
-        )
-      ) {
-        mode = 'delete'
-      } else if (
-        confirm(
-          `Keep the ${steps(children.length)} directly under "${comp.name}" by moving ${children.length === 1 ? 'it' : 'them'} up ${parentName ? `under "${parentName}"` : 'to the top level'}, and delete only "${comp.name}"?\n\nOK moves ${children.length === 1 ? 'it' : 'them'} and deletes "${comp.name}". Cancel does nothing.`,
-        )
-      ) {
-        mode = 'reparent'
-      }
-    }
+    const mode = chooseDeleteMode(plan, components, (message) => confirm(message))
     if (!mode) return
 
     setIsDeleting(true)
@@ -835,13 +603,7 @@ export default function CaseViewPage() {
         children.forEach((ch) => updateComponentNode(ch.id, { parentId: comp.parentId ?? null }))
         deleteComponentNode(comp.id)
       }
-      toast.success(
-        mode === 'delete'
-          ? below.size > 0
-            ? `Deleted "${comp.name}" and the ${steps(below.size)} under it`
-            : `Deleted "${comp.name}"`
-          : `Deleted "${comp.name}"; ${steps(children.length)} moved up`,
-      )
+      toast.success(deleteSuccessMessage(plan, mode))
       setSelectedNode(null)
       setIsEditing(false)
       setEditFormData({})
@@ -1084,13 +846,7 @@ export default function CaseViewPage() {
           type="button"
           onClick={handleRunAssessment}
           disabled={isRunning || !canRun}
-          title={
-            fuMissing
-              ? 'Set the functional unit (Goal & scope) before running'
-              : !canRun
-                ? 'Add at least one input or emission before running'
-                : undefined
-          }
+          title={runButtonTitle(fuMissing, canRun)}
         >
           <Icon name="run" size={14} /> {isRunning ? 'Running…' : 'Run Assessment'}
         </button>
@@ -1104,55 +860,26 @@ export default function CaseViewPage() {
         (() => {
           // Phases reflect the data actually in the case: a run on half an
           // inventory shows Impact as partial, never a free tick.
-          const phases = journeyPhases({
-            fuSet: goalScope ? !fuMissing : null,
-            present: completeness.present,
-            hasAssessment,
-          })
-          const partialRun = phases.find((p) => p.label === 'Impact')?.state === 'partial'
-          const addedLabels = completeness.present.map(
-            (l) => LAYER_LABEL[l as CaseLayer] ?? l,
-          )
-          const firstMissing = completeness.missing[0]
-          const status: 'blocked' | 'ready' | 'assessed' = !canRun
-            ? 'blocked'
-            : !hasAssessment
-              ? 'ready'
-              : 'assessed'
-          const accent =
-            status === 'blocked'
-              ? '#c0392b'
-              : status === 'assessed'
-                ? 'var(--accent, #4f8a6a)'
-                : 'var(--signal-info, #2563eb)'
-          const primary =
-            status === 'blocked' && fuMissing
-              ? {
-                  label: 'Set functional unit',
-                  run: false,
-                  onClick: () => setGoalOpenSignal((s) => s + 1),
-                }
-              : status === 'blocked'
-              ? {
-                  label: 'Add material inputs',
-                  run: false,
-                  onClick: () => router.push(`/project/${projectId}/import`),
-                }
-              : status === 'ready'
-                ? { label: 'Run assessment', run: true, onClick: handleRunAssessment }
-                : {
-                    label: 'View results',
-                    run: false,
-                    onClick: () =>
-                      router.push(`/project/${projectId}/case/${caseId}/results`),
-                  }
-          const missingPhrase = firstMissing
-            ? `${firstMissing.label}${
-                firstMissing.suggestedDocs[0]
-                  ? ` (from a ${firstMissing.suggestedDocs[0]})`
-                  : ' (enter it by hand on the step that uses it)'
-              }`
-            : null
+          const { phases, partialRun, addedLabels, status, accent, missingPhrase, ...view } =
+            deriveCaseStatus({
+              completeness,
+              goalScopeLoaded: !!goalScope,
+              fuMissing,
+              canRun,
+              hasAssessment,
+            })
+          const primary = {
+            label: view.primary.label,
+            run: view.primary.run,
+            onClick:
+              view.primary.action === 'set-functional-unit'
+                ? () => setGoalOpenSignal((s) => s + 1)
+                : view.primary.action === 'add-inputs'
+                  ? () => router.push(`/project/${projectId}/import`)
+                  : view.primary.action === 'run'
+                    ? handleRunAssessment
+                    : () => router.push(`/project/${projectId}/case/${caseId}/results`),
+          }
           return (
             <div
               className="card"
@@ -1329,9 +1056,7 @@ export default function CaseViewPage() {
             hasComparableCase,
             hasWriteUp,
           }}
-          steps={components
-            .filter((c) => c.type === 'operation' || c.type === 'subprocess')
-            .map((c) => c.name)}
+          steps={lessonStepNames(components)}
           topStep={topStep}
           onClose={() => setLearnOpen(false)}
         />
