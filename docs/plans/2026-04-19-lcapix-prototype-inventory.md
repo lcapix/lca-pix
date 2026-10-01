@@ -1,6 +1,6 @@
 # LCAPIX Prototype Inventory
 
-Source: `/Users/kavishpandit/Desktop/lca/lca project v3/LCAPIX/` (Babel-in-browser React prototype)
+Source: `design/legacy/LCAPIX/` (Babel-in-browser React prototype; this inventory was written against a copy at the root of another checkout)
 Purpose: catalogue for porting as the new v3 frontend skeleton, replacing the current Stitch-derived UI while preserving backend, auth, Zustand, Vitest tests.
 
 ---

@@ -6,9 +6,8 @@ npm-debug.log*
 *.log
 .env*.local
 .DS_Store
-LCAPIX
+design
 LCAPIX.zip
-review-screens
 tests
 docs
 *.md

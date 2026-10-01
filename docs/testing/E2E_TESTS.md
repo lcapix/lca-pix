@@ -154,7 +154,7 @@ For read-only checks on the seeded world, `test.use({ storageState: storagePath(
 **Review screenshots for people.** `scripts/capture-review.mjs` takes the same route list from a local dev server, signed in as a local test account whose credentials come from `LCAPIX_REVIEW_EMAIL` / `LCAPIX_REVIEW_PASSWORD` (or `.env.test.local`). It refuses any base URL that is not `http://localhost`, `127.0.0.1` or `[::1]`, and blocks every other origin in the browser. Ids come from `LCAPIX_REVIEW_IDS` or are looked up through the API.
 
 ```bash
-LCAPIX_REVIEW_EMAIL=… LCAPIX_REVIEW_PASSWORD=… node scripts/capture-review.mjs --base=http://localhost:3002 --out=review-screens
+LCAPIX_REVIEW_EMAIL=… LCAPIX_REVIEW_PASSWORD=… node scripts/capture-review.mjs --base=http://localhost:3002 --out=design/legacy/review-screens
 ```
 
 **A seeded object.** Extend `support/seed.ts`, through the API only, at the end of the existing sequence so earlier ids do not shift (they appear in URLs and snapshots).

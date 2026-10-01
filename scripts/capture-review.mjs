@@ -3,7 +3,7 @@
  * Screenshots of every screen for a design review, from a LOCAL dev server.
  *
  *   LCAPIX_REVIEW_EMAIL=you@example.test LCAPIX_REVIEW_PASSWORD=... \
- *     node scripts/capture-review.mjs [--base=http://localhost:3002] [--out=review-screens]
+ *     node scripts/capture-review.mjs [--base=http://localhost:3002] [--out=design/legacy/review-screens]
  *
  * - Localhost only: the base URL must be http://localhost, 127.0.0.1 or [::1]
  *   (any port); anything else is refused. The browser may load only that
@@ -37,7 +37,7 @@ const envFile = path.join(ROOT, '.env.test.local');
 if (existsSync(envFile)) process.loadEnvFile(envFile); // never overrides variables already set
 
 const BASE = arg('base', process.env.LCAPIX_REVIEW_URL || 'http://localhost:3002').replace(/\/$/, '');
-const OUT = path.resolve(ROOT, arg('out', 'review-screens'));
+const OUT = path.resolve(ROOT, arg('out', 'design/legacy/review-screens'));
 const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 let origin;
