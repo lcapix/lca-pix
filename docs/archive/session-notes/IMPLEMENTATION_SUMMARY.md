@@ -6,7 +6,7 @@
 
 ### Phase 1: Critical Bug Fixes
 **Fixed Category Totals Aggregation (0.0000 values)**
-- **File**: [app/project/[projectId]/case/[caseId]/results/page.tsx:206-250](app/project/[projectId]/case/[caseId]/results/page.tsx#L206)
+- **File**: [app/project/[projectId]/case/[caseId]/results/page.tsx:206-250](../../../app/project/[projectId]/case/[caseId]/results/page.tsx#L206)
 - **Solution**: Added intelligent fallback aggregation using `useMemo` hook
 - **Logic**:
   1. First attempts to use `total_impacts` if values are valid
@@ -16,7 +16,7 @@
 
 ### Phase 2: Results Page Redesign
 **Enhanced Component Breakdown Section**
-- **File**: [app/project/[projectId]/case/[caseId]/results/page.tsx:449-500](app/project/[projectId]/case/[caseId]/results/page.tsx#L449)
+- **File**: [app/project/[projectId]/case/[caseId]/results/page.tsx:449-500](../../../app/project/[projectId]/case/[caseId]/results/page.tsx#L449)
 - **Visual Improvements**:
   - Blue gradient header (from-blue-50 to-purple-50)
   - 2px blue border with shadow for prominence
@@ -36,8 +36,8 @@
 5. **[ComponentTreeSkeleton](components/skeletons/component-tree-skeleton.tsx)** - Component hierarchy loading
 
 **Integrated Into**:
-- ✅ [app/home/page.tsx](app/home/page.tsx#L293) - Project list loading
-- ✅ [app/project/[projectId]/case/[caseId]/results/page.tsx](app/project/[projectId]/case/[caseId]/results/page.tsx#L256) - Assessment loading
+- ✅ [app/home/page.tsx](../../../app/home/page.tsx#L293) - Project list loading
+- ✅ [app/project/[projectId]/case/[caseId]/results/page.tsx](../../../app/project/[projectId]/case/[caseId]/results/page.tsx#L256) - Assessment loading
 - ✅ [components/environmental-flows.tsx](components/environmental-flows.tsx#L252) - Flow table loading
 
 **Before**: Plain "Loading..." text
@@ -46,7 +46,7 @@
 ### Phase 4: Comparative Assessment System
 
 #### 4.1 Database Schema
-**[database/migrations/002_comparison_system.sql](database/migrations/002_comparison_system.sql)**
+**[database/migrations/002_comparison_system.sql](../../../database/migrations/002_comparison_system.sql)**
 
 Created 3 tables:
 ```sql
@@ -82,7 +82,7 @@ mysql -h localhost -P 3307 -u admin -p lca_dev < database/migrations/002_compari
 ```
 
 #### 4.2 Comparison Engine
-**[lib/comparison-engine.ts](lib/comparison-engine.ts)** (420+ lines)
+**[lib/comparison-engine.ts](../../../lib/comparison-engine.ts)** (420+ lines)
 
 **Key Functions**:
 - `compareCases()` - Main comparison orchestrator
@@ -147,7 +147,7 @@ mysql -h localhost -P 3307 -u admin -p lca_dev < database/migrations/002_compari
 
 #### 4.3 API Endpoints
 
-**[app/api/comparisons/route.ts](app/api/comparisons/route.ts)**
+**[app/api/comparisons/route.ts](../../../app/api/comparisons/route.ts)**
 - `POST /api/comparisons` - Create new comparison
   - Body: `{ comparison_name, case_ids[], project_id }`
   - Validates: 2-10 cases, project access, case ownership
@@ -156,7 +156,7 @@ mysql -h localhost -P 3307 -u admin -p lca_dev < database/migrations/002_compari
 - `GET /api/comparisons?project_id=X` - List all comparisons
   - Returns: Array of comparisons with metadata
 
-**[app/api/comparisons/[comparisonId]/route.ts](app/api/comparisons/[comparisonId]/route.ts)**
+**[app/api/comparisons/[comparisonId]/route.ts](../../../app/api/comparisons/[comparisonId]/route.ts)**
 - `GET /api/comparisons/:id` - Get comparison details
   - Returns: Full comparison with category_comparisons and rankings
 

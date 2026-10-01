@@ -43,7 +43,7 @@ Hover colors are calculated as 10-15% lighter than standby:
 
 ## Files Modified
 
-### 1. **Main Interactive Tree** - [app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx)
+### 1. **Main Interactive Tree** - [app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx)
 
 #### `getNodeColors()` Function (Lines 310-396)
 
@@ -155,11 +155,11 @@ The following components use **case type colors** (base vs comparative) and were
 - Uses BLUE borders for base, PURPLE borders for comparative
 - Indicates case relationship, not hierarchy level
 
-✅ **Analytics Dashboard** ([app/project/[projectId]/analytics/page.tsx](app/project/[projectId]/analytics/page.tsx))
+✅ **Analytics Dashboard** ([app/project/[projectId]/analytics/page.tsx](../../../app/project/[projectId]/analytics/page.tsx))
 - Uses case type colors in `getCaseColor()` function
 - Distinguishes base vs comparative in charts
 
-✅ **Project Overview Tabs** ([app/project/[projectId]/page.tsx](app/project/[projectId]/page.tsx))
+✅ **Project Overview Tabs** ([app/project/[projectId]/page.tsx](../../../app/project/[projectId]/page.tsx))
 - Tab indicators use BLUE for base, INDIGO for comparative
 - Different semantic meaning from hierarchy
 

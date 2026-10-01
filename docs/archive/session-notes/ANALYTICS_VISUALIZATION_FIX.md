@@ -24,7 +24,7 @@
 5. **Enhanced legend formatter**: Shows percentages with clean formatting
 6. **Better spacing**: `wrapperStyle={{ paddingLeft: '20px', fontSize: '14px', lineHeight: '24px' }}`
 
-**Code Changes** ([Line 421-464](app/project/[projectId]/analytics/page.tsx#L421-L464)):
+**Code Changes** ([Line 421-464](../../../app/project/[projectId]/analytics/page.tsx#L421-L464)):
 ```typescript
 <PieChart>
   <Pie
@@ -74,7 +74,7 @@ curl /api/assessments/2/
 ```
 
 **Solution Applied**:
-Added comprehensive debug logging ([Lines 143-155](app/project/[projectId]/analytics/page.tsx#L143-L155)):
+Added comprehensive debug logging ([Lines 143-155](../../../app/project/[projectId]/analytics/page.tsx#L143-L155)):
 
 ```typescript
 // Debug: Check if Case 2 (Renewable Energy Scenario) is loaded
@@ -109,7 +109,7 @@ if (case2Data) {
 
 **Applied to all chart types**:
 
-1. **Bar Chart Comparison** ([Line 381-384](app/project/[projectId]/analytics/page.tsx#L381-L384)):
+1. **Bar Chart Comparison** ([Line 381-384](../../../app/project/[projectId]/analytics/page.tsx#L381-L384)):
 ```typescript
 <Legend
   wrapperStyle={{ paddingTop: '20px' }}
@@ -117,7 +117,7 @@ if (case2Data) {
 />
 ```
 
-2. **Radar Chart** ([Line 412-415](app/project/[projectId]/analytics/page.tsx#L412-L415)):
+2. **Radar Chart** ([Line 412-415](../../../app/project/[projectId]/analytics/page.tsx#L412-L415)):
 ```typescript
 <Legend
   wrapperStyle={{ paddingTop: '20px' }}
@@ -125,7 +125,7 @@ if (case2Data) {
 />
 ```
 
-3. **Stacked Bar Chart** ([Line 506-510](app/project/[projectId]/analytics/page.tsx#L506-L510)):
+3. **Stacked Bar Chart** ([Line 506-510](../../../app/project/[projectId]/analytics/page.tsx#L506-L510)):
 ```typescript
 <Legend
   wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }}
@@ -134,7 +134,7 @@ if (case2Data) {
 />
 ```
 
-4. **Total Score Comparison** ([Line 539-542](app/project/[projectId]/analytics/page.tsx#L539-L542)):
+4. **Total Score Comparison** ([Line 539-542](../../../app/project/[projectId]/analytics/page.tsx#L539-L542)):
 ```typescript
 <Legend
   wrapperStyle={{ paddingTop: '20px' }}
@@ -152,7 +152,7 @@ if (case2Data) {
 
 ## Files Modified
 
-**Single File**: [app/project/[projectId]/analytics/page.tsx](app/project/[projectId]/analytics/page.tsx)
+**Single File**: [app/project/[projectId]/analytics/page.tsx](../../../app/project/[projectId]/analytics/page.tsx)
 
 **Sections Changed**:
 1. **Lines 143-155**: Debug logging for Case 2

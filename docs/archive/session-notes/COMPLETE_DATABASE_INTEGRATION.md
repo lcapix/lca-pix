@@ -16,7 +16,7 @@ The application now has a direct connection between the frontend and MySQL datab
 ✅ Fixed JOIN columns (`parent_component_id` → `parent_id`)
 ✅ Added support for multiple field naming conventions
 
-**File**: [app/api/cases/[caseId]/components/route.ts](app/api/cases/[caseId]/components/route.ts)
+**File**: [app/api/cases/[caseId]/components/route.ts](../../../app/api/cases/[caseId]/components/route.ts)
 
 ### **2. Data Transformation Layer**
 ✅ Created `transformProjectFromDB()` - Database → Frontend
@@ -26,33 +26,33 @@ The application now has a direct connection between the frontend and MySQL datab
 ✅ Created `transformCaseToDB()` - Frontend → Database
 ✅ Created `transformComponentToDB()` - Frontend → Database
 
-**File**: [lib/data-transformers.ts](lib/data-transformers.ts)
+**File**: [lib/data-transformers.ts](../../../lib/data-transformers.ts)
 
 ### **3. API Client with Auto-Auth**
 ✅ Created `apiRequest()` - Automatically adds JWT auth headers
 ✅ Handles 401 errors with automatic logout/redirect
 ✅ Supports all HTTP methods
 
-**File**: [lib/api-client.ts](lib/api-client.ts)
+**File**: [lib/api-client.ts](../../../lib/api-client.ts)
 
 ### **4. Frontend Pages - Database Integration**
 
 #### ✅ Home Page (`/home`)
-**File**: [app/home/page.tsx](app/home/page.tsx)
+**File**: [app/home/page.tsx](../../../app/home/page.tsx)
 - Fetches projects from `/api/projects` on mount
 - Uses `apiRequest()` with automatic auth
 - Transforms database data with `transformProjectFromDB()`
 - **Status**: FULLY FUNCTIONAL
 
 #### ✅ New Project Page (`/project/new`)
-**File**: [app/project/new/page.tsx](app/project/new/page.tsx)
+**File**: [app/project/new/page.tsx](../../../app/project/new/page.tsx)
 - POSTs to `/api/projects` to create project in database
 - Sends correct format (`project_name`, `description`)
 - Redirects to project detail with database ID
 - **Status**: FULLY FUNCTIONAL
 
 #### ✅ Project Detail Page (`/project/[projectId]`)
-**File**: [app/project/[projectId]/page.tsx](app/project/[projectId]/page.tsx)
+**File**: [app/project/[projectId]/page.tsx](../../../app/project/[projectId]/page.tsx)
 - Fetches project from `/api/projects/[projectId]`
 - Fetches cases from `/api/projects/[projectId]/cases`
 - Parallel requests for better performance
@@ -60,7 +60,7 @@ The application now has a direct connection between the frontend and MySQL datab
 - **Status**: FULLY FUNCTIONAL
 
 #### ✅ Create Base Case Page (`/project/[projectId]/case/base/new`)
-**File**: [app/project/[projectId]/case/base/new/page.tsx](app/project/[projectId]/case/base/new/page.tsx)
+**File**: [app/project/[projectId]/case/base/new/page.tsx](../../../app/project/[projectId]/case/base/new/page.tsx)
 - POSTs to `/api/projects/[projectId]/cases`
 - Sends `case_name`, `case_type`, `case_description`
 - Redirects with database case ID
@@ -71,7 +71,7 @@ The application now has a direct connection between the frontend and MySQL datab
 ✅ Projects no longer cached in localStorage
 ✅ All data now comes fresh from database on every page load
 
-**File**: [lib/store.ts](lib/store.ts)
+**File**: [lib/store.ts](../../../lib/store.ts)
 
 ---
 
@@ -220,21 +220,21 @@ tail -f /tmp/lca-dev.log
 ## 📝 Files Modified
 
 ### **Core Infrastructure**
-1. ✅ [lib/api-client.ts](lib/api-client.ts) - Created
-2. ✅ [lib/data-transformers.ts](lib/data-transformers.ts) - Created
+1. ✅ [lib/api-client.ts](../../../lib/api-client.ts) - Created
+2. ✅ [lib/data-transformers.ts](../../../lib/data-transformers.ts) - Created
 
 ### **API Fixes**
-3. ✅ [app/api/cases/[caseId]/components/route.ts](app/api/cases/[caseId]/components/route.ts) - Schema fixed
-4. ✅ [app/api/projects/route.ts](app/api/projects/route.ts) - user_id column fix
+3. ✅ [app/api/cases/[caseId]/components/route.ts](../../../app/api/cases/[caseId]/components/route.ts) - Schema fixed
+4. ✅ [app/api/projects/route.ts](../../../app/api/projects/route.ts) - user_id column fix
 
 ### **Frontend Pages**
-5. ✅ [app/home/page.tsx](app/home/page.tsx) - Fetches from DB
-6. ✅ [app/project/new/page.tsx](app/project/new/page.tsx) - POSTs to DB
-7. ✅ [app/project/[projectId]/page.tsx](app/project/[projectId]/page.tsx) - Fetches from DB
-8. ✅ [app/project/[projectId]/case/base/new/page.tsx](app/project/[projectId]/case/base/new/page.tsx) - POSTs to DB
+5. ✅ [app/home/page.tsx](../../../app/home/page.tsx) - Fetches from DB
+6. ✅ [app/project/new/page.tsx](../../../app/project/new/page.tsx) - POSTs to DB
+7. ✅ [app/project/[projectId]/page.tsx](../../../app/project/[projectId]/page.tsx) - Fetches from DB
+8. ✅ [app/project/[projectId]/case/base/new/page.tsx](../../../app/project/[projectId]/case/base/new/page.tsx) - POSTs to DB
 
 ### **Store Updates**
-9. ✅ [lib/store.ts](lib/store.ts) - Removed project persistence
+9. ✅ [lib/store.ts](../../../lib/store.ts) - Removed project persistence
 
 ---
 
@@ -243,7 +243,7 @@ tail -f /tmp/lca-dev.log
 The following pages still use Zustand store instead of database. They can be updated following the same pattern:
 
 ### **Case Detail Page**
-**File**: [app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx)
+**File**: [app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx)
 
 **Current**: Reads from store
 ```typescript

@@ -31,7 +31,7 @@ The `getFlowChartColors()` function had **missing type mappings**:
 
 ## Final Fix Applied
 
-### File: [app/project/[projectId]/case/[caseId]/page.tsx:263-297](app/project/[projectId]/case/[caseId]/page.tsx#L263-L297)
+### File: [app/project/[projectId]/case/[caseId]/page.tsx:263-297](../../../app/project/[projectId]/case/[caseId]/page.tsx#L263-L297)
 
 **Added missing type mappings to `getFlowChartColors()` function:**
 

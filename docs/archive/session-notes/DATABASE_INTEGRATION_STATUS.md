@@ -14,7 +14,7 @@
 - ✅ Fixed JOIN column names (`parent_component_id` → `parent_id`)
 - ✅ Added support for multiple field naming conventions
 
-**File**: [app/api/cases/[caseId]/components/route.ts](app/api/cases/[caseId]/components/route.ts)
+**File**: [app/api/cases/[caseId]/components/route.ts](../../../app/api/cases/[caseId]/components/route.ts)
 
 ### **2. Data Transformation Helpers - CREATED**
 - ✅ Created `transformProjectFromDB()` - Database → Frontend
@@ -24,19 +24,19 @@
 - ✅ Created `transformCaseToDB()` - Frontend → Database
 - ✅ Created `transformComponentToDB()` - Frontend → Database
 
-**File**: [lib/data-transformers.ts](lib/data-transformers.ts)
+**File**: [lib/data-transformers.ts](../../../lib/data-transformers.ts)
 
 ### **3. Frontend Pages Connected to Database**
 
 #### ✅ Home Page - `/home`
-**File**: [app/home/page.tsx](app/home/page.tsx)
+**File**: [app/home/page.tsx](../../../app/home/page.tsx)
 - Fetches projects from `/api/projects` with auth token
 - Uses `apiRequest()` helper
 - Transforms data with `transformProjectFromDB()`
 - **Status**: Fully functional
 
 #### ✅ New Project Page - `/project/new`
-**File**: [app/project/new/page.tsx](app/project/new/page.tsx)
+**File**: [app/project/new/page.tsx](../../../app/project/new/page.tsx)
 - POSTs to `/api/projects` to create project
 - Sends correct database format (`project_name`, `description`)
 - Redirects to project detail with database ID
@@ -130,7 +130,7 @@ router.push(`/project/${projectId}/case/${data.case.case_id}`)
 ```
 
 #### 4. New Comparative Case Page - `/project/[projectId]/case/comparative/new`
-**File**: [app/project/[projectId]/case/comparative/new/page.tsx](app/project/[projectId]/case/comparative/new/page.tsx)
+**File**: [app/project/[projectId]/case/comparative/new/page.tsx](../../../app/project/[projectId]/case/comparative/new/page.tsx)
 
 **Needs**: Same as base case but with `case_type: "comparative"`
 

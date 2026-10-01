@@ -30,7 +30,7 @@ Successfully implemented comprehensive Activity-Based Costing (ABC) functionalit
 
 ## Database Schema Changes
 
-### File: [database/migrations/003_abc_cost_breakdown.sql](database/migrations/003_abc_cost_breakdown.sql)
+### File: [database/migrations/003_abc_cost_breakdown.sql](../../../database/migrations/003_abc_cost_breakdown.sql)
 
 **Added 7 new columns to `component` table:**
 
@@ -53,7 +53,7 @@ CREATE INDEX idx_component_costs ON component(opex, capex);
 
 ## TypeScript Interface Updates
 
-### File: [lib/store.ts](lib/store.ts#L51-L58)
+### File: [lib/store.ts](../../../lib/store.ts#L51-L58)
 
 **Updated `ComponentNode` interface:**
 
@@ -74,7 +74,7 @@ export interface ComponentNode {
 }
 ```
 
-### File: [types/component.ts](types/component.ts#L14-L28)
+### File: [types/component.ts](../../../types/component.ts#L14-L28)
 
 **Added helper interfaces:**
 
@@ -99,7 +99,7 @@ export interface DetailedCosts {
 
 ## Data Transformation Layer
 
-### File: [lib/data-transformers.ts](lib/data-transformers.ts)
+### File: [lib/data-transformers.ts](../../../lib/data-transformers.ts)
 
 **Updated both transformation functions:**
 
@@ -123,7 +123,7 @@ labor_cost_usd: component.laborCostUSD || null,
 
 ## API Updates
 
-### File: [app/api/components/[componentId]/route.ts](app/api/components/[componentId]/route.ts#L71-L141)
+### File: [app/api/components/[componentId]/route.ts](../../../app/api/components/[componentId]/route.ts#L71-L141)
 
 **Updated PUT handler to accept new cost fields:**
 
@@ -164,7 +164,7 @@ WHERE component_id = ?
 
 ## User Interface Implementation
 
-### File: [app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx)
+### File: [app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx)
 
 ### Major Changes:
 

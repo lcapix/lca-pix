@@ -7,7 +7,7 @@ Improved the visual distinction between base and comparative case tabs on the pr
 
 ## Changes Implemented
 
-### File Modified: [app/project/[projectId]/page.tsx](app/project/[projectId]/page.tsx)
+### File Modified: [app/project/[projectId]/page.tsx](../../../app/project/[projectId]/page.tsx)
 
 **Total Lines Changed:** 4 lines (139, 148, 163, 182)
 

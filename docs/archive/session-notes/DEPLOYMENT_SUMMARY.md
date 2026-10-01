@@ -32,7 +32,7 @@
    - TypeScript type definitions included
    - Validation rules and business logic documented
 
-2. **[CALCULATIONS.md](CALCULATIONS.md)** (55 KB)
+2. **[CALCULATIONS.md](../../../CALCULATIONS.md)** (55 KB)
    - GWP (Global Warming Potential) calculation methodology
    - ADP (Resource Depletion) calculation methodology
    - IPCC AR6 2021 characterization factors
@@ -40,7 +40,7 @@
    - Test case validation with real data
    - **STATUS: Pending Professor Approval**
 
-3. **[migrate-schema-updates.sql](migrate-schema-updates.sql)** (5.1 KB)
+3. **[migrate-schema-updates.sql](../../../migrate-schema-updates.sql)** (5.1 KB)
    - Database migration script for all 4 schema changes
    - Includes verification queries
    - Rollback script included
@@ -49,11 +49,11 @@
 ### 3. Google OAuth Implementation
 
 **New Files:**
-- [app/api/auth/google/route.ts](app/api/auth/google/route.ts) - OAuth callback handler
+- [app/api/auth/google/route.ts](../../../app/api/auth/google/route.ts) - OAuth callback handler
 
 **Modified Files:**
-- [app/auth/login/page.tsx](app/auth/login/page.tsx) - Real OAuth redirect (line 103-114)
-- [app/auth/signup/page.tsx](app/auth/signup/page.tsx) - Real OAuth redirect (line 108-119)
+- [app/auth/login/page.tsx](../../../app/auth/login/page.tsx) - Real OAuth redirect (line 103-114)
+- [app/auth/signup/page.tsx](../../../app/auth/signup/page.tsx) - Real OAuth redirect (line 108-119)
 
 **Features:**
 - ✅ Real Google OAuth 2.0 integration (replaced mock)

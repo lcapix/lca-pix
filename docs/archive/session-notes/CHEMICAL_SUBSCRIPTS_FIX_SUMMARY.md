@@ -16,7 +16,7 @@ Fixed all chemical formulas across the LCA-PIX v3 application to display proper 
 
 #### **Files Modified**
 
-1. **[app/project/[projectId]/case/[caseId]/results/page.tsx](app/project/[projectId]/case/[caseId]/results/page.tsx)**
+1. **[app/project/[projectId]/case/[caseId]/results/page.tsx](../../../app/project/[projectId]/case/[caseId]/results/page.tsx)**
    - Line 17: Fixed `"kg NOx-eq"` → `"kg NOₓ-eq"` in IMPACT_CATEGORIES
    - Line 577: Added `formatChemicalUnit(impact.unit)` for units from API
    - Impact: Assessment results page now shows proper subscripts
@@ -32,21 +32,21 @@ Fixed all chemical formulas across the LCA-PIX v3 application to display proper 
    - Line 50: Applied formatting to difference calculation unit
    - Impact: Comparison chart tooltips now show proper subscripts
 
-4. **[app/project/[projectId]/analytics/page.tsx](app/project/[projectId]/analytics/page.tsx)**
+4. **[app/project/[projectId]/analytics/page.tsx](../../../app/project/[projectId]/analytics/page.tsx)**
    - Line 16: Added import for `formatChemicalUnit`
    - Lines 793, 797: Applied formatting to comparison table units
    - Impact: Analytics dashboard tables now show proper subscripts
 
-5. **[app/project/[projectId]/comparison/page.tsx](app/project/[projectId]/comparison/page.tsx)** (ALREADY FIXED)
+5. **[app/project/[projectId]/comparison/page.tsx](../../../app/project/[projectId]/comparison/page.tsx)** (ALREADY FIXED)
    - Line 128: Already had `'kg CO₂-eq'` with proper subscript ✓
 
-6. **[lib/store.ts](lib/store.ts)** (ALREADY FIXED)
+6. **[lib/store.ts](../../../lib/store.ts)** (ALREADY FIXED)
    - Line 560: Already had `"CO₂"` with proper subscript ✓
 
 ### 2. Database Migration
 
 #### **Migration Script Created**
-- **[migrate-fix-chemical-subscripts.sql](migrate-fix-chemical-subscripts.sql)**
+- **[migrate-fix-chemical-subscripts.sql](../../../migrate-fix-chemical-subscripts.sql)**
   - Updates `impact_categories` table with proper Unicode subscripts
   - Updates existing `assessment_impacts` records for consistency
   - Includes verification queries to check results

@@ -163,7 +163,7 @@ Total Global Warming Impact = 125.25 + 70.0 + 0.0 = 195.25 kg CO₂-eq
 
 ### 1.5 Current Database Implementation
 
-The algorithm is implemented in [`lib/lca-engine.ts`](lib/lca-engine.ts) with the following database queries:
+The algorithm is implemented in [`lib/lca-engine.ts`](../../../lib/lca-engine.ts) with the following database queries:
 
 ```typescript
 // Query 1: Get component details

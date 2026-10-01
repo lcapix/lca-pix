@@ -23,7 +23,7 @@ This caused a visual mismatch between the legend and the actual flowchart nodes,
 
 ## Final Fix Applied
 
-### **File Modified:** [app/project/[projectId]/case/[caseId]/page.tsx:1206-1222](app/project/[projectId]/case/[caseId]/page.tsx#L1206-L1222)
+### **File Modified:** [app/project/[projectId]/case/[caseId]/page.tsx:1206-1222](../../../app/project/[projectId]/case/[caseId]/page.tsx#L1206-L1222)
 
 **Updated Legend Component:**
 

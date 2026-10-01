@@ -43,7 +43,7 @@ The schema inconsistency occurred because:
    run_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
    ```
 
-2. **Migration Applied** ([migrate-fix-assessment-runs.sql](migrate-fix-assessment-runs.sql)):
+2. **Migration Applied** ([migrate-fix-assessment-runs.sql](../../../migrate-fix-assessment-runs.sql)):
    ```sql
    -- Added run_date instead of using existing run_at
    ADD COLUMN run_date TIMESTAMP NULL
@@ -97,7 +97,7 @@ All assessments have:
 ## The Fix Applied
 
 ### File Changed
-**[app/api/cases/[caseId]/assessments/route.ts](app/api/cases/[caseId]/assessments/route.ts#L35)**
+**[app/api/cases/[caseId]/assessments/route.ts](../../../app/api/cases/[caseId]/assessments/route.ts#L35)**
 
 **Change**:
 ```typescript
@@ -243,14 +243,14 @@ The [case-mini-visualization.tsx](components/case-mini-visualization.tsx) compon
 ## Related Files
 
 ### Modified
-- ✅ [app/api/cases/[caseId]/assessments/route.ts](app/api/cases/[caseId]/assessments/route.ts#L35) - Fixed SQL query
+- ✅ [app/api/cases/[caseId]/assessments/route.ts](../../../app/api/cases/[caseId]/assessments/route.ts#L35) - Fixed SQL query
 
 ### Previously Modified (From earlier session)
 - ✅ [components/case-mini-visualization.tsx](components/case-mini-visualization.tsx#L76-78) - Added fallback filter for null status
-- ✅ [app/project/[projectId]/analytics/page.tsx](app/project/[projectId]/analytics/page.tsx#L88-93) - Added fallback filter
+- ✅ [app/project/[projectId]/analytics/page.tsx](../../../app/project/[projectId]/analytics/page.tsx#L88-93) - Added fallback filter
 
 ### Migration Script (Already Applied)
-- ✅ [migrate-fix-assessment-runs.sql](migrate-fix-assessment-runs.sql) - Added status, calculation_method, error_log, run_date columns
+- ✅ [migrate-fix-assessment-runs.sql](../../../migrate-fix-assessment-runs.sql) - Added status, calculation_method, error_log, run_date columns
 
 ---
 

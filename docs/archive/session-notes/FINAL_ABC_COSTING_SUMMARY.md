@@ -33,15 +33,15 @@ cost_allocation_type ENUM('manual', 'calculated', 'allocated')
 **Lines Added:** ~150 lines
 
 #### TypeScript Interfaces
-- [lib/store.ts](lib/store.ts) - ComponentNode interface with ABC cost fields
-- [types/component.ts](types/component.ts) - CostBreakdown helper interfaces
+- [lib/store.ts](../../../lib/store.ts) - ComponentNode interface with ABC cost fields
+- [types/component.ts](../../../types/component.ts) - CostBreakdown helper interfaces
 
 #### Data Layer
-- [lib/data-transformers.ts](lib/data-transformers.ts) - Database ↔ TypeScript transformations
-- [app/api/components/[componentId]/route.ts](app/api/components/[componentId]/route.ts) - API endpoints
+- [lib/data-transformers.ts](../../../lib/data-transformers.ts) - Database ↔ TypeScript transformations
+- [app/api/components/[componentId]/route.ts](../../../app/api/components/[componentId]/route.ts) - API endpoints
 
 #### User Interface
-- [app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx)
+- [app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx)
   - Currency selector dropdown
   - 6 cost input fields with icons
   - Real-time calculation

@@ -26,7 +26,7 @@
 ## Database Changes
 
 ### Migration File
-**Location:** [database/migrations/004_currency_support.sql](database/migrations/004_currency_support.sql)
+**Location:** [database/migrations/004_currency_support.sql](../../../database/migrations/004_currency_support.sql)
 
 ### Column Renames
 ```sql
@@ -65,7 +65,7 @@ CREATE INDEX idx_component_currency ON component(currency);
 
 ### 1. TypeScript Interfaces
 
-#### File: [lib/store.ts](lib/store.ts#L51-L59)
+#### File: [lib/store.ts](../../../lib/store.ts#L51-L59)
 
 **Before:**
 ```typescript
@@ -90,7 +90,7 @@ currency?: string // ISO 4217 currency code
 
 ### 2. Data Transformers
 
-#### File: [lib/data-transformers.ts](lib/data-transformers.ts)
+#### File: [lib/data-transformers.ts](../../../lib/data-transformers.ts)
 
 **transformComponentFromDB() - Before:**
 ```typescript
@@ -124,7 +124,7 @@ currency: component.currency || 'USD',
 
 ### 3. API Endpoint
 
-#### File: [app/api/components/[componentId]/route.ts](app/api/components/[componentId]/route.ts)
+#### File: [app/api/components/[componentId]/route.ts](../../../app/api/components/[componentId]/route.ts)
 
 **Request Body Parsing - Before:**
 ```typescript
@@ -164,7 +164,7 @@ currency = COALESCE(?, currency),
 
 ### 4. User Interface
 
-#### File: [app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx)
+#### File: [app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx)
 
 **State Management - Before:**
 ```typescript

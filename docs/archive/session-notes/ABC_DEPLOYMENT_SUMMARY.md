@@ -86,29 +86,29 @@ node load-abc-test-data.js
 
 #### TypeScript Interfaces
 
-**File:** [lib/store.ts](lib/store.ts#L51-L58)
+**File:** [lib/store.ts](../../../lib/store.ts#L51-L58)
 - Added 7 optional cost fields to `ComponentNode` interface
 
-**File:** [types/component.ts](types/component.ts#L14-L28)
+**File:** [types/component.ts](../../../types/component.ts#L14-L28)
 - Added `CostBreakdown` interface
 - Added `DetailedCosts` interface
 
 #### Data Transformation Layer
 
-**File:** [lib/data-transformers.ts](lib/data-transformers.ts)
+**File:** [lib/data-transformers.ts](../../../lib/data-transformers.ts)
 - Updated `transformComponentFromDB()` - Parse 7 cost fields
 - Updated `transformComponentToDB()` - Convert 7 fields to DB format
 
 #### API Updates
 
-**File:** [app/api/components/[componentId]/route.ts](app/api/components/[componentId]/route.ts#L71-L141)
+**File:** [app/api/components/[componentId]/route.ts](../../../app/api/components/[componentId]/route.ts#L71-L141)
 - Updated PUT handler to accept 7 new cost fields
 - Updated SQL UPDATE statement
 - Maintained backward compatibility
 
 #### User Interface
 
-**File:** [app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx)
+**File:** [app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx)
 
 **Major Changes:**
 - Added icon imports (Users, Zap, Truck, Package, Building, DollarSign, AlertCircle)

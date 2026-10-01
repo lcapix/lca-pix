@@ -12,8 +12,8 @@ This guide covers the new **Environmental Flows UI** - a complete CRUD interface
 
 ### What Was Built:
 - ✅ **Environmental Flows Component** ([components/environmental-flows.tsx](components/environmental-flows.tsx))
-- ✅ **Integrated into Case Page** ([app/project/[projectId]/case/[caseId]/page.tsx](app/project/[projectId]/case/[caseId]/page.tsx))
-- ✅ **Fixed DELETE API Permissions** ([app/api/flows/[flowId]/route.ts](app/api/flows/[flowId]/route.ts))
+- ✅ **Integrated into Case Page** ([app/project/[projectId]/case/[caseId]/page.tsx](../../../app/project/[projectId]/case/[caseId]/page.tsx))
+- ✅ **Fixed DELETE API Permissions** ([app/api/flows/[flowId]/route.ts](../../../app/api/flows/[flowId]/route.ts))
 
 ---
 
@@ -200,7 +200,7 @@ curl -X GET http://localhost:3002/api/substances \
 - Database uses `parent_component_id`, not `parent_id`
 - Will fix in next iteration
 
-**Fix Location**: [app/api/cases/[caseId]/components/route.ts](app/api/cases/[caseId]/components/route.ts#L27)
+**Fix Location**: [app/api/cases/[caseId]/components/route.ts](../../../app/api/cases/[caseId]/components/route.ts#L27)
 
 ---
 
@@ -285,7 +285,7 @@ interface Flow {
 ### Problem: "Can't delete flow"
 **Solution**:
 1. Verify you have editor permissions
-2. Check API route at [app/api/flows/[flowId]/route.ts](app/api/flows/[flowId]/route.ts)
+2. Check API route at [app/api/flows/[flowId]/route.ts](../../../app/api/flows/[flowId]/route.ts)
 3. Recent fix changed permission from 'admin' to 'editor'
 
 ---
