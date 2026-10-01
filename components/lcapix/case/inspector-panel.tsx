@@ -13,6 +13,7 @@ import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
 import { suggestCostsFromFlows } from '@/lib/costs/suggest-costs'
 import {
   ENERGY_RATES,
+  LABOR_RATES,
   REFERENCE_VINTAGE,
   getLaborRate,
 } from '@/lib/integrations/reference-rates'
@@ -769,11 +770,25 @@ function LaborBreakdown({
   const [state, setState] = useState('US')
   const [liveRate, setLiveRate] = useState<{ rate: number; source: string } | null>(null)
   const [wageLoading, setWageLoading] = useState(false)
+  // A reference wage is a starting point, not the truth. A shop knows what it
+  // pays, and until now the only way to say so was to pick a different state.
+  const [typedRate, setTypedRate] = useState<string>('')
+  // Which trade does this step. It used to be read off the step's NAME, so a
+  // step called "Station 3" was paid the generic production wage with no way
+  // to say otherwise.
+  const [pickedKey, setPickedKey] = useState<string>('')
 
   if (!isLaborNode) return null
 
-  const rate = liveRate ? liveRate.rate : staticRate.rate
-  const rateLabel = liveRate ? liveRate.source : `${staticRate.label} · BLS OEWS national`
+  const typed = typedRate.trim() !== '' && Number.isFinite(Number(typedRate)) ? Number(typedRate) : null
+  const chosen = pickedKey ? LABOR_RATES[pickedKey] : null
+  const reference = chosen ?? staticRate
+  const rate = typed ?? (liveRate ? liveRate.rate : reference.rate)
+  const rateLabel = typed
+    ? 'entered by you — not a published wage'
+    : liveRate
+      ? liveRate.source
+      : `${reference.label} · BLS OEWS national${chosen ? '' : ' · matched on the step name'}`
 
   const storedHours = editFormData.laborHours
   const hoursVal =
@@ -829,6 +844,34 @@ function LaborBreakdown({
       <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
         Labor = hours × rate
       </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        <select
+          className="input"
+          style={{ height: 24, fontSize: 10.5, maxWidth: 210 }}
+          value={pickedKey}
+          onChange={(e) => {
+            const k = e.target.value
+            setPickedKey(k)
+            setTypedRate('')
+            const r = k ? LABOR_RATES[k] : staticRate
+            if (hoursVal != null) {
+              onChange({
+                laborCost: Math.round(hoursVal * r.rate * 100) / 100,
+                laborOccupation: r.soc,
+              })
+            }
+          }}
+          title="Who does this step. The wage follows the trade, not the step's name."
+        >
+          <option value="">Matched on the step name</option>
+          {Object.entries(LABOR_RATES).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v.label}
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{rateLabel}</span>
+      </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
         <div>
           <label className="label" style={{ fontSize: 10 }}>
@@ -844,7 +887,9 @@ function LaborBreakdown({
             onChange={(e) =>
               onChange({
                 laborHours: e.target.value === '' ? undefined : Number(e.target.value),
-                laborOccupation: staticRate.soc,
+                // Keep the provenance the rate established: editing hours after
+                // typing your own wage must not re-label it as a BLS figure.
+                laborOccupation: typed ? 'user' : reference.soc,
                 laborCost:
                   e.target.value === ''
                     ? editFormData.laborCost
@@ -859,13 +904,39 @@ function LaborBreakdown({
           <label className="label" style={{ fontSize: 10 }}>
             Rate ($/h)
           </label>
-          <div
-            className="mono"
-            style={{ fontSize: 12, height: 28, display: 'flex', alignItems: 'center' }}
+          <input
+            className="input mono"
+            type="number"
+            step="any"
+            style={{ height: 28, fontSize: 12, width: 82 }}
+            value={typedRate !== '' ? typedRate : wageLoading ? '' : rate.toFixed(2)}
+            placeholder={wageLoading ? '…' : rate.toFixed(2)}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => {
+              const v = e.target.value
+              setTypedRate(v)
+              const r = Number(v)
+              if (v.trim() === '') {
+                // Back to the reference wage, and back to its provenance.
+                recost(liveRate ? liveRate.rate : reference.rate)
+                onChange({ laborOccupation: reference.soc })
+                return
+              }
+              if (Number.isFinite(r) && hoursVal != null) {
+                // The hours go in the same patch. A patch that carries only the
+                // derived cost was being lost somewhere between here and Save;
+                // sending the whole triple makes the edit idempotent and makes
+                // this input behave exactly like the hours input beside it.
+                onChange({
+                  laborHours: hoursVal,
+                  laborCost: Math.round(hoursVal * r * 100) / 100,
+                  laborOccupation: 'user',
+                })
+              }
+            }}
             title={rateLabel}
-          >
-            {wageLoading ? '…' : `$${rate.toFixed(2)}`}
-          </div>
+            aria-label="Hourly rate"
+          />
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', paddingBottom: 6 }}>=</div>
         <div>

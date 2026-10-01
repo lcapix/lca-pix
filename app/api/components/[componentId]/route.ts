@@ -214,8 +214,27 @@ export async function PUT(
             componentId,
           ]
         );
-      } catch (costErr) {
-        console.warn('[component PUT] cost-column update skipped (schema lacks ABC cost columns):', costErr);
+      } catch (costErr: any) {
+        // Only ONE thing is a missing-schema problem worth swallowing: the
+        // columns not existing. Everything else — a value too long for its
+        // column, a bad number — is the user's edit failing to save, and it
+        // used to disappear into a console warning. A typed wage rate was
+        // silently discarded this way for exactly as long as the marker
+        // 'user-entered' was longer than labor_occupation's 10 characters.
+        if (costErr?.code === 'ER_BAD_FIELD_ERROR') {
+          console.warn('[component PUT] cost columns missing from this schema:', costErr?.message);
+        } else {
+          console.error('[component PUT] cost update failed:', costErr);
+          return NextResponse.json(
+            {
+              error:
+                'The step was saved but its costs were not: ' +
+                (costErr?.sqlMessage || costErr?.message || 'the database refused the values') +
+                '.',
+            },
+            { status: 409 },
+          );
+        }
       }
     }
 
