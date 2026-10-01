@@ -34,6 +34,7 @@
  */
 
 import type { Connection, RowDataPacket } from 'mysql2/promise';
+import { duplicateWarnings } from './duplicate-flows';
 import { canonicalizeRegion, selectBestScopeRows } from './factor-selection';
 import { convertQuantity, normalizeUnit } from './units';
 
@@ -567,19 +568,38 @@ export async function calculateCaseImpacts(
     flow_count: row.flow_count,
   }));
 
-  // Terminating-node rule: a node with children is the sum of its children
-  // (ISO 14044 unit processes; the patent's baseline process). Flows sitting
-  // on such a node still count, but say so: the same flow modeled on a step
-  // below would be counted twice.
-  const nodesWithChildren = new Set(
-    components.map((c) => c.parent_component_id).filter((id) => id != null),
-  );
-  const structureWarnings = componentsWithFlows
-    .filter((c) => nodesWithChildren.has(c.component_id))
-    .map(
-      (c) =>
-        `Component ${c.component_name} has steps below it and also ${c.flow_count} flow(s) of its own. A parent should be the sum of its steps: move these flows onto the step that uses them, or check they are not also modeled below (double count).`,
+  // Where a flow may sit: anywhere. The tier names are nomenclature — the v1
+  // manual calls them "for identification purposes only" and leaves the
+  // hierarchy "completely under the control of the user" — so a flow on a line
+  // is as valid as a flow on an operation, and both are counted.
+  //
+  // What is worth saying is the real error: the SAME substance counted twice on
+  // one path through the tree. The previous warning fired on every parent that
+  // carried flows, which taught people to ignore it.
+  let structureWarnings: string[] = [];
+  try {
+    const [flowRows] = await connection.query<RowDataPacket[]>(
+      `SELECT c.component_id, c.component_name, c.parent_component_id,
+              f.substance_id, s.substance_name
+         FROM flows f
+         JOIN component c ON c.component_id = f.component_id
+         LEFT JOIN substances s ON s.substance_id = f.substance_id
+        WHERE c.case_id = ?`,
+      [caseId],
     );
+    structureWarnings = duplicateWarnings(
+      flowRows.map((r) => ({
+        component_id: r.component_id,
+        component_name: r.component_name,
+        parent_component_id: r.parent_component_id ?? null,
+        substance_id: r.substance_id,
+        substance_name: r.substance_name ?? `substance ${r.substance_id}`,
+      })),
+    );
+  } catch (err) {
+    // Advisory only: a run must not fail because the check could not be made.
+    console.warn('[engine] duplicate-flow check skipped:', err);
+  }
 
   algorithmSteps.push({
     step_number: 4,

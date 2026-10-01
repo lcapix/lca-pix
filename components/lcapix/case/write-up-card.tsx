@@ -31,6 +31,10 @@ export function WriteUpCard({
   prompts,
 }: Props) {
   const [isFinal, setIsFinal] = useState(initialFinal)
+  // Collapsed by default: on a results page the numbers come first, and two
+  // empty text boxes under them read like homework nobody asked for. A case
+  // that already has a write-up opens showing it.
+  const [open, setOpen] = useState(!!(initialInterpretation?.trim() || initialAssumptions?.trim()))
   const [interpretation, setInterpretation] = useState(initialInterpretation ?? '')
   const [assumptions, setAssumptions] = useState(initialAssumptions ?? '')
   const [saving, setSaving] = useState(false)
@@ -126,20 +130,38 @@ export function WriteUpCard({
       <div
         style={{
           display: 'flex',
-          alignItems: 'baseline',
+          alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
-          marginBottom: 4,
         }}
       >
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 650, color: 'var(--text-primary)' }}>
           Your write-up
+          {!open && (interpretation.trim() || assumptions.trim()) && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>
+              written
+            </span>
+          )}
         </h3>
-        <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-          Sections 7 and 8 of the exported report
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+            Sections 7 and 8 of the exported report
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            title="What the result means, and what you assumed. Both print in the report."
+          >
+            {open ? 'Hide' : interpretation.trim() || assumptions.trim() ? 'Show' : 'Write it'}
+          </button>
+        </div>
       </div>
-      <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
+
+      {!open ? null : (
+      <>
+      <p style={{ margin: '10px 0 14px', fontSize: 12.5, color: 'var(--text-secondary)' }}>
         The engine computes the numbers. These two are yours.
       </p>
 
@@ -197,6 +219,9 @@ export function WriteUpCard({
           </span>
         )}
       </div>
+
+      </>
+      )}
 
       <label
         style={{

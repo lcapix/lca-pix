@@ -66,6 +66,8 @@ const COMPONENT_TYPES = {
 } as const
 
 interface EditFormData extends InspectorEditFormData {
+  /** A process template picked while creating the step (migrate-022/023). */
+  processTemplateId?: number
   processType?: string
   parentId?: string
   driverCategory?: string
@@ -695,7 +697,12 @@ export default function CaseViewPage() {
         const response = await apiRequest(`/api/cases/${caseId}/components`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(createPayload),
+          body: JSON.stringify({
+            ...createPayload,
+            // Every process in the library is a production step; the stage can
+            // still be changed on the step afterwards.
+            ...(fd.processTemplateId ? { life_cycle_stage: 'production' } : {}),
+          }),
         })
         const result = await response.json()
         if (!result.success) throw new Error(result.error || 'Failed to create component')
@@ -713,6 +720,18 @@ export default function CaseViewPage() {
           }
         }
         toast.success('Component created successfully')
+
+        // A process was picked while creating the step: open the library on it,
+        // with that process selected, so the next thing asked for is the driver
+        // quantity rather than a blank flow form.
+        if (fd.processTemplateId && typeof window !== 'undefined') {
+          const templateId = fd.processTemplateId
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent('lcapix:open-process-library', { detail: { templateId } }),
+            )
+          }, 400)
+        }
       }
 
       setIsCreating(false)
@@ -723,39 +742,80 @@ export default function CaseViewPage() {
   }
 
   // ---------- Delete (preserved, simplified for inspector button) ----------
-  const handleDeleteSelected = () => {
+  // Deleting a step has to reach the database. Until 2026-09-29 this only
+  // removed the node from the in-memory store, so the step vanished, the toast
+  // said "Component deleted", and it was back on the next reload — the same bug
+  // that was fixed for cases (finding #59) and missed for steps.
+  const handleDeleteSelected = async () => {
     if (!selectedNode) return
     const comp = components.find((c) => c.id === selectedNode)
     if (!comp) return
-    if (!confirm(`Delete "${comp.name}"? This action cannot be undone.`)) return
 
     const children = components.filter((c) => c.parentId === comp.id)
-    if (children.length > 0) {
-      const cascade = confirm(
-        `"${comp.name}" has ${children.length} child component(s). OK = cascade delete all, Cancel = convert children to floating components.`,
-      )
-      if (cascade) {
-        const deleteRecursively = (nodeId: string) => {
-          components
-            .filter((c) => c.parentId === nodeId)
-            .forEach((ch) => deleteRecursively(ch.id))
-          deleteComponentNode(nodeId)
+    const descendants: ComponentNode[] = []
+    const collect = (id: string) => {
+      components
+        .filter((c) => c.parentId === id)
+        .forEach((ch) => {
+          descendants.push(ch)
+          collect(ch.id)
+        })
+    }
+    collect(comp.id)
+
+    // Two steps, because this cannot be undone and it takes the flows, the
+    // costs and everything below the step with it.
+    const flowCount = [comp, ...descendants].reduce((n, c) => n + (c.flowCount ?? 0), 0)
+    const question = children.length
+      ? `Delete "${comp.name}" and the ${descendants.length} step(s) under it?\n\n` +
+        `This removes ${flowCount} flow(s) and their costs, and cannot be undone.`
+      : `Delete "${comp.name}"?\n\nThis removes ${comp.flowCount ?? 0} flow(s) and their costs, and cannot be undone.`
+    if (!confirm(question)) return
+
+    const typed = prompt(
+      `To confirm, type the step's name exactly:\n\n${comp.name}`,
+      '',
+    )
+    if (typed === null) return
+    if (typed.trim() !== comp.name.trim()) {
+      toast.error('Name did not match, so nothing was deleted')
+      return
+    }
+
+    // Children first: the rows below have to go before their parent, and a
+    // failure part-way leaves the tree consistent rather than orphaned.
+    const order = [...descendants.reverse(), comp]
+    const failed: string[] = []
+    for (const node of order) {
+      try {
+        const res = await apiRequest(`/api/components/${node.id}`, { method: 'DELETE' })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          failed.push(`${node.name}: ${body?.error ?? res.status}`)
         }
-        deleteRecursively(comp.id)
-        toast.success(`Deleted with ${children.length} child(ren)`)
-      } else {
-        children.forEach((ch) => updateComponentNode(ch.id, { parentId: null }))
-        deleteComponentNode(comp.id)
-        toast.success(`Deleted. ${children.length} child(ren) now floating`)
+      } catch (e: any) {
+        failed.push(`${node.name}: ${e?.message ?? 'request failed'}`)
       }
+    }
+
+    if (failed.length) {
+      toast.error(`Could not delete ${failed.length} step(s). ${failed[0]}`)
     } else {
-      deleteComponentNode(comp.id)
-      toast.success('Component deleted')
+      toast.success(
+        descendants.length
+          ? `Deleted "${comp.name}" and ${descendants.length} step(s) below it`
+          : `Deleted "${comp.name}"`,
+      )
     }
 
     setSelectedNode(null)
     setIsEditing(false)
     setEditFormData({})
+    // Re-read from the server, so what is on screen is what is stored.
+    setRefreshKey((k) => k + 1)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('lcapix:components-changed'))
+    }
   }
 
   // ---------- Render ----------
@@ -1518,6 +1578,26 @@ function CreateComponentBanner({
   onCancel: () => void
   components: ComponentNode[]
 }) {
+  // The process library, for naming a new step after what it actually does.
+  const [templates, setTemplates] = useState<
+    Array<{ template_id: number; template_name: string; driver_unit: string }>
+  >([])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const r = await apiRequest('/api/process-templates')
+        const d = await r.json().catch(() => ({}))
+        if (!cancelled) setTemplates(Array.isArray(d?.templates) ? d.templates : [])
+      } catch {
+        /* the picker simply does not appear */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const TYPE_OPTIONS = [
     { value: 'product', label: 'Product' },
     { value: 'machine_line', label: 'Machine/Line' },
@@ -1544,6 +1624,36 @@ function CreateComponentBanner({
           </option>
         ))}
       </select>
+      {(formData.processType === 'operation' || formData.processType === 'elemental_task') && (
+        <>
+          <label className="label">What kind of process is this?</label>
+          <select
+            className="input"
+            style={{ height: 32, fontSize: 13 }}
+            value={formData.processTemplateId ?? ''}
+            onChange={(e) => {
+              const id = e.target.value ? Number(e.target.value) : undefined
+              const picked = templates.find((t) => t.template_id === id)
+              onChange({
+                processTemplateId: id,
+                // Name the step after the process unless one is already typed.
+                ...(picked && !formData.processName?.trim()
+                  ? { processName: picked.template_name }
+                  : {}),
+              })
+            }}
+            title="The library says what a process of this kind consumes and in which unit. Picking one opens it on the new step so you can enter the driver quantity."
+          >
+            <option value="">— Optional: pick one and its flows are listed for you —</option>
+            {templates.map((t) => (
+              <option key={t.template_id} value={t.template_id}>
+                {t.template_name} (per {t.driver_unit})
+              </option>
+            ))}
+          </select>
+        </>
+      )}
+
       <label className="label">Name</label>
       <input
         className="input"

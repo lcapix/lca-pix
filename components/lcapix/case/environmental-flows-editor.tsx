@@ -102,6 +102,19 @@ export function EnvironmentalFlowsEditor({
   const [adding, setAdding] = useState(false)
   // The process library: what a step of this kind consumes, in driver units.
   const [libraryOpen, setLibraryOpen] = useState(false)
+  // A process picked while creating the step opens the library here, already on
+  // that process (dispatched by the case editor after the step is created).
+  const [libraryTemplateId, setLibraryTemplateId] = useState<number | null>(null)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent).detail?.templateId
+      setLibraryTemplateId(typeof id === 'number' ? id : null)
+      setAdding(true)
+      setLibraryOpen(true)
+    }
+    window.addEventListener('lcapix:open-process-library', onOpen)
+    return () => window.removeEventListener('lcapix:open-process-library', onOpen)
+  }, [])
   const [saving, setSaving] = useState(false)
   // In-place edit of an existing row's quantity/unit — a what-if is
   // "duplicate the case, tweak a few quantities, re-run"; without this the
@@ -735,7 +748,26 @@ export function EnvironmentalFlowsEditor({
         </div>
       )}
 
-      {/* Add-flow affordance */}
+      {/* Add-flow affordance. The process library used to be reachable only
+          from inside the add form, after opening it and before picking a
+          substance, which is three steps away from anybody who does not already
+          know it exists. It sits here instead, next to Add flow. */}
+      {!adding && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+            type="button"
+            onClick={() => {
+              setAdding(true)
+              setLibraryOpen(true)
+            }}
+            title="Pick the kind of process this step is: the library lists what it consumes and in which unit"
+          >
+            <Icon name="list" size={12} /> Process library
+          </button>
+        </div>
+      )}
       {!adding ? (
         <button
           className="btn btn-ghost btn-sm"
@@ -908,6 +940,7 @@ export function EnvironmentalFlowsEditor({
             {libraryOpen && (
               <ProcessLibrary
                 componentId={componentId}
+                initialTemplateId={libraryTemplateId}
                 onAdded={() => {
                   loadFlows()
                   if (typeof window !== 'undefined') {

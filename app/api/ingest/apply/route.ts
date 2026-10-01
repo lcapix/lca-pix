@@ -42,6 +42,12 @@ export async function POST(request: NextRequest) {
     const notes: string[] = Array.isArray(body.notes) ? body.notes : [];
 
     const targetCaseId = body.target_case_id ? parseInt(body.target_case_id) : null;
+    // Append mode: what the reviewer decided to do with each step the document
+    // describes — attach it to an existing step, create it, or skip it. Without
+    // this the hierarchy was dropped entirely, so re-importing a routing onto a
+    // live case added nothing (and creating blindly would have doubled it).
+    const nodeActions: Record<string, { action?: string; component_id?: number | null }> =
+      body.node_actions && typeof body.node_actions === 'object' ? body.node_actions : {};
     const attachComponentId = body.attach_component_id ? parseInt(body.attach_component_id) : null;
 
     // ── Append mode ──────────────────────────────────────────────────────────
@@ -66,7 +72,7 @@ export async function POST(request: NextRequest) {
       // part of this case. The body's attach_component_id is the default for
       // lines without one; a line with neither is held, never guessed.
       const caseComponents = await query<any>(
-        `SELECT component_id, component_name FROM component WHERE case_id = ?`,
+        `SELECT component_id, component_name, hierarchy_level FROM component WHERE case_id = ?`,
         [targetCaseId]
       );
       const nameById = new Map<number, string>(
@@ -97,13 +103,69 @@ export async function POST(request: NextRequest) {
         let applied = 0;
         let held = 0;
         const usedSteps = new Set<number>();
+
+        // Step 0: settle the steps themselves. idByName starts from what the
+        // case already has, so a flow naming a step the document shares with
+        // the case resolves without the reviewer picking anything.
+        const idByName = new Map<string, number>();
+        const levelById = new Map<number, number>();
+        for (const c of caseComponents as any[]) {
+          idByName.set(String(c.component_name).trim().toLowerCase(), Number(c.component_id));
+          levelById.set(Number(c.component_id), Number(c.hierarchy_level) || 1);
+        }
+        let stepsCreated = 0;
+        let stepsAttached = 0;
+
+        // Plan order, so a parent is created before the child that names it.
+        for (const n of nodes) {
+          const decision = nodeActions[n.name] ?? {};
+          const action = decision.action ?? 'skip';
+          if (action === 'attach' && decision.component_id && nameById.has(decision.component_id)) {
+            idByName.set(n.name.trim().toLowerCase(), decision.component_id);
+            stepsAttached++;
+            continue;
+          }
+          if (action !== 'create') continue;
+
+          const parentId = n.parent ? idByName.get(n.parent.trim().toLowerCase()) ?? null : null;
+          // Depth is the parent's depth plus one. Hard-coding it put every new
+          // step at level 2 regardless of where it actually sat.
+          const anchor = parentId ?? attachComponentId ?? null;
+          const level = anchor ? (levelById.get(anchor) ?? 1) + 1 : 1;
+          const [res] = await conn.query<any>(
+            `INSERT INTO component
+               (case_id, parent_component_id, component_name, component_type, hierarchy_level,
+                quantity, unit, description)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              targetCaseId,
+              parentId ?? attachComponentId ?? null,
+              n.name,
+              n.tier,
+              Math.max(1, level),
+              n.quantity ?? 1,
+              n.unit ?? 'unit',
+              n.description ?? null,
+            ]
+          );
+          const newId = Number(res.insertId);
+          idByName.set(n.name.trim().toLowerCase(), newId);
+          levelById.set(newId, Math.max(1, level));
+          nameById.set(newId, n.name);
+          stepsCreated++;
+        }
+
+        // A line names its step; that beats the default placement.
+        const stepForLine = (item: { node?: string; attach_component_id?: number | null }): number | null =>
+          (item.node ? idByName.get(item.node.trim().toLowerCase()) ?? null : null) ?? stepFor(item);
+
         for (const f of flows) {
           if (!f.substance_id) {
             held++;
             skippedFlows.push(`${f.substance_text}: no confirmed substance match`);
             continue;
           }
-          const target = stepFor(f);
+          const target = stepForLine(f as any);
           if (!target) {
             held++;
             skippedFlows.push(`${f.substance_text}: no step chosen`);
@@ -140,7 +202,7 @@ export async function POST(request: NextRequest) {
         const totals = new Map<string, number>(); // "componentId|column" -> amount
         for (const c of costs) {
           const col = COST_COLUMN[c.category];
-          const target = stepFor(c);
+          const target = stepForLine(c as any);
           if (!col) continue;
           if (!target) {
             skippedFlows.push(`${c.category} cost ${c.amount}: no step chosen`);
@@ -166,12 +228,22 @@ export async function POST(request: NextRequest) {
               SET description = LEFT(CONCAT(COALESCE(description, ''), ?), 2000)
             WHERE case_id = ?`,
           [
-            ` Added ${sourceDoc}: ${applied} flow(s) on ${usedSteps.size} step(s).`.slice(0, 900),
+            ` Added ${sourceDoc}: ${applied} flow(s) on ${usedSteps.size} step(s)` +
+              (stepsCreated ? `, ${stepsCreated} step(s) created` : '') +
+              (stepsAttached ? `, ${stepsAttached} matched to existing steps` : '') +
+              '.'.slice(0, 900),
             targetCaseId,
           ]
         );
 
-        return { applied, held, costCols: totals.size, steps: [...usedSteps] };
+        return {
+          applied,
+          held,
+          costCols: totals.size,
+          steps: [...usedSteps],
+          stepsCreated,
+          stepsAttached,
+        };
       });
 
       return NextResponse.json(
@@ -181,6 +253,8 @@ export async function POST(request: NextRequest) {
           case_id: targetCaseId,
           attach_component_id: attachComponentId,
           steps_used: appendResult.steps.map((id) => nameById.get(id)),
+          steps_created: appendResult.stepsCreated,
+          steps_matched: appendResult.stepsAttached,
           flows_applied: appendResult.applied,
           flows_held_for_review: appendResult.held,
           held_details: skippedFlows,

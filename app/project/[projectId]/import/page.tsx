@@ -20,6 +20,7 @@ import type { IngestPlan, MappedFlow, SubstanceCandidate } from '@/lib/ingest/ma
 import { placeableSteps, suggestPlacement } from '@/lib/ingest/placement'
 import { LIVE_DOC_TYPES, getDocType, LAYER_LABEL } from '@/lib/ingest/doc-types'
 import { SAMPLE_DOCS } from '@/lib/ingest/sample-docs'
+import { matchSteps } from '@/lib/ingest/step-match'
 
 function authHeaders(json = true): Record<string, string> {
   const h: Record<string, string> = json ? { 'Content-Type': 'application/json' } : {}
@@ -43,6 +44,17 @@ interface FlowEdit {
   /** User unit override (item 12a) — replaces the flow's unit on apply when set.
    * Lets a held "kg CO2e" be corrected to "kg" instead of being silently dropped. */
   unit?: string
+  /** Corrected quantity. A document can be wrong, or read wrong, and the review
+   * screen is the moment to fix it — not after the case exists. */
+  quantity?: string
+}
+
+/** Edits to a planned step: its name, what tier it is called, where it sits, how many. */
+interface NodeEdit {
+  name?: string
+  tier?: string
+  parent?: string | null
+  quantity?: string
 }
 
 // Roles a reviewer can assign to an unmapped column (item 3). 'ignore' drops it;
@@ -136,6 +148,10 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   const [plan, setPlan] = useState<IngestPlan | null>(null)
   const [caseName, setCaseName] = useState('')
   const [edits, setEdits] = useState<Record<number, FlowEdit>>({})
+  // Edits to the routing diagram itself. Keyed by the node's ORIGINAL name,
+  // which is also how flows and costs refer to it, so a rename can be applied
+  // to every reference in one pass.
+  const [nodeEdits, setNodeEdits] = useState<Record<string, NodeEdit>>({})
   const [error, setError] = useState<string | null>(null)
   // The sample document shown in a panel (View sample).
   const [sampleView, setSampleView] = useState<{ conn: string; filename: string; content: string } | null>(null)
@@ -147,13 +163,20 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   const [attachComponentId, setAttachComponentId] = useState<number | null>(null)
   const [projectCases, setProjectCases] = useState<Array<{ case_id: number; case_name: string }>>([])
   const [targetComponents, setTargetComponents] = useState<
-    Array<{ component_id: number; name: string; tier: string }>
+    Array<{ component_id: number; name: string; tier: string; parent_component_id?: number | null }>
   >([])
   const [completeness, setCompleteness] = useState<any>(null)
   // Routing: units per setup, so setup time is spread per unit (setup ÷ lot).
   const [lotSize, setLotSize] = useState('')
   // Appending: the step each line goes to (keyed by its document row), plus
   // why it was suggested. A BOM does not say which step uses a part.
+  // Appending a document that describes STEPS (a routing) onto a live case:
+  // each of its steps is matched against the case's own, and the reviewer
+  // decides — attach, create, or skip. Creating blindly is how a case ends up
+  // with two "70. Final assembly" and double the hours.
+  const [stepActions, setStepActions] = useState<
+    Record<string, { action: 'attach' | 'create' | 'skip'; component_id: number | null; reason: string }>
+  >({})
   const [placement, setPlacement] = useState<Record<string, number | null>>({})
   const [placementWhy, setPlacementWhy] = useState<
     Record<string, { confidence: number; reason: string }>
@@ -262,6 +285,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
           component_id: c.component_id ?? c.id,
           name: c.component_name ?? c.name,
           tier: c.component_type ?? c.tier ?? '',
+          parent_component_id: c.parent_component_id ?? null,
         }))
         setTargetComponents(comps)
         // No silent default: each line gets its own suggested step at review.
@@ -271,6 +295,34 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
       }
     })()
   }, [targetCaseId])
+
+  // Suggested matches, recomputed when the plan or the target case changes.
+  useEffect(() => {
+    if (!plan || targetCaseId === null || plan.nodes.length === 0) {
+      setStepActions({})
+      return
+    }
+    const matches = matchSteps(
+      plan.nodes.map((n) => ({ name: n.name, parent: n.parent })),
+      targetComponents.map((c) => ({
+        component_id: c.component_id,
+        component_name: c.name,
+        parent_component_id: c.parent_component_id ?? null,
+      })),
+    )
+    const next: Record<string, { action: 'attach' | 'create' | 'skip'; component_id: number | null; reason: string }> = {}
+    for (const m of matches) {
+      next[m.node] = {
+        action: m.suggested,
+        component_id: m.component_id,
+        reason:
+          m.reason === 'no match'
+            ? 'not in this case yet'
+            : `${m.reason} — ${m.component_name}`,
+      }
+    }
+    setStepActions(next)
+  }, [plan, targetCaseId, targetComponents])
 
   // A flow and the cost from the same document row share one placement.
   const flowKey = (f: MappedFlow, i: number) => f.provenance || `flow-${i}`
@@ -400,6 +452,54 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
       )
       return
     }
+    // The reviewer's edits to the routing diagram. A rename has to reach the
+    // node's children, its flows and its costs, or the apply would attach them
+    // to a name that no longer exists.
+    const renamed = new Map<string, string>()
+    for (const n of plan.nodes) {
+      const to = (nodeEdits[n.name]?.name ?? n.name).trim()
+      if (to && to !== n.name) renamed.set(n.name, to)
+    }
+    const finalName = (name: string | null | undefined) =>
+      name == null ? null : renamed.get(name) ?? name
+
+    const editedNodes = plan.nodes.map((n) => {
+      const ed = nodeEdits[n.name] ?? {}
+      const qty = ed.quantity !== undefined ? Number(ed.quantity) : n.quantity
+      return {
+        ...n,
+        name: finalName(n.name) as string,
+        tier: ed.tier ?? n.tier,
+        parent: finalName(ed.parent !== undefined ? ed.parent : n.parent),
+        quantity: Number.isFinite(qty as number) ? qty : n.quantity,
+      }
+    })
+
+    // Guard the three ways an edited tree can be nonsense.
+    const names = editedNodes.map((n) => n.name)
+    if (names.some((n) => !n.trim())) {
+      setError('Every step needs a name.')
+      return
+    }
+    const dupe = names.find((n, i) => names.indexOf(n) !== i)
+    if (dupe) {
+      setError(`Two steps are both called "${dupe}". Names have to be unique in a case.`)
+      return
+    }
+    const parentOf = new Map(editedNodes.map((n) => [n.name, n.parent ?? null]))
+    for (const n of editedNodes) {
+      const seen = new Set<string>([n.name])
+      let cur = parentOf.get(n.name) ?? null
+      while (cur) {
+        if (seen.has(cur)) {
+          setError(`"${n.name}" ends up inside itself. Check the parent you picked for it.`)
+          return
+        }
+        seen.add(cur)
+        cur = parentOf.get(cur) ?? null
+      }
+    }
+
     setPhase('applying')
     setError(null)
     try {
@@ -408,11 +508,22 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
         .filter(({ e }) => e?.include && e.substance_id !== null)
         .map(({ f, e, i }) => ({
           ...f,
+          node: finalName((f as any).node) ?? (f as any).node,
           attach_component_id: appending ? placement[flowKey(f, i)] ?? attachComponentId : undefined,
           substance_id: e.substance_id,
           substance_name: e.substance_name,
           // Item 12a: honor a reviewer's unit override (e.g. "kg CO2e" → "kg").
           unit: e.unit && e.unit.trim() ? e.unit.trim() : f.unit,
+          // A document can be wrong, or read wrong. The review screen is where
+          // that gets fixed, and the correction is recorded in the provenance.
+          quantity:
+            e.quantity !== undefined && e.quantity.trim() !== '' && Number.isFinite(Number(e.quantity))
+              ? Number(e.quantity)
+              : f.quantity,
+          provenance:
+            e.quantity !== undefined && e.quantity.trim() !== '' && Number(e.quantity) !== Number(f.quantity)
+              ? `${f.provenance ?? ''} · quantity corrected at review (document said ${f.quantity})`.trim()
+              : f.provenance,
         }))
       // Notes the reviewer kept (item 4), plus their unmapped-column role
       // decisions (item 3), so nothing is silently dropped and choices persist.
@@ -428,6 +539,16 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
         ? {
             target_case_id: targetCaseId,
             attach_component_id: attachComponentId,
+            // The steps the document describes, and what the reviewer decided
+            // about each: attach to an existing step, create it, or skip it.
+            nodes: editedNodes,
+            node_actions: Object.fromEntries(
+              editedNodes.map((n, idx) => {
+                const original = plan.nodes[idx].name
+                const d = stepActions[original] ?? { action: 'skip', component_id: null }
+                return [n.name, { action: d.action, component_id: d.component_id }]
+              }),
+            ),
             flows,
             costs: plan.costs.map((c, i) => ({
               ...c,
@@ -438,9 +559,9 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
         : {
             project_id: Number(projectId),
             case_name: caseName.trim() || plan.case_name,
-            nodes: plan.nodes,
+            nodes: editedNodes,
             flows,
-            costs: plan.costs,
+            costs: plan.costs.map((c) => ({ ...c, node: finalName((c as any).node) ?? (c as any).node })),
             notes: outNotes,
           }
       const r = await fetch('/api/ingest/apply', {
@@ -882,24 +1003,114 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
             >
               <div className="eyebrow" style={{ fontSize: 10, marginBottom: 10 }}>
                 HIERARCHY · {plan.nodes.length} NODES
-                {targetCaseId !== null ? ' (context — not created)' : ''}
+                {targetCaseId !== null ? ' · matched against the case' : ''}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                {targetCaseId === null
+                  ? 'Everything here is editable before it is created. The tier is a label, not a rule: put a step under whichever parent reflects how the plant actually runs.'
+                  : 'Each step below was matched against the steps this case already has. Attach keeps the existing step and adds to it; create makes a new one. Check the reason before you apply — this is where a second routing would otherwise duplicate every step.'}
               </div>
               {plan.nodes.map((n) => {
+                const ed = nodeEdits[n.name] ?? {}
+                const tier = ed.tier ?? n.tier
                 const depth =
-                  n.tier === 'product' ? 0 : n.tier === 'machine_line' ? 1 : n.tier === 'subprocess' ? 2 : n.tier === 'operation' ? 3 : 4
+                  tier === 'product' ? 0 : tier === 'machine_line' ? 1 : tier === 'subprocess' ? 2 : tier === 'operation' ? 3 : 4
+                const setNode = (patch: NodeEdit) =>
+                  setNodeEdits({ ...nodeEdits, [n.name]: { ...ed, ...patch } })
                 return (
                   <div
                     key={n.name}
-                    style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '3px 0', marginLeft: depth * 22, fontSize: 12.5 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', marginLeft: depth * 18, fontSize: 12.5 }}
                   >
-                    <span className="chip" style={{ fontSize: 9, padding: '1px 7px' }}>
-                      {TIER_LABEL[n.tier]}
-                    </span>
-                    <span style={{ color: 'var(--text-primary)' }}>{n.name}</span>
+                    <select
+                      className="input"
+                      style={{ height: 24, fontSize: 10.5, width: 112 }}
+                      value={tier}
+                      onChange={(e) => setNode({ tier: e.target.value })}
+                      title="What this level is called. Nomenclature only — it does not change the maths."
+                    >
+                      {Object.entries(TIER_LABEL).map(([v, label]) => (
+                        <option key={v} value={v}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      className="input"
+                      style={{ height: 24, fontSize: 12, flex: 1, minWidth: 120 }}
+                      value={ed.name ?? n.name}
+                      onChange={(e) => setNode({ name: e.target.value })}
+                      title="The step's name. Renaming it here keeps every flow and cost attached to it."
+                    />
+                    <select
+                      className="input"
+                      style={{ height: 24, fontSize: 10.5, width: 150 }}
+                      value={(ed.parent ?? n.parent) ?? ''}
+                      onChange={(e) => setNode({ parent: e.target.value || null })}
+                      title="Which step this one sits under."
+                    >
+                      <option value="">— no parent (top) —</option>
+                      {plan.nodes
+                        .filter((o) => o.name !== n.name)
+                        .map((o) => (
+                          <option key={o.name} value={o.name}>
+                            {nodeEdits[o.name]?.name ?? o.name}
+                          </option>
+                        ))}
+                    </select>
                     {n.quantity != null && (
-                      <span className="mono" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                        {Number(n.quantity).toLocaleString()} {n.unit}
-                      </span>
+                      <>
+                        <input
+                          className="input mono"
+                          style={{ height: 24, fontSize: 11, width: 78 }}
+                          value={ed.quantity ?? String(n.quantity)}
+                          onChange={(e) => setNode({ quantity: e.target.value })}
+                          inputMode="decimal"
+                          title="How many this step makes or handles."
+                        />
+                        <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{n.unit}</span>
+                      </>
+                    )}
+                    {targetCaseId !== null && (
+                      <>
+                        <select
+                          className="input"
+                          style={{ height: 24, fontSize: 10.5, width: 190 }}
+                          value={
+                            stepActions[n.name]?.action === 'attach'
+                              ? `attach:${stepActions[n.name]?.component_id}`
+                              : stepActions[n.name]?.action ?? 'skip'
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setStepActions({
+                              ...stepActions,
+                              [n.name]: v.startsWith('attach:')
+                                ? {
+                                    action: 'attach',
+                                    component_id: Number(v.split(':')[1]),
+                                    reason: 'chosen by you',
+                                  }
+                                : {
+                                    action: v as 'create' | 'skip',
+                                    component_id: null,
+                                    reason: 'chosen by you',
+                                  },
+                            })
+                          }}
+                        >
+                          <option value="create">Create this step</option>
+                          <option value="skip">Skip it</option>
+                          {targetComponents.map((c) => (
+                            <option key={c.component_id} value={`attach:${c.component_id}`}>
+                              Attach to: {c.name}
+                            </option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
+                          {stepActions[n.name]?.reason ?? ''}
+                        </span>
+                      </>
                     )}
                   </div>
                 )
@@ -960,9 +1171,28 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                           </td>
                           <td style={{ padding: '8px', textTransform: 'uppercase', fontSize: 10.5 }}>{f.direction}</td>
                           <td style={{ padding: '8px' }}>
-                            <span className="mono">
-                              {Number(f.quantity).toLocaleString()} {f.unit}
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                className="input mono"
+                                style={{ height: 24, fontSize: 11, width: 92 }}
+                                value={e.quantity ?? String(f.quantity)}
+                                onChange={(ev) =>
+                                  setEdits({ ...edits, [i]: { ...e, quantity: ev.target.value } })
+                                }
+                                inputMode="decimal"
+                                title="What the document said. Correct it here if it was read wrong; the original is kept in the provenance."
+                              />
+                              <span className="mono" style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                                {e.unit?.trim() || f.unit}
+                              </span>
                             </span>
+                            {e.quantity !== undefined &&
+                              e.quantity.trim() !== '' &&
+                              Number(e.quantity) !== Number(f.quantity) && (
+                                <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                                  document said {Number(f.quantity).toLocaleString()}
+                                </div>
+                              )}
                             {f.conversion_note && (
                               <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
                                 {f.conversion_note}

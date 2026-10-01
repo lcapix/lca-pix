@@ -44,16 +44,19 @@ type Template = {
 
 export function ProcessLibrary({
   componentId,
+  initialTemplateId = null,
   onAdded,
   onClose,
 }: {
   componentId: string
+  /** Preselected when the step was created with a process already chosen. */
+  initialTemplateId?: number | null
   onAdded: () => void
   onClose: () => void
 }) {
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
-  const [pickedId, setPickedId] = useState<number | null>(null)
+  const [pickedId, setPickedId] = useState<number | null>(initialTemplateId)
   const [driverQty, setDriverQty] = useState('')
   const [amounts, setAmounts] = useState<Record<number, string>>({})
   const [saving, setSaving] = useState(false)
@@ -71,6 +74,10 @@ export function ProcessLibrary({
       }
     })()
   }, [])
+
+  useEffect(() => {
+    if (initialTemplateId) setPickedId(initialTemplateId)
+  }, [initialTemplateId])
 
   const picked = useMemo(
     () => templates.find((t) => t.template_id === pickedId) ?? null,
