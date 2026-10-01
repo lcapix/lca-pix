@@ -5,6 +5,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /** Spinners and skeletons the app shows while data loads. */
 const LOADING = ['.animate-spin', '.skeleton', '[aria-busy="true"]'].join(', ');
+const LOADING_TEXT = /^\s*Loading\b[^.…]{0,40}(…|\.\.\.)\s*$/;
 
 /** In-flight /api requests per page (settle() waits for them). */
 const inflight = new WeakMap<Page, Set<string>>();
@@ -40,6 +41,12 @@ export async function settle(page: Page, opts: { timeout?: number } = {}): Promi
         .locator(LOADING)
         .filter({ visible: true })
         .count()
+        .catch(() => 0)) > 0 ||
+      // Text placeholders such as "Loading case…" (app/project/[projectId]/page.tsx).
+      (await page
+        .getByText(LOADING_TEXT)
+        .filter({ visible: true })
+        .count()
         .catch(() => 0)) > 0;
     if (busy) quietSince = 0;
     else if (!quietSince) quietSince = Date.now();
@@ -65,6 +72,14 @@ export async function waitForStableLayout(page: Page, timeout = 10_000): Promise
         const stage = document.querySelector('[data-testid="tree-canvas-stage"]') as HTMLElement | null;
         const sig = [
           stage ? getComputedStyle(stage).transform : '',
+          // Node positions, so the Graph view (its own stage) also has to stop moving.
+          Array.from(document.querySelectorAll('[data-node-id]'))
+            .slice(0, 60)
+            .map((el) => {
+              const r = (el as HTMLElement).getBoundingClientRect();
+              return `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)}`;
+            })
+            .join(';'),
           document.documentElement.scrollHeight,
           document.documentElement.scrollWidth,
           document.getElementsByTagName('*').length,

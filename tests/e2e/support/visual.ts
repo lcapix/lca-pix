@@ -59,9 +59,36 @@ export async function refitCanvas(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Server timestamps (a run made at 2:02 PM, or at 10:47 PM) are masked, but a
+ * mask is as wide as its text and digits are not all the same width, so the
+ * layout still moved with the time of day. Rewrite every date and clock time
+ * in the page to one fixed value before the capture; the masks then cover
+ * boxes of the same size on every run.
+ */
+async function normalizeVolatileText(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const rules: Array<[RegExp, string]> = [
+      [/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)([a-z]*\.?) \d{1,2}\b/g, 'Jan$2 1'],
+      [/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, '1/1/2026'],
+      [/\b20\d{2}-\d{2}-\d{2}\b/g, '2026-01-01'],
+      [/\b\d{1,2}:\d{2}:\d{2}(\s?[AP]M)?\b/g, '12:00:00$1'],
+      [/\b\d{1,2}:\d{2}(\s?[AP]M)?\b/g, '12:00$1'],
+    ];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const before = n.nodeValue ?? '';
+      let after = before;
+      for (const [re, to] of rules) after = after.replace(re, to);
+      if (after !== before) n.nodeValue = after;
+    }
+  });
+}
+
 export async function snap(page: Page, name: string, target?: Locator): Promise<void> {
   await settle(page);
   await refitCanvas(page);
+  await normalizeVolatileText(page);
   if (target) {
     await expect(target).toHaveScreenshot(`${name}.png`, { mask: volatileMasks(page), timeout: 30_000 });
     return;
