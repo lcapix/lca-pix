@@ -69,12 +69,11 @@ describe('F9 run an assessment -> results', () => {
     expect(one.json.results_source).toBe('snapshot');
   });
 
-  // BUG (app/api/cases/[caseId]/assessments/route.ts:102 orders by run_date
-  // only; run_date has one-second precision): runs made in the same second
-  // come back in no defined order (oldest first on MySQL 9.6), and the results
-  // page, which shows assessments[0] as "LATEST RUN", can show an older one.
-  // The compare route already breaks the tie with run_id DESC. Low severity.
-  it.fails('lists the newest run first even when runs share a second', async () => {
+  // Fixed: run_date has one-second precision, so runs made in the same second
+  // used to come back in no defined order (oldest first on MySQL 9.6) and the
+  // results page, which shows assessments[0] as "LATEST RUN", could show an
+  // older one. Every "latest run" query now breaks the tie with run_id DESC.
+  it('lists the newest run first even when runs share a second', async () => {
     const t = w.users.owner.token;
     const ids: number[] = [];
     for (let i = 0; i < 5; i++) ids.push((await api.post(`/api/cases/${w.P.base.id}/assessments`, { token: t, json: {} })).json.run_id);

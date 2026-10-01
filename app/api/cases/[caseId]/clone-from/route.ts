@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
@@ -19,7 +20,9 @@ export async function POST(
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
     const targetCaseId = parseId(caseIdParam);
-    const { sourceCaseId } = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { sourceCaseId } = json.body;
 
     if (!sourceCaseId || isNaN(targetCaseId)) {
       return NextResponse.json(

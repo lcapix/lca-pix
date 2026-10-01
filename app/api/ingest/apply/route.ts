@@ -13,11 +13,14 @@
  * are skipped and reported the same way (mirrors the save-time unit guard).
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, decimalMax, fitToColumn, isOutOfRangeError } from '@/lib/field-limits';
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { convertQuantity } from '@/lib/units';
+import { findUsableSubstance, SUBSTANCE_ERROR } from '@/lib/flow-fields';
 import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
 import type { MappedFlow } from '@/lib/ingest/maplca';
 import { nodeDepths, validateProcessModel } from '@/lib/ingest/schema';
@@ -45,16 +48,28 @@ const costColumn = (category: unknown): string | undefined =>
 const id = z.union([z.number().int().positive(), z.string().regex(/^\d+$/).transform(Number)]);
 const optionalId = z.union([id, z.null(), z.literal('')]).optional().transform((v) => (v ? v : null));
 const text = (max: number) => z.string().max(max);
-const provenance = z.object({ doc: z.string(), locator: z.string().optional(), snippet: z.string().optional() }).passthrough();
+// Strings stored in a column are capped at the column's size (lib/field-limits.ts):
+// a longer one is a 400 naming the field, never a failure inside the transaction.
+const K = COLUMN_LIMITS.component;
+// Numbers likewise: a node quantity is DECIMAL(15,6), a cost DECIMAL(15,2),
+// labour hours DECIMAL(10,4). (Several lines summed onto one step can still
+// overflow; the transaction rolls back and the route answers 400.)
+const bounded = (max: number) => z.number().finite().min(-max).max(max);
+const QTY_MAX = decimalMax(K.quantity);
+const COST_MAX = decimalMax(K.labor_cost);
+const HOURS_MAX = decimalMax(K.labor_hours);
+const provenance = z
+  .object({ doc: z.string().max(1000), locator: z.string().max(1000).optional(), snippet: z.string().max(5000).optional() })
+  .passthrough();
 
 const nodeSchema = z
   .object({
-    name: text(255).min(1),
+    name: text(K.component_name.max).min(1),
     tier: z.enum(['product', 'machine_line', 'subprocess', 'operation', 'elemental_task']),
-    parent: text(255).nullable(),
+    parent: text(K.component_name.max).nullable(),
     description: z.string().max(5000).nullable().optional(),
-    quantity: z.number().finite().nullable().optional(),
-    unit: text(64).nullable().optional(),
+    quantity: bounded(QTY_MAX).nullable().optional(),
+    unit: text(K.unit.max).nullable().optional(),
     provenance: provenance.optional(),
   })
   .passthrough();
@@ -66,7 +81,7 @@ const flowSchema = z
     substance_id: z.number().int().positive().nullable().optional(),
     direction: z.enum(['input', 'output']),
     quantity: z.number().finite(),
-    unit: text(64),
+    unit: text(COLUMN_LIMITS.flows.unit.max),
     provenance: z.string().max(1000).nullable().optional(),
     attach_component_id: optionalId,
   })
@@ -76,9 +91,9 @@ const costSchema = z
   .object({
     node: text(255).optional().default(''),
     category: z.enum(['labor', 'energy', 'material', 'transportation', 'opex', 'capex']),
-    amount: z.number().finite().nullable(),
-    hours: z.number().finite().nullable().optional(),
-    occupation: text(32).nullable().optional(),
+    amount: bounded(COST_MAX).nullable(),
+    hours: bounded(HOURS_MAX).nullable().optional(),
+    occupation: text(K.labor_occupation.max).nullable().optional(),
     provenance: provenance.nullable().optional(),
     attach_component_id: optionalId,
   })
@@ -86,7 +101,7 @@ const costSchema = z
 
 const bodySchema = z.object({
   project_id: optionalId,
-  case_name: z.string().max(255).optional().default(''),
+  case_name: z.string().max(COLUMN_LIMITS.case_table.case_name.max).optional().default(''),
   nodes: z.array(nodeSchema).max(5000).optional().default([]),
   flows: z.array(flowSchema).max(20000).optional().default([]),
   costs: z.array(costSchema).max(20000).optional().default([]),
@@ -94,6 +109,33 @@ const bodySchema = z.object({
   target_case_id: optionalId,
   attach_component_id: optionalId,
 });
+
+/**
+ * The factor unit of every substance the plan's flows name, provided the caller
+ * may use each one: a library substance or a custom one they created (security
+ * audit L3, the ingest twin of FLOW-5). Another user's private substance, or an
+ * id that does not exist, refuses the whole plan with 400 before anything is
+ * written, and the substance's name is never echoed.
+ */
+async function usableSubstanceUnits(
+  flows: Array<{ substance_id?: number | null }>,
+  userId: number,
+): Promise<{ ok: true; units: Map<number, string | null> } | { ok: false; response: NextResponse }> {
+  const units = new Map<number, string | null>();
+  for (const [i, f] of flows.entries()) {
+    const sid = f.substance_id;
+    if (!sid || units.has(sid)) continue;
+    const row = await findUsableSubstance(sid, userId);
+    if (!row) {
+      return {
+        ok: false,
+        response: NextResponse.json({ error: `Flow ${i + 1}: ${SUBSTANCE_ERROR}` }, { status: 400 }),
+      };
+    }
+    units.set(sid, row.default_unit ?? null);
+  }
+  return { ok: true, units };
+}
 
 function invalid(error: z.ZodError) {
   const issue = error.issues[0];
@@ -104,13 +146,9 @@ function invalid(error: z.ZodError) {
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
-    let raw: unknown;
-    try {
-      raw = await request.json();
-    } catch {
-      return NextResponse.json({ error: 'Body must be JSON' }, { status: 400 });
-    }
-    const parsed = bodySchema.safeParse(raw);
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const parsed = bodySchema.safeParse(json.body);
     if (!parsed.success) return invalid(parsed.error);
     const body = parsed.data;
 
@@ -162,13 +200,11 @@ export async function POST(request: NextRequest) {
         return attachComponentId && nameById.has(attachComponentId) ? attachComponentId : null;
       };
 
-      // Factor-unit lookup for the unit guard (same discipline as create mode).
-      const substanceIds = [...new Set(flows.map((f) => f.substance_id).filter(Boolean))] as number[];
-      const unitBySubstance = new Map<number, string | null>();
-      for (const sid of substanceIds) {
-        const row = await queryOne<any>(`SELECT unit FROM substances WHERE substance_id = ?`, [sid]);
-        unitBySubstance.set(sid, row?.unit ?? null);
-      }
+      // Factor-unit lookup for the unit guard (same discipline as create mode),
+      // over substances the caller may use only (L3).
+      const usable = await usableSubstanceUnits(flows, userId);
+      if (!usable.ok) return usable.response;
+      const unitBySubstance = usable.units;
 
       const skippedFlows: string[] = [];
       const appendResult = await transaction(async (conn) => {
@@ -296,13 +332,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Factor-unit lookup for the unit guard, outside the transaction.
-    const substanceIds = [...new Set(flows.map((f) => f.substance_id).filter(Boolean))] as number[];
-    const unitBySubstance = new Map<number, string | null>();
-    for (const sid of substanceIds) {
-      const row = await queryOne<any>(`SELECT unit FROM substances WHERE substance_id = ?`, [sid]);
-      unitBySubstance.set(sid, row?.unit ?? null);
-    }
+    // Factor-unit lookup for the unit guard, outside the transaction, over
+    // substances the caller may use only (L3).
+    const usable = await usableSubstanceUnits(flows, userId);
+    if (!usable.ok) return usable.response;
+    const unitBySubstance = usable.units;
 
     const skippedFlows: string[] = [];
 
@@ -322,7 +356,9 @@ export async function POST(request: NextRequest) {
           [projectId, uniqueName, ...onlyReachable.params]
         );
         if (!taken) break;
-        uniqueName = `${caseName} (${n})`;
+        // The number is added here, so the base is cut to leave room for it.
+        const suffix = ` (${n})`;
+        uniqueName = `${fitToColumn(caseName, { kind: 'chars', max: COLUMN_LIMITS.case_table.case_name.max - suffix.length })}${suffix}`;
       }
       const [caseIns]: any = await conn.query(
         `INSERT INTO case_table (project_id, created_by, case_name, case_type, description)
@@ -477,6 +513,14 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (isOutOfRangeError(error)) {
+      // Costs or hours that fit one by one but not once added onto a step.
+      // The transaction rolled back: nothing was imported.
+      return NextResponse.json(
+        { error: 'A cost or hours value in the plan is too large to store once added up on its step. Nothing was imported.' },
+        { status: 400 }
+      );
     }
     console.error('Ingest apply error:', error);
     return NextResponse.json({ error: 'Failed to apply ingestion plan' }, { status: 500 });

@@ -1,5 +1,6 @@
 // app/api/integrations/electricity/sync/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { z } from 'zod';
 import { guardAdmin } from '@/lib/integrations/admin-guard';
 import { syncZoneFactor } from '@/lib/integrations/electricity-maps/sync';
@@ -28,7 +29,9 @@ export async function POST(request: NextRequest) {
   if (guard.response) return guard.response;
   const userId = guard.userId;
 
-  const parsed = Body.safeParse(await request.json().catch(() => ({})));
+  const json = await readJson(request);
+  if (!json.ok) return json.response;
+  const parsed = Body.safeParse(json.body);
   if (!parsed.success) {
     // Emit the zod issues so callers can see which field is wrong (was generic "Invalid body").
     return NextResponse.json({ error: 'Invalid body', issues: parsed.error.issues }, { status: 400 });

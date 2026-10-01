@@ -10,11 +10,13 @@
  * Assessment runs are NOT copied: they are the original case's history.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, fitToColumn, lengthError } from '@/lib/field-limits';
 
 export async function POST(
   request: NextRequest,
@@ -50,10 +52,17 @@ export async function POST(
       );
     }
 
-    let body: any = {};
-    try { body = await request.json(); } catch { /* empty body is fine */ }
-    const askedName = typeof body.case_name === 'string' ? body.case_name.trim().slice(0, 255) : '';
-    const newName: string = askedName || `${sourceCase.case_name} (Copy)`;
+    // The body is optional (Duplicate with the default name sends none).
+    const json = await readJson(request, { optional: true });
+    if (!json.ok) return json.response;
+    const body = json.body;
+    const C = COLUMN_LIMITS.case_table;
+    const askedName = typeof body.case_name === 'string' ? body.case_name.trim() : '';
+    const nameError = lengthError('Case name', askedName, C.case_name);
+    if (nameError) return NextResponse.json({ error: nameError }, { status: 400 });
+    // The default name is composed here, so it is cut to fit rather than refused.
+    const newName: string =
+      askedName || `${fitToColumn(sourceCase.case_name, { kind: 'chars', max: C.case_name.max - ' (Copy)'.length })} (Copy)`;
 
     // Only among the cases the caller reaches (B-A1), as on create.
     const only = await reachableCasesFilter(userId, sourceCase.project_id, 'case_table');
@@ -81,9 +90,12 @@ export async function POST(
           userId,
           newName,
           newType,
-          sourceCase.description
-            ? `${sourceCase.description} [duplicated from "${sourceCase.case_name}"]`
-            : `Duplicated from "${sourceCase.case_name}"`,
+          fitToColumn(
+            sourceCase.description
+              ? `${sourceCase.description} [duplicated from "${sourceCase.case_name}"]`
+              : `Duplicated from "${sourceCase.case_name}"`,
+            C.description,
+          ),
           sourceCase.region_code ?? null,
         ]
       );

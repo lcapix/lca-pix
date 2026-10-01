@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { insert, exists } from '@/lib/db-helpers';
 import {
   hashPassword,
@@ -29,12 +30,9 @@ function bad(error: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    let body: any;
-    try {
-      body = await request.json();
-    } catch {
-      return bad('Email and password are required');
-    }
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const { email, password } = body ?? {};
     const fullNameRaw = body?.full_name;
 

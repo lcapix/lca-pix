@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
@@ -16,6 +17,7 @@ import {
 } from '@/lib/component-fields';
 import type { TreeRow } from '@/lib/component-tree';
 import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 
 const ALLOCATION_METHODS = ['none', 'physical', 'economic', 'system_expansion'];
 
@@ -90,7 +92,9 @@ export async function PUT(
     const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Component not found' });
     if (denied) return denied;
 
-    const body = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const {
       component_name,
       component_type,
@@ -121,6 +125,14 @@ export async function PUT(
       ) {
         throw new BadRequest('Component name must be 1 to 200 characters');
       }
+      const K = COLUMN_LIMITS.component;
+      const tooLong = firstLengthError([
+        ['Description', body.component_description ?? body.description, K.description],
+        ['Process type', process_type, K.process_type],
+        ['Driver category', driver_category, K.driver_category],
+        ['Driver type', driver_type, K.driver_type],
+      ]);
+      if (tooLong) throw new BadRequest(tooLong);
       if (quantity !== undefined && quantity !== null && quantity !== '') {
         quantityValue = nonNegative('quantity', quantity);
         const type = component_type ?? existing.component_type;
@@ -142,7 +154,7 @@ export async function PUT(
         }
         coreClears.push(['unit', typeof u === 'string' && u.trim() ? u.trim() : null]);
       }
-      for (const col of ['opex', 'capex']) {
+      for (const col of ['opex', 'capex'] as const) {
         if (has(body, col)) coreClears.push([col, nonNegative(col, body[col])]);
       }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
@@ -99,7 +100,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const g = await guard(request, p, 'admin');
     if (g.error) return g.error;
 
-    const body = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const email = String(body?.email ?? '').trim().toLowerCase();
     const role = (String(body?.role ?? 'viewer').toLowerCase() as Role);
 

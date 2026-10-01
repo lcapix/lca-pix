@@ -51,19 +51,27 @@ describe('POST /api/cases/:id/assessments when the run fails (RUN-3)', () => {
     const res = await POST(req({ calculation_method: 'CML 2001', region_code: 'Global' }) as any, params as any);
     expect(res.status).toBe(500);
 
+    const body = await res.json();
+    // L1: a generic message and a request id; the engine's message stays in
+    // the server log, and the stored run (readable by every member) names the
+    // request, not the error.
+    expect(body).toEqual({ error: 'Failed to run assessment', request_id: expect.stringMatching(/^[0-9a-f-]{36}$/), run_id: 78, status: 'failed' });
+    expect(JSON.stringify(body)).not.toContain('engine exploded');
+
     const failed = vi.mocked(db.insert).mock.calls.find(([sql]) => /'failed'/.test(sql));
     expect(failed).toBeTruthy();
-    expect(failed![1]).toEqual(expect.arrayContaining([3, 'CML 2001', 'Global', 'engine exploded', 1]));
-
-    const body = await res.json();
-    expect(body).toMatchObject({ error: 'Failed to run assessment', details: 'engine exploded', run_id: 78, status: 'failed' });
+    expect(failed![1]).toEqual(expect.arrayContaining([3, 'CML 2001', 'Global', 1]));
+    const errorLog = (failed![1] as unknown[]).find((v) => typeof v === 'string' && v.includes('request'));
+    expect(errorLog).toContain(body.request_id);
+    expect(errorLog).not.toContain('engine exploded');
   });
 
   it('still answers 500 when recording the failure fails too', async () => {
     vi.mocked(db.insert).mockRejectedValue(new Error('db down'));
     const res = await POST(req({ calculation_method: 'CML 2001' }) as any, params as any);
     expect(res.status).toBe(500);
-    expect((await res.json()).details).toBe('engine exploded');
+    const body = await res.json();
+    expect(body).toEqual({ error: 'Failed to run assessment', request_id: expect.any(String) });
   });
 });
 

@@ -60,13 +60,21 @@ describe('F8 costs', () => {
     }
   });
 
-  // BUG (FLOW-2 follow-up; lib/component-fields.ts:32-37 nonNegative accepts any
-  // finite number, and the cost columns are DECIMAL(15,2)): a cost above
-  // 9,999,999,999,999.99 fails in MySQL ("Out of range value") and the route
-  // answers 500 "Failed to update component" instead of 400.
-  it.fails('a cost larger than its column gets 400, not 500', async () => {
-    const r = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json: { labor_cost: 1e20 } });
-    expect(r.status).toBe(400);
+  // Fixed (FLOW-2 follow-up): lib/component-fields.ts checks every number
+  // against its DECIMAL column (costs DECIMAL(15,2), hours DECIMAL(10,4)), so a
+  // value MySQL would refuse as "Out of range" is a 400 naming the field.
+  it('a cost larger than its column gets 400, not 500', async () => {
+    const before = await costsOf(w.P.base.op);
+    for (const json of [{ labor_cost: 1e20 }, { opex: 1e13 }, { labor_hours: 1e6 }]) {
+      const r = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json });
+      expect(r.status, JSON.stringify(json)).toBe(400);
+      expect(r.json.error).toMatch(new RegExp(`${Object.keys(json)[0]} must be at most`));
+    }
+    expect(await costsOf(w.P.base.op)).toEqual(before);
+    // The column's largest value is accepted.
+    const max = await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json: { overhead_cost: 9999999999999.99 } });
+    expect(max.status, max.text).toBe(200);
+    await api.put(`/api/components/${w.P.base.op}`, { token: w.users.editor.token, json: { overhead_cost: before.overhead_cost } });
   });
 
   it('F8.4/F8.7 an ordinary user looks up a state wage, an energy price and a metal price (D6)', async () => {
@@ -148,19 +156,36 @@ describe('F8 costs', () => {
     }
   });
 
-  // BUG COST-7 (app/api/cases/[caseId]/scale/route.ts:53 scales by the
-  // client's from/to, not by the stored product quantity): replaying the same
-  // "1 -> 2" request (a retry, a double click) scales the inventory twice.
-  it.fails('replaying a scale request does not scale twice (COST-7)', async () => {
+  // COST-7 (fixed): the route compares the client's `from` with the stored
+  // product quantity under a row lock, so a replayed "1 -> 2" (a retry, a
+  // double click) is refused with 409 instead of scaling the inventory twice.
+  it('replaying a scale request does not scale twice (COST-7)', async () => {
     const copy = await w.fresh.caseCopy();
     const sum = async () =>
       Number(
         (await sqlOne('SELECT SUM(f.quantity) AS q FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?', [copy])).q,
       );
     const before = await sum();
+    const statuses: number[] = [];
     for (let i = 0; i < 2; i++) {
-      await api.post(`/api/cases/${copy}/scale`, { token: w.users.editor.token, json: { from: 1, to: 2, mode: 'scale-inputs' } });
+      const r = await api.post(`/api/cases/${copy}/scale`, { token: w.users.editor.token, json: { from: 1, to: 2, mode: 'scale-inputs' } });
+      statuses.push(r.status);
+      if (i === 1) expect(r.json.error).toMatch(/changed since/i);
     }
+    expect(statuses).toEqual([200, 409]);
     expect(await sum()).toBeCloseTo(before * 2, 9);
+  });
+
+  it('two scale requests at once apply exactly one (row lock)', async () => {
+    const copy = await w.fresh.caseCopy();
+    const sum = async () =>
+      Number(
+        (await sqlOne('SELECT SUM(f.quantity) AS q FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?', [copy])).q,
+      );
+    const before = await sum();
+    const send = () => api.post(`/api/cases/${copy}/scale`, { token: w.users.editor.token, json: { from: 1, to: 3, mode: 'scale-inputs' } });
+    const statuses = (await Promise.all([send(), send(), send()])).map((r) => r.status).sort();
+    expect(statuses).toEqual([200, 409, 409]);
+    expect(await sum()).toBeCloseTo(before * 3, 9);
   });
 });

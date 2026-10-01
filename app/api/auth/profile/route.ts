@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { readJson } from "@/lib/http"
+import { COLUMN_LIMITS, firstLengthError } from "@/lib/field-limits"
 import { requireAuth } from "@/lib/auth"
 import { isAuthError } from "@/lib/route-guard"
 import { query, execute } from "@/lib/db-helpers"
@@ -73,7 +75,9 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const userId = await requireAuth(request)
-    const body = await request.json().catch(() => ({}))
+    const json = await readJson(request)
+    if (!json.ok) return json.response
+    const body = json.body
 
     const fullName = trimOrNull(body.fullName)
     const company = trimOrNull(body.company)
@@ -92,6 +96,18 @@ export async function PUT(request: NextRequest) {
         { error: "Company / organization is required." },
         { status: 400 },
       )
+    }
+    // PROF-1: each value must fit its column (strict mode refuses a longer one).
+    const A = COLUMN_LIMITS.account
+    const tooLong = firstLengthError([
+      ["Full name", fullName, A.full_name],
+      ["Company / organization", company, A.company],
+      ["Role", role, A.role],
+      ["Use case", useCase, A.use_case],
+      ["Country", country, A.country],
+    ])
+    if (tooLong) {
+      return NextResponse.json({ error: tooLong }, { status: 400 })
     }
     if (useCase && !ALLOWED_USE_CASES.has(useCase)) {
       return NextResponse.json(

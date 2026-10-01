@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
@@ -93,7 +95,9 @@ export async function POST(
 
     // Prod schema: the flows table columns are flow_type / quantity (NOT
     // direction / amount). Accept either key from the client for resilience.
-    const body = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const substance_id = body.substance_id;
     const flow_type = body.flow_type ?? body.direction;
     const rawQuantity = body.quantity ?? body.amount;
@@ -110,6 +114,13 @@ export async function POST(
     if (!['input', 'output'].includes(flow_type)) {
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
+    const F = COLUMN_LIMITS.flows;
+    const tooLong = firstLengthError([
+      ['Unit', unit, F.unit],
+      ['Driver description', driver_description, F.driver_description],
+      ['Transport mode', body.transport_mode, F.transport_mode],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
     // FLOW-4: null, words, NaN and negatives used to reach MySQL or the engine.
     const quantity = parseFlowQuantity(rawQuantity);
@@ -139,6 +150,16 @@ export async function POST(
       }
     }
 
+    // A transport leg's distance is DECIMAL(18,3): checked before the flow is written.
+    const legMass = Number(body.transport_mass_kg);
+    const legKm = Number(body.transport_distance_km);
+    if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > decimalMax(F.transport_distance_km)) {
+      return NextResponse.json(
+        { error: `transport_distance_km must be at most ${decimalMax(F.transport_distance_km)}` },
+        { status: 400 }
+      );
+    }
+
     // Bug #9: default is_driver to TRUE so new flows count in assessments.
     const flowId = await insert(
       `INSERT INTO flows
@@ -149,8 +170,6 @@ export async function POST(
 
     // What a transport leg was computed from (migrate-022). Its own statement,
     // so a database without the columns still records the flow itself.
-    const legMass = Number(body.transport_mass_kg);
-    const legKm = Number(body.transport_distance_km);
     if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > 0) {
       try {
         await execute(

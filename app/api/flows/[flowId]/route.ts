@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, lengthError } from '@/lib/field-limits';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
@@ -38,7 +40,9 @@ export async function PUT(
     if (denied) return denied;
 
     // Prod schema: flows columns are flow_type / quantity. Accept either key.
-    const body = await request.json();
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const substance_id = body.substance_id;
     const flow_type = body.flow_type ?? body.direction;
     const quantityProvided =
@@ -54,6 +58,8 @@ export async function PUT(
     if (flow_type != null && !['input', 'output'].includes(flow_type)) {
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
+    const unitTooLong = lengthError('Unit', unit, COLUMN_LIMITS.flows.unit);
+    if (unitTooLong) return NextResponse.json({ error: unitTooLong }, { status: 400 });
 
     // L3: a swap may only go to a library substance or the caller's own one.
     let swappedTo: { default_unit?: string | null; substance_name?: string } | null = null;

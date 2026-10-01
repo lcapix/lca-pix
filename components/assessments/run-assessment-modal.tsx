@@ -107,7 +107,11 @@ export function RunAssessmentModal({ open, onClose, caseId, onCompleted, initial
       });
       const result = await res.json().catch(() => null);
       if (!res.ok) {
-        const reason = [result?.error, result?.details].filter(Boolean).join(': ');
+        // A 500 carries a request id (the cause is in the server log), not
+        // the error text; show it so the user can report it.
+        const reason = [result?.error, result?.request_id ? `reference ${result.request_id}` : null]
+          .filter(Boolean)
+          .join(', ');
         throw new Error(reason || `Assessment failed (${res.status})`);
       }
       try {

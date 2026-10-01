@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
 import { queryOne } from '@/lib/db-helpers';
 import { verifyPassword, dummyPasswordCheck, createToken } from '@/lib/auth';
 import { RATE_LIMITS, clientIp, enforceRateLimit } from '@/lib/rate-limit';
@@ -18,12 +19,9 @@ const INVALID = 'Invalid email or password';
 
 export async function POST(request: NextRequest) {
   try {
-    let body: any;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
-    }
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
     const email = body?.email;
     const password = body?.password;
 

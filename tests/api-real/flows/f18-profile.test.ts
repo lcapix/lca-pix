@@ -59,18 +59,22 @@ describe('F18 profile', () => {
     }
   });
 
-  // BUG PROF-1 (app/api/auth/profile/route.ts:104): no length check before
-  // the UPDATE, so a value longer than its column (full_name 120, company 160,
-  // role 120, use_case 60, country 80) fails in MySQL strict mode and the
-  // route answers 500 "Internal error" instead of 400.
-  it.fails('over-long fields get 400, not 500 (PROF-1)', async () => {
-    for (const json of [
-      { fullName: 'F'.repeat(121), company: 'ok' },
-      { fullName: 'ok', company: 'C'.repeat(161) },
-      { fullName: 'ok', company: 'ok', country: 'Z'.repeat(81) },
-    ]) {
+  // PROF-1 (fixed): each field is checked against its column (full_name 120,
+  // company 160, role 120, use_case 60, country 80) before the UPDATE, so a
+  // value that is too long gets 400 naming the field instead of a 500.
+  it('over-long fields get 400, not 500 (PROF-1)', async () => {
+    for (const [json, msg] of [
+      [{ fullName: 'F'.repeat(121), company: 'ok' }, /full name.*120/i],
+      [{ fullName: 'ok', company: 'C'.repeat(161) }, /company.*160/i],
+      [{ fullName: 'ok', company: 'ok', role: 'R'.repeat(121) }, /role.*120/i],
+      [{ fullName: 'ok', company: 'ok', country: 'Z'.repeat(81) }, /country.*80/i],
+    ] as const) {
       const r = await api.put('/api/auth/profile', { token: u.token, json });
       expect(r.status, Object.keys(json).join()).toBe(400);
+      expect(r.json.error).toMatch(msg);
     }
+    // At the limit is fine.
+    const ok = await api.put('/api/auth/profile', { token: u.token, json: { fullName: 'F'.repeat(120), company: 'C'.repeat(160) } });
+    expect(ok.status, ok.text).toBe(200);
   });
 });

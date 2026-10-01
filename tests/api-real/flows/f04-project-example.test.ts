@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
 import { sql, sqlOne } from '../support/db';
 import { createUser, type TestUser } from '../support/users';
+import { EXAMPLE_STEPS } from '@/lib/example-case';
 
 let u: TestUser;
 beforeAll(async () => {
@@ -139,15 +140,29 @@ describe('F4b worked example', () => {
     expect((await sql('SELECT COUNT(*) AS n FROM project WHERE owner_id = ? AND project_name = ?', [u.id, 'Example: painted steel bracket']))[0].n).toBe(1);
   });
 
-  // BUG (lib/example-case.ts:89 names 'Argon', which neither db/baseline nor
-  // any migration seeds; migrate-023 only uses it as a substance hint): the
-  // worked example always answers skipped_substances ['Argon'], so the weld
-  // step has no argon flow and the point the example makes about a substance
-  // without a climate factor ("the run says so") never shows. Low severity.
-  it.fails('builds every flow of the worked example, argon included', async () => {
+  // Fixed: the example named 'Argon', which neither db/baseline nor any
+  // migration seeds, so every build answered skipped_substances ['Argon'] and
+  // the weld step lost a flow. The example now names library substances only
+  // (the file's honesty rule: quantities illustrative, factors real).
+  it('builds every flow of the worked example, none skipped', async () => {
     const other = await createUser('f4argon');
     const res = await api.post('/api/example-project', { token: other.token });
     expect(res.status).toBe(200);
     expect(res.json.skipped_substances).toEqual([]);
+    const expected = EXAMPLE_STEPS.reduce((n, s) => n + s.flows.length, 0);
+    const [built] = await sql(
+      'SELECT COUNT(*) AS n FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?',
+      [Number(res.json.case_id)],
+    );
+    expect(Number(built.n)).toBe(expected);
+  });
+
+  it('every substance the example names is a library substance', async () => {
+    const names = [...new Set(EXAMPLE_STEPS.flatMap((s) => s.flows.map((f) => f.substance)))];
+    const found = await sql(
+      `SELECT substance_name FROM substances WHERE is_custom = 0 AND substance_name IN (${names.map(() => '?').join(',')})`,
+      names,
+    );
+    expect(found.map((r: any) => r.substance_name).sort()).toEqual([...names].sort());
   });
 });

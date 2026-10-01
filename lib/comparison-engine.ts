@@ -157,7 +157,7 @@ async function fetchCaseAssessment(
     `SELECT run_id, run_name, case_id
      FROM assessment_runs
      WHERE case_id = ? AND status = 'completed'
-     ORDER BY run_date DESC
+     ORDER BY run_date DESC, run_id DESC
      LIMIT 1`,
     [caseId]
   )
