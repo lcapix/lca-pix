@@ -10,20 +10,8 @@
  * case's own documents, plus the bundled samples, and searches inside them.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import { apiRequest } from '@/lib/api-client'
 import { SAMPLE_DOCS, SAMPLE_LABELS } from '@/lib/ingest/sample-docs'
-
-type DocRow = {
-  document_id: number
-  filename: string
-  doc_type: string | null
-  created_at?: string
-  char_count?: number
-}
-
-type Open = { key: string; filename: string; content: string; source: 'case' | 'sample' }
+import { useCaseDocuments } from '@/lib/case-editor/use-case-documents'
 
 const DOC_TYPES = [
   { value: 'routing', label: 'Routing' },
@@ -42,105 +30,23 @@ export function ReferencePane({
   caseId: string | number
   onClose: () => void
 }) {
-  const [docs, setDocs] = useState<DocRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState<Open | null>(null)
-  const [needle, setNeedle] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const [docType, setDocType] = useState('routing')
-  const fileRef = useRef<HTMLInputElement | null>(null)
-
-  const load = async () => {
-    try {
-      const res = await apiRequest(`/api/cases/${caseId}/documents`)
-      const data = await res.json().catch(() => ({}))
-      setDocs(Array.isArray(data?.documents) ? data.documents : [])
-    } catch {
-      setDocs([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caseId])
-
-  const openCaseDoc = async (row: DocRow) => {
-    setOpen({ key: `case-${row.document_id}`, filename: row.filename, content: 'Loading…', source: 'case' })
-    try {
-      const res = await apiRequest(`/api/cases/${caseId}/documents?id=${row.document_id}`)
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.document) {
-        toast.error(data?.error || 'Could not open that document')
-        setOpen(null)
-        return
-      }
-      setOpen({
-        key: `case-${row.document_id}`,
-        filename: data.document.filename,
-        content: data.document.content ?? '',
-        source: 'case',
-      })
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Could not open that document')
-      setOpen(null)
-    }
-  }
-
-  const attach = async (file: File) => {
-    setUploading(true)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      form.append('doc_type', docType)
-      const res = await apiRequest(`/api/cases/${caseId}/documents`, { method: 'POST', body: form })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || data?.success === false) {
-        toast.error(data?.error || `Could not attach (${res.status})`)
-        return
-      }
-      toast.success(data?.truncated ? 'Attached (long file, kept the first part)' : 'Attached')
-      await load()
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Could not attach')
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
-  }
-
-  const remove = async (row: DocRow) => {
-    try {
-      const res = await apiRequest(`/api/cases/${caseId}/documents?id=${row.document_id}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        toast.error(`Could not remove (${res.status})`)
-        return
-      }
-      if (open?.key === `case-${row.document_id}`) setOpen(null)
-      await load()
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Could not remove')
-    }
-  }
-
-  // Lines that match, with their line numbers kept, so a value can be quoted
-  // back to the line it came from.
-  const lines = useMemo(() => {
-    if (!open) return [] as Array<{ n: number; text: string; hit: boolean }>
-    const all = open.content.split('\n')
-    const q = needle.trim().toLowerCase()
-    const rows = all.map((text, i) => ({ n: i + 1, text, hit: !!q && text.toLowerCase().includes(q) }))
-    return q ? rows.filter((r) => r.hit) : rows
-  }, [open, needle])
-
-  const hitCount = useMemo(
-    () => (needle.trim() && open ? lines.length : 0),
-    [needle, lines, open],
-  )
+  const {
+    docs,
+    loading,
+    open,
+    setOpen,
+    needle,
+    setNeedle,
+    uploading,
+    docType,
+    setDocType,
+    fileRef,
+    openCaseDoc,
+    attach,
+    remove,
+    lines,
+    hitCount,
+  } = useCaseDocuments(caseId)
 
   return (
     <aside
