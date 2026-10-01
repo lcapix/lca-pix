@@ -5,48 +5,20 @@
 // Business logic (fetch / save / delete / create / run-assessment) is
 // preserved from the prior implementation.
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { toast } from 'sonner'
 
-import { apiRequest } from '@/lib/api-client'
-import {
-  transformCaseFromDB,
-  transformComponentFromDB,
-} from '@/lib/data-transformers'
-import { useProjectStore, type ComponentNode, type Case } from '@/lib/store'
-import { componentsToTree, flattenTree, rollupTree } from '@/lib/case-tree-adapter'
-import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
-import type { CompletenessReport, EditFormData } from '@/lib/case-editor/types'
-import {
-  COMPONENT_TYPES,
-  buildComponentUpdatePayload,
-  formDataFromComponent,
-  pendingRescale,
-  scaleSuccessMessage,
-  validateComponentSave,
-} from '@/lib/case-editor/component-payload'
-import {
-  filterFlatByLabel,
-  lessonStepNames,
-  newComponentQuery,
-  parentOptionsFor,
-  pickInitialComponent,
-  toComponentLikes,
-} from '@/lib/case-editor/case-tree'
-import { chooseDeleteMode, deleteSuccessMessage, planDelete } from '@/lib/case-editor/delete-plan'
-import {
-  assessmentCompleteMessage,
-  buildRunBody,
-  completedRuns,
-  hasRunSibling,
-  isInventoryReady,
-  readRunPrefs,
-  runBlockedMessage,
-  runButtonTitle,
-  topClimateStep,
-} from '@/lib/case-editor/run-assessment'
+import { COMPONENT_TYPES } from '@/lib/case-editor/component-payload'
+import { lessonStepNames } from '@/lib/case-editor/case-tree'
+import { runButtonTitle } from '@/lib/case-editor/run-assessment'
 import { deriveCaseStatus } from '@/lib/case-editor/case-status'
+import { useCaseData } from '@/lib/case-editor/use-case-data'
+import { useDuplicateCase } from '@/lib/case-editor/use-duplicate-case'
+import { useEditorPanels } from '@/lib/case-editor/use-editor-panels'
+import { useRunAssessment, useRunGate } from '@/lib/case-editor/use-run-assessment'
+import { useEditForm } from '@/lib/case-editor/use-edit-form'
+import { useCaseSelection, useCaseTree } from '@/lib/case-editor/use-case-selection'
+import { useComponentActions } from '@/lib/case-editor/use-component-actions'
 
 import { Breadcrumb, Icon } from '@/components/lcapix'
 import {
@@ -54,15 +26,11 @@ import {
   NodeDetailsStrip,
   InspectorPanel,
   type CanvasView,
-  type InspectorEditFormData,
 } from '@/components/lcapix/case'
 import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
-import {
-  GoalScopeCard,
-  type GoalScopeSummary,
-} from '@/components/lcapix/case/goal-scope-card'
+import { GoalScopeCard } from '@/components/lcapix/case/goal-scope-card'
 import { PhaseStepper } from '@/components/lcapix/case/phase-stepper'
-import { ScaleDialog, type PendingScale } from '@/components/lcapix/case/scale-dialog'
+import { ScaleDialog } from '@/components/lcapix/case/scale-dialog'
 import { CaseNameDialog } from '@/components/lcapix/case/case-name-dialog'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { ReferencePane } from '@/components/lcapix/case/reference-pane'
@@ -80,497 +48,82 @@ export default function CaseViewPage() {
   // ?componentId=<id>: the same, by id (the old /component/:id/edit URL lands here).
   const preselectComponentId = searchParams.get('componentId')
 
-  const { updateComponentNode, deleteComponentNode } = useProjectStore()
+  // ---------- Server data ----------
+  const {
+    currentCase,
+    components,
+    isLoading,
+    refreshKey,
+    refresh,
+    reloadComponents,
+    projectName,
+    studyMethod,
+    completeness,
+    hasAssessment,
+    topStep,
+    hasComparableCase,
+    learningState,
+    hasWriteUp,
+  } = useCaseData({ projectId, caseId, router })
 
-  // ---------- Fetch state (preserved) ----------
-  const [currentCase, setCurrentCase] = useState<Case | null>(null)
-  const [components, setComponents] = useState<ComponentNode[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  // Bumped when the component-create/edit modal reports a change, forcing the
-  // fetch effect below to re-run so new nodes appear without a full reload.
-  const [refreshKey, setRefreshKey] = useState(0)
   // Duplicate asks for the copy's name before creating it.
-  const [dupOpen, setDupOpen] = useState(false)
-  const [dupBusy, setDupBusy] = useState(false)
-  const [dupError, setDupError] = useState<string | null>(null)
-  // ?duplicate=1 (the results page's "Duplicate and change one thing") opens
-  // the Duplicate dialog once the case has loaded, then drops the param so a
-  // reload or Back does not open it again (RES-6).
-  const wantsDuplicate = searchParams.get('duplicate') === '1'
-  const duplicateFromUrlHandled = useRef(false)
-  useEffect(() => {
-    const handler = () => setRefreshKey((k) => k + 1)
-    window.addEventListener('lcapix:components-changed', handler)
-    return () => window.removeEventListener('lcapix:components-changed', handler)
-  }, [])
-  useEffect(() => {
-    if (!wantsDuplicate || !currentCase || duplicateFromUrlHandled.current) return
-    duplicateFromUrlHandled.current = true
-    setDupOpen(true)
-    const rest = new URLSearchParams(searchParams.toString())
-    rest.delete('duplicate')
-    const qs = rest.toString()
-    router.replace(`/project/${projectId}/case/${caseId}${qs ? `?${qs}` : ''}`, { scroll: false })
-  }, [wantsDuplicate, currentCase, searchParams, router, projectId, caseId])
-  // Fetched once for the breadcrumb so it reads "<project name>" instead of "Project".
-  const [projectName, setProjectName] = useState<string>('')
-  // The document a person types their quantities from, kept open beside the
-  // editor. Remembered per case so it survives a reload mid-build.
-  const [referenceOpen, setReferenceOpen] = useState(false)
+  const duplicate = useDuplicateCase({ projectId, caseId, router, currentCase, searchParams })
 
-  // Guided lessons. Opened by ?learn=1 (the build-by-hand path) or the Learn
-  // button; progress lives on the case, so an instructor sees it next to the
-  // model the student built.
-  const [learnOpen, setLearnOpen] = useState(false)
-  const [learningState, setLearningState] = useState<unknown>(null)
-  const [hasWriteUp, setHasWriteUp] = useState(false)
-  const [topStep, setTopStep] = useState<string | null>(null)
-  const [hasComparableCase, setHasComparableCase] = useState(false)
+  // Guided lessons and the reference document beside the editor.
+  const { learnOpen, setLearnOpen, referenceOpen, setReferenceOpen } = useEditorPanels()
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (new URLSearchParams(window.location.search).get('learn') === '1') {
-      setLearnOpen(true)
-      setReferenceOpen(true)
-    }
-  }, [])
-
-  // A sibling case that has been run is what makes lesson 5 (compare) possible.
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const r = await apiRequest(`/api/projects/${projectId}/cases`)
-        const d = await r.json().catch(() => ({}))
-        const comparable = hasRunSibling(d?.cases, caseId)
-        if (!cancelled) setHasComparableCase(comparable)
-      } catch {
-        /* advisory only */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [projectId, caseId, refreshKey])
-  const [studyMethod, setStudyMethod] = useState<string | undefined>(undefined)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const r = await apiRequest(`/api/projects/${projectId}`)
-        const d = await r.json()
-        if (!cancelled && d?.success) {
-          setProjectName(d.project?.project_name ?? '')
-          setStudyMethod(d.project?.lcia_method ?? undefined)
-        }
-      } catch {
-        // breadcrumb falls back to 'Project'
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [projectId])
-
-  // ---------- Case completeness (which layers present / missing) ----------
-  // Drives the "what to add next" strip and gates Run Assessment. Re-fetched on
-  // refreshKey so it tracks live edits (add a flow → strip and gate update).
-  const [completeness, setCompleteness] = useState<CompletenessReport | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const r = await apiRequest(`/api/cases/${caseId}/completeness`)
-        const d = await r.json()
-        if (!cancelled && d?.success) setCompleteness(d.report ?? null)
-      } catch {
-        // completeness is advisory; a failure just hides the strip
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [caseId, refreshKey])
-
-  // A case can be assessed only if it has at least one impact-bearing flow
-  // layer (materials / energy / emissions / transport). Skeleton + costs alone
-  // characterize to nothing, so a run would return a misleading 0. This is the
-  // honest gate; tightening it to require specific layers (e.g. block until
-  // energy is present too) is a product decision — change IMPACT_LAYERS.
-  const inventoryReady = isInventoryReady(completeness)
-
-  // ISO 14044 goal & scope (4.2.3.2): a run needs a functional unit, because a
-  // result that is not "per" anything cannot be interpreted or compared. The
-  // Goal & scope card reports what is saved; until it loads nothing is blocked.
-  const [goalScope, setGoalScope] = useState<GoalScopeSummary | null>(null)
-  const [goalOpenSignal, setGoalOpenSignal] = useState(0)
-  const fuMissing = !!goalScope && !goalScope.functionalUnit.trim()
-  const canRun = inventoryReady && !fuMissing
-
-  // Has this case been assessed yet? Moves the journey phase in the status panel
-  // from Inventory to Interpretation. Re-checked on refreshKey.
-  const [hasAssessment, setHasAssessment] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const r = await apiRequest(`/api/cases/${caseId}/assessments`)
-        const d = await r.json()
-        // A run that produced no results (nothing to characterize) does not
-        // count as assessed.
-        const runs = completedRuns(d?.assessments)
-        if (!cancelled) setHasAssessment(runs.length > 0)
-
-        // Which step actually carried the most climate impact, for the reveal
-        // after a prediction. Newest run, headline category.
-        const top = topClimateStep(runs[0])
-        if (top !== undefined && !cancelled) setTopStep(top)
-      } catch {
-        /* advisory — panel falls back to the Inventory phase */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [caseId, refreshKey])
+  // ISO 14044 goal & scope + inventory: may this case run?
+  const { goalScope, setGoalScope, goalOpenSignal, openGoalScope, fuMissing, canRun } =
+    useRunGate(completeness)
 
   // ---------- UI state ----------
-  const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [canvasView, setCanvasView] = useState<CanvasView>('Tree')
   const [searchQuery, setSearchQuery] = useState('')
   const [sidebarQuery, setSidebarQuery] = useState('')
 
-  // ---------- Edit / create state (preserved) ----------
-  const [isEditing, setIsEditing] = useState(false)
-  const [editFormData, setEditFormData] = useState<EditFormData>({})
-  // A change to the product's quantity waits here until the user says what it
-  // means (scale the inputs, or the data already covers that many units).
-  const [pendingScale, setPendingScale] = useState<(PendingScale & { fd: EditFormData }) | null>(null)
-  const skipScaleCheck = useRef(false)
+  // ---------- Selection, edit form, tree ----------
+  const form = useEditForm()
+  const { editFormData, patchForm } = form
+  const { selectedNode, setSelectedNode, handleSelect } = useCaseSelection({
+    components,
+    loadFormFor: form.loadFormFor,
+    setIsEditing: form.setIsEditing,
+    preselectComponent,
+    preselectComponentId,
+  })
+  const { tree, flat, filteredFlat, selectedFlatNode, selectedComponent, selectedRollup, parentOptions } =
+    useCaseTree(components, selectedNode, sidebarQuery)
 
-  // ---------- Fetch: full-page loader on the first load only ----------
-  // Later refetches (lcapix:components-changed, delete, goal & scope) run in
-  // the background with the editor mounted, so calculator and form state
-  // survive them (EDIT-6). Every components response carries a sequence
-  // number and only the newest one is applied, and the effect aborts its
-  // requests when it re-runs, so an older response can never overwrite a
-  // newer one.
-  const loadedCaseId = useRef<string | null>(null)
-  const componentsSeq = useRef(0)
-
-  /** Fetch the case's components; returns them, or null if a newer fetch won. */
-  const reloadComponents = async (signal?: AbortSignal): Promise<ComponentNode[] | null> => {
-    const seq = ++componentsSeq.current
-    const r = await apiRequest(`/api/cases/${caseId}/components`, signal ? { signal } : undefined)
-    const data = await r.json()
-    if (seq !== componentsSeq.current || signal?.aborted) return null
-    const list: ComponentNode[] =
-      data?.success && Array.isArray(data.components)
-        ? data.components.map((dbComp: any) => transformComponentFromDB(dbComp))
-        : []
-    setComponents(list)
-    return list
-  }
-
-  useEffect(() => {
-    const controller = new AbortController()
-    const firstLoad = loadedCaseId.current !== caseId
-    const fetchCaseData = async () => {
-      if (firstLoad) setIsLoading(true)
-      try {
-        const [caseResponse, list] = await Promise.all([
-          apiRequest(`/api/cases/${caseId}`, { signal: controller.signal }),
-          reloadComponents(controller.signal),
-        ])
-        const caseData = await caseResponse.json()
-        if (controller.signal.aborted) return
-
-        if (caseData.success && caseData.case) {
-          const transformedCase = transformCaseFromDB(caseData.case)
-          setCurrentCase((prev) => ({
-            ...transformedCase,
-            components: list ?? prev?.components ?? [],
-          }))
-          setLearningState(caseData.case.learning_state ?? null)
-          setHasWriteUp(!!String(caseData.case.interpretation ?? '').trim())
-          loadedCaseId.current = caseId
-        } else {
-          toast.error('Case not found')
-          router.push(`/project/${projectId}`)
-        }
-      } catch (error: any) {
-        if (controller.signal.aborted || error?.name === 'AbortError') return
-        console.error('Failed to fetch case:', error)
-        if (firstLoad) {
-          toast.error('Failed to load case details')
-          router.push(`/project/${projectId}`)
-        } else {
-          // A failed background refresh keeps what is on screen.
-          toast.error('Could not refresh the case. What you see may be out of date.')
-        }
-      } finally {
-        if (!controller.signal.aborted) setIsLoading(false)
-      }
-    }
-
-    fetchCaseData()
-    return () => controller.abort()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caseId, projectId, router, refreshKey])
-
-  // ---------- Auto-select: the ?component=<name> deep-link target, else first root ----------
-  useEffect(() => {
-    if (components.length > 0 && !selectedNode) {
-      const target = pickInitialComponent(components, {
-        id: preselectComponentId,
-        name: preselectComponent,
-      })
-      if (target) {
-        setSelectedNode(target.id)
-        loadFormFor(target)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [components.length, preselectComponent, preselectComponentId])
-
-  // ---------- Tree adapter (memoized) ----------
-  const tree = useMemo(() => componentsToTree(toComponentLikes(components)), [components])
-
-  const flat: FlatCaseNode[] = useMemo(() => flattenTree(tree), [tree])
-
-  const filteredFlat = useMemo(() => filterFlatByLabel(flat, sidebarQuery), [flat, sidebarQuery])
-
-  const selectedFlatNode = useMemo(
-    () => flat.find((n) => n.id === selectedNode) ?? null,
-    [flat, selectedNode],
-  )
-
-  const selectedComponent = useMemo(
-    () => (selectedNode ? components.find((c) => c.id === selectedNode) ?? null : null),
-    [components, selectedNode],
-  )
-
-  // Subtree totals per node — parents are pure sums (terminating-node model).
-  // Drives the Σ values in the detail strip and tells the inspector which
-  // selected nodes are roll-ups (no flow/cost editing of their own).
-  const rollups = useMemo(() => rollupTree(tree), [tree])
-  const selectedRollup = selectedNode ? rollups.get(selectedNode) ?? null : null
-
-  // Candidate re-parent targets for the inspector. A node may be moved under
-  // any COARSER node (levels may be skipped — an Operation can sit directly
-  // under a Product), across any branch of the tree, or made independent.
-  // Self + descendants are excluded to prevent cycles.
-  const parentOptions = useMemo(
-    () => parentOptionsFor(components, selectedComponent),
-    [components, selectedComponent],
-  )
-
-  // ---------- Form helpers ----------
-  function loadFormFor(c: ComponentNode) {
-    setEditFormData(formDataFromComponent(c))
-    setIsEditing(true)
-  }
-
-  // ---------- Selection ----------
-  const handleSelect = (id: string) => {
-    if (id === '__root__') {
-      setSelectedNode(null)
-      setIsEditing(false)
-      return
-    }
-    setSelectedNode(id)
-    const c = components.find((x) => x.id === id)
-    if (c) loadFormFor(c)
-  }
-
-  // ---------- Run Assessment ----------
-  // One click actually RUNS the calculation (POST), then navigates to results.
-  // Previously this only navigated to the results page, forcing the user to
-  // click "Run new" there — so "Run Assessment" never actually computed.
-  const [isRunning, setIsRunning] = useState(false)
-  const handleRunAssessment = async () => {
-    if (isRunning) return
-    if (!canRun) {
-      toast.error(runBlockedMessage(fuMissing))
-      if (fuMissing) setGoalOpenSignal((s) => s + 1)
-      return
-    }
-    setIsRunning(true)
-    try {
-      // Honor the same per-case method/region memory the run modal writes —
-      // a quick-run that silently switched a US case back to Global made the
-      // latest run non-comparable with its own history (live-caught: run 119).
-      // Nothing remembered: the server uses the study's scope (the project's
-      // method, the case's region).
-      const remembered = readRunPrefs(caseId)
-      const res = await apiRequest(`/api/cases/${caseId}/assessments`, {
-        method: 'POST',
-        body: JSON.stringify(buildRunBody(remembered)),
-      })
-      if (!res.ok) {
-        const msg = await res.text().catch(() => res.statusText)
-        throw new Error(msg || `Assessment failed (${res.status})`)
-      }
-      const data = await res.json().catch(() => ({}))
-      toast.success(assessmentCompleteMessage(data))
-      router.push(`/project/${projectId}/case/${caseId}/results`)
-    } catch (e: any) {
-      console.error('Run assessment failed:', e)
-      toast.error(e?.message || 'Assessment failed')
-    } finally {
-      setIsRunning(false)
-    }
-  }
-
-  // ---------- Create component ----------
-  // Routes to the /component/new URL; an intercepting parallel route renders
-  // that page as a modal over this editor while keeping the case canvas
-  // mounted underneath.
-  const handleCreateComponent = () => {
-    // Carry the selection as placement context: a new component defaults to
-    // being the CHILD of the node the user is standing on (or its sibling,
-    // when a leaf is selected) — never a guess from elsewhere in the tree.
-    const query = newComponentQuery(selectedComponent)
-    router.push(`/project/${projectId}/case/${caseId}/component/new${query}`)
-  }
-
-  // ---------- Rescale (product quantity changed, user chose what it means) ----------
-  const applyScale = async (mode: 'scale-inputs' | 'data-covers') => {
-    if (!pendingScale) return
-    const { from, to, fd } = pendingScale
-    setPendingScale(null)
-    try {
-      const r = await apiRequest(`/api/cases/${caseId}/scale`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from, to, mode }),
-      })
-      const j = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(j?.error || 'Could not rescale the case')
-      toast.success(scaleSuccessMessage(mode, j.flows_scaled, from, to))
-      // Save the rest of the edited fields; the quantity is already set.
-      skipScaleCheck.current = true
-      await handleSaveComponent({ ...fd, mass: to })
-      window.dispatchEvent(new Event('lcapix:flows-changed'))
-      setRefreshKey((k) => k + 1)
-    } catch (e: any) {
-      toast.error(e?.message || 'Could not rescale the case')
-    }
-  }
-
-  // ---------- Save (preserved) ----------
-  // Accepts an optional override merged over the current form state, so callers
-  // (e.g. the cost "Apply" affordance) can apply-and-save in one action without
-  // waiting for a separate Save click or a React state flush.
-  const handleSaveComponent = async (override?: Partial<EditFormData>) => {
-    const fd = { ...editFormData, ...(override || {}) }
-    const invalid = validateComponentSave(fd)
-    if (invalid) {
-      toast.error(invalid)
-      return
-    }
-
-    // Changing the product's quantity rescales the case: ask first.
-    const current = components.find((c) => c.id === selectedNode)
-    if (isEditing && !skipScaleCheck.current) {
-      const change = pendingRescale(current, fd)
-      if (change) {
-        setPendingScale({ ...change, fd })
-        return
-      }
-    }
-    skipScaleCheck.current = false
-
-    try {
-      if (isEditing && selectedNode) {
-        const updatePayload = buildComponentUpdatePayload(fd)
-
-        const response = await apiRequest(`/api/components/${selectedNode}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatePayload),
-        })
-        const result = await response.json()
-        if (!result.success) throw new Error(result.error || 'Failed to update component')
-
-        const transformed = await reloadComponents()
-        if (transformed) {
-          // Re-fill the panel from what was just saved. It used to be cleared
-          // (setEditFormData({}) below), so every field went blank after Save
-          // and only came back when the step was selected again.
-          const saved = transformed.find((c: any) => String(c.id) === String(selectedNode))
-          if (saved) loadFormFor(saved)
-        }
-        toast.success('Component updated successfully')
-      }
-    } catch (error: any) {
-      console.error('Error saving component:', error)
-      toast.error(error.message || 'Failed to save component')
-    }
-  }
-
-  // ---------- Delete ----------
-  // Deletes on the server (DELETE /api/components/:id), then refetches; the
-  // node only disappears once the server says it is gone (EDIT-1). A step
-  // with children asks two plain questions, and Cancel on the last one never
-  // does anything: delete everything under it, or keep the children by
-  // moving them up to this step's parent.
-  const [isDeleting, setIsDeleting] = useState(false)
-  const handleDeleteSelected = async () => {
-    if (!selectedNode || isDeleting) return
-    const plan = planDelete(components, selectedNode)
-    if (!plan) return
-    const { comp, children, below } = plan
-
-    const mode = chooseDeleteMode(plan, components, (message) => confirm(message))
-    if (!mode) return
-
-    setIsDeleting(true)
-    try {
-      const res = await apiRequest(
-        `/api/components/${encodeURIComponent(comp.id)}?children=${mode}`,
-        { method: 'DELETE' },
-      )
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j?.error || `Could not delete "${comp.name}" (${res.status})`)
-      }
-      // Keep the persisted local cache in step with the server.
-      if (mode === 'delete') {
-        ;[comp.id, ...below].forEach((id) => deleteComponentNode(id))
-      } else {
-        children.forEach((ch) => updateComponentNode(ch.id, { parentId: comp.parentId ?? null }))
-        deleteComponentNode(comp.id)
-      }
-      toast.success(deleteSuccessMessage(plan, mode))
-      setSelectedNode(null)
-      setIsEditing(false)
-      setEditFormData({})
-      // Background refetch of the tree, completeness and journey.
-      setRefreshKey((k) => k + 1)
-    } catch (e: any) {
-      // The node stays: nothing was removed locally.
-      toast.error(e?.message || `Could not delete "${comp.name}"`)
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
-  // ---------- Goal & scope saved (EDIT-8) ----------
-  // Saving the data basis also rewrites the product's quantity on the server.
-  // Pull the tree again and carry the new quantity into an open product form,
-  // or the next inspector Save would send the old one and revert it.
-  const handleGoalScopeSaved = async () => {
-    try {
-      const list = await reloadComponents()
-      const product = list?.find((c) => c.type === COMPONENT_TYPES.PRODUCT && !c.parentId)
-      if (product && product.id === selectedNode) {
-        setEditFormData((f) => ({ ...f, mass: product.mass }))
-      }
-    } catch {
-      toast.error('Could not refresh the steps after saving goal & scope')
-    }
-  }
+  // ---------- Actions ----------
+  const { isRunning, handleRunAssessment } = useRunAssessment({
+    projectId,
+    caseId,
+    router,
+    canRun,
+    fuMissing,
+    openGoalScope,
+  })
+  const {
+    handleCreateComponent,
+    handleSaveComponent,
+    handleApplyCosts,
+    handleDeleteSelected,
+    applyScale,
+    cancelScale,
+    pendingScale,
+    handleGoalScopeSaved,
+  } = useComponentActions({
+    projectId,
+    caseId,
+    router,
+    components,
+    selectedNode,
+    setSelectedNode,
+    selectedComponent,
+    form,
+    reloadComponents,
+    refresh,
+  })
 
   // ---------- Render ----------
   if (isLoading) {
@@ -776,7 +329,7 @@ export default function CaseViewPage() {
           className="btn btn-secondary btn-sm"
           type="button"
           title="Copy this case (tree, flows, costs) as a what-if with one change"
-          onClick={() => setDupOpen(true)}
+          onClick={duplicate.openDuplicate}
         >
           <Icon name="layers" size={14} /> Duplicate
         </button>
@@ -812,7 +365,7 @@ export default function CaseViewPage() {
             run: view.primary.run,
             onClick:
               view.primary.action === 'set-functional-unit'
-                ? () => setGoalOpenSignal((s) => s + 1)
+                ? openGoalScope
                 : view.primary.action === 'add-inputs'
                   ? () => router.push(`/project/${projectId}/import`)
                   : view.primary.action === 'run'
@@ -923,56 +476,22 @@ export default function CaseViewPage() {
         })()}
 
       <CaseNameDialog
-        open={dupOpen}
+        open={duplicate.dupOpen}
         title="Duplicate this case"
         initialName={`${currentCase.name} (copy)`}
         confirmLabel="Duplicate"
         help={ISO_HELP.caseCopyName}
-        busy={dupBusy}
-        error={dupError}
-        onCancel={() => {
-          setDupOpen(false)
-          setDupError(null)
-        }}
-        onSubmit={async (name) => {
-          setDupBusy(true)
-          setDupError(null)
-          try {
-            const r = await fetch(`/api/cases/${caseId}/duplicate`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(localStorage.getItem('auth_token')
-                  ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
-                  : {}),
-              },
-              body: JSON.stringify({ case_name: name }),
-            })
-            const j = await r.json().catch(() => null)
-            if (r.ok && j?.case_id) {
-              toast.success(`Created "${j.case_name}": ${j.components_copied} nodes and ${j.flows_copied} flows copied`)
-              setDupOpen(false)
-              router.push(`/project/${projectId}/case/${j.case_id}`)
-            } else {
-              setDupError(j?.error || 'Could not duplicate case')
-            }
-          } catch {
-            setDupError('Could not duplicate case')
-          } finally {
-            setDupBusy(false)
-          }
-        }}
+        busy={duplicate.dupBusy}
+        error={duplicate.dupError}
+        onCancel={duplicate.cancelDuplicate}
+        onSubmit={duplicate.submitDuplicate}
       />
 
       <ScaleDialog
         pending={pendingScale}
         unit={components.find((c) => c.type === COMPONENT_TYPES.PRODUCT)?.massUnit}
         onChoose={applyScale}
-        onCancel={() => {
-          // Put the field back to the saved quantity so nothing looks changed.
-          if (pendingScale) setEditFormData((f) => ({ ...f, mass: pendingScale.from }))
-          setPendingScale(null)
-        }}
+        onCancel={cancelScale}
       />
 
       <GoalScopeCard
@@ -1238,25 +757,13 @@ export default function CaseViewPage() {
             node={selectedFlatNode}
             studyMethod={studyMethod}
             editFormData={selectedComponent ? editFormData : undefined}
-            onChange={
-              selectedComponent
-                ? (patch) => setEditFormData((f) => ({ ...f, ...patch }))
-                : undefined
-            }
+            onChange={selectedComponent ? patchForm : undefined}
             onSave={selectedComponent ? () => handleSaveComponent() : undefined}
             onDelete={selectedComponent ? handleDeleteSelected : undefined}
             parentOptions={parentOptions}
             hasChildren={!!selectedRollup?.hasChildren}
             rolled={selectedRollup}
-            onApplyCosts={
-              selectedComponent
-                ? (patch) => {
-                    setEditFormData((f) => ({ ...f, ...patch }))
-                    // Save with the patch merged directly (avoids stale state).
-                    handleSaveComponent(patch as any)
-                  }
-                : undefined
-            }
+            onApplyCosts={selectedComponent ? handleApplyCosts : undefined}
           />
         </aside>
 
