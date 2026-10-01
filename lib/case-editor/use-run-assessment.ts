@@ -9,7 +9,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { apiRequest } from '@/lib/api-client'
-import type { GoalScopeSummary } from '@/components/lcapix/case/goal-scope-card'
+import type { GoalScopeSummary } from './goal-scope'
 import {
   assessmentCompleteMessage,
   buildRunBody,

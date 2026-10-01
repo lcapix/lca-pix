@@ -6,52 +6,13 @@
 // alternative). Collapsed to a one-line summary; the status panel opens it
 // (openSignal) when the functional unit is missing.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { toast } from 'sonner'
-import { apiRequest } from '@/lib/api-client'
+import type { ReactNode } from 'react'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
+import { BOUNDARIES, fmtScale, type GoalScopeSummary } from '@/lib/case-editor/goal-scope'
+import { useGoalScope } from '@/lib/case-editor/use-goal-scope'
 
-export interface GoalScopeSummary {
-  functionalUnit: string
-  systemBoundary: string
-  referenceFlow: number
-  referenceFlowUnit: string
-  modeledOutput: number
-}
-
-const BOUNDARIES: Array<{ id: string; label: string }> = [
-  { id: 'cradle-to-gate', label: 'Cradle-to-gate' },
-  { id: 'gate-to-gate', label: 'Gate-to-gate' },
-  { id: 'cradle-to-grave', label: 'Cradle-to-grave' },
-]
-
-interface FormState {
-  goalStatement: string
-  functionalUnit: string
-  systemBoundary: string
-  boundaryNotes: string
-  referenceFlow: string
-  referenceFlowUnit: string
-  modeledOutput: string
-}
-
-const positiveString = (v: unknown): string => {
-  const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? String(n) : '1'
-}
-
-const toSummary = (s: FormState): GoalScopeSummary => ({
-  functionalUnit: s.functionalUnit.trim(),
-  systemBoundary: s.systemBoundary,
-  referenceFlow: Number(s.referenceFlow) || 1,
-  referenceFlowUnit: s.referenceFlowUnit.trim(),
-  modeledOutput: Number(s.modeledOutput) || 1,
-})
-
-/** Compact scale readout: 1, 0.0667, 1.92e-5. */
-const fmtScale = (x: number) =>
-  !Number.isFinite(x) ? '?' : Number.isInteger(x) ? String(x) : String(Number(x.toPrecision(3)))
+export type { GoalScopeSummary } from '@/lib/case-editor/goal-scope'
 
 export function GoalScopeCard({
   projectId,
@@ -69,130 +30,21 @@ export function GoalScopeCard({
   /** Called after a successful save (the data basis also rewrites the product's quantity). */
   onSaved?: () => void
 }) {
-  const [saved, setSaved] = useState<FormState | null>(null)
-  const [form, setForm] = useState<FormState | null>(null)
-  const [open, setOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  // Latest callback without re-running the load effect on every render.
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const [pr, cr] = await Promise.all([
-          apiRequest(`/api/projects/${projectId}`),
-          apiRequest(`/api/cases/${caseId}`),
-        ])
-        const p = (await pr.json())?.project ?? {}
-        const c = (await cr.json())?.case ?? {}
-        if (cancelled) return
-        // No migrate-014 on this database: hide the card and block nothing.
-        if (!('functional_unit' in p) || !('reference_flow' in c)) {
-          onChangeRef.current?.(null)
-          return
-        }
-        const s: FormState = {
-          goalStatement: p.goal_statement ?? '',
-          functionalUnit: p.functional_unit ?? '',
-          systemBoundary: p.system_boundary ?? 'cradle-to-gate',
-          boundaryNotes: p.boundary_notes ?? '',
-          referenceFlow: positiveString(c.reference_flow),
-          referenceFlowUnit: c.reference_flow_unit ?? '',
-          modeledOutput: positiveString(c.modeled_output),
-        }
-        setSaved(s)
-        setForm(s)
-        onChangeRef.current?.(toSummary(s))
-      } catch {
-        // advisory: without it the page still works and nothing is blocked
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [projectId, caseId])
-
-  useEffect(() => {
-    if (openSignal > 0) {
-      setOpen(true)
-      setTimeout(
-        () => rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
-        50,
-      )
-    }
-  }, [openSignal])
+  const { saved, form, open, saving, rootRef, set, toggle, cancel, save } = useGoalScope({
+    projectId,
+    caseId,
+    openSignal,
+    onChange,
+    onSaved,
+  })
 
   if (!saved || !form) return null
 
-  const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch })
   const fuSet = !!saved.functionalUnit.trim()
   const unit = saved.referenceFlowUnit || 'unit'
   const boundaryLabel =
     BOUNDARIES.find((b) => b.id === saved.systemBoundary)?.label ?? saved.systemBoundary
   const scale = (Number(form.referenceFlow) || 0) / (Number(form.modeledOutput) || 1)
-
-  async function save() {
-    if (!form) return
-    const refFlow = Number(form.referenceFlow)
-    const modeled = Number(form.modeledOutput)
-    if (!(refFlow > 0) || !(modeled > 0)) {
-      toast.error('Reference flow and data basis must be numbers above 0.')
-      return
-    }
-    setSaving(true)
-    try {
-      const put = (url: string, body: object) =>
-        apiRequest(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        })
-      const [pr, cr] = await Promise.all([
-        put(`/api/projects/${projectId}`, {
-          functional_unit: form.functionalUnit.trim(),
-          system_boundary: form.systemBoundary,
-          goal_statement: form.goalStatement.trim(),
-          boundary_notes: form.boundaryNotes.trim(),
-        }),
-        put(`/api/cases/${caseId}`, {
-          reference_flow: refFlow,
-          reference_flow_unit: form.referenceFlowUnit.trim(),
-          modeled_output: modeled,
-        }),
-      ])
-      if (pr.status === 403) {
-        throw new Error('Only the project owner can change the study goal & scope.')
-      }
-      for (const r of [pr, cr]) {
-        if (!r.ok) {
-          const j = await r.json().catch(() => ({}))
-          throw new Error(j?.error || 'Could not save goal & scope.')
-        }
-      }
-      const next: FormState = {
-        goalStatement: form.goalStatement.trim(),
-        functionalUnit: form.functionalUnit.trim(),
-        systemBoundary: form.systemBoundary,
-        boundaryNotes: form.boundaryNotes.trim(),
-        referenceFlow: String(refFlow),
-        referenceFlowUnit: form.referenceFlowUnit.trim(),
-        modeledOutput: String(modeled),
-      }
-      setSaved(next)
-      setForm(next)
-      setOpen(false)
-      onChangeRef.current?.(toSummary(next))
-      onSaved?.()
-      toast.success('Goal & scope saved')
-    } catch (e: any) {
-      toast.error(e?.message || 'Could not save goal & scope.')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div
@@ -243,10 +95,7 @@ export function GoalScopeCard({
         <button
           type="button"
           className="btn btn-ghost btn-sm"
-          onClick={() => {
-            if (open) setForm(saved)
-            setOpen(!open)
-          }}
+          onClick={toggle}
         >
           {open ? 'Close' : fuSet ? 'Edit' : 'Set it'}
         </button>
@@ -351,10 +200,7 @@ export function GoalScopeCard({
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setForm(saved)
-                setOpen(false)
-              }}
+              onClick={cancel}
             >
               Cancel
             </button>
