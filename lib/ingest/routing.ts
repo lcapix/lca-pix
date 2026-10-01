@@ -48,10 +48,10 @@ const HEADER_PATTERNS: Record<Field, RegExp> = {
   // and ResourceGrp, SAP work centers under a plant area): the coarser group.
   line: /^(line|production\s*line|plant|area|shop|site|department|dept|resource\s*group|work\s*cent(er|re)\s*group|workstation\s*group)$/i,
   workCenter: /^(work\s*cent(er|re)(\s*(id|code))?|workcent(er|re)|wc|machine\s*(name|id)|resource|resource\s*(id|name)|cell|station|work\s*station|workstation|op\s*code|opcode)$/i,
-  setupHrs: /^(setup|set-?up|setup\s*(hrs?|hours|time|std)|est\s*set\s*hours|estsethours|changeover(\s*time)?)$/i,
-  laborHrs: /^(labor|labour|labor\s*(hrs?|hours|time|std)|labour\s*(hrs?|hours|time)|operator\s*(hours|time)|man\s*hours|manhours|direct\s*labor)$/i,
-  machineHrs: /^(machine\s*(time|hrs?|hours|std))$/i,
-  runHrs: /^(run|run\s*(hrs?|hours|time|std)|cycle|cycle\s*time|prod\s*std|prodstd|production\s*standard|operation\s*time|time|time\s*in\s*mins?|duration|default\s*duration|processing\s*time|std\s*time|standard\s*time|hours|hrs|est\s*prod\s*hours|estprodhours)$/i,
+  setupHrs: /^(setup|set-?up|setup\s*(hrs?|hours|time|std)|est\s*set\s*hours|estsethours|changeover(\s*time)?)(\s*(per|\/)\s*(unit|piece|pc|ea|each|part))?$/i,
+  laborHrs: /^(labor|labour|labor\s*(hrs?|hours|time|std)|labour\s*(hrs?|hours|time)|operator\s*(hours|time)|man\s*hours|manhours|direct\s*labor)(\s*(per|\/)\s*(unit|piece|pc|ea|each|part))?$/i,
+  machineHrs: /^(machine\s*(time|hrs?|hours|std))(\s*(per|\/)\s*(unit|piece|pc|ea|each|part))?$/i,
+  runHrs: /^(run|run\s*(hrs?|hours|time|std)|cycle|cycle\s*time|prod\s*std|prodstd|production\s*standard|operation\s*time|time|time\s*in\s*mins?|duration|default\s*duration|processing\s*time|std\s*time|standard\s*time|hours|hrs|est\s*prod\s*hours|estprodhours)(\s*(per|\/)\s*(unit|piece|pc|ea|each|part))?$/i,
   baseQty: /^(base\s*(quantity|qty)|batch\s*(size|qty|quantity)|per\s*qty)$/i,
   lotSize: /^(lot\s*size|lot\s*qty|run\s*qty|order\s*(qty|quantity)|job\s*qty|production\s*qty)$/i,
   stdFormat: /^(std\s*format|stdformat|standard\s*format)$/i,
@@ -303,7 +303,19 @@ export function structureRouting(
     notes.push('No operations found — check the routing has a description/operation column.');
   }
   if (!cols.setupHrs && !cols.runHrs && !cols.laborHrs && !cols.machineHrs) {
-    notes.push('No hours column found — operations were created without labor cost.');
+    notes.push(
+      `No hours column found, so these operations carry no labor cost. Columns read: ${Object.keys(
+        rows[0] ?? {},
+      )
+        .filter((c) => !c.startsWith('__'))
+        .join(', ')}. Rename the time column to something like "Run Hours" or add the hours per step by hand.`,
+    );
+  } else if (!cols.runHrs && !cols.laborHrs && !cols.machineHrs && cols.setupHrs) {
+    // Setup alone is per lot, not per unit. Without a lot size nothing can be
+    // spread, so the routing lands with no labor at all — silently, until now.
+    notes.push(
+      'The only time column found is setup, which is per lot rather than per unit. Enter the lot size so it can be spread (setup ÷ lot), or the operations will carry no labor cost.',
+    );
   }
   if (setupExcluded > 0) {
     notes.push(

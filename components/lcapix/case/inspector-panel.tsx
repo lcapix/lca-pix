@@ -297,7 +297,18 @@ export function InspectorPanel({
         </InspectorSection>
       )}
 
-      <InspectorSection title="Environmental Flows">
+      <InspectorSection title="What this step consumes" defaultOpen={true}>
+        <div
+          style={{
+            fontSize: 10.5,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--text-tertiary)',
+            margin: '2px 0 6px',
+          }}
+        >
+          Inputs and outputs
+        </div>
         {hasChildren ? (
           <div
             style={{
@@ -387,9 +398,19 @@ export function InspectorPanel({
             ))}
           </div>
         )}
-      </InspectorSection>
-
-      <InspectorSection title="Costs">
+        <div
+          style={{
+            fontSize: 10.5,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--text-tertiary)',
+            margin: '16px 0 6px',
+            paddingTop: 12,
+            borderTop: '1px solid var(--border-subtle)',
+          }}
+        >
+          What it costs
+        </div>
         {hasChildren && (
           <div
             style={{

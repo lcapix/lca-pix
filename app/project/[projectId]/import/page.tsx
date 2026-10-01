@@ -1003,6 +1003,11 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
             >
               <div className="eyebrow" style={{ fontSize: 10, marginBottom: 10 }}>
                 HIERARCHY · {plan.nodes.length} NODES
+                {plan.costs.length > 0
+                  ? ` · $${plan.costs
+                      .reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+                      .toLocaleString(undefined, { maximumFractionDigits: 2 })} of cost in this document`
+                  : ''}
                 {targetCaseId !== null ? ' · matched against the case' : ''}
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginBottom: 8 }}>
@@ -1012,6 +1017,12 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
               </div>
               {plan.nodes.map((n) => {
                 const ed = nodeEdits[n.name] ?? {}
+                // What this document says this step costs, and in which
+                // categories. Read beside the step rather than in a separate
+                // table, so the money and the model are read together.
+                const own = plan.costs.filter((c) => c.node === n.name)
+                const ownTotal = own.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
+                const kinds = [...new Set(own.map((c) => c.category))].join(', ')
                 const tier = ed.tier ?? n.tier
                 const depth =
                   tier === 'product' ? 0 : tier === 'machine_line' ? 1 : tier === 'subprocess' ? 2 : tier === 'operation' ? 3 : 4
@@ -1070,6 +1081,22 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                         />
                         <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{n.unit}</span>
                       </>
+                    )}
+                    {ownTotal > 0 && (
+                      <span
+                        className="mono"
+                        style={{
+                          fontSize: 11,
+                          padding: '1px 7px',
+                          borderRadius: 999,
+                          background: 'color-mix(in oklab, var(--brand-primary) 10%, transparent)',
+                          color: 'var(--brand-primary)',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={`${kinds} — from this document. Costs roll up to the steps above.`}
+                      >
+                        ${ownTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </span>
                     )}
                     {targetCaseId !== null && (
                       <>
