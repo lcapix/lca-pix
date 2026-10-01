@@ -156,7 +156,7 @@ export default function ClassPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 20px 60px' }}>
+    <main id="content" style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 20px 60px' }}>
       <Link href={`/project/${projectId}`} style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
         ← Back to the project
       </Link>
@@ -348,6 +348,6 @@ export default function ClassPage() {
           </div>
         )}
       </section>
-    </div>
+    </main>
   )
 }

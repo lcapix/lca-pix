@@ -3,7 +3,7 @@
   "totals": {
     "region": {
       "impact": "moderate",
-      "count": 903,
+      "count": 886,
       "screens": 47
     },
     "color-contrast": {
@@ -13,8 +13,8 @@
     },
     "landmark-one-main": {
       "impact": "moderate",
-      "count": 38,
-      "screens": 38
+      "count": 37,
+      "screens": 37
     },
     "landmark-unique": {
       "impact": "moderate",
@@ -291,13 +291,9 @@
       }
     },
     "class": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
       "region": {
         "impact": "moderate",
-        "count": 21
+        "count": 4
       },
       "select-name": {
         "impact": "critical",
