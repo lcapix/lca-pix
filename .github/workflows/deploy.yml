@@ -193,6 +193,155 @@ jobs:
       - name: API, authz and security tests
         run: pnpm test:api
 
+  # Optional: not a dependency of deploy. Browser tests (docs/testing/E2E_TESTS.md):
+  # user journeys, contract tests and the accessibility baseline, against
+  # `next dev` on a throwaway database built from nothing in a MySQL 8.0
+  # service container. The dev server can reach only localhost; the browser
+  # can load only localhost. Empty root password on purpose, as in db-tests.
+  e2e:
+    name: Browser tests (Playwright)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '3306'
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_ARTIFACTS_DIR: ${{ runner.temp }}/lcapix-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: mysql client
+        run: |
+          if ! command -v mysql >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y mysql-client
+          fi
+          mysql --host=127.0.0.1 --port=3306 --user=root -e 'SELECT VERSION()'
+
+      - name: Playwright browser (the version @playwright/test pins)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Journeys and contracts
+        run: pnpm e2e
+
+      - name: Accessibility baseline
+        if: success() || failure()
+        run: pnpm e2e:a11y
+
+      - name: Upload results (traces, screenshots, axe findings)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-results
+          path: |
+            ${{ runner.temp }}/lcapix-e2e/results
+            ${{ runner.temp }}/lcapix-e2e/report
+            ${{ runner.temp }}/lcapix-e2e/a11y
+          retention-days: 7
+
+  # Optional and non-blocking. The committed screenshots are macOS
+  # (*-darwin.png); Linux rasterises text differently, so they cannot be
+  # compared here. Until a Linux set is committed this job generates one and
+  # uploads it (review it, then commit tests/e2e/__snapshots__/visual/*-linux.png
+  # from a trusted run); once it exists the job compares against it.
+  e2e-visual:
+    name: Visual baseline (Playwright, non-blocking)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '3306'
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_ARTIFACTS_DIR: ${{ runner.temp }}/lcapix-e2e
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: mysql client
+        run: |
+          if ! command -v mysql >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y mysql-client
+          fi
+
+      - name: Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Compare, or generate a Linux baseline
+        run: |
+          if ls tests/e2e/__snapshots__/visual/*-linux.png >/dev/null 2>&1; then
+            pnpm e2e:visual
+          else
+            echo "No Linux baseline committed: generating one."
+            pnpm e2e:update
+          fi
+
+      - name: Upload screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-visual
+          path: |
+            tests/e2e/__snapshots__/visual/*-linux.png
+            ${{ runner.temp }}/lcapix-e2e/results
+          retention-days: 7
+
   deploy:
     name: Deploy to Vercel (production)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
