@@ -14,10 +14,13 @@ test('F4 worked example → Run Assessment → results shows the total', async (
   await page.getByRole('button', { name: 'Open the worked example' }).click();
   expect((await built).status()).toBe(200);
 
-  await expect(page).toHaveURL(/\/project\/\d+$/);
+  // Navigations below can wait on a `next dev` compile (it evicts pages idle
+  // for 60 s), which under parallel load takes longer than the 20 s default.
+  const NAV = { timeout: 90_000 };
+  await expect(page).toHaveURL(/\/project\/\d+$/, NAV);
   await expect(page.getByRole('heading', { level: 1, name: 'Example: painted steel bracket' })).toBeVisible();
   await page.getByRole('button', { name: 'Open editor' }).click();
-  await expect(page).toHaveURL(/\/project\/\d+\/case\/\d+/);
+  await expect(page).toHaveURL(/\/project\/\d+\/case\/\d+/, NAV);
   await expect(page.getByTestId('tree-canvas-viewport')).toBeVisible();
 
   // PROJ-1 is fixed: the example has its functional unit, so Run is enabled.
@@ -27,8 +30,8 @@ test('F4 worked example → Run Assessment → results shows the total', async (
   await run.click();
   expect((await posted).status()).toBe(201);
 
-  await expect(page).toHaveURL(/\/case\/\d+\/results$/);
-  await expect(page.getByText('TOTAL IMPACT · GLOBAL WARMING')).toBeVisible();
+  await expect(page).toHaveURL(/\/case\/\d+\/results$/, NAV);
+  await expect(page.getByText('TOTAL IMPACT · GLOBAL WARMING')).toBeVisible(NAV);
   // 0.8 kg steel × 1.9 + 0.57 kWh × 0.35 (US grid) = 1.7195 kg CO2 eq under TRACI 2.1.
   await expect(page.getByText('1.72', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Global Warming 1\.72 kg CO2 eq$/ })).toBeVisible();

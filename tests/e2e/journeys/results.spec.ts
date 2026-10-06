@@ -34,10 +34,12 @@ test.describe('F9 run an assessment', () => {
     await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
     const run = await posted;
     expect(run.status()).toBe(201);
-    await expect(page).toHaveURL(/\/results$/);
+    // The results page (and below, the export route) can wait on a `next dev`
+    // compile, which under parallel load takes longer than the 20 s default.
+    await expect(page).toHaveURL(/\/results$/, { timeout: 90_000 });
 
     // The hero total: 800 × 1.9 + (0.05 + 0.000001 + 0.4) × 0.35 = 1,520.1575.
-    await expect(page.getByText('TOTAL IMPACT · GLOBAL WARMING')).toBeVisible();
+    await expect(page.getByText('TOTAL IMPACT · GLOBAL WARMING')).toBeVisible({ timeout: 90_000 });
     await expect(page.getByRole('button', { name: /^Global Warming 1,520 kg CO2 eq$/ })).toBeVisible();
 
     // RES-1: the stage panel printed 1,000 as "1". It must group thousands.
@@ -77,8 +79,9 @@ test.describe('F10 export', () => {
       await open(page, `/project/${seed.example.projectId}/case/${seed.example.baseCaseId}/results`, {
         ready: 'TOTAL IMPACT',
       });
-      const download = page.waitForEvent('download');
-      const response = page.waitForResponse((r) => r.url().includes('/export?format='));
+      // Building the file (and compiling the export route, if next dev evicted it) can pass 20 s under load.
+      const download = page.waitForEvent('download', { timeout: 90_000 });
+      const response = page.waitForResponse((r) => r.url().includes('/export?format='), { timeout: 90_000 });
       await page.getByRole('button', { name: label, exact: true }).click();
       expect((await response).status()).toBe(200);
       const file = await download;

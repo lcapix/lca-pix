@@ -108,6 +108,8 @@ test.describe('accessible names (guardrails §4)', () => {
     await openCase(page, seed().example.projectId, seed().example.baseCaseId);
     await page.getByRole('button', { name: 'Add Component', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New component' });
+    // An intercepting route: its first open can wait on a next dev compile (see support/states.ts).
+    await expect(dialog).toBeVisible({ timeout: 90_000 });
     for (const tier of ['Product', 'Machine/Line', 'Subprocess', 'Operation', 'Elemental']) {
       await expect(dialog.getByRole('radio', { name: tier, exact: true })).toBeVisible();
     }

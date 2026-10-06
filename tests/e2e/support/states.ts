@@ -63,7 +63,10 @@ export const STATES: ScreenState[] = [
     path: editorPath,
     prepare: async (page) => {
       await selectComponent(page, '10. Cut blank');
-      await expect(inspector(page).getByRole('button', { name: 'Edit quantity of Steel' })).toBeVisible();
+      // EnvironmentalFlowsEditor fetches the step's flows itself after the
+      // inspector opens; under parallel load (and a route next dev evicted
+      // and recompiles) that can take longer than 20 s.
+      await expect(inspector(page).getByRole('button', { name: 'Edit quantity of Steel' })).toBeVisible({ timeout: 90_000 });
       await settle(page);
     },
   },
@@ -73,7 +76,10 @@ export const STATES: ScreenState[] = [
     path: editorPath,
     prepare: async (page) => {
       await page.getByRole('button', { name: 'Add Component', exact: true }).click();
-      await expect(page.getByRole('dialog', { name: 'New component' })).toBeVisible();
+      // The dialog is the intercepting route @modal/(.)component/new: next dev
+      // compiles it on the first in-app navigation (the warm-up's page loads
+      // never reach it), which under parallel load takes longer than 20 s.
+      await expect(page.getByRole('dialog', { name: 'New component' })).toBeVisible({ timeout: 90_000 });
       await settle(page);
     },
   },
