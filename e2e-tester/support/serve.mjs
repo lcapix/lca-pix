@@ -43,6 +43,7 @@ const server = spawn(process.execPath, [path.join(REPO_ROOT, 'tests', 'e2e', 'su
 
 let ready;
 let stopping = false;
+let failed = false;
 function stop(signal) {
   if (stopping) return;
   stopping = true;
@@ -57,7 +58,7 @@ function stop(signal) {
 for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => stop(sig));
 server.on('exit', (code, signal) => {
   ready?.close();
-  process.exit(stopping ? 0 : code ?? (signal ? 1 : 0));
+  process.exit(failed ? 1 : stopping ? 0 : code ?? (signal ? 1 : 0));
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -193,5 +194,6 @@ try {
   }
 } catch (e) {
   log(`could not get ready: ${e?.message ?? e}`);
+  failed = true;
   stop('startup failure');
 }

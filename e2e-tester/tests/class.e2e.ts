@@ -46,7 +46,7 @@ test('“Students see only their own case”: a second student cannot open the f
   await expect(toasts(screen).getByText('Students now see only their own case')).toBeVisible();
   await expect(ownOnly).toBeChecked();
   expect((await owner.get<{ project: { members_see_own_cases: boolean } }>(`/api/projects/${projectId}`)).project.members_see_own_cases).toBe(true);
-  // Each row names its author, so the instructor can tell the two apart.
+  // The instructor still sees both students' cases.
   await expect(screen.getByText('Ana’s bottle study')).toBeVisible();
   await expect(screen.getByText('Ben’s bottle study')).toBeVisible();
 
