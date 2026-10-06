@@ -342,6 +342,90 @@ jobs:
             ${{ runner.temp }}/lcapix-e2e/results
           retention-days: 7
 
+  # Optional: not a dependency of deploy. The e2e (TesterArmy) UI suite in
+  # e2e-tester/ (docs/testing/E2E_TESTER.md): exact checks only, no model and
+  # no API key, telemetry off. Its own package (e2e, @e2e-dev/web, Playwright
+  # 1.63) so the Playwright suite above keeps its pinned 1.59.1. The runner
+  # starts the app itself: a throwaway database in the MySQL 8.0 service and
+  # `next dev -p 3150` that can reach only localhost; the browser loads only
+  # localhost. Known-failure repros (tag bugbash) never gate. Empty root
+  # password on purpose, as in db-tests.
+  e2e-tester:
+    name: UI tests (e2e, exact checks)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '3306'
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_TELEMETRY_DISABLED: '1'
+      E2E_ARTIFACTS_DIR: ${{ runner.temp }}/lcapix-e2e-tester
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            e2e-tester/pnpm-lock.yaml
+
+      - name: Install dependencies (app, then the e2e tester)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir e2e-tester install --frozen-lockfile
+
+      - name: mysql client
+        run: |
+          if ! command -v mysql >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y mysql-client
+          fi
+          mysql --host=127.0.0.1 --port=3306 --user=root -e 'SELECT VERSION()'
+
+      - name: Playwright browser (the version e2e-tester pins)
+        run: pnpm --dir e2e-tester exec playwright install --with-deps chromium
+
+      - name: Typecheck the tests
+        run: pnpm --dir e2e-tester typecheck
+
+      - name: UI tests (e2e)
+        run: pnpm --dir e2e-tester exec e2e run --exclude-tag bugbash --reporter list,junit
+
+      - name: Upload report, app log and artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-tester-report
+          path: |
+            e2e-tester/.e2e/report.json
+            e2e-tester/.e2e/junit.xml
+            e2e-tester/.e2e/logs/app.log
+            e2e-tester/.e2e/artifacts
+          if-no-files-found: warn
+          retention-days: 7
+
   deploy:
     name: Deploy to Vercel (production)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
