@@ -44,7 +44,8 @@ test.describe('F6 process tree', () => {
 
     await outline(page).getByRole('button', { name: 'Add Component' }).click();
     const dialog = page.getByRole('dialog', { name: 'New component' });
-    await expect(dialog).toBeVisible();
+    // An intercepting route: its first open can wait on a next dev compile (see support/states.ts).
+    await expect(dialog).toBeVisible({ timeout: 90_000 });
     // Guardrails §4 name this radiogroup "Process tier"; today it is "Component
     // type" (the contract test records the gap).
     await dialog.getByRole('radiogroup', { name: /Process tier|Component type/ }).getByRole('radio', { name: 'Operation' }).click();
