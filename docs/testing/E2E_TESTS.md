@@ -2,6 +2,8 @@
 
 `tests/e2e` drives the real app in Chromium: user journeys, contract tests for the hooks the redesign must keep, a screenshot baseline of every screen, and an accessibility baseline. Every run builds its own database from nothing and drops it afterwards, so it needs no dump and never touches the database `.env.local` names.
 
+The core journeys also run under the e2e (TesterArmy) runner, in `e2e-tester/` with its own Playwright: see [E2E_TESTER.md](E2E_TESTER.md) (`pnpm e2e:tester`).
+
 ```
 playwright.config.ts
 tests/e2e/
