@@ -1,6 +1,6 @@
 name: CI and production deploy
 
-# Pull requests run checks only. A production deploy happens only on a push
+# Pull requests (into main or v1-hardening) run checks only. A production deploy happens only on a push
 # to main, and only after the checks pass. Third-party actions are pinned to
 # commit SHAs (the tag is in the trailing comment); bump both together.
 
@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, v1-hardening]
 
 permissions:
   contents: read
