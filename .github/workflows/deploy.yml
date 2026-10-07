@@ -222,8 +222,10 @@ jobs:
       DATABASE_PASSWORD: ''
       JWT_SECRET: ci-dummy-not-a-secret
       NEXT_TELEMETRY_DISABLED: '1'
-      E2E_ARTIFACTS_DIR: ${{ runner.temp }}/lcapix-e2e
     steps:
+      - name: Artifacts folder
+        # runner.temp is not available in job-level env, so set it here.
+        run: echo "E2E_ARTIFACTS_DIR=$RUNNER_TEMP/lcapix-e2e" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -297,8 +299,10 @@ jobs:
       DATABASE_PASSWORD: ''
       JWT_SECRET: ci-dummy-not-a-secret
       NEXT_TELEMETRY_DISABLED: '1'
-      E2E_ARTIFACTS_DIR: ${{ runner.temp }}/lcapix-e2e
     steps:
+      - name: Artifacts folder
+        # runner.temp is not available in job-level env, so set it here.
+        run: echo "E2E_ARTIFACTS_DIR=$RUNNER_TEMP/lcapix-e2e" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -375,8 +379,10 @@ jobs:
       JWT_SECRET: ci-dummy-not-a-secret
       NEXT_TELEMETRY_DISABLED: '1'
       E2E_TELEMETRY_DISABLED: '1'
-      E2E_ARTIFACTS_DIR: ${{ runner.temp }}/lcapix-e2e-tester
     steps:
+      - name: Artifacts folder
+        # runner.temp is not available in job-level env, so set it here.
+        run: echo "E2E_ARTIFACTS_DIR=$RUNNER_TEMP/lcapix-e2e-tester" >> "$GITHUB_ENV"
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
