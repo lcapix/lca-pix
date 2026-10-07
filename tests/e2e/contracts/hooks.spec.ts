@@ -1,7 +1,7 @@
 /**
  * Contract tests: the hooks that scripts, the E2E guide, the guided tour and
- * the unit tests rely on. docs/design-revamp/00-guardrails.md §4 says each
- * must survive the refactor and redesign; these fail the moment one goes.
+ * the unit tests rely on. Each must survive the refactor and redesign;
+ * these fail the moment one goes.
  *
  * Accessible names are matched case-insensitively, with an optional leading
  * "+" (the plus icon the guide writes as "+") and trailing "→". Where today's

@@ -82,7 +82,7 @@ The list reporter ends with a `Failed Tests` section: the error code, the failin
 | `class.e2e.ts` | "Students see only their own case": a second student cannot open the first student's case | B-A1: two editor students with a case each; before, a student reads the other's case; the instructor turns the switch on from the class page (toast, stored); after, the second student gets 404 from the API and "Case not found" in the editor, and still opens their own case |
 | `permissions.e2e.ts` | a non-member opening another user's project gets "Project not found" and none of its data | F14: API 404, toast "Project not found", sent to `/home`, none of the project's names shown; its case URL shows "Case not found" |
 
-Names and ids come from docs/design-revamp/00-guardrails.md §4 where it lists them: `tree-canvas-viewport`, "Add Component", "Run Assessment", "Compare Cases". The Add Component radiogroup is matched as "Process tier" or today's "Component type".
+Names and ids are the test hooks pinned by `tests/e2e/contracts/hooks.spec.ts`: `tree-canvas-viewport`, "Add Component", "Run Assessment", "Compare Cases". The Add Component radiogroup is matched as "Process tier" or today's "Component type".
 
 ### Known failures
 

@@ -1,6 +1,6 @@
 {
   "_comment": [
-    "Every screen in docs/design-revamp/CLAUDE_DESIGN_BRIEF.md §4, as a route on the seeded world (tests/e2e/support/seed.ts).",
+    "Every screen of the app, as a route on the seeded world (tests/e2e/support/seed.ts).",
     "One list feeds the visual and accessibility baselines, the global-setup warm-up and scripts/capture-review.mjs.",
     "slug: snapshot + a11y baseline key. path: {placeholders} come from the seed ids (support/routes.ts idsFromSeed).",
     "as: who is signed in (owner by default; viewer, empty, newcomer, anon). ready: text that must be visible before the page counts as loaded. brief: the §4 item.",

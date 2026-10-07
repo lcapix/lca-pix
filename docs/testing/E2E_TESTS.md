@@ -7,7 +7,7 @@ The core journeys also run under the e2e (TesterArmy) runner, in `e2e-tester/` w
 ```
 playwright.config.ts
 tests/e2e/
-  routes.json            every screen in CLAUDE_DESIGN_BRIEF §4, on seeded ids
+  routes.json            every screen of the app, on seeded ids
   journeys/*.spec.ts     user flows F1–F14 (docs/flows/USER_FLOWS.md)
   contracts/*.spec.ts    test ids, accessible names, tour anchors (guardrails §4)
   visual/*.spec.ts       screenshot baseline → __snapshots__/visual/*-<platform>.png
@@ -96,7 +96,7 @@ Selectors are roles and accessible names (`getByRole`, `getByLabel`), so a journ
 
 ### Contracts (`contracts/`) — do the hooks survive the redesign?
 
-`hooks.spec.ts` pins what `docs/design-revamp/00-guardrails.md` §4 promises: `data-testid="tree-canvas-viewport"` / `"tree-canvas-stage"` (and `data-node-id` on nodes), the accessible names scripts and the guide use, every `data-tour` anchor in `lib/lcapix-tour-steps.ts`, and the landing walkthrough anchors. Names match case-insensitively with an optional leading "+" and trailing "→"; a spelling that differs only in case is recorded as an annotation.
+`hooks.spec.ts` pins the hooks any redesign must keep: `data-testid="tree-canvas-viewport"` / `"tree-canvas-stage"` (and `data-node-id` on nodes), the accessible names scripts and the guide use, every `data-tour` anchor in `lib/lcapix-tour-steps.ts`, and the landing walkthrough anchors. Names match case-insensitively with an optional leading "+" and trailing "→"; a spelling that differs only in case is recorded as an annotation.
 
 Known gaps, kept visible rather than hidden:
 

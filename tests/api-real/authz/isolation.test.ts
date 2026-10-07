@@ -1,5 +1,5 @@
 /**
- * Student isolation (B-A1, docs/design-revamp/UX_SPEC.md §2b.2): a class
+ * Student isolation (B-A1, the rule in lib/route-guard.ts): a class
  * project with `members_see_own_cases = 1`.
  *
  *   P (the standard world's project) is the class: the instructor is P's

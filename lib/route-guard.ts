@@ -15,7 +15,7 @@
  *   - any requireAuth failure (no/bad/revoked token, unknown or deactivated
  *     account) is 401, never 500.
  *
- * Case ownership (B-A1, docs/design-revamp/UX_SPEC.md §2b.2): a project with
+ * Case ownership (B-A1, student privacy in class projects): a project with
  * `members_see_own_cases = 1` keeps each editor's and viewer's cases to that
  * member. They reach only cases whose `created_by` is them, and everything
  * under those cases; the owner and admin members reach every case. A case a
