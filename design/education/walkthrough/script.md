@@ -284,7 +284,9 @@ Seven. What still needs the backend.
 
 ### Marked Coming soon, and not built yet · (scene 40, map)
 
-Some of it still needs the backend. On the screens it is marked Coming soon: Guided mode saved to her account, report sections and comparisons, findings, invites by email, compare across projects, and more file types. The build map that comes with these screens lists the rest of the backend work.
+Some of it still needs the backend. On the screens it is marked Coming soon: Guided mode saved to her account, report sections and comparisons, findings, invites by email, compare across projects, and more file types.
+
+The build map that comes with these screens lists the rest of the backend work.
 
 ## 8. Close
 
