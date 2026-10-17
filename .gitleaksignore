@@ -1,0 +1,10 @@
+# Findings that gitleaks reports but that are not secrets. One fingerprint per
+# line: <commit>:<file>:<rule>:<line>. Add a line only after reading the value
+# and confirming it is not a credential. A real secret is rotated, never listed.
+
+# AWS_DEPLOYMENT.md line 51 at b54bd79 (2026-09-10) is a comment listing four
+# environment variable names with no values:
+#   EIA_API_KEY= ELECTRICITY_MAPS_API_KEY= METALS_API_KEY= BLS_API_KEY=
+# generic-api-key reads one of the names as a key. The file was later moved out
+# of the tree. First flagged on pull request #3, the first full-history scan.
+b54bd790cd50d81699f6a3cc971792c45decb829:AWS_DEPLOYMENT.md:generic-api-key:51
