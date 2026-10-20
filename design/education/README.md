@@ -106,6 +106,9 @@ The screens are newer than `specs/behaviour-spec-claude-design.md`. Where they d
 
 Anything the backend does not do today stays tagged COMING SOON on the screen, once at most, until the backend lands.
 
+## Next: the integration check
+Before anyone builds, the backend developer checks whether these screens can be integrated on `v1-hardening`, and what backend work each one waits on. The prompt for that session is `INTEGRATION_PROMPT.md` in this folder. Its answer goes in `integration-assessment.md`, next to it.
+
 ## Before you build: where a screen should not be copied as drawn
 `build-map.md`, section "Where a screen and the code disagree", lists 36 differences. Most mean the code needs the change. These five mean the screen does:
 1. **Log in and sign-up errors (F1.2b).** Keep the code's neutral messages. The screen's wording ("That password doesn't match this email", "An account with this email already exists") would tell anyone which emails have an account. Build the layout and the inline placement, with the code's words.
