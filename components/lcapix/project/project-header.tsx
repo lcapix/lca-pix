@@ -15,6 +15,8 @@ export interface ProjectHeaderProps {
   router: { push: (href: string) => void }
   onAddCase: () => void
   onDeleteProject: () => void
+  /** What the caller may do (lib/project-role); everything is shown until it is known. */
+  capabilities?: { canEdit: boolean; canDeleteProject: boolean }
 }
 
 export function ProjectHeader({
@@ -26,6 +28,7 @@ export function ProjectHeader({
   router,
   onAddCase,
   onDeleteProject,
+  capabilities = { canEdit: true, canDeleteProject: true },
 }: ProjectHeaderProps) {
   return (
     <div
@@ -117,6 +120,7 @@ export function ProjectHeader({
       </button>
       {/* Two ways to start a case, offered as equals: read it from a
           document, or build it by hand. */}
+      {capabilities.canEdit && (
       <button
         type="button"
         className={`btn ${cases.length === 0 ? 'btn-primary' : 'btn-secondary'} btn-sm`}
@@ -125,6 +129,8 @@ export function ProjectHeader({
       >
         <Icon name="file" size={14} /> Import Data
       </button>
+      )}
+      {capabilities.canEdit && (
       <button
         data-tour="project-add-case"
         type="button"
@@ -134,6 +140,8 @@ export function ProjectHeader({
       >
         <Icon name="plus" size={14} /> Add Case
       </button>
+      )}
+      {capabilities.canDeleteProject && (
       <button
         type="button"
         className="btn btn-secondary btn-sm"
@@ -143,6 +151,7 @@ export function ProjectHeader({
       >
         <Trash2 size={14} /> Delete
       </button>
+      )}
     </div>
   )
 }

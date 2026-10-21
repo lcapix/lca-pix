@@ -69,6 +69,10 @@ export default defineConfig({
   },
   projects: [
     { name: 'journeys', testMatch: 'journeys/**/*.spec.ts' },
+    // The same journeys in Safari's engine and in Firefox (stage 10.2). The
+    // launch flags above are Chromium's, so these two start without them.
+    { name: 'journeys-webkit', testMatch: 'journeys/**/*.spec.ts', use: { browserName: 'webkit', launchOptions: { args: [] } } },
+    { name: 'journeys-firefox', testMatch: 'journeys/**/*.spec.ts', use: { browserName: 'firefox', launchOptions: { args: [] } } },
     { name: 'contracts', testMatch: 'contracts/**/*.spec.ts' },
     { name: 'visual', testMatch: 'visual/**/*.spec.ts', fullyParallel: true },
     { name: 'a11y', testMatch: 'a11y/**/*.spec.ts', fullyParallel: true },

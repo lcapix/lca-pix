@@ -128,9 +128,12 @@ describe('a 500 names a request id that the server log also has (L1)', () => {
     const { res, logs } = await failRun(false);
     expect(res.status).toBe(500);
     expect(res.json).toEqual({ error: 'Failed to run assessment', request_id: expect.stringMatching(/^[0-9a-f-]{36}$/) });
-    const line = logs.find((c) => String(c[0]).includes(res.json.request_id));
+    // One structured line (lib/observability): the id and the error together.
+    const line = logs.map((c) => String(c[0])).find((s) => s.includes(res.json.request_id));
     expect(line, 'the id is logged with the error').toBeDefined();
-    expect(String(line![1]?.message ?? line![1])).toContain('Deadlock');
+    const entry = JSON.parse(line!);
+    expect(entry).toMatchObject({ level: 'error', request_id: res.json.request_id, alert: true });
+    expect(entry.err.message).toContain('Deadlock');
   });
 
   it('POST /api/cases/:id/assessments, the engine transaction failing: the failed run keeps the id, not the error', async () => {

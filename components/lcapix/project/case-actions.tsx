@@ -15,6 +15,12 @@ export interface CaseActionsProps {
   onRun: () => void
   setRenameOpen: (open: boolean) => void
   handleDeleteCase: (caseId: string) => void
+  /**
+   * What the caller may do (lib/project-role): Run and Rename need Can change,
+   * Delete needs admin. Everything is shown until the role is known; the
+   * server refuses the rest either way.
+   */
+  capabilities?: { canEdit: boolean; canManage: boolean }
 }
 
 export function CaseActions({
@@ -26,9 +32,11 @@ export function CaseActions({
   onRun,
   setRenameOpen,
   handleDeleteCase,
+  capabilities = { canEdit: true, canManage: true },
 }: CaseActionsProps) {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
+      {capabilities.canEdit && (
       <button
         type="button"
         className="btn btn-primary"
@@ -44,6 +52,7 @@ export function CaseActions({
         <Icon name="run" size={14} />{' '}
         {isRunningAssessment ? 'Running…' : 'Run Assessment'}
       </button>
+      )}
       <button
         type="button"
         className="btn btn-secondary btn-sm"
@@ -57,7 +66,7 @@ export function CaseActions({
       >
         Results
       </button>
-      {activeCase && (
+      {activeCase && capabilities.canEdit && (
         <button
           type="button"
           className="btn btn-ghost btn-sm"
@@ -68,7 +77,7 @@ export function CaseActions({
           <Icon name="edit" size={14} />
         </button>
       )}
-      {activeCase && (
+      {activeCase && capabilities.canManage && (
         <button
           type="button"
           className="btn btn-ghost btn-sm"

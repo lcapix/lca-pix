@@ -311,7 +311,7 @@ function MontageHero() {
           }}
         >
           Run a base case. Run an alternative. Watch the carbon, cost and time
-          deltas update side-by-side — with the math you can defend.
+          deltas update side-by-side: with the math you can defend.
         </p>
       </div>
 

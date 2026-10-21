@@ -80,12 +80,12 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
   const pptx = new PptxGenJS()
   pptx.author = 'LCAPIX'
   pptx.company = 'LCAPIX'
-  pptx.title = `${data.project.project_name} — LCA Report`
+  pptx.title = `${data.project.project_name}: LCA Report`
   pptx.layout = 'LAYOUT_WIDE' // 13.33 × 7.5 in
 
   const runDate = data.assessment.run_at
     ? new Date(data.assessment.run_at).toLocaleDateString()
-    : '—'
+    : '–'
 
   // ─── Slide 1: Title ────────────────────────────────────────────────────────
   const title = pptx.addSlide()
@@ -269,6 +269,11 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
   if (data.data_quality?.uncharacterized_flows) {
     limitLines.push(
       `${data.data_quality.uncharacterized_flows} flow(s) have no factor in this method and add nothing.`,
+    )
+  }
+  if (data.data_quality?.missing_amount_flows) {
+    limitLines.push(
+      `${data.data_quality.missing_amount_flows} flow(s) had no amount yet and were left out of this run.`,
     )
   }
   if (limitLines.length) {

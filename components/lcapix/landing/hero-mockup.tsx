@@ -47,7 +47,7 @@ const METHODS: MethodVariant[] = [
 const VISIBLE_CATEGORIES = EXAMPLE_CATEGORIES.slice(0, 5)
 
 function formatCatVal(v: number): string {
-  if (!isFinite(v)) return '—'
+  if (!isFinite(v)) return '–'
   if (v < 0.001 && v > 0) return v.toExponential(2)
   if (v < 1) return v.toFixed(4)
   if (v < 100) return v.toFixed(2)
@@ -68,7 +68,7 @@ export function HeroMockup() {
   const tourSteps: CursorStep[] = [
     {
       selector: '[data-tour="cat-1"]',
-      label: 'Click a category — the big number and delta recompute.',
+      label: 'Click a category: the big number and delta recompute.',
       onClick: () => setActiveCatIdx(1),
       holdMs: 3000,
     },
@@ -80,19 +80,19 @@ export function HeroMockup() {
     },
     {
       selector: '[data-tour="method-pill"]',
-      label: 'Switch methodology — same inputs, different framework.',
+      label: 'Switch methodology: same inputs, different framework.',
       onClick: () => setMethodIdx((i) => (i + 1) % METHODS.length),
       holdMs: 3200,
     },
     {
       selector: '[data-tour="cat-0"]',
-      label: 'Back to Global Warming — the headline number teams report.',
+      label: 'Back to Global Warming: the headline number teams report.',
       onClick: () => setActiveCatIdx(0),
       holdMs: 3000,
     },
     {
       selector: '[data-tour="contributor-0"]',
-      label: 'Top contributors — your biggest lever for cutting impact.',
+      label: 'Top contributors: your biggest lever for cutting impact.',
       holdMs: 3000,
     },
   ]

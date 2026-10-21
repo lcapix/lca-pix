@@ -101,7 +101,7 @@ export function NodeDetailsCard({
             style={{ fontSize: 11, color: 'var(--text-tertiary)' }}
           >
             {/* Don't show the synthetic '__root__' container in the
-                path — top-level nodes read as roots themselves. */}
+                path: top-level nodes read as roots themselves. */}
             Path:{' '}
             {nodePathLabel(caseTree, selectedTreeNode)}
           </div>

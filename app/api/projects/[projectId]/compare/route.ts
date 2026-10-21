@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { COMPARE_MAX_CASES } from '@/lib/compare/comparability';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
@@ -12,6 +13,9 @@ import {
 } from '@/lib/compare/diff';
 import { compareStatus, runResults, snapshotDrift, type LegacyRunRows } from '@/lib/compare/run-results';
 import { parseId } from '@/lib/ids';
+import { editedAfterRun } from '@/lib/runs/stale';
+import { inRunOrder, newestRunIds, placeholders } from '@/lib/runs/newest-first';
+import { describeOwnFactors } from '@/lib/factor-override';
 
 // GET /api/projects/[projectId]/compare?cases=209,212[&base=209][&runs=209:173,212:176]
 //
@@ -27,7 +31,7 @@ import { parseId } from '@/lib/ids';
 // into a material comparison), else the study's own method and region, else
 // its latest. `runs` overrides any of these.
 
-const MAX_CASES = 8;
+const MAX_CASES = COMPARE_MAX_CASES;
 
 const num = (v: unknown) => {
   const n = Number(v);
@@ -50,14 +54,17 @@ export async function GET(
     if (denied) return denied;
 
     const sp = request.nextUrl.searchParams;
-    const ids = Array.from(
+    const requested = Array.from(
       new Set(
         (sp.get('cases') ?? '')
           .split(',')
           .map((x) => parseId(x))
           .filter((x) => Number.isFinite(x))
       )
-    ).slice(0, MAX_CASES);
+    );
+    // At most MAX_CASES; the answer says how many were left out, never silently.
+    const ids = requested.slice(0, MAX_CASES);
+    const leftOut = requested.length - ids.length;
     if (!ids.length) {
       return NextResponse.json({ error: 'Pick at least one case' }, { status: 400 });
     }
@@ -88,14 +95,20 @@ export async function GET(
 
     // Completed runs, newest first.
     const runsByCase = new Map<number, any[]>();
+    // Ids sorted alone, rows read by id: sorting rows that carry their
+    // snapshot fails on a large case (lib/runs/newest-first).
     for (const c of cases) {
-      const runs = await query<any>(
-        `SELECT run_id, calculation_method, region_code, run_date, run_snapshot
-           FROM assessment_runs
-          WHERE case_id = ? AND (status IS NULL OR status = 'completed')
-          ORDER BY run_date DESC, run_id DESC`,
-        [c.case_id]
-      );
+      const ids = await newestRunIds(Number(c.case_id), { status: 'completed-or-unset' });
+      const runs = ids.length
+        ? inRunOrder(
+            ids,
+            await query<any>(
+              `SELECT run_id, calculation_method, region_code, run_date, run_snapshot
+                 FROM assessment_runs WHERE run_id IN (${placeholders(ids.length)})`,
+              ids,
+            ),
+          )
+        : [];
       runsByCase.set(c.case_id, runs);
     }
 
@@ -183,6 +196,23 @@ export async function GET(
           WHERE k.case_id = ?`,
         [c.case_id]
       );
+      // Each flow's own factors (migrate-034): a copy that changes only a
+      // factor must not read as "nothing else changed".
+      const ownByFlow = new Map<number, any[]>();
+      try {
+        const own = await query<any>(
+          `SELECT o.flow_id, ic.category_name, o.factor_value, o.impact_unit, o.per_unit
+             FROM flow_factor_overrides o
+             JOIN flows f ON f.flow_id = o.flow_id
+             JOIN component k ON k.component_id = f.component_id
+             JOIN impact_categories ic ON ic.category_id = o.category_id
+            WHERE k.case_id = ?`,
+          [c.case_id]
+        );
+        for (const r of own) ownByFlow.set(Number(r.flow_id), [...(ownByFlow.get(Number(r.flow_id)) ?? []), r]);
+      } catch (ownErr: any) {
+        if (ownErr?.code !== 'ER_NO_SUCH_TABLE') throw ownErr;
+      }
       inventories.set(c.case_id, {
         steps: comps.map((k: any) => ({
           id: String(k.component_id),
@@ -196,8 +226,9 @@ export async function GET(
           stepId: String(f.component_id),
           substance: f.substance,
           dir: f.flow_type === 'output' ? 'output' : 'input',
-          quantity: num(f.quantity),
+          quantity: f.quantity === null || f.quantity === undefined ? null : num(f.quantity),
           unit: f.unit ?? '',
+          ownFactor: describeOwnFactors(ownByFlow.get(Number(f.flow_id)) ?? []),
         })),
       });
 
@@ -247,22 +278,16 @@ export async function GET(
         // Edited after the run? Then its results no longer describe the case.
         // updated_at catches edits; a delete leaves nothing behind, so a frozen
         // run also compares its steps, flows and data basis with the case now.
-        const s = await queryOne<any>(
-          `SELECT (
-              EXISTS (SELECT 1 FROM component k WHERE k.case_id = r.case_id AND k.updated_at > r.run_date)
-           OR EXISTS (SELECT 1 FROM flows f JOIN component k ON k.component_id = f.component_id
-                       WHERE k.case_id = r.case_id AND f.updated_at > r.run_date)
-           ) AS stale
-             FROM assessment_runs r WHERE r.run_id = ?`,
-          [run.run_id]
-        );
+        // An own factor set or changed after the run counts too (migrate-034);
+        // a database without the table asks without it.
         stale =
-          !!Number(s?.stale) ||
+          (await editedAfterRun(Number(run.run_id))) ||
           snapshotDrift(snapshot, {
             componentIds: comps.map((k: any) => Number(k.component_id)),
             flowIds: flowRows.map((f: any) => Number(f.flow_id)),
             referenceFlow: c.reference_flow ?? null,
             modeledOutput: c.modeled_output ?? null,
+            ownFactorFlowIds: [...ownByFlow.keys()],
           });
       }
       const results = runResults({
@@ -328,6 +353,15 @@ export async function GET(
           steps: comps.length,
           flows: flowRows.length,
         },
+        // What each step takes in and gives out now, by step name (E09's
+        // "Steel 0.8 kg · Electricity 0.05 kWh" under each step).
+        stepFlows: flowRows.map((f: any) => ({
+          step: byId.get(f.component_id)?.component_name ?? '',
+          substance: f.substance,
+          dir: f.flow_type === 'output' ? 'output' : 'input',
+          quantity: f.quantity === null || f.quantity === undefined ? null : num(f.quantity),
+          unit: f.unit ?? '',
+        })),
       });
     }
 
@@ -354,6 +388,7 @@ export async function GET(
       baseCaseId: String(base.case_id),
       cases: out,
       diffs,
+      limit: { maxCases: MAX_CASES, leftOut },
     });
   } catch (error: any) {
     if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

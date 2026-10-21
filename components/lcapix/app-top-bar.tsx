@@ -3,12 +3,17 @@
 // AppTopBar — mirrored from LCAPIX/shared.jsx lines 128-173.
 // When `onNav` is not provided, falls back to Next router push using a default id→path map.
 
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { InShellContext } from './shell/shell-context'
+import { usePlatformAdmin } from '@/lib/auth/use-platform-admin'
+
+export { usePlatformAdmin }
 import { useRouter } from 'next/navigation'
 import { Logo } from './logo'
 import { Icon } from './icon'
-import { useAuthStore, useProjectStore } from '@/lib/store'
+import { useAuthStore } from '@/lib/store'
 import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-store'
+import { signOut } from '@/lib/auth/sign-out'
 
 export interface AppTopBarProps {
   current?: string
@@ -28,29 +33,6 @@ const links: { id: string; label: string; adminOnly?: boolean }[] = [
   { id: 'guide', label: 'Docs' },
 ]
 
-/**
- * True once /api/auth/me says the signed-in account is a platform admin. The
- * integration page's actions are admin-only, so its nav entries stay hidden
- * until then (and on any failure).
- */
-function usePlatformAdmin(): boolean {
-  const [isAdmin, setIsAdmin] = useState(false)
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-    if (!token) return
-    let cancelled = false
-    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled) setIsAdmin(d?.user?.account_type === 'admin')
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
-  return isAdmin
-}
 
 const menuItemStyle: React.CSSProperties = {
   display: 'flex',
@@ -70,7 +52,8 @@ const menuItemStyle: React.CSSProperties = {
 
 export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   const router = useRouter()
-  const { user, logout } = useAuthStore()
+  const inShell = useContext(InShellContext)
+  const { user } = useAuthStore()
   const isPlatformAdmin = usePlatformAdmin()
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -99,25 +82,8 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   }
 
   const handleLogout = () => {
-    // Expire the auth cookies server-side (httpOnly ones cannot be touched
-    // from JS). Fire-and-forget: local logout must not wait on the network.
-    try {
-      fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => {})
-    } catch {}
-    // Drop the previous user's cached projects so the next person on this
-    // browser does not see them: reset the in-memory store, then remove the
-    // persisted copies (projects and the activity feed).
-    useProjectStore.setState({ projects: [], currentProject: null, flows: [], nodes: [] })
-    useNotificationsStore.setState({ items: [] })
-    try {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user')
-      localStorage.removeItem('lcapix-projects')
-      localStorage.removeItem('lcapix-notifications')
-    } catch {}
-    logout()
     setMenuOpen(false)
-    router.push('/auth/login')
+    signOut((path) => router.push(path))
   }
 
   useEffect(() => {
@@ -151,6 +117,9 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
       document.removeEventListener('keydown', onKey)
     }
   }, [notifOpen])
+
+  // Inside the education shell the sidebar replaces this bar.
+  if (inShell) return null
 
   return (
     <div

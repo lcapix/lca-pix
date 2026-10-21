@@ -41,7 +41,7 @@ const TIER_GUIDE: Array<{ id: HierarchyNodeType; blurb: string }> = [
     id: 'Operation',
     blurb: 'One processing step (a unit process). Its materials, energy, emissions & labor live here as exchanges.',
   },
-  { id: 'Task', blurb: 'An optional finer sub-step — only when you split an operation.' },
+  { id: 'Task', blurb: 'An optional finer sub-step: only when you split an operation.' },
 ]
 
 export function TreeCanvas({ root, flat, selected, onSelect, view = 'Tree', highlightQuery }: TreeCanvasProps) {

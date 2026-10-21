@@ -9,6 +9,9 @@
 
 import type { IngestCost, IngestNode, ProcessModel } from './schema';
 import { processModelWarnings, validateProcessModel } from './schema';
+
+/** How a unit-conversion note starts when the unit could not be converted (the review keys on it). */
+export const NO_CONVERSION = 'No conversion for'
 import { convertQuantity, normalizeUnit, unitFamily, unitProblem } from '@/lib/units';
 
 // Unit handling at mapping time reads every spelling through lib/units, the
@@ -131,7 +134,7 @@ export function convertIngestUnit(
     return {
       quantity: qty,
       unit,
-      note: `NO CONVERSION RULE for '${unit}' (${unitProblem(unit)}) — passed through`,
+      note: `${NO_CONVERSION} '${unit}' (${unitProblem(unit)}), so the amount is kept as written`,
     };
   }
   if (canonical === 'MMBtu' && substanceText.trim().toLowerCase().includes('natural gas')) {
@@ -143,7 +146,7 @@ export function convertIngestUnit(
   }
   const target = FAMILY_TARGET[unitFamily(unit) ?? ''] ?? canonical;
   const conv = convertQuantity(qty, unit, target);
-  if (!conv) return { quantity: qty, unit, note: `NO CONVERSION RULE for '${unit}' — passed through` };
+  if (!conv) return { quantity: qty, unit, note: `${NO_CONVERSION} '${unit}', so the amount is kept as written` };
   return { quantity: conv.quantity, unit: conv.toUnit, note: conv.factor === 1 ? '' : conv.note };
 }
 
@@ -200,7 +203,7 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
   }
   plan.nodes = [...pm.nodes];
   plan.costs = [...pm.costs];
-  plan.review.push(...processModelWarnings(pm).map((w) => `STRUCTURE WARNING: ${w}`));
+  plan.review.push(...processModelWarnings(pm));
   for (const f of pm.flows) {
     const conv = convertIngestUnit(f.quantity, f.unit, f.substance_text);
     const { best, score, candidates } = matchSubstance(
@@ -211,23 +214,23 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
       plan.review.push(
         // The document's own line name: in append mode f.node is only the
         // connector's placeholder step, not where the line will go.
-        `UNMATCHED SUBSTANCE: '${f.substance_text}' (${f.label || f.node}) — best score ${score.toFixed(2)}; ` +
-          'flow held back, NOT silently dropped'
+        `'${f.substance_text}' (${f.label || f.node}): nothing in the library matched closely enough ` +
+          `(best ${score.toFixed(2)}). The line is held, not dropped: pick a substance for it.`
       );
     }
-    if (conv.note.includes('NO CONVERSION RULE')) {
-      plan.review.push(`UNIT: ${conv.note} (${f.substance_text} on ${f.node})`);
+    if (conv.note.startsWith(NO_CONVERSION)) {
+      plan.review.push(`'${f.substance_text}' on ${f.node}: ${conv.note}.`);
     }
     if (best !== null && score < 0.9) {
       plan.review.push(
-        `LOW-CONFIDENCE MATCH (${score.toFixed(2)}): '${f.substance_text}' -> ` +
-          `'${best.substance_name}' (id ${best.substance_id}) — confirm`
+        `'${f.substance_text}' (${f.label || f.node}) matched '${best.substance_name}' at ${score.toFixed(2)}: ` +
+          `check it is the right substance.`
       );
     }
     if (best !== null && (best.factor_count ?? 1) === 0) {
       plan.review.push(
-        `NO IMPACT DATA: matched '${best.substance_name}' has zero characterization factors — ` +
-          `this flow would contribute 0 to every category`
+        `'${f.substance_text}' (${f.label || f.node}) matched '${best.substance_name}', which has no ` +
+          `impact factor in the library: it adds 0 to every category.`
       );
     }
     // Unit-compatibility guard (finding 1b): if the matched substance's factor
@@ -239,9 +242,9 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
       if (factorUnit && !convertQuantity(1, conv.unit, factorUnit)) {
         unitCompatible = false;
         plan.review.push(
-          `UNIT MISMATCH: '${f.substance_text}' (${f.label || f.node}) is in '${conv.unit}' but ` +
-            `'${best.substance_name}' factors are in '${factorUnit}' — WILL BE HELD unless you ` +
-            `pick a substance whose unit is compatible`
+          `'${f.substance_text}' (${f.label || f.node}) is in ${conv.unit}, but '${best.substance_name}' ` +
+            `has factors per ${factorUnit}: the line will be held unless you pick a substance in a unit ` +
+            `that converts.`
         );
       }
     }

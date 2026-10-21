@@ -99,7 +99,7 @@ export function HotspotPanel({ cases, category }: { cases: CompareCase[]; catego
                       }}
                       title={`${sig(cell.value)} ${unit} · ${fmtNum(cell.share, 1)}% of the case`}
                     >
-                      {cell.value === 0 ? '—' : show === 'share' ? `${fmtNum(cell.share, 1)}%` : sig(cell.value)}
+                      {cell.value === 0 ? '–' : show === 'share' ? `${fmtNum(cell.share, 1)}%` : sig(cell.value)}
                     </td>
                   ))}
                 </tr>

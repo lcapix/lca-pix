@@ -44,7 +44,7 @@ export function parseQuantity(v: unknown, opts: { decimalComma?: boolean } = {})
     if (d) return { value: Number(m[1]) / d, unit: m[3] || undefined }
   }
   // Range "3-4", "3 – 4", "3 to 4": midpoint, flagged.
-  if ((m = s.match(/^(\d+(?:[.,]\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:[.,]\d+)?)\s*([A-Za-zµ%³²."]*)$/i))) {
+  if ((m = s.match(/^(\d+(?:[.,]\d+)?)\s*(?:-|–|–|to)\s*(\d+(?:[.,]\d+)?)\s*([A-Za-zµ%³²."]*)$/i))) {
     const a = toNumber(m[1], dc)
     const b = toNumber(m[2], dc)
     if (Number.isFinite(a) && Number.isFinite(b)) {

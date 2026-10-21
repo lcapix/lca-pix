@@ -169,6 +169,26 @@ export function useComponentActions({
     const mode = chooseDeleteMode(plan, components, (message) => confirm(message))
     if (!mode) return
 
+    // High-impact deletes need the step's name typed back, as GitHub, Vercel and
+    // AWS do for irreversible deletes: removing child steps or any flows takes
+    // their quantities and costs with them and cannot be undone. A bare leaf with
+    // no flows keeps the single confirm above.
+    const removedIds = mode === 'delete' ? [comp.id, ...below] : [comp.id]
+    const removed = components.filter((c) => removedIds.includes(c.id))
+    const removedFlows = removed.reduce((n, c) => n + (c.flowCount ?? 0), 0)
+    if (removedIds.length > 1 || removedFlows > 0) {
+      const typed = prompt(
+        `This removes ${removedIds.length} step(s) and ${removedFlows} flow(s) with their costs, ` +
+          `and cannot be undone.\n\nTo confirm, type the step's name exactly:\n\n${comp.name}`,
+        '',
+      )
+      if (typed === null) return
+      if (typed.trim() !== comp.name.trim()) {
+        toast.error('Name did not match, so nothing was deleted')
+        return
+      }
+    }
+
     setIsDeleting(true)
     try {
       const res = await apiRequest(

@@ -22,6 +22,7 @@ import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, decimalMax, isOutOfRangeError } from '@/lib/field-limits';
+import { scaleCostLines } from '@/lib/costs/cost-basis';
 
 // `to` becomes the product's quantity and the case's modeled_output, both
 // DECIMAL(15,6): at least 0.000001 (a smaller one would be stored as 0) and at
@@ -115,6 +116,27 @@ export async function POST(
               `UPDATE component SET ${present.map((c) => `${c} = ${c} * ?`).join(', ')} WHERE case_id = ?`,
               [...present.map(() => factor), caseId]
             );
+          }
+          // A cost's driver scales with it, so driver x rate still explains the
+          // amount (migrate-035). The rate is per unit of driver and stays.
+          try {
+            const [basisRows]: any = await conn.query(
+              `SELECT b.component_id, b.cost_kind, b.driver_quantity, b.cost_lines
+                 FROM component_cost_basis b JOIN component c ON c.component_id = b.component_id
+                WHERE c.case_id = ?`,
+              [caseId]
+            );
+            for (const b of basisRows ?? []) {
+              const lines = scaleCostLines(b.cost_lines, factor);
+              if (b.driver_quantity === null && lines === null) continue;
+              await conn.query(
+                `UPDATE component_cost_basis SET driver_quantity = driver_quantity * ?, cost_lines = ?
+                  WHERE component_id = ? AND cost_kind = ?`,
+                [factor, lines, b.component_id, b.cost_kind]
+              );
+            }
+          } catch (basisErr: any) {
+            if (basisErr?.code !== 'ER_NO_SUCH_TABLE') throw basisErr;
           }
         }
         await conn.query(

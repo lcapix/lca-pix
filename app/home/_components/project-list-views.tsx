@@ -58,7 +58,7 @@ export function projectGridView({
                   overflow: 'hidden',
                 }}
               >
-                {p.description || '—'}
+                {p.description || '–'}
               </div>
             </div>
             <div

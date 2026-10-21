@@ -313,7 +313,7 @@ export function CaseTabs({
             <div
               style={{
                 fontSize: 11,
-                color: 'var(--text-disabled)',
+                color: 'var(--text-secondary)',
                 marginTop: 6,
               }}
             >

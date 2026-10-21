@@ -124,7 +124,9 @@ export async function open(page: Page, path: string, opts: { ready?: string | Re
   trackApi(page);
   await page.goto(path);
   if (opts.ready) {
-    const ready = page.getByText(opts.ready).first();
+    // The first match a person can see: a page may also carry the text where
+    // its layout hides it (the profile's name in the sidebar on a phone).
+    const ready = page.getByText(opts.ready).filter({ visible: true }).first();
     try {
       await expect(ready).toBeVisible({ timeout: 30_000 });
     } catch {

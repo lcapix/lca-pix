@@ -120,7 +120,7 @@ export function suggestCostsFromFlows(
         )
         continue
       }
-      notes.push(`${sub} (${amt} ${unit}): no reference price for this unit — enter cost manually.`)
+      notes.push(`${sub} (${amt} ${unit}): no reference price for this unit: enter cost manually.`)
       continue
     }
 

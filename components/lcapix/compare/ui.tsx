@@ -25,27 +25,27 @@ export function notComparableText(c: Pick<CompareCase, 'name' | 'run' | 'statusR
 
 /** "+0.03" / "−0.43" with a true minus sign; "0" stays unsigned. */
 export function signed(n: number | null | undefined, digits = 2): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—'
+  if (n === null || n === undefined || !Number.isFinite(n)) return '–'
   if (n === 0) return fmtNum(0, digits)
   return `${n > 0 ? '+' : '−'}${fmtNum(Math.abs(n), digits)}`
 }
 
 /** Four significant digits, so 88.62 and 0.007334 both keep their detail. */
 export function sig(n: number | null | undefined, digits = 4): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—'
+  if (n === null || n === undefined || !Number.isFinite(n)) return '–'
   if (n === 0) return '0'
   return Number(n.toPrecision(digits)).toLocaleString('en-US', { maximumSignificantDigits: digits })
 }
 
 export function signedSig(n: number | null | undefined, digits = 3): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return '—'
+  if (n === null || n === undefined || !Number.isFinite(n)) return '–'
   if (n === 0) return '0'
   return `${n > 0 ? '+' : '−'}${sig(Math.abs(n), digits)}`
 }
 
 export function signedPct(n: number | null | undefined, digits = 1): string {
   const s = signed(n, digits)
-  return s === '—' ? s : `${s}%`
+  return s === '–' ? s : `${s}%`
 }
 
 export const money = (n: number) =>

@@ -85,7 +85,7 @@ export function DashboardHero({
                 color: 'var(--brand-primary)',
               }}
             >
-              TOTAL IMPACT · {activeCat?.label.toUpperCase() || '—'}
+              TOTAL IMPACT · {activeCat?.label.toUpperCase() || '–'}
             </span>
             <HelpTip label="How do I read this number?" width={320}>
               {ISO_HELP.readTotal}
@@ -278,7 +278,7 @@ export function DashboardHero({
                 }}
               >
                 {usingDemoContributors
-                  ? 'No contributors yet — run an assessment to see what is driving impact.'
+                  ? 'No contributors yet: run an assessment to see what is driving impact.'
                   : `No step carries ${activeCat?.label ?? 'this category'} in this run.`}
               </div>
             )}

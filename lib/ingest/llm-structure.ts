@@ -378,7 +378,7 @@ export function toProcessModel(
     const hit = resolve(ref);
     if (hit) return hit;
     if (terminal.length === 1) return terminal[0].name;
-    repairs.push(`could not tell which step ${what} belongs to ('${clean(ref) || 'none given'}'); attached to the product — move it to the right step`);
+    repairs.push(`Could not tell which step ${what} belongs to ('${clean(ref) || 'none given'}'), so it is on the product: move it to the right step.`);
     return product;
   };
 
@@ -455,7 +455,7 @@ export function toProcessModel(
       );
     } else if (missing.length) {
       notes.push(
-        `The document appears to list ${textSteps.size} numbered steps but ${overlap} were extracted — check for missing steps before applying.`,
+        `The document seems to list ${textSteps.size} numbered steps, and ${overlap} were read: check for missing steps before you save.`,
       );
     }
   }

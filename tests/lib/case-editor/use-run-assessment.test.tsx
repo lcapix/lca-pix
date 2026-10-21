@@ -66,7 +66,7 @@ describe('useRunAssessment', () => {
     expect(url).toBe('/api/cases/10/assessments')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ run_name: 'Assessment', calculation_method: 'TRACI 2.1', region_code: 'US' })
-    expect(toast.success).toHaveBeenCalledWith('Assessment complete — 1.720 kg CO₂-eq')
+    expect(toast.success).toHaveBeenCalledWith('Assessment complete: 1.720 kg CO₂-eq')
     expect(router.push).toHaveBeenCalledWith('/project/7/case/10/results')
     expect(result.current.isRunning).toBe(false)
   })

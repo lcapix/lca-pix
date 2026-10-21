@@ -17,7 +17,8 @@ export interface CaseOutlineProps {
   totalComponents: number
   selectedId: string | null
   onSelect: (id: string) => void
-  onAdd: () => void
+  /** Add Component; omitted for a "Can read" member. */
+  onAdd?: () => void
 }
 
 export function CaseOutline({
@@ -161,14 +162,16 @@ export function CaseOutline({
           borderTop: '1px solid var(--border-subtle)',
         }}
       >
-        <button
-          className="btn btn-secondary btn-sm"
-          style={{ width: '100%', justifyContent: 'center' }}
-          type="button"
-          onClick={onAdd}
-        >
-          <Icon name="plus" size={12} /> Add Component
-        </button>
+        {onAdd && (
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ width: '100%', justifyContent: 'center' }}
+            type="button"
+            onClick={onAdd}
+          >
+            <Icon name="plus" size={12} /> Add Component
+          </button>
+        )}
       </div>
     </aside>
   )

@@ -16,6 +16,7 @@ import { useNumberDrafts } from '@/lib/case-editor/use-number-drafts'
 import { InspectorHeader } from './inspector/inspector-header'
 import { PropertiesSection } from './inspector/properties-section'
 import { PlacementSection } from './inspector/placement-section'
+import { InspectorSection } from './inspector/inspector-section'
 import { FlowsSection } from './inspector/flows-section'
 import { CostsSection } from './inspector/costs-section'
 import { LifeCycleSection } from './inspector/life-cycle-section'
@@ -94,27 +95,30 @@ export function InspectorPanel({
         <PlacementSection editFormData={editFormData} onChange={onChange!} parentOptions={parentOptions} />
       )}
 
-      <FlowsSection
-        node={node}
-        controlled={controlled}
-        hasChildren={hasChildren}
-        rolled={rolled}
-        flows={flows}
-        studyMethod={studyMethod}
-        onLiveFlows={(id, rows) => setLiveFlows({ nodeId: id, flows: rows })}
-      />
-
-      <CostsSection
-        node={node}
-        controlled={controlled}
-        hasChildren={hasChildren}
-        rolled={rolled}
-        editFormData={editFormData}
-        onChange={onChange}
-        onApplyCosts={onApplyCosts}
-        suggestFlows={suggestFlows}
-        drafts={drafts}
-      />
+      {/* What a step consumes is one question: its inputs and outputs, then
+          what it costs, read together instead of in two sections. */}
+      <InspectorSection title="What this step consumes">
+        <FlowsSection
+          node={node}
+          controlled={controlled}
+          hasChildren={hasChildren}
+          rolled={rolled}
+          flows={flows}
+          studyMethod={studyMethod}
+          onLiveFlows={(id, rows) => setLiveFlows({ nodeId: id, flows: rows })}
+        />
+        <CostsSection
+          node={node}
+          controlled={controlled}
+          hasChildren={hasChildren}
+          rolled={rolled}
+          editFormData={editFormData}
+          onChange={onChange}
+          onApplyCosts={onApplyCosts}
+          suggestFlows={suggestFlows}
+          drafts={drafts}
+        />
+      </InspectorSection>
 
       {controlled && node.type !== 'Product' && (
         <LifeCycleSection editFormData={editFormData!} onChange={onChange!} />

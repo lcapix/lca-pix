@@ -37,7 +37,7 @@ export function useSampleDocs({ plantId, setFile, setPlantId, setError }: Sample
     const productName = sampleProductName(conn, plantId)
     if (productName) setPlantId(productName)
     setError(null)
-    toast.success('Sample loaded — now click "Preview extraction"')
+    toast.success('Sample loaded. Press Check what we read.')
   }
   // Read the document before trusting what came out of it: opens the sample
   // CSV in a new tab, rows and all.

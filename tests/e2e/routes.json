@@ -28,7 +28,7 @@
       "slug": "landing",
       "path": "/",
       "as": "anon",
-      "ready": "Built for sustainability engineers.",
+      "ready": "Know the footprint of anything you make.",
       "brief": "1 Landing"
     },
     {
@@ -84,21 +84,21 @@
       "slug": "login",
       "path": "/auth/login",
       "as": "anon",
-      "ready": "Welcome back.",
+      "ready": "Log in",
       "brief": "3 Login"
     },
     {
       "slug": "signup",
       "path": "/auth/signup",
       "as": "anon",
-      "ready": "Create your account.",
+      "ready": "Create your account",
       "brief": "3 Sign up"
     },
     {
       "slug": "onboarding",
       "path": "/auth/onboarding",
       "as": "newcomer",
-      "ready": "Continue to dashboard",
+      "ready": "Tell us a little about you.",
       "brief": "3 Onboarding"
     },
     {
@@ -111,13 +111,13 @@
       "slug": "home-empty",
       "path": "/home",
       "as": "empty",
-      "ready": "Open the worked example",
+      "ready": "Open the sample study",
       "brief": "5 Home (empty state)"
     },
     {
       "slug": "project-new",
       "path": "/project/new",
-      "ready": "Define an assessment.",
+      "ready": "Start your own project",
       "brief": "6 New project"
     },
     {
@@ -129,8 +129,8 @@
     {
       "slug": "project-workspace",
       "path": "/project/{exampleProject}",
-      "ready": "Open editor",
-      "brief": "8 Project workspace"
+      "ready": "Sample study",
+      "brief": "8 Project overview (the sample, E02)"
     },
     {
       "slug": "project-workspace-five-tier",
@@ -153,50 +153,53 @@
     {
       "slug": "case-editor",
       "path": "/project/{exampleProject}/case/{baseCase}",
-      "ready": "Add Component",
-      "brief": "10 Case editor"
+      "ready": "Make my own copy",
+      "phoneReady": "Read only on a phone.",
+      "brief": "10 Case (the sample, read-only, E03)"
     },
     {
       "slug": "case-editor-five-tier",
       "path": "/project/{fiveTierProject}/case/{fiveTierCase}",
-      "ready": "Add Component",
-      "brief": "10 Case editor (5 tiers)"
+      "ready": "Run Assessment",
+      "phoneReady": "Read only on a phone.",
+      "brief": "10 Case (5 tiers, E03)"
     },
     {
       "slug": "component-new-page",
       "path": "/project/{exampleProject}/case/{baseCase}/component/new",
       "ready": "New Component",
-      "brief": "12 Add component (full page)"
+      "brief": "12 Add component (full page, an old link: the classic form)"
     },
     {
       "slug": "component-edit-page",
       "path": "/project/{exampleProject}/case/{baseCase}/component/{cutBlank}/edit",
-      "ready": "Add Component",
-      "brief": "12 Edit component (full page)"
+      "ready": "Process tiers",
+      "phoneReady": "Read only on a phone.",
+      "brief": "12 Edit component (an old link: lands on the case workspace)"
     },
     {
       "slug": "results",
       "path": "/project/{exampleProject}/case/{baseCase}/results",
-      "ready": "TOTAL IMPACT",
-      "brief": "13 Results"
+      "ready": "What builds this number",
+      "brief": "13 Results (E05)"
     },
     {
       "slug": "analytics",
       "path": "/project/{exampleProject}/analytics",
-      "ready": "Example: painted steel bracket",
-      "brief": "15 Analytics"
+      "ready": "Analytics",
+      "brief": "15 Analytics (E10)"
     },
     {
       "slug": "compare",
-      "path": "/project/{exampleProject}/comparison",
-      "ready": "Cases in the comparison",
-      "brief": "16 Compare"
+      "path": "/project/{exampleProject}/comparison?cases={baseCase},{compCase}",
+      "ready": "Change by step",
+      "brief": "16 Compare (E09)"
     },
     {
       "slug": "import",
       "path": "/project/{exampleProject}/import",
-      "ready": "Import a document",
-      "brief": "17 Import"
+      "ready": "What kind of file is it?",
+      "brief": "17 Add a file (F2.2)"
     },
     {
       "slug": "class",
@@ -280,9 +283,57 @@
       "slug": "project-not-found",
       "path": "/project/{fiveTierProject}",
       "as": "viewer",
-      "ready": "Project not found",
-      "brief": "4 Project not found (non-member): toast, then back to /home",
-      "landsOn": "/home"
+      "ready": "This project is not here.",
+      "brief": "4 Project not found (non-member): says so, with Go to Home"
+    },
+    {
+      "slug": "cases",
+      "path": "/project/{exampleProject}/cases",
+      "ready": "Your cases",
+      "brief": "22 Cases (E07)"
+    },
+    {
+      "slug": "people",
+      "path": "/project/{fiveTierProject}/people",
+      "ready": "Add people",
+      "brief": "22 People (E08)"
+    },
+    {
+      "slug": "people-sample",
+      "path": "/project/{exampleProject}/people",
+      "ready": "The sample is never shared",
+      "brief": "22 People on the sample"
+    },
+    {
+      "slug": "reports",
+      "path": "/reports?project={exampleProject}",
+      "ready": "Build a report",
+      "brief": "22 Reports (E11)"
+    },
+    {
+      "slug": "case-new",
+      "path": "/project/{fiveTierProject}/case/new",
+      "ready": "What kind of case?",
+      "brief": "22 New case (E18)"
+    },
+    {
+      "slug": "case-copy",
+      "path": "/project/{exampleProject}/case/{compCase}",
+      "ready": "Run Assessment",
+      "phoneReady": "Read only on a phone.",
+      "brief": "22 Case (a copy you can change, E03)"
+    },
+    {
+      "slug": "case-inventory",
+      "path": "/project/{exampleProject}/case/{compCase}?tab=inventory",
+      "ready": "Inventory",
+      "brief": "22 Inventory tab (E04)"
+    },
+    {
+      "slug": "case-writeup",
+      "path": "/project/{exampleProject}/case/{compCase}?tab=writeup",
+      "ready": "Interpretation",
+      "brief": "22 Write-up tab (E06)"
     }
   ]
 }

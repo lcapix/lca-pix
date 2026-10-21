@@ -26,7 +26,7 @@ const QA: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         Use <strong>PDF Export</strong> on the Analytics page. The export is a
-        static snapshot of the current run — recipients can read it without
+        static snapshot of the current run: recipients can read it without
         touching your data.
       </>
     ),
@@ -35,7 +35,7 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'What method should I pick?',
     a: (
       <>
-        Default to <strong>CML 2001</strong> for product LCA — it&apos;s
+        Default to <strong>CML 2001</strong> for product LCA: it&apos;s
         well-established and recognised in EPDs. Use ReCiPe when you need
         single-score endpoint indicators, or EPS if your stakeholders want a
         monetised number.
@@ -57,7 +57,7 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'Can I undo a run?',
     a: (
       <>
-        Runs are append-only — every assessment is archived under Historical
+        Runs are append-only: every assessment is archived under Historical
         runs. You can&apos;t edit a past run, but you can rerun with the same
         inputs at any time, and you can always diff two runs side-by-side.
       </>

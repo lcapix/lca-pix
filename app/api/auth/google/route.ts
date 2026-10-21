@@ -36,6 +36,7 @@ import {
 } from '@/lib/auth';
 import { execute, insert, queryOne } from '@/lib/db-helpers';
 import { setAuthHandoffCookie } from '../cookies';
+import { needsOnboarding } from '@/lib/onboarding';
 
 const STATE_COOKIE = 'google_oauth';
 const STATE_PATH = '/api/auth/google';
@@ -212,8 +213,7 @@ export async function GET(request: NextRequest) {
 
     // New users (no onboarded_at, no company) go through /auth/onboarding;
     // everyone else to /home. /auth/callback does the actual redirect.
-    const needsOnboarding = !user.onboarded_at || !user.company;
-    const nextPath = needsOnboarding ? '/auth/onboarding' : '/home';
+    const nextPath = needsOnboarding(user) ? '/auth/onboarding' : '/home';
 
     const token = createToken(
       { id: user.id, email: user.email, account_type: user.account_type },

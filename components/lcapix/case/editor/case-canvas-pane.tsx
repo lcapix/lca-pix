@@ -17,8 +17,8 @@ export interface CaseCanvasPaneProps {
   onSelect: (id: string) => void
   view: CanvasView
   highlightQuery: string
-  /** "Create your first component" on an empty case. */
-  onCreate: () => void
+  /** "Create your first component" on an empty case; omitted for a "Can read" member. */
+  onCreate?: () => void
   selectedFlatNode: FlatCaseNode | null
   totalComponents: number
   /** The selected node's subtree totals. */
@@ -84,13 +84,15 @@ export function CaseCanvasPane({
             <div style={{ fontSize: 14, marginBottom: 10 }}>
               No components in this case yet.
             </div>
-            <button
-              className="btn btn-primary btn-sm"
-              type="button"
-              onClick={onCreate}
-            >
-              <Icon name="plus" size={12} /> Create your first component
-            </button>
+            {onCreate && (
+              <button
+                className="btn btn-primary btn-sm"
+                type="button"
+                onClick={onCreate}
+              >
+                <Icon name="plus" size={12} /> Create your first component
+              </button>
+            )}
           </div>
         )}
       </div>

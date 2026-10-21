@@ -23,14 +23,14 @@ export default function DataModelPage() {
         Every LCA in LCAPIX is organised around a strict five-tier process
         tree, inherited from the original v1 desktop platform and preserved
         across v2/v3. The hierarchy mirrors how an LCA practitioner actually
-        decomposes a system — from the whole product down to the individual
+        decomposes a system: from the whole product down to the individual
         elementary flows that the impact engine consumes.
       </p>
 
       <Section title="Project">
         Top-level container. Owns a name, description, methodology default
         (e.g. ISO 14040), valuation method (e.g. EPS or ReCiPe), status, and
-        members. Multiple cases live inside one project — typically one base
+        members. Multiple cases live inside one project: typically one base
         case plus N comparatives sharing the same functional unit.
       </Section>
 
@@ -38,11 +38,11 @@ export default function DataModelPage() {
         A single scenario within the project. Two types:
         <Ul>
           <Li>
-            <strong>Base case</strong> — the reference scenario (the as-is
+            <strong>Base case</strong>: the reference scenario (the as-is
             production line, the existing material mix, the current grid).
           </Li>
           <Li>
-            <strong>Comparative case</strong> — an alternative being
+            <strong>Comparative case</strong>: an alternative being
             evaluated. Inherits the same functional unit as the base; only the
             substitutions you care about should differ.
           </Li>
@@ -54,7 +54,7 @@ export default function DataModelPage() {
       <Section title="Five-tier process tree">
         Every case rolls up from a single Product node through Machine/Line,
         Subprocess, Operation, and Elemental Task leaves. Quantities and
-        constraints below are the v1 defaults — v3 enforces them as soft
+        constraints below are the v1 defaults: v3 enforces them as soft
         limits, not hard cut-offs.
         <Table
           rows={[
@@ -96,7 +96,7 @@ export default function DataModelPage() {
         engine freezes the current tree + flows + selected method + region
         into an immutable <code>assessment_runs</code> row, then writes one{' '}
         <code>assessment_results</code> row per (component × category). Past
-        runs stay forever — you can diff any two without re-running, and
+        runs stay forever: you can diff any two without re-running, and
         every chart on the Results page is sourced from a specific run.
       </Section>
 

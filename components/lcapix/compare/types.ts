@@ -48,6 +48,8 @@ export interface CompareCase extends CaseResult {
   warnings: string[]
   costs: Array<{ step: string } & Record<CostKey, number>>
   inventory: { steps: number; flows: number }
+  /** The case's flows now, by step name (amounts per the case's own output, not per functional unit). */
+  stepFlows?: Array<{ step: string; substance: string; dir: 'input' | 'output'; quantity: number | null; unit: string }>
 }
 
 export interface CompareDiff {
@@ -69,4 +71,6 @@ export interface CompareResponse {
   baseCaseId: string
   cases: CompareCase[]
   diffs: CompareDiff[]
+  /** How many cases a comparison holds, and how many the request asked for beyond that. */
+  limit?: { maxCases: number; leftOut: number }
 }

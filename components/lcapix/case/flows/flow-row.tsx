@@ -106,7 +106,7 @@ export function FlowRowItem({
               return (
                 <span
                   style={{ color: 'var(--signal-error)', fontWeight: 600 }}
-                  title="This substance has no impact factors — this flow contributes ZERO to every category."
+                  title="This substance has no impact factors: this flow contributes ZERO to every category."
                 >
                   · no impact data
                 </span>
@@ -192,9 +192,13 @@ export function FlowRowItem({
             borderRadius: 4,
           }}
         >
-          <span className="mono" style={{ color: 'var(--text-secondary)' }}>
-            {Number(f.quantity).toLocaleString()}
-          </span>
+          {f.quantity === null || f.quantity === undefined ? (
+            <span style={{ color: 'var(--signal-warn)', fontWeight: 600 }}>Needs an amount</span>
+          ) : (
+            <span className="mono" style={{ color: 'var(--text-secondary)' }}>
+              {Number(f.quantity).toLocaleString()}
+            </span>
+          )}
           <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{f.unit}</span>
           <Icon name="edit" size={10} />
         </button>

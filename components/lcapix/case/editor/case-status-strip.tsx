@@ -25,6 +25,8 @@ export interface CaseStatusStripProps {
   onViewResults: () => void
   /** "Add a document": the import page. */
   onAddDocument: () => void
+  /** A "Can read" member: the only action offered is reading the results. */
+  readOnly?: boolean
 }
 
 export function CaseStatusStrip({
@@ -39,12 +41,15 @@ export function CaseStatusStrip({
   onRun,
   onViewResults,
   onAddDocument,
+  readOnly = false,
 }: CaseStatusStripProps) {
   // Phases reflect the data actually in the case: a run on half an
   // inventory shows Impact as partial, never a free tick.
   const { phases, partialRun, addedLabels, status, accent, missingPhrase, ...view } =
     deriveCaseStatus({ completeness, goalScopeLoaded, fuMissing, canRun, hasAssessment })
-  const primary = {
+  const primary = readOnly
+    ? { label: 'View results', run: false, onClick: onViewResults }
+    : {
     label: view.primary.label,
     run: view.primary.run,
     onClick:
@@ -56,6 +61,8 @@ export function CaseStatusStrip({
             ? onRun
             : onViewResults,
   }
+  // A reader with no run yet has nothing to act on here.
+  const showPrimary = !readOnly || hasAssessment
   return (
     <div
       className="card"
@@ -71,8 +78,8 @@ export function CaseStatusStrip({
           <div style={{ fontSize: 13, fontWeight: 600 }}>
             {status === 'blocked'
               ? fuMissing
-                ? 'Blocked — functional unit not set'
-                : 'Blocked — nothing to assess yet'
+                ? 'Blocked: functional unit not set'
+                : 'Blocked: nothing to assess yet'
               : status === 'ready'
                 ? 'Ready to run'
                 : partialRun
@@ -112,23 +119,27 @@ export function CaseStatusStrip({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={primary.onClick}
-          disabled={primary.run && isRunning}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          {primary.run && isRunning ? 'Running…' : primary.label} →
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          onClick={onAddDocument}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          <Icon name="file" size={13} /> Add a document
-        </button>
+        {showPrimary && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={primary.onClick}
+            disabled={primary.run && isRunning}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {primary.run && isRunning ? 'Running…' : primary.label} →
+          </button>
+        )}
+        {!readOnly && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={onAddDocument}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            <Icon name="file" size={13} /> Add a document
+          </button>
+        )}
       </div>
       {/* Full missing checklist: goal & scope first, then inventory layers */}
       {(fuMissing || completeness.missing.length > 0) && (

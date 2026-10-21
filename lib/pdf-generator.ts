@@ -70,7 +70,8 @@ export interface ReportData {
     component_name: string;
     substance_name: string;
     direction: string;
-    amount: string | number;
+    /** null: the flow had no amount yet when the run was made (left out of it). */
+    amount: string | number | null;
     unit: string;
   }>;
   dataSources?: {
@@ -797,8 +798,8 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData, headi
     doc.text(flow.direction.toUpperCase(), 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2], lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.text);
-    const amount = num(flow.amount as number | string);
-    doc.text(String(amount), 60 + colWidths[0] + colWidths[1] + colWidths[2], y + 5, { width: colWidths[3], lineBreak: false, ellipsis: true });
+    const amount = flow.amount == null || flow.amount === '' ? 'No amount yet' : num(flow.amount);
+    doc.text(amount, 60 + colWidths[0] + colWidths[1] + colWidths[2], y + 5, { width: colWidths[3], lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.textLight);
     doc.text(flow.unit, 60 + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y + 5, { width: colWidths[4], lineBreak: false, ellipsis: true });

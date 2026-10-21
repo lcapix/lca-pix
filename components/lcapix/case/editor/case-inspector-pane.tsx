@@ -7,7 +7,16 @@
 
 import { InspectorPanel, type InspectorPanelProps } from '@/components/lcapix/case'
 
-export function CaseInspectorPane(props: InspectorPanelProps) {
+export interface CaseInspectorPaneProps extends InspectorPanelProps {
+  /**
+   * A "Can read" member. The panel keeps showing the step's real values, inside
+   * a disabled fieldset so every input and button is inert (and announced as
+   * unavailable); the caller also leaves out Save and Delete.
+   */
+  readOnly?: boolean
+}
+
+export function CaseInspectorPane({ readOnly = false, ...props }: CaseInspectorPaneProps) {
   return (
     <aside
       className="case-inspector"
@@ -20,7 +29,20 @@ export function CaseInspectorPane(props: InspectorPanelProps) {
         minWidth: 0,
       }}
     >
-      <InspectorPanel {...props} />
+      {readOnly ? (
+        <fieldset
+          disabled
+          aria-label="Step details, read only"
+          style={{ border: 0, margin: 0, padding: 0, minWidth: 0, display: 'flex', flexDirection: 'column', flex: 1 }}
+        >
+          <p style={{ margin: 0, padding: '10px 20px', fontSize: 12, color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+            You can read this case. Ask the project owner for Can change to edit it.
+          </p>
+          <InspectorPanel {...props} />
+        </fieldset>
+      ) : (
+        <InspectorPanel {...props} />
+      )}
     </aside>
   )
 }

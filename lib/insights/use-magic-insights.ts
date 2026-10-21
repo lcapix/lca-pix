@@ -40,6 +40,8 @@ export interface MagicInsightsOptions {
   stepCosts?: StepCostRow[]
   /** Initially active category (e.g. the one selected on the results page). */
   initialCategory?: string
+  /** The run being read: the server checks access and the project's AI switch by it. */
+  runId?: number | null
 }
 
 /**
@@ -56,6 +58,7 @@ export function useMagicInsights({
   totalCost,
   stepCosts,
   initialCategory,
+  runId,
 }: MagicInsightsOptions) {
   // Available category options (real categories + an "overall" option).
   const categoryOptions = useMemo(() => buildCategoryOptions(impacts), [impacts])
@@ -210,7 +213,7 @@ export function useMagicInsights({
             'Content-Type': 'application/json',
             ...(token ? { Authorization: 'Bearer ' + token } : {}),
           },
-          body: JSON.stringify(facts),
+          body: JSON.stringify({ ...facts, run_id: runId ?? null }),
           signal: controller.signal,
         })
         // 429 = this user's narrations for the hour are used up.
@@ -259,6 +262,7 @@ export function useMagicInsights({
     activeTotal,
     totalCost,
     contributors,
+    runId,
   ])
 
   // What actually renders: AI narration when in AI mode and it produced text,

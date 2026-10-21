@@ -74,9 +74,11 @@ describe('buildApplyFlows', () => {
     expect(flows[0].attach_component_id).toBeUndefined()
   })
 
-  it('puts each flow on its placed step when appending, else the default step', () => {
+  it('gives each flow only its own placed step when appending (the default goes once, on the body)', () => {
+    // Folding the default into every line hid which step the reviewer picked,
+    // so the server could not put a line on its document step first.
     const flows = buildApplyFlows({ plan, edits, appending: true, placement: { 'row 2': 3, 'flow-3': null }, attachComponentId: 9 })
-    expect(flows.map((f) => f.attach_component_id)).toEqual([3, 9])
+    expect(flows.map((f) => f.attach_component_id)).toEqual([3, null])
     const none = buildApplyFlows({ plan, edits, appending: true, placement: {}, attachComponentId: null })
     expect(none.map((f) => f.attach_component_id)).toEqual([null, null])
   })
@@ -91,8 +93,8 @@ describe('buildOutNotes', () => {
     expect(buildOutNotes(['a', 'b', 'c'], new Set([1]), { Tooling: 'note', Vendor: 'ignore', Qty: '', Part: 'material' })).toEqual([
       'a',
       'c',
-      'Column "Tooling" — marked as note by reviewer (pending a connector to map it).',
-      'Column "Part" — marked as material by reviewer (pending a connector to map it).',
+      'Column "Tooling": marked as note at review, kept until a reader maps it.',
+      'Column "Part": marked as material at review, kept until a reader maps it.',
     ])
   })
 
@@ -127,7 +129,7 @@ describe('buildApplyBody', () => {
     expect(body.case_name).toBe('Touring bike')
   })
 
-  it('appends: target case, default step, and every cost on its placed step else the default', () => {
+  it('appends: target case, default step, and every cost with its own placed step (null when none)', () => {
     const body = buildApplyBody({
       plan, projectId: '12', caseName: 'ignored', targetCaseId: 7, attachComponentId: 4,
       placement: { 'bom.csv · row 2': 3 }, flows, notes: ['n'],
@@ -136,7 +138,7 @@ describe('buildApplyBody', () => {
     expect(body).toMatchObject({ target_case_id: 7, attach_component_id: 4, flows, notes: ['n'] })
     expect((body as any).costs).toEqual([
       { ...plan.costs[0], attach_component_id: 3 },
-      { ...plan.costs[1], attach_component_id: 4 },
+      { ...plan.costs[1], attach_component_id: null },
     ])
   })
 

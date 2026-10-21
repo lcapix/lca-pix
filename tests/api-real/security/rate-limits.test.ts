@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
 import { freshIp, type ApiResponse } from '../support/http';
 import { createUser, makePlatformAdmin, newPassword, uniqueEmail, type TestUser } from '../support/users';
-import { addFlow, createCase, createComponent, createProject } from '../support/world';
+import { addFlow, createCase, createComponent, createProject, runAssessment, substanceId } from '../support/world';
 import { sqlOne } from '../support/db';
 
 function expect429(res: ApiResponse, limit: number) {
@@ -57,10 +57,20 @@ describe('rate limits', () => {
   it('insights: 20 per hour per user (with a model key)', async () => {
     process.env.HF_TOKEN = 'hf_test_dummy_token';
     try {
-      const facts = { caseName: 'x', method: 'CML 2001', categoryLabel: 'Global Warming', contributors: [], mode: 'summary' };
-      for (let i = 0; i < 20; i++) expect((await api.post('/api/insights', { token: u.token, json: facts })).status).toBe(200);
-      expect429(await api.post('/api/insights', { token: u.token, json: facts }), 20);
-      expect((await api.post('/api/insights', { token: other.token, json: facts })).status).toBe(200);
+      // A narration is about a run the caller reaches (education 2.13).
+      const runOf = async (owner: TestUser) => {
+        const pid = await createProject(owner, `RL insights ${owner.id}`);
+        const cid = await createCase(owner, pid, `RL case ${owner.id}`);
+        const product = await createComponent(owner, cid, { component_name: `RL product ${owner.id}`, component_type: 'product' });
+        await addFlow(owner, product, { substance_id: await substanceId('Electricity'), flow_type: 'input', quantity: 1, unit: 'kWh' });
+        return Number((await runAssessment(owner, cid)).run_id);
+      };
+      const facts = { caseName: 'x', method: 'CML 2001', categoryLabel: 'Global Warming', contributors: [], mode: 'summary', run_id: await runOf(u) };
+      // Distinct questions: a repeated one is answered from the cache and uses none of the allowance.
+      const ask = (i: number) => ({ ...facts, mode: 'custom', question: `Question ${i}` });
+      for (let i = 0; i < 20; i++) expect((await api.post('/api/insights', { token: u.token, json: ask(i) })).status).toBe(200);
+      expect429(await api.post('/api/insights', { token: u.token, json: ask(20) }), 20);
+      expect((await api.post('/api/insights', { token: other.token, json: { ...facts, run_id: await runOf(other) } })).status).toBe(200);
     } finally {
       delete process.env.HF_TOKEN;
     }

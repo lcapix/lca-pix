@@ -175,7 +175,7 @@ export function buildKpis(status: Status, fmt: (n: number) => string): Kpi[] {
   // data because no live key is configured. Both are functional.
   const liveCount = (status.sources ?? []).filter((s) => s.status === 'success').length;
   const referenceCount = (status.sources ?? []).filter((s) => s.status === 'static').length;
-  const latestMethod = status.factorsByMethod[0]?.method_name ?? '—';
+  const latestMethod = status.factorsByMethod[0]?.method_name ?? '–';
 
   const kpis: Kpi[] = [
     {

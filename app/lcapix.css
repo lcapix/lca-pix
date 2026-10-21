@@ -70,9 +70,12 @@
   --shadow-overlay: 0 32px 64px -16px rgba(25, 28, 27, 0.12), 0 2px 8px rgba(25, 28, 27, 0.04);
 
   /* Fonts */
-  --font-ui: 'Inter', system-ui, sans-serif;
+  /* The faces next/font loads (app/layout.tsx sets --font-sans and
+     --font-mono on <html>). 'Inter' was never loaded, so every var(--font-ui)
+     text fell back to the system font; Inter Tight is the design's face. */
+  --font-ui: var(--font-sans, 'Inter Tight'), system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', monospace;
-  --font-display: 'Inter', system-ui, sans-serif;
+  --font-display: var(--font-sans, 'Inter Tight'), system-ui, sans-serif;
 
   /* Density */
   --density: 1;

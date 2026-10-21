@@ -1,77 +1,70 @@
+// POST /api/example-project builds the sample study (lib/sample/). The data and
+// its golden totals are checked against a real database in
+// tests/api-real/flows/f28-sample-study.test.ts; this file checks the route.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { POST } from '@/app/api/example-project/route'
 import * as auth from '@/lib/auth'
 import * as db from '@/lib/db-helpers'
-import { EXAMPLE_CASE, EXAMPLE_PROJECT } from '@/lib/example-case'
+import * as builder from '@/lib/sample/build-sample'
+import * as limits from '@/lib/rate-limit'
 
 vi.mock('@/lib/auth')
 vi.mock('@/lib/db-helpers')
-
-type Call = { sql: string; params: any[] }
-
-function setup(opts: { failOn?: RegExp } = {}) {
-  vi.mocked(auth.requireAuth).mockResolvedValue(42)
-  vi.mocked(db.queryOne).mockResolvedValue(null) // no example yet
-  vi.mocked(db.insert).mockRejectedValue(new Error('pool write outside the transaction'))
-  vi.mocked(db.execute).mockRejectedValue(new Error('pool write outside the transaction'))
-  const calls: Call[] = []
-  let next = 100
-  const conn = {
-    query: vi.fn(async (sql: string, params: any[] = []) => {
-      calls.push({ sql, params })
-      if (opts.failOn?.test(sql)) throw Object.assign(new Error('disk full'), { code: 'ER_DISK_FULL' })
-      if (/FROM permissions/i.test(sql)) return [[{ permission_id: 1 }]]
-      if (/FROM substances/i.test(sql)) return [[{ substance_id: 3 }]]
-      if (/^\s*INSERT/i.test(sql)) return [{ insertId: next++, affectedRows: 1 }]
-      return [{ affectedRows: 1 }]
-    }),
-  }
-  vi.mocked(db.transaction).mockImplementation(async (cb: any) => cb(conn))
-  return calls
-}
+vi.mock('@/lib/sample/build-sample', async (orig) => ({ ...(await orig<any>()), buildSampleStudy: vi.fn() }))
 
 const call = () =>
   POST(new Request('http://t/api/example-project', { method: 'POST', headers: { Authorization: 'Bearer x' } }) as any)
 
-beforeEach(() => vi.resetAllMocks())
+function conn(existing: unknown[] = []) {
+  return { query: vi.fn(async (sql: string) => (/FROM project/.test(sql) ? [existing] : [[]])) }
+}
 
-describe('POST /api/example-project (PROJ-1 / PROJ-2)', () => {
-  it('writes the functional unit and boundary to the project', async () => {
-    const calls = setup()
+beforeEach(() => {
+  vi.resetAllMocks()
+  vi.mocked(auth.requireAuth).mockResolvedValue(42)
+  vi.spyOn(limits, 'enforceRateLimit').mockResolvedValue(null)
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
+describe('POST /api/example-project (the sample study)', () => {
+  it('builds inside one transaction, locking the account row first', async () => {
+    const c = conn()
+    vi.mocked(db.transaction).mockImplementation(async (cb: any) => cb(c))
+    vi.mocked(db.queryOne).mockResolvedValue(null)
+    vi.mocked(builder.buildSampleStudy).mockResolvedValue({ projectId: 7, baseCaseId: 8, whatIfCaseId: 9, baseRunId: 10, whatIfRunId: 11 })
     const res = await call()
     expect(res.status).toBe(200)
-    const u = calls.find((c) => /UPDATE project\b/i.test(c.sql) && /functional_unit/.test(c.sql))
-    expect(u).toBeTruthy()
-    expect(u!.params).toContain(EXAMPLE_CASE.functionalUnit)
-    expect(u!.params).toContain(EXAMPLE_CASE.boundary)
+    expect(c.query.mock.calls[0][0]).toMatch(/FROM account WHERE id = \? FOR UPDATE/)
+    expect(builder.buildSampleStudy).toHaveBeenCalledWith(c, 42)
+    expect((await res.json()).existed).toBe(false)
   })
 
-  it('writes the reference flow and data basis to the case, and nothing that lives on the project', async () => {
-    const calls = setup()
-    await call()
-    const u = calls.find((c) => /UPDATE case_table/i.test(c.sql))!
-    expect(u.sql).toMatch(/reference_flow\s*=/)
-    expect(u.sql).toMatch(/reference_flow_unit\s*=/)
-    expect(u.sql).toMatch(/modeled_output\s*=/)
-    expect(u.sql).not.toMatch(/functional_unit|system_boundary/)
-    expect(u.params).toContain(EXAMPLE_CASE.referenceFlowUnit)
-  })
-
-  it('adds the owner membership row every other project gets', async () => {
-    const calls = setup()
-    await call()
-    const m = calls.find((c) => /INSERT INTO project_members/i.test(c.sql))
-    expect(m).toBeTruthy()
-    expect(m!.params).toEqual([100, 42, 1])
-  })
-
-  it('builds everything inside one transaction and fails whole (500) on a real error', async () => {
-    const calls = setup({ failOn: /INSERT INTO flows/i })
+  it('a repeat returns the sample that exists and builds nothing', async () => {
+    vi.mocked(db.queryOne).mockResolvedValue({ project_id: 7 } as any)
     const res = await call()
-    expect(res.status).toBe(500)
-    expect(db.transaction).toHaveBeenCalledTimes(1)
-    expect(db.insert).not.toHaveBeenCalled()
-    expect(db.execute).not.toHaveBeenCalled()
-    expect(calls.some((c) => /INSERT INTO project\b/i.test(c.sql) && c.params.includes(EXAMPLE_PROJECT.name))).toBe(true)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ existed: true, project_id: 7 })
+    expect(db.transaction).not.toHaveBeenCalled()
+  })
+
+  it('a missing library substance is 409 and a failure is 500, with no internal text', async () => {
+    vi.mocked(db.queryOne).mockResolvedValue(null)
+    vi.mocked(db.transaction).mockImplementation(async (cb: any) => cb(conn()))
+    vi.mocked(builder.buildSampleStudy).mockRejectedValueOnce(new builder.SampleUnavailable('no Argon'))
+    const unavailable = await call()
+    expect(unavailable.status).toBe(409)
+    expect((await unavailable.json()).error).not.toMatch(/Argon/)
+    vi.mocked(builder.buildSampleStudy).mockRejectedValueOnce(Object.assign(new Error('disk full'), { code: 'ER_DISK_FULL' }))
+    const failed = await call()
+    expect(failed.status).toBe(500)
+    expect((await failed.json()).error).toBe('Could not build the sample study. Nothing was created.')
+  })
+
+  it('is rate limited before anything is written', async () => {
+    vi.mocked(db.queryOne).mockResolvedValue(null)
+    vi.spyOn(limits, 'enforceRateLimit').mockResolvedValue(new Response('{}', { status: 429 }) as any)
+    const res = await call()
+    expect(res.status).toBe(429)
+    expect(db.transaction).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,10 @@
 'use client'
 
-/** The plan's human-attention items, each dismissible once handled. */
+/**
+ * The plan's lines that need a person to look (F2.3, F2.6): each in plain
+ * words, naming the document's line, dismissible once handled. A line that
+ * came out word for word twice shows once.
+ */
 export function NeedsReviewCard({
   review,
   dismissedReview,
@@ -10,48 +14,30 @@ export function NeedsReviewCard({
   dismissedReview: Set<number>
   onDismiss: (i: number) => void
 }) {
+  const seen = new Set<string>()
+  const shown = review
+    .map((text, i) => ({ text, i }))
+    .filter(({ text, i }) => {
+      if (dismissedReview.has(i) || seen.has(text)) return false
+      seen.add(text)
+      return true
+    })
+  if (!shown.length) return null
   return (
-    <div
-      className="card"
-      style={{ padding: 20, borderLeft: '3px solid var(--signal-warn, #d97706)' }}
-    >
-      <div className="eyebrow" style={{ fontSize: 10, marginBottom: 10 }}>
-        NEEDS HUMAN REVIEW
-      </div>
-      {review.map((r, i) =>
-        dismissedReview.has(i) ? null : (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'baseline',
-              fontSize: 12.5,
-              padding: '3px 0',
-              color: 'var(--text-secondary)',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => onDismiss(i)}
-              title="Dismiss — I've handled this"
-              aria-label="Dismiss review item"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: 'var(--text-tertiary)',
-                fontSize: 14,
-                lineHeight: 1,
-                padding: 0,
-              }}
-            >
-              ×
+    <section className="ds-card" aria-labelledby="review-h" style={{ padding: 18, borderLeft: '3px solid var(--ds-warn, #8f5b00)' }}>
+      <h3 id="review-h" className="ds-section-label" style={{ margin: '0 0 8px' }}>
+        Check these before you save · {shown.length}
+      </h3>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+        {shown.map(({ text, i }) => (
+          <li key={i} style={{ display: 'flex', gap: 12, alignItems: 'baseline', fontSize: 13, color: 'var(--ds-text)' }}>
+            <span style={{ flex: 1 }}>{text}</span>
+            <button type="button" className="ds-link" style={{ fontSize: 13 }} onClick={() => onDismiss(i)} aria-label={`Dismiss: ${text}`}>
+              Dismiss
             </button>
-            <span>! {r}</span>
-          </div>
-        ),
-      )}
-    </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

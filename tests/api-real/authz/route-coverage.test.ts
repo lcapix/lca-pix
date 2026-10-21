@@ -14,8 +14,8 @@ describe('route coverage', () => {
   const inCode = new Set(routes.flatMap((r) => r.methods.map((m) => `${m} ${r.template}`)));
   const inMatrix = new Set(rows.map((r) => `${r.method} ${r.path.split('?')[0]}`));
 
-  it('finds the 45 route files', () => {
-    expect(routes).toHaveLength(45);
+  it('finds the 54 route files', () => {
+    expect(routes).toHaveLength(54);
   });
 
   it('every route x method in the code has a permissions row', () => {

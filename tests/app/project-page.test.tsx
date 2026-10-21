@@ -17,7 +17,7 @@ vi.mock('@/components/lcapix/case/case-journey', () => ({
   },
 }))
 
-import ProjectPage from '@/app/project/[projectId]/page'
+import ProjectPage from '@/components/lcapix/project/project-overview-page'
 import { apiRequest } from '@/lib/api-client'
 import { toast } from 'sonner'
 

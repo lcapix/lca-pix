@@ -81,7 +81,7 @@ export function MachineEnergy({
         {num(loadPct, setLoadPct, 'Load (%)', '%')}
         {op('=')}
         <div className="mono" style={{ fontSize: 12, fontWeight: 600, paddingBottom: 6 }}>
-          {kwh != null ? `${kwh} kWh` : '— kWh'}
+          {kwh != null ? `${kwh} kWh` : '– kWh'}
         </div>
       </div>
       <div
@@ -90,12 +90,12 @@ export function MachineEnergy({
         {num(price, setPrice, 'Price ($/kWh)', '$/kWh')}
         {op('→')}
         <div className="mono" style={{ fontSize: 12, paddingBottom: 6 }}>
-          {energyCost != null ? `$${energyCost.toFixed(2)} energy` : '—'}
+          {energyCost != null ? `$${energyCost.toFixed(2)} energy` : '–'}
         </div>
         {num(machineRate, setMachineRate, 'Machine $/h', 'optional')}
         {op('→')}
         <div className="mono" style={{ fontSize: 12, paddingBottom: 6 }}>
-          {equipmentCost != null ? `$${equipmentCost.toFixed(2)} machine` : '—'}
+          {equipmentCost != null ? `$${equipmentCost.toFixed(2)} machine` : '–'}
         </div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>

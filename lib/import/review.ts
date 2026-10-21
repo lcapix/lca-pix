@@ -12,6 +12,16 @@ export interface FlowEdit {
   /** User unit override (item 12a) — replaces the flow's unit on apply when set.
    * Lets a held "kg CO2e" be corrected to "kg" instead of being silently dropped. */
   unit?: string
+  /** Corrected quantity, as typed. A document can be wrong, or read wrong, and
+   * the review screen is the moment to fix it, not after the case exists. */
+  quantity?: string
+}
+
+/** The reviewer's corrected quantity for a flow, or null when none was typed (blank or not a number). */
+export function correctedQuantity(f: MappedFlow, e: FlowEdit | undefined): number | null {
+  if (e?.quantity === undefined || e.quantity.trim() === '') return null
+  const q = Number(e.quantity)
+  return Number.isFinite(q) && q !== Number(f.quantity) ? q : null
 }
 
 // Roles a reviewer can assign to an unmapped column (item 3). 'ignore' drops it;
@@ -99,6 +109,7 @@ export function initialEdits(flows: MappedFlow[]): Record<number, FlowEdit> {
 /**
  * Lines (applied flows + costs) with no step yet, when appending; 0 when there
  * is no plan or a new case is being created. Lines sharing a key count once.
+ * A line going to a step the document creates (newStep) is placed.
  */
 export function countUnplaced(args: {
   plan: IngestPlan | null
@@ -106,8 +117,9 @@ export function countUnplaced(args: {
   edits: Record<number, FlowEdit>
   placement: Record<string, number | null>
   attachComponentId: number | null
+  newStep?: Record<string, string>
 }): number {
-  const { plan, appending, edits, placement, attachComponentId } = args
+  const { plan, appending, edits, placement, attachComponentId, newStep = {} } = args
   return plan && appending
     ? new Set(
         [
@@ -115,7 +127,7 @@ export function countUnplaced(args: {
             edits[i]?.include && edits[i]?.substance_id !== null ? flowKey(f, i) : null,
           ),
           ...plan.costs.map((c, i) => costKey(c, i)),
-        ].filter((k): k is string => !!k && (placement[k] ?? attachComponentId) == null),
+        ].filter((k): k is string => !!k && (placement[k] ?? attachComponentId) == null && !newStep[k]),
       ).size
     : 0
 }

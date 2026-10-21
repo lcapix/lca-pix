@@ -13,13 +13,23 @@
  *    so the client silently uses the deterministic computed insight instead.
  *    The AI path is strictly additive; the product never depends on it.
  *
+ * Checked before it is sent: the reply is collected in full and every number
+ * in it must match a number in the facts the model was given (lib/insights/
+ * number-check). One unsupported number drops the reply, and the client shows
+ * the computed insight instead. So the narration is no longer streamed: it
+ * arrives whole, after the check.
+ *
  * Limits: 16 KB body (checked on Content-Length and while reading), question
  * at most 500 characters, capped lists and strings (sanitizeInsightFacts), and
  * RATE_LIMITS.insights per user. Refusals are JSON with fallback:true.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { createHash } from 'crypto';
+import { execute, queryOne } from '@/lib/db-helpers';
+import { parseId } from '@/lib/ids';
+import { checkNarrationNumbers } from '@/lib/insights/number-check';
 import {
   buildInsightMessages,
   HF_ROUTER_URL,
@@ -119,25 +129,67 @@ function sseToText(body: ReadableStream<Uint8Array>): ReadableStream<Uint8Array>
   });
 }
 
+/** The run a narration is about, and whether its project lets AI phrase it (migrate-042). */
+async function runScope(runId: number): Promise<{ case_id: number; ai_enabled: boolean } | null> {
+  const sql = (withSwitch: boolean) =>
+    `SELECT r.case_id${withSwitch ? ', p.ai_enabled' : ''}
+       FROM assessment_runs r
+       JOIN case_table c ON c.case_id = r.case_id
+       JOIN project p ON p.project_id = c.project_id
+      WHERE r.run_id = ?`;
+  let row: any;
+  try {
+    row = await queryOne<any>(sql(true), [runId]);
+  } catch (err: any) {
+    if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
+    row = await queryOne<any>(sql(false), [runId]); // before migrate-042: on (D7)
+  }
+  if (!row) return null;
+  return { case_id: Number(row.case_id), ai_enabled: row.ai_enabled == null || Number(row.ai_enabled) === 1 };
+}
+
+/** A checked reply kept for this run and prompt, or null (none, or no cache table yet). */
+async function cachedReply(runId: number, hash: string): Promise<{ reply: string; model: string } | null> {
+  try {
+    const row = await queryOne<any>(`SELECT reply, model FROM insight_cache WHERE run_id = ? AND prompt_hash = ?`, [runId, hash]);
+    return row ? { reply: String(row.reply), model: String(row.model) } : null;
+  } catch (err: any) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') return null;
+    throw err;
+  }
+}
+
+async function keepReply(runId: number, hash: string, model: string, reply: string): Promise<void> {
+  try {
+    await execute(`INSERT IGNORE INTO insight_cache (run_id, prompt_hash, model, reply) VALUES (?, ?, ?, ?)`, [
+      runId,
+      hash,
+      model.slice(0, 100),
+      reply,
+    ]);
+  } catch (err: any) {
+    // A reply that cannot be kept is still a good reply.
+    console.warn('Insight reply not cached:', err?.code ?? err?.message ?? err);
+  }
+}
+
+const narration = (text: string, model: string, cache: 'hit' | 'miss') =>
+  new Response(text, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Insights-Model': model,
+      'X-Insights-Checked': 'numbers',
+      'X-Insights-Cache': cache,
+    },
+  });
+
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
 
     // Refuse an oversized body before reading any of it (INS-2).
     if ((declaredContentLength(request) ?? 0) > INSIGHT_LIMITS.bodyBytes) return tooLarge();
-
-    const token = process.env.HF_TOKEN;
-    const model = process.env.HF_INSIGHTS_MODEL || INSIGHTS_DEFAULT_MODEL;
-
-    // No key configured → tell the client to fall back to computed insights.
-    // 200 (not an error): the deterministic path is a first-class mode.
-    if (!token) {
-      return fallback({ reason: 'HF_TOKEN not configured' });
-    }
-
-    // Each narration is a paid model call: 20 per user per hour.
-    const limited = await enforceRateLimit(RATE_LIMITS.insights, [userId], { fallback: true });
-    if (limited) return limited;
 
     let raw: unknown;
     try {
@@ -147,9 +199,39 @@ export async function POST(request: NextRequest) {
       if (e instanceof PayloadTooLargeError) return tooLarge();
       return fallback({ error: 'Body must be JSON' }, 400);
     }
-    const parsed = sanitizeInsightFacts(raw);
+
+    // The run the narration is about: the caller must reach it, and its
+    // project must allow AI (D7). Without a run there is nothing to check the
+    // switch against, so the computed insight is the answer.
+    const runId = parseId((raw as any)?.run_id);
+    if (Number.isNaN(runId)) return fallback({ reason: 'no run' });
+    const scope = await runScope(runId);
+    if (!scope) return NextResponse.json({ fallback: true, error: 'Run not found' }, { status: 404 });
+    const denied = await caseAccessDenied(userId, scope.case_id, undefined, { notFound: 'Run not found' });
+    if (denied) return denied;
+    if (!scope.ai_enabled) return fallback({ reason: 'AI is off for this project', ai: 'off' });
+
+    const { run_id: _runId, ...factsBody } = (raw ?? {}) as Record<string, unknown>;
+    const parsed = sanitizeInsightFacts(factsBody);
     if (!parsed.ok) return fallback({ error: parsed.error }, 400);
     const { system, user } = buildInsightMessages(parsed.facts);
+
+    const model = process.env.HF_INSIGHTS_MODEL || INSIGHTS_DEFAULT_MODEL;
+    // Asked before: the same checked words, no model call, no allowance used.
+    const hash = createHash('sha256').update(`${model}\n${system}\n${user}`).digest('hex');
+    const kept = await cachedReply(runId, hash);
+    if (kept) return narration(kept.reply, kept.model, 'hit');
+
+    // No key configured → tell the client to fall back to computed insights.
+    // 200 (not an error): the deterministic path is a first-class mode.
+    const token = process.env.HF_TOKEN;
+    if (!token) {
+      return fallback({ reason: 'HF_TOKEN not configured' });
+    }
+
+    // Each narration is a paid model call: 20 per user per hour.
+    const limited = await enforceRateLimit(RATE_LIMITS.insights, [userId], { fallback: true });
+    if (limited) return limited;
 
     const hfRes = await fetch(HF_ROUTER_URL, {
       method: 'POST',
@@ -176,13 +258,18 @@ export async function POST(request: NextRequest) {
       return fallback({ reason: `HF ${hfRes.status}` });
     }
 
-    return new Response(sseToText(hfRes.body), {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Insights-Model': model,
-      },
-    });
+    // Collect the whole reply, then check every number in it against the facts.
+    const text = (await new Response(sseToText(hfRes.body)).text()).trim();
+    if (!text) return fallback({ reason: 'empty reply' });
+    const check = checkNarrationNumbers(text, user);
+    if (!check.ok) {
+      // Only the count goes to the log: the reply may quote the user's own data.
+      console.warn(`Insights reply dropped: ${check.unmatched.length} number(s) not in the facts`);
+      return fallback({ reason: 'number check failed' });
+    }
+
+    await keepReply(runId, hash, model, text);
+    return narration(text, model, 'miss');
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

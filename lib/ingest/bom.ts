@@ -106,7 +106,7 @@ export function structureBom(
     name: product,
     tier: 'product',
     parent: null,
-    description: `Assembled product — bill of materials ingested from ${docName}.`,
+    description: `The product, as the bill of materials ${docName} gives it.`,
     quantity: 1,
     unit: 'unit',
     provenance: { doc: docName, locator: loc, snippet: `product=${product}` },
@@ -175,7 +175,7 @@ export function structureBom(
       massUnit = unit;
     }
     if (q?.estimate || w?.estimate) {
-      notes.push(`Line "${label || material}": a range was given; the midpoint was used — check it.`);
+      notes.push(`Line "${label || material}": a range was given, so the midpoint was used. Check it.`);
     }
 
     const prov: Provenance = {
@@ -199,8 +199,8 @@ export function structureBom(
       held++;
       notes.push(
         `Line "${label || material}" has no mass (` +
-          `${q ? `${q.value} ${unit || '?'}` : 'no quantity'}) — needs a per-part mass to ` +
-          `contribute a material impact; not counted.`,
+          `${q ? `${q.value} ${unit || '?'}` : 'no quantity'}). It needs a mass per part to ` +
+          `count as material, so it is not counted yet.`,
       );
     }
 
@@ -226,10 +226,10 @@ export function structureBom(
   }
 
   if (!cols.material && !cols.part && !cols.description) {
-    notes.push('No recognizable part/material column found — check the BOM headers.');
+    notes.push('No part or material column was found: check the headers of the bill of materials.');
   }
   if (held) {
-    notes.push(`${held} line(s) had no mass and were left out of the impact — add a mass/weight column to include them.`);
+    notes.push(`${held} ${held === 1 ? 'line has' : 'lines have'} no mass, so ${held === 1 ? 'it is' : 'they are'} left out of the impact. Add a mass or weight column to count ${held === 1 ? 'it' : 'them'}.`);
   }
   if (assemblies) {
     notes.push(`${assemblies} assembly row(s) were not counted again: their parts are listed under them.`);

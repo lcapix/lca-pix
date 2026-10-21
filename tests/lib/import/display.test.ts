@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 
 import {
   TIER_LABEL,
+  costsByStep,
+  documentCostTotal,
   applyButtonLabel,
   backHref,
   backLabel,
@@ -74,8 +76,8 @@ describe('percent', () => {
 
 describe('applyButtonLabel', () => {
   it('reads by phase and by create vs append', () => {
-    expect(applyButtonLabel(false, false)).toBe('Apply — create this case')
-    expect(applyButtonLabel(false, true)).toBe('Apply — add to case')
+    expect(applyButtonLabel(false, false)).toBe('Create this case')
+    expect(applyButtonLabel(false, true)).toBe('Add to the case')
     expect(applyButtonLabel(true, false)).toBe('Creating case…')
     expect(applyButtonLabel(true, true)).toBe('Adding…')
   })
@@ -100,5 +102,24 @@ describe('noFlowsMessage', () => {
     expect(noFlowsMessage('routing')).toMatch(/^A routing gives the steps and their hours/)
     expect(noFlowsMessage('bom')).toBe('This document has no material or energy lines to add.')
     expect(noFlowsMessage('itac')).toBe('This document has no material or energy lines to add.')
+  })
+})
+
+describe('costsByStep / documentCostTotal', () => {
+  const costs = [
+    { node: 'Cut', category: 'labor', amount: 10.01 },
+    { node: 'Cut', category: 'energy', amount: 2 },
+    { node: 'Cut', category: 'labor', amount: 1 },
+    { node: 'Weld', category: 'labor', amount: 'x' as any },
+  ] as any
+  it('totals each step and names its categories once', () => {
+    const m = costsByStep(costs)
+    expect(m.get('Cut')).toEqual({ total: 13.01, kinds: 'labor, energy' })
+    expect(m.get('Weld')).toEqual({ total: 0, kinds: 'labor' })
+    expect(m.has('Paint')).toBe(false)
+  })
+  it('totals the document, a non-number counting as 0', () => {
+    expect(documentCostTotal(costs)).toBeCloseTo(13.01)
+    expect(documentCostTotal([])).toBe(0)
   })
 })

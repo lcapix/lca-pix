@@ -112,7 +112,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                   <td style={{ ...td, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{mode === 'relative' ? '%' : r.unit}</td>
                   {r.cells.map((cell) => {
                     const isBase = cell.caseId === baseId
-                    if (cell.value === null) return <td key={cell.caseId} style={tdNum}>—</td>
+                    if (cell.value === null) return <td key={cell.caseId} style={tdNum}>–</td>
                     if (mode === 'values') return <td key={cell.caseId} style={tdNum}>{sig(cell.value)}</td>
                     if (mode === 'relative') {
                       return (

@@ -168,6 +168,7 @@ export function CategorySelect({
         Impact category
       </span>
       <select
+        aria-label="Impact category"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{

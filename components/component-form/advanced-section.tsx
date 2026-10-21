@@ -72,7 +72,7 @@ export function AdvancedSection({
               color: 'var(--text-tertiary)',
             }}
           >
-            Advanced metadata — parsed as JSON on blur-valid input
+            Advanced metadata: parsed as JSON on blur-valid input
           </p>
         </div>
       )}

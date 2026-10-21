@@ -1,17 +1,16 @@
 // @vitest-environment jsdom
 /**
- * /auth/onboarding: save errors and the welcome message go through sonner
- * (the only mounted Toaster), so the user actually sees them.
+ * About you (F1.3, F1.4): the answers are saved, then the sample is built and
+ * Home opens; a failed save says so on the form; a failed build keeps the
+ * answers and offers Try again or an empty project; Skip saves nothing but
+ * the skip. Errors are on the screen, never in a toast.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
-const { toast } = vi.hoisted(() => ({
-  toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
-}))
 const replace = vi.fn()
-vi.mock('sonner', () => ({ toast }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace }) }))
+const push = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace }) }))
 vi.mock('@/components/auth-guard', () => ({ AuthGuard: ({ children }: any) => <>{children}</> }))
 
 import OnboardingPage from '@/app/auth/onboarding/page'
@@ -20,20 +19,27 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
 let putStatus = 200
+let buildStatus = 200
+let sent: any[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
   putStatus = 200
+  buildStatus = 200
+  sent = []
   localStorage.setItem('auth_token', 'token-abc')
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_url: string, init?: RequestInit) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       if (init?.method === 'PUT') {
-        return putStatus >= 400
-          ? json(putStatus, { error: 'Failed to update profile' })
-          : json(200, { success: true })
+        sent.push(JSON.parse(String(init.body)))
+        return putStatus >= 400 ? json(putStatus, { error: 'Failed to update profile' }) : json(200, { success: true })
       }
-      return json(200, { success: true, profile: { needsOnboarding: true } })
+      if (String(url).startsWith('/api/example-project')) {
+        return buildStatus >= 400 ? json(buildStatus, { error: 'Could not build the sample study. Nothing was created.' }) : json(200, { project_id: 9 })
+      }
+      if (String(url).startsWith('/api/projects')) return json(200, { projects: [] })
+      return json(200, { success: true, profile: { id: 1, email: 'a@b.c', needsOnboarding: true, fullName: 'Ada Lovelace' } })
     }),
   )
 })
@@ -43,32 +49,47 @@ afterEach(() => {
   localStorage.clear()
 })
 
-async function fillAndSubmit() {
+async function open() {
   render(<OnboardingPage />)
-  fireEvent.change(await screen.findByPlaceholderText('Jane Doe'), { target: { value: 'Ada Lovelace' } })
-  fireEvent.change(screen.getByPlaceholderText('Acme Sustainability'), {
-    target: { value: 'Analytical Engines' },
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Continue to dashboard' }))
+  await waitFor(() => expect((screen.getByLabelText('Full name') as HTMLInputElement).value).toBe('Ada Lovelace'))
 }
 
 describe('/auth/onboarding', () => {
-  it('shows the server error in a toast when the save fails', async () => {
+  it('saves the answers (institution optional), builds the sample and opens Home', async () => {
+    await open()
+    fireEvent.click(screen.getByLabelText(/Research in a lab/))
+    fireEvent.click(screen.getByRole('button', { name: /Open the sample study/ }))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/home'))
+    expect(sent[0]).toMatchObject({ fullName: 'Ada Lovelace', company: null, useCase: 'lab' })
+  })
+
+  it('a failed save says so on the form and builds nothing', async () => {
     putStatus = 500
-    await fillAndSubmit()
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('Save failed', {
-        description: 'Failed to update profile',
-      }),
-    )
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: /Open the sample study/ }))
+    await waitFor(() => expect(screen.getByText('Failed to update profile')).toBeTruthy())
     expect(replace).not.toHaveBeenCalledWith('/home')
   })
 
-  it('welcomes the user in a toast and goes home on success', async () => {
-    await fillAndSubmit()
+  it('a failed build keeps the answers: Try again, or an empty project instead', async () => {
+    buildStatus = 500
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: /Open the sample study/ }))
+    expect(await screen.findByText(/We couldn.t build the sample study. Nothing was lost./)).toBeTruthy()
+    expect(screen.getByText('Your answers are saved. Try again in a moment.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Start with an empty project instead' }))
+    expect(push).toHaveBeenCalledWith('/project/new')
+  })
+
+  it('Skip for now saves only the skip', async () => {
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }))
     await waitFor(() => expect(replace).toHaveBeenCalledWith('/home'))
-    expect(toast.success).toHaveBeenCalledWith("You're all set", {
-      description: 'Welcome to LCAPIX.',
-    })
+    expect(sent).toEqual([{ skip: true }])
+  })
+
+  it('a company workspace is shown, not selectable', async () => {
+    await open()
+    expect((screen.getByLabelText(/A company workspace/) as HTMLInputElement).disabled).toBe(true)
   })
 })

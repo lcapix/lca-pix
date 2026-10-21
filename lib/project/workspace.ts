@@ -83,13 +83,13 @@ export function workspaceKpis(args: {
     },
     {
       label: 'Global Warming',
-      value: totalImpact != null ? totalImpact.toFixed(3) : '—',
+      value: totalImpact != null ? totalImpact.toFixed(3) : '–',
       note: totalImpact != null ? impactUnit : 'Run an assessment',
       tone: totalImpact != null ? 'brand' : 'neutral',
     },
     {
       label: 'Cost',
-      value: totalCost != null ? `$${Math.round(totalCost).toLocaleString()}` : '—',
+      value: totalCost != null ? `$${Math.round(totalCost).toLocaleString()}` : '–',
       note: totalCost != null ? 'Total ABC cost' : 'Add cost data on operations',
       tone: totalCost != null ? 'brand' : 'neutral',
     },

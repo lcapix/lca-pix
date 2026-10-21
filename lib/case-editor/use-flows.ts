@@ -159,16 +159,20 @@ export function useFlowRowEdit({
   const startEdit = (f: FlowRow) =>
     setEditing({
       id: f.flow_id,
-      qty: String(f.quantity),
+      // A flow with no amount yet edits from an empty box, not the word "null".
+      qty: f.quantity === null || f.quantity === undefined ? '' : String(f.quantity),
       unit: f.unit,
       substanceId: f.substance_id,
     })
 
   async function saveEdit() {
     if (!editing || editSaving) return
-    const qtyNum = Number(editing.qty)
-    if (editing.qty.trim() === '' || isNaN(qtyNum)) {
-      toast.error('Quantity must be a number')
+    // An empty box clears the amount (the flow then "needs an amount" and is
+    // left out of a run); anything else must be a number.
+    const blank = editing.qty.trim() === ''
+    const qtyNum = blank ? null : Number(editing.qty)
+    if (qtyNum !== null && (isNaN(qtyNum) || qtyNum < 0)) {
+      toast.error('Enter an amount of 0 or more, or leave it empty for now')
       return
     }
     setEditSaving(true)

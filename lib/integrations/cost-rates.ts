@@ -8,6 +8,20 @@ export interface CostRate {
   effectiveDate: string;
 }
 
+/**
+ * A DATE column as YYYY-MM-DD. mysql2 returns a DATE as a Date at local
+ * midnight, and String(date).slice(0, 10) gave "Thu May 01": read the local
+ * calendar fields instead. A string is kept as it is.
+ */
+export function isoDate(v: unknown): string {
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    const mm = String(v.getMonth() + 1).padStart(2, '0');
+    const dd = String(v.getDate()).padStart(2, '0');
+    return `${v.getFullYear()}-${mm}-${dd}`;
+  }
+  return String(v ?? '').slice(0, 10);
+}
+
 export type CostRateType = 'labor' | 'electricity' | 'natural_gas' | 'material' | 'transport';
 
 export interface GetOrFetchParams {
@@ -48,7 +62,7 @@ export async function getOrFetchRate(params: GetOrFetchParams): Promise<CostRate
         rateValue: parseFloat(String(cached.rate_value)),
         unit: cached.rate_unit,
         source: cached.source,
-        effectiveDate: String(cached.effective_date).slice(0, 10),
+        effectiveDate: isoDate(cached.effective_date),
       };
     }
   }

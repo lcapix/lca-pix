@@ -1,11 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { POST } from '@/app/api/insights/route';
 import * as auth from '@/lib/auth';
+import * as db from '@/lib/db-helpers';
+import * as guard from '@/lib/route-guard';
 import { MemoryRateLimitStore, setRateLimitStore } from '@/lib/rate-limit';
 
 vi.mock('@/lib/auth');
+vi.mock('@/lib/db-helpers');
+vi.mock('@/lib/route-guard', async (orig) => ({ ...(await orig<any>()), caseAccessDenied: vi.fn() }));
+
+/** The run a narration is about (education 2.13): reachable, in a project with AI on. */
+let project = { ai_enabled: 1 };
+let cached: { reply: string; model: string } | null = null;
+function runAndCache() {
+  vi.mocked(guard.caseAccessDenied).mockResolvedValue(null);
+  vi.mocked(db.queryOne).mockImplementation(async (sql: string) => {
+    if (/FROM assessment_runs r/.test(sql)) return { case_id: 3, ...project } as any;
+    if (/FROM insight_cache/.test(sql)) return cached as any;
+    return null;
+  });
+  vi.mocked(db.execute).mockResolvedValue(1 as any);
+}
 
 const FACTS = {
+  run_id: 41,
   caseName: 'Bracket',
   method: 'CML 2001',
   categoryLabel: 'Global Warming',
@@ -51,6 +69,9 @@ describe('POST /api/insights', () => {
     vi.mocked(auth.requireAuth).mockResolvedValue(7);
     process.env.HF_TOKEN = 'hf_test';
     setRateLimitStore(new MemoryRateLimitStore());
+    project = { ai_enabled: 1 };
+    cached = null;
+    runAndCache();
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -169,6 +190,57 @@ describe('POST /api/insights', () => {
     it('401 when not signed in', async () => {
       vi.mocked(auth.requireAuth).mockRejectedValue(new Error('No authentication token provided'));
       expect((await POST(req(FACTS) as any)).status).toBe(401);
+    });
+  });
+
+  describe('the run, the AI switch and the cache (education 2.13)', () => {
+    const upstream = () => {
+      const fetchMock = vi.fn(async () =>
+        new Response(sse(['data: {"choices":[{"delta":{"content":"Paint is 60% of it."}}]}\n\n', 'data: [DONE]\n\n']).body, { status: 200 }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    };
+
+    it('no run: the computed insight, nothing sent', async () => {
+      const fetchMock = upstream();
+      const { run_id: _r, ...noRun } = FACTS;
+      const res = await POST(req(noRun) as any);
+      expect(await res.json()).toMatchObject({ fallback: true, reason: 'no run' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('a run the caller cannot reach is 404, and nothing is sent', async () => {
+      const fetchMock = upstream();
+      vi.mocked(guard.caseAccessDenied).mockResolvedValue(new Response(JSON.stringify({ error: 'Run not found' }), { status: 404 }) as any);
+      const res = await POST(req(FACTS) as any);
+      expect(res.status).toBe(404);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("AI switched off for the project: the computed insight, and the run's figures never leave", async () => {
+      const fetchMock = upstream();
+      project = { ai_enabled: 0 };
+      const res = await POST(req(FACTS) as any);
+      expect(await res.json()).toMatchObject({ fallback: true, ai: 'off' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('a checked reply is kept for the run; asking again reads it back without a model call or the allowance', async () => {
+      const fetchMock = upstream();
+      const first = await POST(req(FACTS) as any);
+      expect(first.headers.get('x-insights-cache')).toBe('miss');
+      expect(await first.text()).toBe('Paint is 60% of it.');
+      const kept = vi.mocked(db.execute).mock.calls.find(([sql]) => /INSERT IGNORE INTO insight_cache/.test(String(sql)));
+      expect(kept?.[1]).toEqual([41, expect.stringMatching(/^[0-9a-f]{64}$/), expect.any(String), 'Paint is 60% of it.']);
+
+      cached = { reply: 'Paint is 60% of it.', model: 'm' };
+      fetchMock.mockClear();
+      delete process.env.HF_TOKEN; // a kept reply needs no key
+      const again = await POST(req(FACTS) as any);
+      expect(again.headers.get('x-insights-cache')).toBe('hit');
+      expect(await again.text()).toBe('Paint is 60% of it.');
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

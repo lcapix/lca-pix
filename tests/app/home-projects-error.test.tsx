@@ -35,7 +35,7 @@ vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 
-import HomePage from '@/app/home/page'
+import HomePage from '@/app/home/_components/classic-home'
 import { useAuthStore, useProjectStore } from '@/lib/store'
 import { toast } from 'sonner'
 

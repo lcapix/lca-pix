@@ -25,18 +25,8 @@ import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
 import type { MappedFlow } from '@/lib/ingest/maplca';
 import { nodeDepths, validateProcessModel } from '@/lib/ingest/schema';
 
-const COST_COLUMN: Record<string, string> = {
-  labor: 'labor_cost',
-  energy: 'energy_cost',
-  material: 'material_cost',
-  transportation: 'transportation_cost',
-  opex: 'opex',
-  capex: 'capex',
-};
-
-/** The cost column for a category, own keys only ("constructor" is not a column). */
-const costColumn = (category: unknown): string | undefined =>
-  typeof category === 'string' && Object.hasOwn(COST_COLUMN, category) ? COST_COLUMN[category] : undefined;
+import { costColumn } from '@/lib/ingest/cost-columns';
+import { recordHeldLines, type HeldLine } from '@/lib/import/held-lines';
 
 // ── Body validation ──────────────────────────────────────────────────────────
 // Every value that reaches SQL is checked for type here. mysql2's .query()
@@ -108,6 +98,39 @@ const bodySchema = z.object({
   notes: z.array(z.string().max(5000)).max(1000).optional().default([]),
   target_case_id: optionalId,
   attach_component_id: optionalId,
+  // Append mode: the reviewer's decision for each step the document describes,
+  // keyed by step name. Must be declared here: bodySchema is strict, so an
+  // undeclared key is stripped and every step would silently default to skip.
+  node_actions: z
+    .record(
+      text(K.component_name.max),
+      z.object({
+        action: z.enum(['attach', 'create', 'skip']).optional(),
+        component_id: optionalId,
+      }),
+    )
+    .refine((r) => Object.keys(r).length <= 5000, { message: 'At most 5000 step decisions' })
+    .optional()
+    .default({}),
+  // Append mode: for a step that already has a cost in a column this document
+  // writes, keyed "<component_id>|<column>": keep what is there, replace it,
+  // or add to it. Without a decision the line adds (the API's old behaviour);
+  // the review screen always sends one, defaulting to keep, so a re-imported
+  // document never doubles a cost unseen.
+  cost_modes: z
+    .record(z.string().regex(/^\d+\|[a-z_]+$/), z.enum(['keep', 'replace', 'add']))
+    .refine((r) => Object.keys(r).length <= 5000, { message: 'At most 5000 cost decisions' })
+    .optional()
+    .default({}),
+  // The same for flows: a step that already has a flow of a substance in one
+  // direction, keyed "<component_id>|<substance_id>|<input|output>". Replace
+  // removes that step's existing flows of the substance in that direction
+  // before the document's go in.
+  flow_modes: z
+    .record(z.string().regex(/^\d+\|\d+\|(input|output)$/), z.enum(['keep', 'replace', 'add']))
+    .refine((r) => Object.keys(r).length <= 5000, { message: 'At most 5000 flow decisions' })
+    .optional()
+    .default({}),
 });
 
 /**
@@ -160,6 +183,13 @@ export async function POST(request: NextRequest) {
     const notes: string[] = body.notes;
 
     const targetCaseId = body.target_case_id;
+    // Append mode: what the reviewer decided to do with each step the document
+    // describes — attach it to an existing step, create it, or skip it. Without
+    // this the hierarchy was dropped entirely, so re-importing a routing onto a
+    // live case added nothing (and creating blindly would have doubled it).
+    const nodeActions = body.node_actions;
+    const costModes = body.cost_modes;
+    const flowModes = body.flow_modes;
     const attachComponentId = body.attach_component_id;
 
     // ── Append mode ──────────────────────────────────────────────────────────
@@ -182,7 +212,7 @@ export async function POST(request: NextRequest) {
       // part of this case. The body's attach_component_id is the default for
       // lines without one; a line with neither is held, never guessed.
       const caseComponents = await query<any>(
-        `SELECT component_id, component_name FROM component WHERE case_id = ?`,
+        `SELECT component_id, component_name, hierarchy_level FROM component WHERE case_id = ?`,
         [targetCaseId]
       );
       const nameById = new Map<number, string>(
@@ -207,20 +237,98 @@ export async function POST(request: NextRequest) {
       const unitBySubstance = usable.units;
 
       const skippedFlows: string[] = [];
+      // The same lines, kept for later (migrate-040, E12 "lines held").
+      const heldLines: HeldLine[] = [];
+      const heldFlow = (f: any, reason: HeldLine['reason']) =>
+        heldLines.push({
+          kind: 'flow', reason, step_name: f.node || null, substance_text: f.substance_text, substance_id: f.substance_id ?? null,
+          direction: f.direction, quantity: f.quantity, unit: f.unit, provenance: f.provenance ?? null,
+        });
       const appendResult = await transaction(async (conn) => {
         let applied = 0;
         let held = 0;
+        let flowsKept = 0;
+        let flowsReplaced = 0;
         const usedSteps = new Set<number>();
+        // Replace clears a step's existing flows of a substance once, before
+        // the first of the document's lines for it goes in.
+        const cleared = new Set<string>();
+
+        // Step 0: settle the steps themselves. idByName starts from what the
+        // case already has, so a flow naming a step the document shares with
+        // the case resolves without the reviewer picking anything.
+        const idByName = new Map<string, number>();
+        const levelById = new Map<number, number>();
+        for (const c of caseComponents as any[]) {
+          idByName.set(String(c.component_name).trim().toLowerCase(), Number(c.component_id));
+          levelById.set(Number(c.component_id), Number(c.hierarchy_level) || 1);
+        }
+        let stepsCreated = 0;
+        let stepsAttached = 0;
+
+        // Plan order, so a parent is created before the child that names it.
+        for (const n of nodes) {
+          const decision = nodeActions[n.name] ?? {};
+          const action = decision.action ?? 'skip';
+          if (action === 'attach' && decision.component_id && nameById.has(decision.component_id)) {
+            idByName.set(n.name.trim().toLowerCase(), decision.component_id);
+            stepsAttached++;
+            continue;
+          }
+          if (action !== 'create') continue;
+
+          const parentId = n.parent ? idByName.get(n.parent.trim().toLowerCase()) ?? null : null;
+          // Depth is the parent's depth plus one. Hard-coding it put every new
+          // step at level 2 regardless of where it actually sat.
+          const anchor = parentId ?? attachComponentId ?? null;
+          const level = anchor ? (levelById.get(anchor) ?? 1) + 1 : 1;
+          const [res] = await conn.query<any>(
+            `INSERT INTO component
+               (case_id, parent_component_id, component_name, component_type, hierarchy_level,
+                quantity, unit, description)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              targetCaseId,
+              parentId ?? attachComponentId ?? null,
+              n.name,
+              n.tier,
+              Math.max(1, level),
+              n.quantity ?? 1,
+              n.unit ?? 'unit',
+              n.description ?? null,
+            ]
+          );
+          const newId = Number(res.insertId);
+          idByName.set(n.name.trim().toLowerCase(), newId);
+          levelById.set(newId, Math.max(1, level));
+          nameById.set(newId, n.name);
+          stepsCreated++;
+        }
+
+        // Where a line goes, in order: the step the reviewer set for it in the
+        // STEP column; else the step it names in the document (attached or
+        // just created above); else the default step; else it is held. The
+        // name used to come first, so a line went to a same-named step even
+        // when the reviewer had picked another one.
+        const stepForLine = (item: { node?: string; attach_component_id?: number | null }): number | null => {
+          const own = Number(item?.attach_component_id);
+          if (own && nameById.has(own)) return own;
+          const named = item.node ? idByName.get(item.node.trim().toLowerCase()) : undefined;
+          return named ?? stepFor({});
+        };
+
         for (const f of flows) {
           if (!f.substance_id) {
             held++;
             skippedFlows.push(`${f.substance_text}: no confirmed substance match`);
+            heldFlow(f, 'no_substance');
             continue;
           }
-          const target = stepFor(f);
+          const target = stepForLine(f as any);
           if (!target) {
             held++;
             skippedFlows.push(`${f.substance_text}: no step chosen`);
+            heldFlow(f, 'no_step');
             continue;
           }
           // lib/units decides, as the engine will ('Mg' is not 'mg').
@@ -230,7 +338,22 @@ export async function POST(request: NextRequest) {
             skippedFlows.push(
               `${f.substance_text}: unit '${f.unit}' cannot convert to factor unit '${factorUnit}'`
             );
+            heldFlow(f, 'unit');
             continue;
+          }
+          const flowKey = `${target}|${f.substance_id}|${f.direction}`;
+          const flowMode = flowModes[flowKey] ?? 'add';
+          if (flowMode === 'keep') {
+            flowsKept++;
+            continue;
+          }
+          if (flowMode === 'replace' && !cleared.has(flowKey)) {
+            cleared.add(flowKey);
+            const [del]: any = await conn.query(
+              `DELETE FROM flows WHERE component_id = ? AND substance_id = ? AND flow_type = ?`,
+              [target, f.substance_id, f.direction]
+            );
+            flowsReplaced += Number(del?.affectedRows ?? 0);
           }
           await conn.query(
             `INSERT INTO flows
@@ -251,24 +374,67 @@ export async function POST(request: NextRequest) {
 
         // Costs ADD onto each step's existing columns (append, never overwrite).
         const totals = new Map<string, number>(); // "componentId|column" -> amount
+        // Labor multiplicands per step (hours, and the occupation that priced
+        // them), so a replaced or added labor cost keeps hours × wage true.
+        const laborHours = new Map<number, { hours: number; soc?: string }>();
         for (const c of costs) {
           const col = costColumn(c.category);
-          const target = stepFor(c);
+          const target = stepForLine(c as any);
           if (!col) continue;
           if (!target) {
             skippedFlows.push(`${c.category} cost ${c.amount}: no step chosen`);
+            heldLines.push({
+              kind: 'cost', reason: 'no_step', step_name: c.node || null, cost_category: c.category,
+              amount: c.amount, hours: (c as any).hours ?? null, occupation: (c as any).occupation ?? null,
+              provenance: c.provenance?.doc ?? null,
+            });
             continue;
           }
           const key = `${target}|${col}`;
           totals.set(key, (totals.get(key) ?? 0) + Number(c.amount || 0));
           usedSteps.add(target);
+          if (col === 'labor_cost' && Number((c as any).hours) > 0) {
+            const acc = laborHours.get(target) ?? { hours: 0 };
+            acc.hours += Number((c as any).hours);
+            acc.soc ??= (c as any).occupation ?? undefined;
+            laborHours.set(target, acc);
+          }
         }
+        let costsKept = 0;
+        let costsReplaced = 0;
         for (const [key, amount] of totals) {
           const [id, col] = key.split('|');
+          const mode = costModes[key] ?? 'add';
+          if (mode === 'keep') {
+            costsKept++;
+            continue;
+          }
+          if (mode === 'replace') costsReplaced++;
+          // col is from costColumn(), a fixed whitelist; never from the body.
           await conn.query(
-            `UPDATE component SET ${col} = COALESCE(${col}, 0) + ? WHERE component_id = ?`,
+            mode === 'replace'
+              ? `UPDATE component SET ${col} = ? WHERE component_id = ?`
+              : `UPDATE component SET ${col} = COALESCE(${col}, 0) + ? WHERE component_id = ?`,
             [amount, Number(id)]
           );
+          const lh = col === 'labor_cost' ? laborHours.get(Number(id)) : undefined;
+          if (lh) {
+            // Hours follow the cost: replaced with it, or added to it. The
+            // occupation is the document's on a replace, and fills a blank on
+            // an add (a typed 'user' rate or a reference wage already there stays).
+            const hours = Math.round(lh.hours * 10000) / 10000;
+            try {
+              await conn.query(
+                mode === 'replace'
+                  ? `UPDATE component SET labor_hours = ?, labor_occupation = ? WHERE component_id = ?`
+                  : `UPDATE component SET labor_hours = COALESCE(labor_hours, 0) + ?,
+                         labor_occupation = COALESCE(labor_occupation, ?) WHERE component_id = ?`,
+                [hours, lh.soc ?? null, Number(id)]
+              );
+            } catch (e: any) {
+              if (e?.code !== 'ER_BAD_FIELD_ERROR') throw e; // older schema: the cost still applied
+            }
+          }
         }
 
         // The document's name only (a flow's provenance also carries its row).
@@ -279,12 +445,29 @@ export async function POST(request: NextRequest) {
               SET description = LEFT(CONCAT(COALESCE(description, ''), ?), 2000)
             WHERE case_id = ?`,
           [
-            ` Added ${sourceDoc}: ${applied} flow(s) on ${usedSteps.size} step(s).`.slice(0, 900),
+            ` Added ${sourceDoc}: ${applied} flow(s) on ${usedSteps.size} step(s)` +
+              (stepsCreated ? `, ${stepsCreated} step(s) created` : '') +
+              (stepsAttached ? `, ${stepsAttached} matched to existing steps` : '') +
+              '.'.slice(0, 900),
             targetCaseId,
           ]
         );
 
-        return { applied, held, costCols: totals.size, steps: [...usedSteps] };
+        const heldKept = await recordHeldLines(conn, targetCaseId, userId, heldLines);
+
+        return {
+          applied,
+          held,
+          heldKept,
+          costCols: totals.size - costsKept,
+          costsKept,
+          costsReplaced,
+          flowsKept,
+          flowsReplaced,
+          steps: [...usedSteps],
+          stepsCreated,
+          stepsAttached,
+        };
       });
 
       return NextResponse.json(
@@ -294,10 +477,17 @@ export async function POST(request: NextRequest) {
           case_id: targetCaseId,
           attach_component_id: attachComponentId,
           steps_used: appendResult.steps.map((id) => nameById.get(id)),
+          steps_created: appendResult.stepsCreated,
+          steps_matched: appendResult.stepsAttached,
           flows_applied: appendResult.applied,
           flows_held_for_review: appendResult.held,
           held_details: skippedFlows,
+          held_lines_kept: appendResult.heldKept,
           cost_columns_updated: appendResult.costCols,
+          costs_kept: appendResult.costsKept,
+          costs_replaced: appendResult.costsReplaced,
+          flows_kept: appendResult.flowsKept,
+          flows_replaced: appendResult.flowsReplaced,
         },
         { status: 200 }
       );
@@ -339,6 +529,12 @@ export async function POST(request: NextRequest) {
     const unitBySubstance = usable.units;
 
     const skippedFlows: string[] = [];
+    const heldLines: HeldLine[] = [];
+    const heldFlow = (f: any, reason: HeldLine['reason']) =>
+      heldLines.push({
+        kind: 'flow', reason, step_name: f.node || null, substance_text: f.substance_text, substance_id: f.substance_id ?? null,
+        direction: f.direction, quantity: f.quantity, unit: f.unit, provenance: f.provenance ?? null,
+      });
 
     const result = await transaction(async (conn) => {
       const sourceDoc =
@@ -442,12 +638,14 @@ export async function POST(request: NextRequest) {
         if (!f.substance_id) {
           held++;
           skippedFlows.push(`${f.substance_text} (${f.node}): no confirmed substance match`);
+          heldFlow(f, 'no_substance');
           continue;
         }
         const componentId = idByName.get(f.node);
         if (!componentId) {
           held++;
           skippedFlows.push(`${f.substance_text} (${f.node}): node not in plan`);
+          heldFlow(f, 'no_step');
           continue;
         }
         // lib/units decides, as the engine will ('Mg' is not 'mg').
@@ -457,6 +655,7 @@ export async function POST(request: NextRequest) {
           skippedFlows.push(
             `${f.substance_text} (${f.node}): unit '${f.unit}' cannot convert to factor unit '${factorUnit}'`
           );
+          heldFlow(f, 'unit');
           continue;
         }
         await conn.query(
@@ -480,7 +679,18 @@ export async function POST(request: NextRequest) {
       for (const c of costs) {
         const col = costColumn(c.category);
         const componentId = idByName.get(c.node);
-        if (!col || !componentId) continue;
+        if (!col) continue;
+        // A cost on a step the plan does not have was dropped without a word;
+        // it is held like a flow now.
+        if (!componentId) {
+          skippedFlows.push(`${c.category} cost ${c.amount} (${c.node}): node not in plan`);
+          heldLines.push({
+            kind: 'cost', reason: 'no_step', step_name: c.node || null, cost_category: c.category,
+            amount: c.amount, hours: (c as any).hours ?? null, occupation: (c as any).occupation ?? null,
+            provenance: c.provenance?.doc ?? null,
+          });
+          continue;
+        }
         const acc = costByNode.get(c.node) ?? {};
         acc[col] = (acc[col] ?? 0) + Number(c.amount || 0);
         costByNode.set(c.node, acc);
@@ -494,7 +704,9 @@ export async function POST(request: NextRequest) {
         ]);
       }
 
-      return { caseId, caseName: uniqueName, components: idByName.size, applied, held, costNodes: costByNode.size };
+      const heldKept = await recordHeldLines(conn, caseId, userId, heldLines);
+
+      return { caseId, caseName: uniqueName, components: idByName.size, applied, held, heldKept, costNodes: costByNode.size };
     });
 
     return NextResponse.json(
@@ -506,6 +718,7 @@ export async function POST(request: NextRequest) {
         flows_applied: result.applied,
         flows_held_for_review: result.held,
         held_details: skippedFlows,
+        held_lines_kept: result.heldKept,
         cost_nodes: result.costNodes,
       },
       { status: 201 }

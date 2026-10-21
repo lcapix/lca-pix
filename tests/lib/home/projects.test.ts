@@ -29,7 +29,7 @@ describe('formatRelative', () => {
   })
   it('reads a future date as just now and an invalid one as a dash', () => {
     expect(formatRelative(new Date(NOW + DAY), NOW)).toBe('just now')
-    expect(formatRelative(new Date('nope'), NOW)).toBe('—')
+    expect(formatRelative(new Date('nope'), NOW)).toBe('–')
   })
 })
 
@@ -43,8 +43,8 @@ describe('coerceProject', () => {
       status: 'active',
       cases: 0,
       components: 0,
-      lastRun: '—',
-      updated: '—',
+      lastRun: '–',
+      updated: '–',
     })
   })
   it('reads more than one case as a comparison and archived projects', () => {

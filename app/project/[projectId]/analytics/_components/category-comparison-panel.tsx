@@ -266,9 +266,9 @@ export function CategoryComparisonPanel({
         }}
       >
         {view === 'absolute' &&
-          'Raw impact values per category. A single huge bar means that category dominates — switch to Log scale or Normalised to see smaller ones.'}
+          'Raw impact values per category. A single huge bar means that category dominates: switch to Log scale or Normalised to see smaller ones.'}
         {view === 'radar' &&
-          'Each axis is normalised to the highest scenario in that category — bigger polygon = larger overall footprint.'}
+          'Each axis is normalised to the highest scenario in that category: bigger polygon = larger overall footprint.'}
         {view === 'normalized' &&
           'Each category is scaled 0–100% of its own maximum so small-magnitude categories stay visible.'}
         {view === 'log' &&

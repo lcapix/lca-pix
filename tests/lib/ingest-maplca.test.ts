@@ -52,7 +52,7 @@ describe('convertIngestUnit', () => {
     const r = convertIngestUnit(3, 'bushels', 'Wheat')
     expect(r.quantity).toBe(3)
     expect(r.unit).toBe('bushels')
-    expect(r.note).toContain('NO CONVERSION RULE')
+    expect(r.note).toContain('No conversion for')
   })
 })
 
@@ -100,7 +100,7 @@ describe('mapModel', () => {
     expect(gas.quantity).toBeCloseTo(118704.6, 1)
     expect(gas.provenance).toContain('ITAC.xlsx')
     // exact-name matches at score 1 ⇒ no low-confidence review lines for them
-    expect(plan.review.filter((r) => r.includes('LOW-CONFIDENCE'))).toHaveLength(0)
+    expect(plan.review.filter((r) => r.includes('check it is the right substance'))).toHaveLength(0)
   })
 
   it('holds back unmatched substances into review instead of dropping them', () => {
@@ -115,13 +115,13 @@ describe('mapModel', () => {
     const plan = mapModel(pm, CATALOG)
     const held = plan.flows.find((f) => f.substance_text.includes('Trichloroethylene'))!
     expect(held.substance_id).toBeNull()
-    expect(plan.review.some((r) => r.startsWith('UNMATCHED SUBSTANCE'))).toBe(true)
+    expect(plan.review.some((r) => r.includes('nothing in the library matched closely enough'))).toBe(true)
   })
 
   it('flags matches whose substance has zero impact factors', () => {
     const pm = structureItac([{ ...ROW, W0_plant_usage: 300 }], 'TS0001', 'ITAC.xlsx')
     const plan = mapModel(pm, CATALOG)
-    expect(plan.review.some((r) => r.startsWith('NO IMPACT DATA'))).toBe(true)
+    expect(plan.review.some((r) => r.includes('has no impact factor in the library'))).toBe(true)
   })
 
   it('returns only STRUCTURE review lines for an invalid model', () => {

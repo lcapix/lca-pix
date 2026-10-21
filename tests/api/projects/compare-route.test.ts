@@ -68,6 +68,11 @@ function install() {
   vi.mocked(db.query).mockImplementation(async (sql: string, params?: any[]) => {
     sqlSeen.push(sql);
     if (/FROM case_table WHERE project_id/.test(sql)) return world.cases as any;
+    // Runs are read in two steps (lib/runs/newest-first): ids by case, newest
+    // first, then the rows by id.
+    if (/FROM assessment_runs[\s\S]*WHERE run_id IN/.test(sql)) {
+      return Object.values(world.runs).flat().filter((r: any) => params!.includes(r.run_id)) as any;
+    }
     if (/FROM assessment_runs/.test(sql)) return (world.runs[params![0]] ?? []) as any;
     if (/FROM component WHERE case_id/.test(sql)) return (world.comps[params![0]] ?? []) as any;
     if (/FROM flows f/.test(sql)) return (world.flows[params![0]] ?? []) as any;

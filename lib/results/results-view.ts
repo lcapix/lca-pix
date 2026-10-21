@@ -227,3 +227,25 @@ export function exportFileName(
   const stem = format === 'csv' ? 'LCAPIX_inventory' : 'LCAPIX_Report'
   return `${stem}_${caseName?.replace(/[^a-zA-Z0-9]/g, '_') ?? runId}.${format}`
 }
+
+/**
+ * Download a run's export (GET /api/assessments/[runId]/export) as a file:
+ * the PDF report, the slides, or the inventory CSV. Throws with the status
+ * when the server refuses, so the caller can say why.
+ */
+export async function downloadRunExport(runId: number, format: 'pdf' | 'pptx' | 'csv', caseName: string | undefined): Promise<void> {
+  const token = typeof localStorage === 'undefined' ? null : localStorage.getItem('auth_token')
+  const res = await fetch(`/api/assessments/${runId}/export?format=${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new Error(`the export answered ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = exportFileName(format, caseName, runId)
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

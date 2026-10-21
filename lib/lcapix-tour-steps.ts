@@ -15,7 +15,7 @@ export const LCAPIX_TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="home-greeting"]',
     title: 'Welcome to LCAPIX',
-    body: 'Life-cycle assessment with cost and environmental impact in the same view. This quick tour walks you from an empty dashboard to a defensible CO₂ number — about 90 seconds.',
+    body: 'Life-cycle assessment with cost and environmental impact in the same view. This quick tour walks you from an empty dashboard to a defensible CO₂ number: about 90 seconds.',
     placement: 'bottom',
     navigate: '/home',
   },
@@ -28,14 +28,14 @@ export const LCAPIX_TOUR_STEPS: TourStep[] = [
   {
     selector: '[data-tour="home-new-project"]',
     title: 'Start a new project',
-    body: 'Every LCA lives inside a project. A project can have multiple cases — typically a base case and one or more comparative scenarios.',
-    actionHint: "Click 'New Project' — we'll wait while you create one.",
+    body: 'Every LCA lives inside a project. A project can have multiple cases: typically a base case and one or more comparative scenarios.',
+    actionHint: "Click 'New Project': we'll wait while you create one.",
     placement: 'bottom',
   },
   {
     selector: '[data-tour="project-header"]',
     title: 'Your project workspace',
-    body: 'You can have multiple cases per project — a base case (current state) and one or more comparative cases. The hierarchy you build is shared across cases unless you diverge it.',
+    body: 'You can have multiple cases per project: a base case (current state) and one or more comparative cases. The hierarchy you build is shared across cases unless you diverge it.',
     placement: 'bottom',
   },
   {

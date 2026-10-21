@@ -338,6 +338,7 @@ export default function ProfilePage() {
 
                   <Field label="Country" hint="Helps us suggest regional factor packs.">
                     <select
+                      aria-label="Country"
                       value={draft.country}
                       onChange={(e) => update("country", e.target.value)}
                       style={{ ...inputStyle, appearance: "auto" }}
@@ -386,6 +387,7 @@ export default function ProfilePage() {
 
                   <Field label="Primary use case">
                     <select
+                      aria-label="Primary use case"
                       value={draft.useCase}
                       onChange={(e) => update("useCase", e.target.value)}
                       style={{ ...inputStyle, appearance: "auto" }}
@@ -410,16 +412,16 @@ export default function ProfilePage() {
                 >
                   <ReadOnlyGrid
                     rows={[
-                      { label: "Email", value: server.email || "—" },
+                      { label: "Email", value: server.email || "–" },
                       {
                         label: "Username",
-                        value: server.username ? `@${server.username}` : "—",
+                        value: server.username ? `@${server.username}` : "–",
                       },
                       {
                         label: "Member since",
                         value: server.onboardedAt
                           ? formatDate(server.onboardedAt)
-                          : "—",
+                          : "–",
                       },
                     ]}
                   />
@@ -572,7 +574,7 @@ function CalmMetaRow({
         <MetaCell label="Country" value={country || "Not set"} />
         <MetaCell
           label="Joined"
-          value={onboardedAt ? formatDate(onboardedAt) : "—"}
+          value={onboardedAt ? formatDate(onboardedAt) : "–"}
           last
         />
       </div>
@@ -885,6 +887,6 @@ function formatDate(iso: string): string {
       day: "numeric",
     })
   } catch {
-    return "—"
+    return "–"
   }
 }

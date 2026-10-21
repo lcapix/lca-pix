@@ -12,10 +12,9 @@ export function FirstDocBanner() {
         fontSize: 13,
       }}
     >
-      <strong>Start with your process routing.</strong> A routing / bill-of-process
-      document builds the case skeleton (lines → operations) that every other document
-      attaches to. It's pre-selected below — upload it, or switch the type if a different
-      document comes first.
+      <strong>Start with your routing.</strong> A routing gives the case its steps (lines,
+      then operations), and every other file attaches to them. It is picked below: add it,
+      or pick another kind if a different file comes first.
     </div>
   )
 }

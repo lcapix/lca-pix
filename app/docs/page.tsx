@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { Icon } from '@/components/lcapix'
 import { MarketingNav } from '@/components/lcapix/marketing-nav'
+import { EDU_SHELL } from '@/lib/ui-flags'
+import { turnOnGuidedMode } from '@/lib/shell/use-shell'
 
 // Every item links to a real guide page (no dead anchors). The professor's
 // manual content lives under /guide/* — getting started, first assessment,
@@ -38,7 +40,7 @@ const SECTIONS = [
     title: 'ABC costing',
     blurb: 'Activity-Based Costing applied to every flow.',
     items: [
-      { l: 'Cost drivers — Labor · Energy · Material', href: '/guide/data-model' },
+      { l: 'Cost drivers: Labor · Energy · Material', href: '/guide/data-model' },
       { l: 'Operational vs capital', href: '/guide/data-model' },
       { l: 'Per-flow attribution', href: '/guide/data-model' },
       { l: 'Cost ↔ impact trade-off', href: '/guide/first-assessment' },
@@ -112,6 +114,12 @@ export default function DocsPage() {
   // set the start flag and route to /home where <GuidedTour> auto-opens (same
   // mechanism the navbar "Tour" button uses).
   const startTour = () => {
+    // The education shell has no product tour: Guided mode is its guide (E02 to E06).
+    if (EDU_SHELL) {
+      turnOnGuidedMode()
+      router.push('/home')
+      return
+    }
     try {
       sessionStorage.setItem('lcapix:start-tour', '1')
     } catch {}
@@ -227,9 +235,9 @@ export default function DocsPage() {
                 fontSize: 14,
                 whiteSpace: 'nowrap',
               }}
-              title="Take the interactive product walkthrough"
+              title={EDU_SHELL ? 'A short guide at each step of a case, on this device' : 'Take the interactive product walkthrough'}
             >
-              <Icon name="sparkle" size={16} /> Take the guided tour
+              <Icon name="sparkle" size={16} /> {EDU_SHELL ? 'Turn on Guided mode' : 'Take the guided tour'}
             </button>
           </div>
         </div>

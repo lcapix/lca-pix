@@ -34,7 +34,7 @@ vi.mock('@/components/lcapix/case/goal-scope-card', () => ({
   },
 }))
 
-import CaseViewPage from '@/app/project/[projectId]/case/[caseId]/page'
+import CaseViewPage from '@/components/lcapix/case/editor/case-editor-page'
 import { apiRequest } from '@/lib/api-client'
 import { toast } from 'sonner'
 
@@ -150,13 +150,36 @@ describe('Case editor delete (EDIT-1)', () => {
     expect(deletes()).toEqual([])
   })
 
-  it('OK on the first prompt deletes the step and everything under it', async () => {
+  it('OK on the first prompt, then the typed name, deletes the step and everything under it', async () => {
     await renderEditor()
     selectNode('Cut')
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValueOnce(' Cut ')
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(deletes()).toEqual(['/api/components/2?children=delete']))
     expect(confirm).toHaveBeenCalledTimes(1)
+    expect(prompt).toHaveBeenCalledTimes(1)
+    expect(prompt.mock.calls[0][0]).toContain('This removes 2 step(s) and 0 flow(s)')
+  })
+
+  it('a typed name that does not match deletes nothing', async () => {
+    await renderEditor()
+    selectNode('Cut')
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+    vi.spyOn(window, 'prompt').mockReturnValueOnce('Cu')
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(deletes()).toEqual([])
+  })
+
+  it('Cancel on the typed-name prompt deletes nothing', async () => {
+    await renderEditor()
+    selectNode('Cut')
+    vi.spyOn(window, 'confirm').mockReturnValueOnce(true)
+    vi.spyOn(window, 'prompt').mockReturnValueOnce(null)
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(deletes()).toEqual([])
   })
 
   it('Cancel then OK keeps the children by moving them up', async () => {

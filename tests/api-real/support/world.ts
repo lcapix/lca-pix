@@ -151,6 +151,8 @@ export interface World {
     leaf: () => Promise<number>;
     flow: () => Promise<number>;
     legacyComparison: () => Promise<number>;
+    /** An import line held for review on P.base (migrate-040). */
+    heldLine: () => Promise<number>;
   };
 }
 
@@ -339,6 +341,14 @@ export async function buildWorld(opts: { runs?: boolean } = {}): Promise<World> 
         createComponent(owner, baseId, { component_name: `Glaze ${next()}`, component_type: 'operation', parent_component_id: subprocess }),
       flow: async () => addFlow(owner, task, { substance_id: electricity, flow_type: 'input', quantity: 0.25, unit: 'kWh' }),
       legacyComparison: legacyComparisonRow,
+      heldLine: async () => {
+        const res: any = await sql(
+          `INSERT INTO import_held_lines (case_id, line_kind, reason, step_name, substance_text, substance_id, direction, quantity, unit, created_by)
+           VALUES (?, 'flow', 'no_step', 'Kiln', ?, ?, 'input', 0.5, 'kWh', ?)`,
+          [baseId, `Electricity ${next()}`, electricity, owner.id],
+        );
+        return Number(res.insertId);
+      },
     },
   };
 }

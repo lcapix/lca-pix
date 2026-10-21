@@ -17,6 +17,7 @@ import {
 } from '@/lib/component-fields';
 import type { TreeRow } from '@/lib/component-tree';
 import { parseId } from '@/lib/ids';
+import { changedCostKinds } from '@/lib/costs/cost-basis';
 import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 
 const ALLOCATION_METHODS = ['none', 'physical', 'economic', 'system_expansion'];
@@ -244,7 +245,23 @@ export async function PUT(
     // ABC cost breakdown: its own statement, built from the columns this
     // database has. Only a missing column is tolerated; anything else is a 500
     // rather than a silently discarded edit.
+    // A cost whose amount (or labor driver) this edit changes is no longer
+    // explained by its basis row (migrate-035): the row goes with the change.
+    const costsBefore = costValues.length
+      ? await queryOne<any>(`SELECT * FROM component WHERE component_id = ?`, [componentId])
+      : null;
     await updateExistingColumns(componentId, costValues, 'component PUT');
+    const unexplained = changedCostKinds(costsBefore, costValues);
+    if (unexplained.length) {
+      try {
+        await execute(
+          `DELETE FROM component_cost_basis WHERE component_id = ? AND cost_kind IN (${unexplained.map(() => '?').join(', ')})`,
+          [componentId, ...unexplained],
+        );
+      } catch (basisErr: any) {
+        if (basisErr?.code !== 'ER_NO_SUCH_TABLE') throw basisErr;
+      }
+    }
 
     // The product's quantity IS the case's data basis (how many units the
     // entered data make): whichever path changes it, keep the two equal.

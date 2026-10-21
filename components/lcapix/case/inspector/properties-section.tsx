@@ -29,8 +29,8 @@ export function PropertiesSection({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         {/* Quantity belongs to the product only: it is the case's data basis
             (how many units the entered data describe) and changing it rescales
-            the case. On a step it meant nothing — the engine reads the step's
-            flows, not a count on the node — so a number typed there was
+            the case. On a step it meant nothing: the engine reads the step's
+            flows, not a count on the node: so a number typed there was
             decoration. A step that runs twice per unit doubles its own hours,
             energy and materials, which is where ERP routings and openLCA unit
             processes carry repetition too. */}

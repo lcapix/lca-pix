@@ -85,7 +85,7 @@ describe('substance search', () => {
     expect(variants.map((s) => s.substance_id)).toEqual([1, 2])
     expect(others.map((s) => s.substance_id)).toEqual([3, 8])
     expect(options.some((s) => s.substance_id === 7)).toBe(false) // no factors
-    expect(substanceOptionLabel(CATALOG[1])).toBe('Aluminium — recycled')
+    expect(substanceOptionLabel(CATALOG[1])).toBe('Aluminium (recycled)')
     expect(substanceOptionLabel(CATALOG[0])).toBe('Aluminium')
   })
 })

@@ -1,9 +1,9 @@
 // Number formatting helpers mirrored from LCAPIX/shared.jsx lines 95-99
 
 export function fmtNum(n: number | null | undefined, digits = 2): string {
-  if (n === null || n === undefined) return '—'
+  if (n === null || n === undefined) return '–'
   const v = Number(n)
-  if (!Number.isFinite(v)) return '—'
+  if (!Number.isFinite(v)) return '–'
   // A real but small contribution used to print as "0.00" (acidification rows
   // sit around 0.002 kg SO2 eq), which reads as "this flow does nothing".
   // Below the requested precision, switch to two significant digits.
@@ -30,9 +30,9 @@ export function fmtNum(n: number | null | undefined, digits = 2): string {
  *  - keeps the sign, so credits read as credits ("-12.5").
  */
 export function fmtSig(n: number | null | undefined, sig = 4): string {
-  if (n === null || n === undefined) return '—'
+  if (n === null || n === undefined) return '–'
   const v = Number(n)
-  if (!Number.isFinite(v)) return '—'
+  if (!Number.isFinite(v)) return '–'
   if (v === 0) return '0'
   const abs = Math.abs(v)
   if (abs < 1e-3) {

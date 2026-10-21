@@ -1,146 +1,69 @@
 /**
- * The case editor: F6 process tree, F7 environmental flows, F8 costs.
- * docs/flows/USER_FLOWS.md §F6–F8. Every test starts from its own account's
- * worked example, so tests never share data.
+ * Inside a case (the workspace, E03 to E04, E14): F6 the process tree, F7
+ * flows, F8 costs. docs/flows/USER_FLOWS.md §F6–F8. Every test starts from
+ * its own account's copy of the sample study, so tests never share data.
+ *
+ * The workspace's tree is one Tab stop (role tree) holding its steps (role
+ * treeitem, named "<name>, <tier>"); a step's menu (E03c) opens with a right
+ * click or the M key; the panel beside the tree is the selected step's.
  */
 import type { Page } from '@playwright/test';
 import type { Api, ApiUser } from '../support/api';
-import {
-  inspector,
-  openCase,
-  openSection,
-  outline,
-  outlineRow,
-  saveInspector,
-  selectComponent,
-  workedExample,
-} from '../support/editor';
+import { openCase, workedExample } from '../support/editor';
 import { expect, test } from '../support/fixtures';
 import { expectToast, settle } from '../support/ui';
 
-type Component = { component_id: number; component_name: string; parent_component_id: number | null };
+type Component = { component_id: number; component_name: string; parent_component_id: number | null; component_type?: string };
 
 async function components(api: Api, user: ApiUser, caseId: number): Promise<Component[]> {
   return (await api.as(user.token).get<{ components: Component[] }>(`/api/cases/${caseId}/components`)).components;
 }
 
-/** Answer the native confirm() dialogs in order; returns the messages seen. */
-function answerConfirms(page: Page, answers: boolean[]): string[] {
-  const seen: string[] = [];
-  page.on('dialog', async (d) => {
-    seen.push(d.message());
-    if (answers.shift()) await d.accept();
-    else await d.dismiss();
-  });
-  return seen;
+const step = (page: Page, name: string) => page.getByRole('treeitem', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, `) });
+
+/**
+ * A step's menu by right click. The step panel floats over the right of the
+ * tree, as it does for a person, so the panel is hidden first (Hide panel).
+ */
+async function menuOf(page: Page, name: string) {
+  const hide = page.getByRole('button', { name: 'Hide panel' });
+  if (await hide.isVisible()) await hide.click();
+  await step(page, name).click({ button: 'right' });
+  const menu = page.getByRole('menu', { name: `${name} menu` });
+  await expect(menu).toBeVisible();
+  return menu;
 }
 
 test.describe('F6 process tree', () => {
-  test('add a component through the Add Component dialog', async ({ api, newUser, signIn }) => {
+  test('add a step under the product, then rename it from its menu', async ({ api, newUser, signIn }) => {
     const user = await newUser('tree-add');
     const { projectId, caseId } = await workedExample(api, user);
     const { page } = await signIn(user);
     await openCase(page, projectId, caseId);
 
-    await outline(page).getByRole('button', { name: 'Add Component' }).click();
-    const dialog = page.getByRole('dialog', { name: 'New component' });
-    // An intercepting route: its first open can wait on a next dev compile (see support/states.ts).
-    await expect(dialog).toBeVisible({ timeout: 90_000 });
-    // Guardrails §4 name this radiogroup "Process tier"; today it is "Component
-    // type" (the contract test records the gap).
-    await dialog.getByRole('radiogroup', { name: /Process tier|Component type/ }).getByRole('radio', { name: 'Operation' }).click();
-    // The form's labels are not tied to their inputs: placeholders stand in
-    // (recorded in the a11y baseline, rule "label").
-    await dialog.getByPlaceholder('e.g. Cathode Coating').fill('40. Inspect and pack');
-    const created = page.waitForResponse(
-      (r) => r.url().includes(`/api/cases/${caseId}/components`) && r.request().method() === 'POST',
-    );
-    await dialog.getByRole('button', { name: 'Create component' }).click();
+    await step(page, 'Painted steel bracket').click();
+    const created = page.waitForResponse((r) => r.url().includes(`/api/cases/${caseId}/components`) && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Add step', exact: true }).click();
     expect((await created).status()).toBe(201);
+    // One tier below the product, named so it can be found and renamed.
+    await expect(step(page, 'New step')).toBeVisible();
+    await expect(page.getByRole('treeitem', { name: 'New step, Machine / line' })).toBeVisible();
 
+    // The new step is selected: M opens its menu from the keyboard (E03c).
+    await page.getByRole('tree').focus();
+    await page.keyboard.press('m');
+    const menu = page.getByRole('menu', { name: 'New step menu' });
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Rename' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Rename step' });
+    await dialog.getByLabel('Name').fill('Inspection line');
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dialog).toBeHidden();
-    await expect(outlineRow(page, '40. Inspect and pack')).toBeVisible();
-    const saved = (await components(api, user, caseId)).find((c) => c.component_name === '40. Inspect and pack');
+    await expect(step(page, 'Inspection line')).toBeVisible();
+
+    const saved = (await components(api, user, caseId)).find((c) => c.component_name === 'Inspection line');
     expect(saved?.parent_component_id).not.toBeNull();
-  });
-
-  test('change the product quantity through the scale dialog', async ({ api, newUser, signIn }) => {
-    const user = await newUser('tree-qty');
-    const { projectId, caseId } = await workedExample(api, user);
-    const { page } = await signIn(user);
-    await openCase(page, projectId, caseId);
-
-    // Quantity lives on the product (the case's data basis): changing it asks
-    // whether to scale the inputs or keep them.
-    await selectComponent(page, 'Painted steel bracket');
-    await inspector(page).getByRole('textbox', { name: 'Product quantity' }).fill('2');
-    await inspector(page).getByRole('button', { name: 'Save', exact: true }).click();
-    const scale = page.getByRole('dialog').filter({ hasText: 'Scale everything' });
-    await expect(scale).toBeVisible();
-    const put = page.waitForResponse((r) => /\/api\/components\/\d+/.test(r.url()) && r.request().method() === 'PUT');
-    await scale.getByRole('button', { name: /My data already covers 2/ }).click();
-    expect((await put).status()).toBe(200);
-    await expectToast(page, 'Kept the inputs as entered; they now count as 2 units');
-
-    await page.reload();
-    await settle(page);
-    await selectComponent(page, 'Painted steel bracket');
-    await expect(inspector(page).getByRole('textbox', { name: 'Product quantity' })).toHaveValue('2');
-    const product = (await components(api, user, caseId)).find((c) => c.parent_component_id == null)!;
-    expect(product.component_name).toBe('Painted steel bracket');
-  });
-
-  test('change a step’s life-cycle stage in the inspector', async ({ api, newUser, signIn }) => {
-    const user = await newUser('tree-stage');
-    const { projectId, caseId } = await workedExample(api, user);
-    const { page } = await signIn(user);
-    await openCase(page, projectId, caseId);
-
-    await selectComponent(page, '20. Weld tab');
-    const stage = inspector(page).getByRole('combobox', { name: /Which stage of the product.s life/ });
-    await openSection(page, 'Life-cycle stage', stage);
-    await expect(stage).toHaveValue('production');
-    await stage.selectOption({ label: 'Use' });
-    await saveInspector(page);
-
-    await page.reload();
-    await settle(page);
-    await selectComponent(page, '20. Weld tab');
-    await openSection(page, 'Life-cycle stage', stage);
-    await expect(stage).toHaveValue('use');
-  });
-
-  // BUG (data loss). handleSaveComponent awaits reloadComponents() and then
-  // refills the form with loadFormFor(saved) for the node that was selected
-  // when Save was clicked (stale closure, app/project/[projectId]/case/[caseId]/page.tsx:703-704;
-  // reached from applyScale at :612). Select another step while that reload is
-  // in flight and the inspector holds the PREVIOUS node's fields under the new
-  // selection; the next Save PUTs them onto the new step. After a product
-  // rescale this turns "20. Weld tab" into a second root "Painted steel
-  // bracket" product. The reload is delayed here so the race is deterministic.
-  test.fixme('switching steps while a save is still reloading keeps each step’s own fields', async ({ api, newUser, signIn }) => {
-    const user = await newUser('tree-race');
-    const { projectId, caseId } = await workedExample(api, user);
-    const { page } = await signIn(user);
-    await openCase(page, projectId, caseId);
-
-    await selectComponent(page, 'Painted steel bracket');
-    await inspector(page).getByRole('textbox', { name: 'Product quantity' }).fill('2');
-    await inspector(page).getByRole('button', { name: 'Save', exact: true }).click();
-    await page.route(`**/api/cases/${caseId}/components*`, async (route) => {
-      await new Promise((r) => setTimeout(r, 1500));
-      await route.continue();
-    });
-    await page.getByRole('dialog').filter({ hasText: 'Scale everything' }).getByRole('button', { name: /My data already covers 2/ }).click();
-    await selectComponent(page, '20. Weld tab');
-    await page.waitForTimeout(2500); // the delayed reload lands
-    await page.unroute(`**/api/cases/${caseId}/components*`);
-    await expect(inspector(page).getByText('20. Weld tab', { exact: true }).first()).toBeVisible();
-    await saveInspector(page);
-
-    const list = await components(api, user, caseId);
-    expect(list.filter((c) => c.parent_component_id == null)).toHaveLength(1);
-    expect(list.map((c) => c.component_name)).toContain('20. Weld tab');
+    expect(saved?.component_type).toBe('machine_line');
   });
 
   test.describe('delete', () => {
@@ -148,153 +71,132 @@ test.describe('F6 process tree', () => {
     async function withSubtree(api: Api, user: ApiUser, caseId: number) {
       const list = await components(api, user, caseId);
       const product = list.find((c) => c.parent_component_id == null)!;
-      const post = (body: object) =>
-        api.as(user.token).post<{ component: { component_id: number } }>(`/api/cases/${caseId}/components`, body);
-      const finishing = (await post({ component_name: 'Finishing', component_type: 'subprocess', parent_component_id: product.component_id })).component.component_id;
-      await post({ component_name: 'Degrease', component_type: 'operation', parent_component_id: finishing });
-      return { productId: product.component_id };
+      const post = (body: object) => api.as(user.token).post<{ component: { component_id: number } }>(`/api/cases/${caseId}/components`, body);
+      const finishing = (await post({ component_name: 'Finishing', component_type: 'machine_line', parent_component_id: product.component_id })).component
+        .component_id;
+      await post({ component_name: 'Degrease', component_type: 'subprocess', parent_component_id: finishing });
     }
 
-    test('delete a step with its subtree', async ({ api, newUser, signIn }) => {
+    test('the confirm says what goes; Cancel deletes nothing, Delete step takes the subtree', async ({ api, newUser, signIn }) => {
       const user = await newUser('tree-del');
       const { projectId, caseId } = await workedExample(api, user);
       await withSubtree(api, user, caseId);
       const { page } = await signIn(user);
       await openCase(page, projectId, caseId);
 
-      await selectComponent(page, 'Finishing');
-      const seen = answerConfirms(page, [true]);
-      const del = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().includes('children=delete'));
-      await inspector(page).getByRole('button', { name: 'Delete', exact: true }).click();
-      expect((await del).status()).toBe(200);
-      expect(seen[0]).toContain('Delete "Finishing" and the 1 step under it');
+      const deletes: string[] = [];
+      page.on('request', (r) => {
+        if (r.method() === 'DELETE') deletes.push(r.url());
+      });
+      await (await menuOf(page, 'Finishing')).getByRole('menuitem', { name: 'Delete step' }).click();
+      const confirm = page.getByRole('alertdialog', { name: 'Delete this step?' }).or(page.getByRole('dialog', { name: 'Delete this step?' }));
+      await expect(confirm).toContainText('Finishing, its flows and every step below it are deleted.');
+      // Cancel is the safe default and has focus.
+      await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
+      await confirm.getByRole('button', { name: 'Cancel' }).click();
+      await expect(step(page, 'Finishing')).toBeVisible();
+      expect(deletes).toEqual([]);
 
-      await expectToast(page, 'Deleted "Finishing" and the 1 step under it');
-      await expect(outlineRow(page, 'Finishing')).toHaveCount(0);
-      await expect(outlineRow(page, 'Degrease')).toHaveCount(0);
+      await (await menuOf(page, 'Finishing')).getByRole('menuitem', { name: 'Delete step' }).click();
+      const del = page.waitForResponse((r) => r.request().method() === 'DELETE' && /\/api\/components\/\d+/.test(r.url()));
+      await confirm.getByRole('button', { name: 'Delete step' }).click();
+      expect((await del).status()).toBe(200);
+      await expect(step(page, 'Finishing')).toHaveCount(0);
+      await expect(step(page, 'Degrease')).toHaveCount(0);
       const names = (await components(api, user, caseId)).map((c) => c.component_name);
       expect(names).not.toContain('Finishing');
       expect(names).not.toContain('Degrease');
     });
 
-    test('delete a step but keep its children (they move up)', async ({ api, newUser, signIn }) => {
-      const user = await newUser('tree-keep');
+    test('the product has no Delete step', async ({ api, newUser, signIn }) => {
+      const user = await newUser('tree-root');
       const { projectId, caseId } = await workedExample(api, user);
-      const { productId } = await withSubtree(api, user, caseId);
       const { page } = await signIn(user);
       await openCase(page, projectId, caseId);
-
-      await selectComponent(page, 'Finishing');
-      // Today's UI: two native confirms. Cancel on the first means "keep the
-      // children"; OK on the second confirms it. (Target: one dialog with
-      // "Delete subtree" / "Keep children (move up)" / "Cancel".)
-      const seen = answerConfirms(page, [false, true]);
-      const del = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().includes('children=reparent'));
-      await inspector(page).getByRole('button', { name: 'Delete', exact: true }).click();
-      expect((await del).status()).toBe(200);
-      expect(seen[1]).toContain('Keep the 1 step directly under "Finishing"');
-
-      await expectToast(page, 'Deleted "Finishing"; 1 step moved up');
-      await expect(outlineRow(page, 'Finishing')).toHaveCount(0);
-      await expect(outlineRow(page, 'Degrease')).toBeVisible();
-      const degrease = (await components(api, user, caseId)).find((c) => c.component_name === 'Degrease');
-      expect(degrease?.parent_component_id).toBe(productId);
-    });
-
-    test('cancelling both questions deletes nothing', async ({ api, newUser, signIn }) => {
-      const user = await newUser('tree-cancel');
-      const { projectId, caseId } = await workedExample(api, user);
-      await withSubtree(api, user, caseId);
-      const { page } = await signIn(user);
-      await openCase(page, projectId, caseId);
-
-      await selectComponent(page, 'Finishing');
-      const seen = answerConfirms(page, [false, false]);
-      await inspector(page).getByRole('button', { name: 'Delete', exact: true }).click();
-      await expect.poll(() => seen.length).toBe(2);
-      await expect(outlineRow(page, 'Finishing')).toBeVisible();
-      expect((await components(api, user, caseId)).map((c) => c.component_name)).toContain('Finishing');
+      const menu = await menuOf(page, 'Painted steel bracket');
+      await expect(menu.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Delete step' })).toHaveCount(0);
     });
   });
 });
 
-test.describe('F7 environmental flows', () => {
+test.describe('F7 flows', () => {
   test('add a flow, and a transport leg worked out from mass × distance', async ({ api, newUser, signIn }) => {
     const user = await newUser('flows');
     const { projectId, caseId } = await workedExample(api, user);
     const { page } = await signIn(user);
     await openCase(page, projectId, caseId);
-    await selectComponent(page, '20. Weld tab');
-    const pane = inspector(page);
-    const addFlow = pane.getByRole('button', { name: 'Add flow' });
-    await openSection(page, 'Environmental Flows', addFlow);
+    await step(page, '20. Weld tab').click();
+    await page.getByRole('button', { name: '+ Add a flow to this step' }).click();
 
-    // A plain input: 0.5 kg aluminium. The add-flow inputs have no accessible
-    // names (labels not tied to them): placeholders stand in.
-    await addFlow.click();
-    await pane.getByPlaceholder('Search substances…').fill('Aluminum');
-    await pane.getByRole('button', { name: /^Aluminum\b/ }).first().click();
-    await pane.getByPlaceholder('0.0').fill('0.5');
-    await pane.getByPlaceholder('kg').fill('kg');
+    // A plain input: 0.5 kg aluminium.
+    await page.getByPlaceholder('Search substances…').fill('Aluminum');
+    await page.getByRole('button', { name: /^Aluminum\b/ }).first().click();
+    await page.getByPlaceholder('0.0').fill('0.5');
+    await page.getByPlaceholder('kg').fill('kg');
     let posted = page.waitForResponse((r) => /\/api\/components\/\d+\/flows/.test(r.url()) && r.request().method() === 'POST');
-    await pane.getByRole('button', { name: 'Save flow' }).click();
+    await page.getByRole('button', { name: 'Save flow' }).click();
     expect((await posted).status()).toBe(201);
     await expectToast(page, 'Flow added');
-    await expect(pane.getByRole('button', { name: 'Edit quantity of Aluminum' })).toBeVisible();
 
     // A transport leg: 0.85 t over 450 km = 382.5 tkm.
-    await pane.getByRole('button', { name: 'Add flow' }).click();
-    await pane.getByPlaceholder('Search substances…').fill('Transport, truck, regional');
-    await pane.getByRole('button', { name: /^Transport, truck, regional\b/ }).first().click();
-    await expect(pane.getByText('Transport leg — enter mass and distance, we compute tonne-km')).toBeVisible();
-    await pane.getByPlaceholder('e.g. 1.2').fill('0.85');
-    await pane.getByPlaceholder('e.g. 450').fill('450');
-    await expect(pane.getByText('= 382.5 tkm')).toBeVisible();
-    await expect(pane.getByPlaceholder('0.0')).toHaveValue('382.5');
+    await page.getByRole('button', { name: '+ Add a flow to this step' }).click();
+    await page.getByPlaceholder('Search substances…').fill('Transport, truck, regional');
+    await page.getByRole('button', { name: /^Transport, truck, regional\b/ }).first().click();
+    await expect(page.getByText('Transport leg: enter mass and distance, we compute tonne-km')).toBeVisible();
+    await page.getByPlaceholder('e.g. 1.2').fill('0.85');
+    await page.getByPlaceholder('e.g. 450').fill('450');
+    await expect(page.getByText('= 382.5 tkm')).toBeVisible();
+    await expect(page.getByPlaceholder('0.0')).toHaveValue('382.5');
     posted = page.waitForResponse((r) => /\/api\/components\/\d+\/flows/.test(r.url()) && r.request().method() === 'POST');
-    await pane.getByRole('button', { name: 'Save flow' }).click();
+    await page.getByRole('button', { name: 'Save flow' }).click();
     const res = await posted;
     expect(res.status()).toBe(201);
-    const body = res.request().postDataJSON();
-    expect(body).toMatchObject({ quantity: 382.5, unit: 'tkm', transport_mass_kg: 850, transport_distance_km: 450 });
-    await expect(pane.getByRole('button', { name: 'Edit quantity of Transport, truck, regional' })).toBeVisible();
+    expect(res.request().postDataJSON()).toMatchObject({ quantity: 382.5, unit: 'tkm', transport_mass_kg: 850, transport_distance_km: 450 });
+
+    // Both are on the step now, with their amounts.
+    const weldId = (await components(api, user, caseId)).find((c) => c.component_name === '20. Weld tab')!.component_id;
+    const flows = (await api.as(user.token).get<{ flows: Array<{ substance_name: string; quantity: number | string }> }>(`/api/components/${weldId}/flows`)).flows;
+    expect(flows.map((f) => [f.substance_name, Number(f.quantity)])).toEqual(
+      expect.arrayContaining([
+        ['Aluminum', 0.5],
+        ['Transport, truck, regional', 382.5],
+      ]),
+    );
   });
 });
 
 test.describe('F8 costs', () => {
-  test('a cost of 0 is stored as 0, and a cleared cost goes back to empty', async ({ api, newUser, signIn }) => {
+  test('a cost of 0 is stored as 0, and Clear this cost puts it back to not set', async ({ api, newUser, signIn }) => {
     const user = await newUser('costs');
     const { projectId, caseId } = await workedExample(api, user);
+    const cutId = async () => (await components(api, user, caseId)).find((c) => c.component_name === '10. Cut blank')!.component_id;
     const { page } = await signIn(user);
     await openCase(page, projectId, caseId);
-    await selectComponent(page, '10. Cut blank');
-    const labor = inspector(page).getByRole('textbox', { name: 'Labor cost' });
-    const energy = inspector(page).getByRole('textbox', { name: 'Energy cost' });
-    await openSection(page, 'Costs', labor);
+    // The Cost view: the panel shows the selected step's costs (E14).
+    await page.getByRole('radio', { name: 'Cost', exact: true }).click();
+    await step(page, '10. Cut blank').click();
 
-    await labor.fill('0');
-    await energy.fill('12.5');
-    await saveInspector(page);
+    await page.getByRole('button', { name: /^Material/ }).click();
+    await page.getByLabel('Material cost in dollars').fill('0');
+    const put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    expect((await put).status()).toBe(200);
+    await expect(page.getByText('Saved · material on 10. Cut blank')).toBeVisible();
+    let row = (await api.as(user.token).get<{ component: Record<string, unknown> }>(`/api/components/${await cutId()}`)).component;
+    expect(Number(row.material_cost)).toBe(0);
+    expect(row.material_cost).not.toBeNull();
+
     await page.reload();
     await settle(page);
-    await selectComponent(page, '10. Cut blank');
-    await openSection(page, 'Costs', labor);
-    await expect(labor).toHaveValue('0');
-    await expect(energy).toHaveValue('12.5');
-
-    await energy.fill('');
-    await saveInspector(page);
-    await page.reload();
-    await settle(page);
-    await selectComponent(page, '10. Cut blank');
-    await openSection(page, 'Costs', labor);
-    await expect(energy).toHaveValue('');
-    await expect(labor).toHaveValue('0');
-
-    const row = (await api.as(user.token).get<{ component: Record<string, unknown> }>(
-      `/api/components/${(await components(api, user, caseId)).find((c) => c.component_name === '10. Cut blank')!.component_id}`,
-    )).component;
-    expect(Number(row.labor_cost)).toBe(0);
-    expect(row.energy_cost).toBeNull();
+    await page.getByRole('radio', { name: 'Cost', exact: true }).click();
+    await step(page, '10. Cut blank').click();
+    await page.getByRole('button', { name: /^Material/ }).click();
+    const cleared = page.waitForResponse((r) => r.url().includes('/costs?kind=material') && r.request().method() === 'DELETE');
+    await page.getByRole('button', { name: 'Clear this cost' }).click();
+    expect((await cleared).status()).toBe(200);
+    await expect(page.getByRole('button', { name: /^Material.*Not set/ })).toBeVisible();
+    row = (await api.as(user.token).get<{ component: Record<string, unknown> }>(`/api/components/${await cutId()}`)).component;
+    expect(row.material_cost).toBeNull();
   });
 });

@@ -1,51 +1,27 @@
 'use client'
 
-import { Icon } from '@/components/lcapix'
-import { backLabel } from '@/lib/import/display'
+// The import page's header (F2.2, F2.3, F2.4): where the file goes ("Aluminium
+// enclosure · into a new case" or "· into Base case") and what this step is.
 
-/** Eyebrow, back link (to the target case or the project), title and intro. */
 export function ImportHeader({
-  targetCaseId,
-  onBack,
+  projectName,
+  targetName,
+  title,
 }: {
-  targetCaseId: number | null
-  onBack: () => void
+  projectName: string | null
+  /** The case the file goes into; null for a new case. */
+  targetName: string | null
+  title: string
 }) {
   return (
-    <>
-      <div className="eyebrow" style={{ fontSize: 11, marginBottom: 6 }}>
-        DATA INGESTION
-      </div>
-      <button
-        type="button"
-        className="mono"
-        onClick={() => onBack()}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          marginBottom: 10,
-          fontSize: 11,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: 'var(--text-tertiary)',
-          cursor: 'pointer',
-        }}
-      >
-        <Icon name="chevron-left" size={13} />
-        {backLabel(targetCaseId)}
-      </button>
-      <h1 className="display" style={{ fontSize: 26, fontWeight: 600, margin: '0 0 6px' }}>
-        Import a document
-      </h1>
-      <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '0 0 24px', lineHeight: 1.55 }}>
-        Upload a real document and review the extracted process model before anything is created.
-        Every value keeps a pointer to where in the document it came from; nothing uncertain is
-        applied silently.
+    <header className="np-head">
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--ds-text-2)' }}>
+        {projectName ? `${projectName} · ` : ''}
+        {targetName ? `into ${targetName}` : 'into a new case'}
       </p>
-    </>
+      <h1 className="ds-title" style={{ margin: '4px 0 0' }}>
+        {title}
+      </h1>
+    </header>
   )
 }

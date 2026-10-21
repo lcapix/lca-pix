@@ -13,6 +13,7 @@ import {
   isAuthError,
   projectAccessDenied,
   reachableCasesFilter,
+  READ_ONLY_CASE,
   unreachableCaseIds,
 } from '@/lib/route-guard';
 
@@ -81,20 +82,46 @@ describe('projectAccessDenied', () => {
 
 /**
  * Case 3 lives in project 7. `createdBy` made it; `ownOnly` is the project's
- * members_see_own_cases setting. `null` case = no such case.
+ * members_see_own_cases setting; `hidden` keeps it from members (migrate-037);
+ * `readOnly` is the sample's base case (migrate-038). `null` case = no such
+ * case. Project 7's owner is OWNER and its admin member ADMIN (the staff whose
+ * cases members read under D2); the caller's member row has `callerRole`.
  */
-function caseRow(c: { createdBy: number | null; ownOnly: boolean } | null) {
+function caseRow(
+  c: { createdBy: number | null; ownOnly: boolean; hidden?: boolean; readOnly?: boolean } | null,
+  callerRole: 'viewer' | 'editor' | 'admin' | 'owner' = 'editor',
+) {
   vi.mocked(db.queryOne).mockImplementation(async (sql: string) => {
     if (/FROM case_table/.test(sql)) {
-      return c && ({ case_id: 3, project_id: 7, created_by: c.createdBy, members_see_own_cases: c.ownOnly ? 1 : 0 } as any);
+      return (
+        c &&
+        ({
+          case_id: 3,
+          project_id: 7,
+          created_by: c.createdBy,
+          hidden_from_members: c.hidden ? 1 : 0,
+          read_only: c.readOnly ? 1 : 0,
+          members_see_own_cases: c.ownOnly ? 1 : 0,
+        } as any)
+      );
     }
+    if (/FROM project_members pm/.test(sql)) return { permission_name: callerRole } as any;
     if (/FROM project/.test(sql)) return c && ({ members_see_own_cases: c.ownOnly ? 1 : 0 } as any);
     return null;
+  });
+  // The staff list: the owner, and admins when the SQL asks for them.
+  vi.mocked(db.query).mockImplementation(async (sql: string, params?: any[]) => {
+    if (/SELECT owner_id AS id FROM project/.test(sql)) {
+      return [{ id: OWNER }, ...((params ?? []).includes('admin') ? [{ id: ADMIN }] : [])] as any;
+    }
+    return [] as any;
   });
 }
 
 const CALLER = 4;
 const OTHER_STUDENT = 5;
+const OWNER = 9;
+const ADMIN = 8;
 
 describe('caseAccessDenied', () => {
   it('a case that does not exist is 404 with the route body, before any access check', async () => {
@@ -177,6 +204,53 @@ describe('caseAccessDenied', () => {
       expect((await caseAccessDenied(CALLER, 3, 'editor'))?.status).toBe(403);
     });
   });
+
+  describe("setting on, D2: members read the staff's cases, never change them", () => {
+    it("an editor reads the owner's and an admin's case; any write is 403", async () => {
+      for (const creator of [OWNER, ADMIN]) {
+        caseRow({ createdBy: creator, ownOnly: true }, 'editor');
+        memberWithRole('editor');
+        expect(await caseAccessDenied(CALLER, 3)).toBeNull();
+        expect(await caseAccessDenied(CALLER, 3, 'viewer')).toBeNull();
+        const write = await caseAccessDenied(CALLER, 3, 'editor', { forbidden: 'Nope' });
+        expect(write?.status).toBe(403);
+        expect(await write!.json()).toEqual({ error: 'Nope' });
+      }
+    });
+
+    it("a viewer reads the owner's case, not an admin's", async () => {
+      memberWithRole('viewer');
+      caseRow({ createdBy: OWNER, ownOnly: true }, 'viewer');
+      expect(await caseAccessDenied(CALLER, 3)).toBeNull();
+      caseRow({ createdBy: ADMIN, ownOnly: true }, 'viewer');
+      expect((await caseAccessDenied(CALLER, 3))?.status).toBe(404);
+    });
+
+    it('a staff case kept from members is as good as missing (migrate-037)', async () => {
+      caseRow({ createdBy: OWNER, ownOnly: true, hidden: true }, 'editor');
+      memberWithRole('editor');
+      const hidden = await caseAccessDenied(CALLER, 3, undefined, { notFound: 'Case not found' });
+      expect(hidden?.status).toBe(404);
+      expect(await hidden!.json()).toEqual({ error: 'Case not found' });
+    });
+  });
+
+  describe('a read-only case (the sample, migrate-038)', () => {
+    it('nobody changes it, the owner included; reading stays open', async () => {
+      caseRow({ createdBy: CALLER, ownOnly: false, readOnly: true }, 'owner');
+      memberWithRole('owner');
+      expect(await caseAccessDenied(CALLER, 3)).toBeNull();
+      const write = await caseAccessDenied(CALLER, 3, 'editor');
+      expect(write?.status).toBe(403);
+      expect(await write!.json()).toEqual({ error: READ_ONLY_CASE });
+    });
+
+    it('a classmate gets 404 for a read-only case they cannot reach, never the read-only 403', async () => {
+      caseRow({ createdBy: OTHER_STUDENT, ownOnly: true, readOnly: true }, 'editor');
+      memberWithRole('editor');
+      expect((await caseAccessDenied(CALLER, 3, 'editor'))?.status).toBe(404);
+    });
+  });
 });
 
 describe('list filtering: casesRestrictedFor / reachableCasesFilter', () => {
@@ -189,14 +263,24 @@ describe('list filtering: casesRestrictedFor / reachableCasesFilter', () => {
     }
   });
 
-  it('setting on: editors and viewers see only the cases they created', async () => {
-    caseRow({ createdBy: null, ownOnly: true });
-    for (const role of ['viewer', 'editor'] as const) {
-      memberWithRole(role);
-      expect(await casesRestrictedFor(CALLER, 7)).toBe(true);
-      expect(await reachableCasesFilter(CALLER, 7)).toEqual({ sql: ' AND c.created_by = ?', params: [CALLER] });
-      expect(await reachableCasesFilter(CALLER, 7, 'ct')).toEqual({ sql: ' AND ct.created_by = ?', params: [CALLER] });
-    }
+  it("setting on: an editor's list is their own cases plus the staff's not kept from members (D2)", async () => {
+    caseRow({ createdBy: null, ownOnly: true }, 'editor');
+    memberWithRole('editor');
+    expect(await casesRestrictedFor(CALLER, 7)).toBe(true);
+    expect(await reachableCasesFilter(CALLER, 7)).toEqual({
+      sql: ' AND (c.created_by = ? OR (c.hidden_from_members = 0 AND c.created_by IN (?, ?)))',
+      params: [CALLER, OWNER, ADMIN],
+    });
+    expect((await reachableCasesFilter(CALLER, 7, 'ct')).sql).toMatch(/^ AND \(ct\.created_by = \?/);
+  });
+
+  it("setting on: a viewer's list adds the owner's cases only", async () => {
+    caseRow({ createdBy: null, ownOnly: true }, 'viewer');
+    memberWithRole('viewer');
+    expect(await reachableCasesFilter(CALLER, 7)).toEqual({
+      sql: ' AND (c.created_by = ? OR (c.hidden_from_members = 0 AND c.created_by IN (?)))',
+      params: [CALLER, OWNER],
+    });
   });
 
   it('setting on: the owner and admins see every case', async () => {
@@ -223,14 +307,17 @@ describe('unreachableCaseIds (saved comparisons that name several cases)', () =>
     expect(db.query).not.toHaveBeenCalled();
   });
 
-  it('setting on: the ids an editor did not create', async () => {
-    caseRow({ createdBy: null, ownOnly: true });
+  it('setting on: the ids an editor cannot reach (not theirs, not a visible staff case)', async () => {
+    caseRow({ createdBy: null, ownOnly: true }, 'editor');
     memberWithRole('editor');
-    vi.mocked(db.query).mockResolvedValue([{ case_id: 3 }] as any);
+    const staffQuery = vi.mocked(db.query).getMockImplementation()!;
+    vi.mocked(db.query).mockImplementation(async (sql: string, params?: any[]) =>
+      /FROM case_table WHERE project_id/.test(sql) ? ([{ case_id: 3 }] as any) : staffQuery(sql, params),
+    );
     expect(await unreachableCaseIds(CALLER, 7, [3, 4, 4, 9])).toEqual([4, 9]);
-    const [sql, params] = vi.mocked(db.query).mock.calls[0];
-    expect(sql).toMatch(/created_by = \?/);
-    expect(params).toEqual([7, CALLER, 3, 4, 9]);
+    const [sql, params] = vi.mocked(db.query).mock.calls.find(([q]) => /FROM case_table WHERE project_id/.test(String(q)))!;
+    expect(sql).toMatch(/created_by = \? OR \(case_table\.hidden_from_members = 0/);
+    expect(params).toEqual([7, CALLER, OWNER, ADMIN, 3, 4, 9]);
   });
 
   it('setting on: nothing is hidden from an admin', async () => {

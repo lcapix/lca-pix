@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
-import { requireAuth } from '@/lib/auth';
+import { getProjectRole, requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/cases/[caseId] - Get single case details
 export async function GET(
@@ -40,6 +41,40 @@ export async function GET(
       caseData.project_region_code = scope?.region_code ?? null;
     } catch {
       /* before migrate-018 */
+    }
+    // The study's functional unit (exercise 1, "Goal and scope", checks it).
+    try {
+      const fu = await queryOne<any>(`SELECT functional_unit FROM project WHERE project_id = ?`, [caseData.project_id]);
+      caseData.project_functional_unit = fu?.functional_unit ?? null;
+    } catch {
+      caseData.project_functional_unit = null;
+    }
+
+    // The caller's role in the case's project, so the editor can hide what a
+    // "Can read" member cannot do (the write routes still check for themselves).
+    const role = await getProjectRole(userId, Number(caseData.project_id));
+    // Whoever reaches this case only to read it reads it as "Can read": an
+    // editor on an instructor's case with "members see only their own cases"
+    // on (D2), and everyone, the owner included, on the sample's read-only
+    // base case (migrate-038).
+    caseData.my_role =
+      role && role !== 'viewer' && (await caseAccessDenied(userId, caseId, 'editor')) ? 'viewer' : role;
+    // The role in the project itself: whether the caller may make cases (a
+    // copy of a read-only case needs Can change on the project).
+    caseData.project_role = role;
+    caseData.read_only = Number(caseData.read_only ?? 0) === 1;
+
+    // The copy link (E03 "Copy of the Base case"), named only when the caller
+    // reaches that case too; otherwise not even its id is sent (B-A1).
+    caseData.copied_from = null;
+    if (caseData.parent_case_id != null) {
+      const parentId = Number(caseData.parent_case_id);
+      if (await caseAccessDenied(userId, parentId)) {
+        caseData.parent_case_id = null;
+      } else {
+        const parent = await queryOne<any>(`SELECT case_id, case_name FROM case_table WHERE case_id = ?`, [parentId]);
+        caseData.copied_from = parent ? { case_id: Number(parent.case_id), case_name: parent.case_name } : null;
+      }
     }
 
     return NextResponse.json({ success: true, case: caseData });
@@ -78,6 +113,21 @@ export async function PUT(
     if (!json.ok) return json.response;
     const body = json.body;
     const { case_name, description, case_type } = body;
+
+    // Keep this case from the class (migrate-037): the owner and admins only,
+    // a strict boolean, and an audit row when it changes.
+    let hiddenChange: { from: number; to: number } | null = null;
+    if (Object.prototype.hasOwnProperty.call(body, 'hidden_from_members')) {
+      const v = body.hidden_from_members;
+      if (![true, false, 0, 1].includes(v)) {
+        return NextResponse.json({ error: 'hidden_from_members must be true or false' }, { status: 400 });
+      }
+      const staffDenied = await caseAccessDenied(userId, caseId, 'admin', { notFound: 'Case not found' });
+      if (staffDenied) return staffDenied;
+      const now = await queryOne<any>(`SELECT hidden_from_members FROM case_table WHERE case_id = ?`, [caseId]);
+      const to = v === true || v === 1 ? 1 : 0;
+      if (Number(now?.hidden_from_members) !== to) hiddenChange = { from: Number(now?.hidden_from_members ?? 0), to };
+    }
 
     // Every string must fit its column before anything is written (strict
     // mode refuses a longer one: a 500, or the "needs migrate-014" 409 below).
@@ -215,6 +265,19 @@ export async function PUT(
       }
     }
 
+    if (hiddenChange) {
+      await execute(`UPDATE case_table SET hidden_from_members = ? WHERE case_id = ?`, [hiddenChange.to, caseId]);
+      await recordAudit({
+        userId,
+        action: 'update',
+        table: 'case_table',
+        recordId: caseId,
+        before: { hidden_from_members: hiddenChange.from },
+        after: { hidden_from_members: hiddenChange.to },
+        request,
+      });
+    }
+
     const REF_FIELDS = ['reference_flow', 'reference_flow_unit', 'modeled_output'];
     if (REF_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
       try {
@@ -271,7 +334,7 @@ export async function DELETE(
     const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
-      `SELECT project_id FROM case_table WHERE case_id = ?`,
+      `SELECT project_id, case_name, case_type, created_by FROM case_table WHERE case_id = ?`,
       [caseId]
     );
 
@@ -283,6 +346,19 @@ export async function DELETE(
     if (denied) return denied;
 
     await execute(`DELETE FROM case_table WHERE case_id = ?`, [caseId]);
+    await recordAudit({
+      userId,
+      action: 'delete',
+      table: 'case_table',
+      recordId: caseId,
+      before: {
+        project_id: caseData.project_id,
+        case_name: caseData.case_name,
+        case_type: caseData.case_type,
+        created_by: caseData.created_by ?? null,
+      },
+      request,
+    });
 
     return NextResponse.json({ success: true, message: 'Case deleted' });
   } catch (error: any) {

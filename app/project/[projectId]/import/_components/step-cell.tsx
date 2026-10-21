@@ -10,19 +10,22 @@ export interface StepPicker {
   placementWhy: Record<string, PlacementWhy>
   steps: PlaceableStep[]
   attachComponentId: number | null
+  /** Lines going to a step the document creates, by key: the new step's name. */
+  newStep?: Record<string, string>
   onChoose: (key: string, stepId: number | null) => void
 }
 
 // The STEP picker for one line when appending, with why it was suggested.
 /** The STEP picker for the line with this placement key. */
 export function StepCell({ stepKey, picker }: { stepKey: string; picker: StepPicker }) {
-  const { placement, placementWhy, steps, attachComponentId, onChoose } = picker
+  const { placement, placementWhy, steps, attachComponentId, newStep = {}, onChoose } = picker
   const why = placementWhy[stepKey]
   return (
     <div>
       <select
-        className="input"
-        style={{ fontSize: 11.5, padding: '3px 6px', height: 28, minWidth: 190 }}
+        className="ds-input"
+        style={{ minWidth: 190 }}
+        data-unplaced={placement[stepKey] == null && !newStep[stepKey] && !attachComponentId ? 'true' : undefined}
         value={placement[stepKey] ?? ''}
         aria-label="Step this line is used at"
         onChange={(ev) => {
@@ -30,7 +33,13 @@ export function StepCell({ stepKey, picker }: { stepKey: string; picker: StepPic
           onChoose(stepKey, v)
         }}
       >
-        <option value="">{attachComponentId ? '— default step —' : '— choose a step —'}</option>
+        <option value="">
+          {newStep[stepKey]
+            ? `New step: ${newStep[stepKey]}`
+            : attachComponentId
+              ? 'The default step'
+              : 'Choose a step'}
+        </option>
         {steps.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
@@ -38,13 +47,7 @@ export function StepCell({ stepKey, picker }: { stepKey: string; picker: StepPic
         ))}
       </select>
       {why && (
-        <div
-          style={{
-            fontSize: 10,
-            marginTop: 2,
-            color: confidenceColor(why.confidence),
-          }}
-        >
+        <div style={{ fontSize: 12, marginTop: 4, color: confidenceColor(why.confidence) }}>
           {why.reason}
         </div>
       )}

@@ -127,7 +127,7 @@ export function ImpactCategoriesPanel({
               padding: '6px 0',
             }}
           >
-            No categories available — run an assessment.
+            No categories available: run an assessment.
           </div>
         )}
       </div>

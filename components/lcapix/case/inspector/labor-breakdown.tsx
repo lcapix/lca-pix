@@ -1,10 +1,12 @@
 'use client'
 
-// Labor = hours × rate, made visible and editable, with a wage location
-// picker (national reference, or a state's live BLS wage). Keyed by node id
-// at the call site, so the location and live wage reset per node.
+// Labor = hours × rate, made visible and editable: the trade that does the
+// step, the rate (a reference wage, a state's live BLS wage, or the one the
+// shop types), and the wage location. Keyed by node id at the call site, so
+// the trade, typed rate, location and live wage reset per node.
 
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
+import { LABOR_RATES } from '@/lib/integrations/reference-rates'
 import { isLaborNode } from '@/lib/case-editor/cost-calculators'
 import { US_STATES, useLaborRate } from '@/lib/case-editor/use-labor-rate'
 import type { InspectorEditFormData } from '@/lib/case-editor/types'
@@ -18,7 +20,10 @@ export function LaborBreakdown({
   editFormData: InspectorEditFormData
   onChange: (patch: Partial<InspectorEditFormData>) => void
 }) {
-  const { state, pickState, rate, rateLabel, wageLoading, hoursVal, computed, setHours } = useLaborRate({
+  const {
+    state, pickState, tradeKey, pickTrade, typedRate, typeRate,
+    rate, rateLabel, wageNote, wageLoading, hoursVal, computed, setHours,
+  } = useLaborRate({
     nodeLabel: (node?.label as string) ?? '',
     editFormData,
     onChange,
@@ -37,6 +42,23 @@ export function LaborBreakdown({
     >
       <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
         Labor = hours × rate
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        <select
+          className="input"
+          style={{ height: 24, fontSize: 10.5, maxWidth: 210 }}
+          value={tradeKey}
+          onChange={(e) => pickTrade(e.target.value)}
+          aria-label="Trade"
+          title="Who does this step. The wage follows the trade, not the step's name."
+        >
+          <option value="">Matched on the step name</option>
+          {Object.entries(LABOR_RATES).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v.label}
+            </option>
+          ))}
+        </select>
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
         <div>
@@ -59,13 +81,18 @@ export function LaborBreakdown({
           <label className="label" style={{ fontSize: 10 }}>
             Rate ($/h)
           </label>
-          <div
-            className="mono"
-            style={{ fontSize: 12, height: 28, display: 'flex', alignItems: 'center' }}
+          <input
+            className="input mono"
+            type="number"
+            step="any"
+            style={{ height: 28, fontSize: 12, width: 82 }}
+            value={typedRate !== '' ? typedRate : wageLoading ? '' : rate.toFixed(2)}
+            placeholder={wageLoading ? '…' : rate.toFixed(2)}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => typeRate(e.target.value)}
             title={rateLabel}
-          >
-            {wageLoading ? '…' : `$${rate.toFixed(2)}`}
-          </div>
+            aria-label="Hourly rate"
+          />
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', paddingBottom: 6 }}>=</div>
         <div>
@@ -82,7 +109,7 @@ export function LaborBreakdown({
               fontWeight: 600,
             }}
           >
-            {computed != null ? `$${computed.toFixed(2)}` : '—'}
+            {computed != null ? `$${computed.toFixed(2)}` : '–'}
           </div>
         </div>
         <div>
@@ -106,8 +133,13 @@ export function LaborBreakdown({
         </div>
       </div>
       <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>
-        {rateLabel}. Edit hours or pick a state (live BLS wage); Save persists.
+        {rateLabel}. Edit hours, type your own rate, or pick a trade or a state (live BLS wage); Save persists.
       </div>
+      {wageNote && (
+        <div role="status" style={{ fontSize: 10, color: 'var(--signal-warn, #d97706)', marginTop: 2 }}>
+          {wageNote}
+        </div>
+      )}
     </div>
   )
 }

@@ -26,9 +26,12 @@ const DOC_TYPES = [
 export function ReferencePane({
   caseId,
   onClose,
+  readOnly = false,
 }: {
   caseId: string | number
   onClose: () => void
+  /** A "Can read" member reads the documents but cannot attach or remove one. */
+  readOnly?: boolean
 }) {
   const {
     docs,
@@ -90,8 +93,9 @@ export function ReferencePane({
           {loading && <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)' }}>Loading…</div>}
           {!loading && docs.length === 0 && (
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 10 }}>
-              No document kept for this case yet. Attach the one you are typing from, or open a sample
-              below to see the shape of a real one.
+              {readOnly
+                ? 'No document kept for this case yet. Open a sample below to see the shape of a real one.'
+                : 'No document kept for this case yet. Attach the one you are typing from, or open a sample below to see the shape of a real one.'}
             </div>
           )}
           {docs.map((d) => (
@@ -128,17 +132,20 @@ export function ReferencePane({
                   {d.doc_type ?? 'document'}
                 </span>
               </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => remove(d)}
-                title="Remove this document from the case"
-              >
-                Remove
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => remove(d)}
+                  title="Remove this document from the case"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           ))}
 
+          {!readOnly && (
           <div
             style={{
               marginTop: 14,
@@ -185,6 +192,7 @@ export function ReferencePane({
               {uploading ? 'Reading the file…' : 'Text is kept for reading. Scanned images are not read.'}
             </div>
           </div>
+          )}
 
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>

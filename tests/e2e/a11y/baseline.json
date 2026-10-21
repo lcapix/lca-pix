@@ -3,55 +3,30 @@
   "totals": {
     "region": {
       "impact": "moderate",
-      "count": 886,
-      "screens": 47
-    },
-    "color-contrast": {
-      "impact": "serious",
-      "count": 73,
+      "count": 161,
       "screens": 15
-    },
-    "landmark-one-main": {
-      "impact": "moderate",
-      "count": 37,
-      "screens": 37
     },
     "landmark-unique": {
       "impact": "moderate",
-      "count": 19,
-      "screens": 18
+      "count": 11,
+      "screens": 10
     },
-    "label": {
-      "impact": "critical",
-      "count": 15,
-      "screens": 9
-    },
-    "select-name": {
-      "impact": "critical",
-      "count": 10,
-      "screens": 8
-    },
-    "target-size": {
-      "impact": "serious",
-      "count": 9,
-      "screens": 3
-    },
-    "page-has-heading-one": {
+    "landmark-one-main": {
       "impact": "moderate",
-      "count": 7,
-      "screens": 7
+      "count": 9,
+      "screens": 9
     },
     "heading-order": {
       "impact": "moderate",
-      "count": 5,
-      "screens": 5
-    },
-    "link-in-text-block": {
-      "impact": "serious",
-      "count": 4,
+      "count": 3,
       "screens": 3
     },
-    "landmark-no-duplicate-banner": {
+    "landmark-main-is-top-level": {
+      "impact": "moderate",
+      "count": 1,
+      "screens": 1
+    },
+    "landmark-no-duplicate-main": {
       "impact": "moderate",
       "count": 1,
       "screens": 1
@@ -65,214 +40,26 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 19
+        "count": 18
       }
     },
-    "admin-integrations": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 5
-      }
-    },
-    "analytics": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 17
-      }
-    },
-    "case-editor": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 7
-      },
-      "label": {
-        "impact": "critical",
-        "count": 2
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 26
-      }
-    },
-    "case-editor-five-tier": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 8
-      },
-      "label": {
-        "impact": "critical",
-        "count": 2
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 27
-      }
-    },
-    "case-editor-graph": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 2
-      },
-      "label": {
-        "impact": "critical",
-        "count": 2
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 23
-      }
-    },
-    "case-editor-inspector": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 7
-      },
-      "label": {
-        "impact": "critical",
-        "count": 1
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 26
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 1
-      }
-    },
-    "case-editor-list": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 2
-      },
-      "label": {
-        "impact": "critical",
-        "count": 2
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 19
-      }
-    },
-    "case-editor-tree": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 7
-      },
-      "label": {
-        "impact": "critical",
-        "count": 2
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 26
-      }
-    },
-    "case-new-base": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 10
-      }
-    },
-    "case-new-comparative": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 14
-      }
-    },
+    "admin-integrations": {},
+    "analytics": {},
+    "case-copy": {},
+    "case-cost-labor": {},
+    "case-delete-confirm": {},
+    "case-editor": {},
+    "case-editor-five-tier": {},
+    "case-inventory": {},
+    "case-new": {},
+    "case-new-base": {},
+    "case-new-base-option": {},
+    "case-new-comparative": {},
+    "case-step-menu": {},
+    "case-step-panel": {},
+    "case-writeup": {},
+    "cases": {},
     "changelog": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 4
-      },
       "heading-order": {
         "impact": "moderate",
         "count": 1
@@ -281,101 +68,29 @@
         "impact": "moderate",
         "count": 1
       },
-      "link-in-text-block": {
-        "impact": "serious",
-        "count": 1
-      },
       "region": {
         "impact": "moderate",
-        "count": 29
+        "count": 28
       }
     },
     "class": {
-      "region": {
-        "impact": "moderate",
-        "count": 4
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 1
-      }
-    },
-    "compare": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 1
-      },
-      "landmark-one-main": {
+      "landmark-main-is-top-level": {
         "impact": "moderate",
         "count": 1
       },
-      "link-in-text-block": {
-        "impact": "serious",
-        "count": 2
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 13
-      }
-    },
-    "component-dialog": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 11
-      },
-      "label": {
-        "impact": "critical",
-        "count": 2
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 26
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 1
-      }
-    },
-    "component-edit-page": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 7
-      },
-      "label": {
-        "impact": "critical",
-        "count": 1
-      },
-      "landmark-one-main": {
+      "landmark-no-duplicate-main": {
         "impact": "moderate",
         "count": 1
       },
       "landmark-unique": {
         "impact": "moderate",
         "count": 1
-      },
-      "page-has-heading-one": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 26
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 1
       }
     },
-    "component-new-page": {
-      "region": {
-        "impact": "moderate",
-        "count": 4
-      }
-    },
+    "compare": {},
+    "compare-add-case": {},
+    "component-edit-page": {},
+    "component-new-page": {},
     "docs": {
       "heading-order": {
         "impact": "moderate",
@@ -387,7 +102,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 27
+        "count": 26
       }
     },
     "guide": {
@@ -397,21 +112,17 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 4
+        "count": 3
       }
     },
     "guide-api-reference": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 4
-      },
       "landmark-unique": {
         "impact": "moderate",
         "count": 1
       },
       "region": {
         "impact": "moderate",
-        "count": 4
+        "count": 3
       }
     },
     "guide-data-model": {
@@ -421,7 +132,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 4
+        "count": 3
       }
     },
     "guide-faq": {
@@ -431,7 +142,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 4
+        "count": 3
       }
     },
     "guide-first-assessment": {
@@ -441,7 +152,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 4
+        "count": 3
       }
     },
     "guide-glossary": {
@@ -451,69 +162,13 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 4
-      }
-    },
-    "home": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 13
-      }
-    },
-    "home-empty": {
-      "landmark-no-duplicate-banner": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 14
-      }
-    },
-    "import": {
-      "label": {
-        "impact": "critical",
-        "count": 1
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 12
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 2
-      }
-    },
-    "landing": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 75
-      },
-      "target-size": {
-        "impact": "serious",
         "count": 3
       }
     },
+    "home": {},
+    "home-empty": {},
+    "import": {},
+    "landing": {},
     "legal-privacy": {
       "landmark-one-main": {
         "impact": "moderate",
@@ -525,7 +180,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 6
+        "count": 5
       }
     },
     "legal-security": {
@@ -539,7 +194,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 6
+        "count": 5
       }
     },
     "legal-terms": {
@@ -553,43 +208,12 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 6
+        "count": 5
       }
     },
-    "library-factors": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 8
-      }
-    },
-    "library-substances": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 7
-      }
-    },
-    "login": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 22
-      },
-      "target-size": {
-        "impact": "serious",
-        "count": 3
-      }
-    },
+    "library-factors": {},
+    "library-substances": {},
+    "login": {},
     "not-found": {
       "landmark-one-main": {
         "impact": "moderate",
@@ -597,23 +221,13 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 3
+        "count": 2
       }
     },
-    "onboarding": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 9
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 1
-      }
-    },
+    "onboarding": {},
+    "people": {},
+    "people-privacy-confirm": {},
+    "people-sample": {},
     "pricing": {
       "landmark-one-main": {
         "impact": "moderate",
@@ -621,7 +235,7 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 31
+        "count": 25
       }
     },
     "product": {
@@ -635,134 +249,18 @@
       },
       "region": {
         "impact": "moderate",
-        "count": 30
+        "count": 29
       }
     },
-    "profile": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 17
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 2
-      }
-    },
-    "project-new": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 12
-      }
-    },
-    "project-not-found": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 13
-      }
-    },
-    "project-start": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "link-in-text-block": {
-        "impact": "serious",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 14
-      }
-    },
-    "project-workspace": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 5
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 37
-      }
-    },
-    "project-workspace-five-tier": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 6
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 34
-      }
-    },
-    "results": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 1
-      },
-      "heading-order": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 60
-      }
-    },
-    "results-magic-insights": {
-      "color-contrast": {
-        "impact": "serious",
-        "count": 1
-      },
-      "heading-order": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 68
-      },
-      "select-name": {
-        "impact": "critical",
-        "count": 1
-      }
-    },
-    "signup": {
-      "landmark-one-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "region": {
-        "impact": "moderate",
-        "count": 24
-      },
-      "target-size": {
-        "impact": "serious",
-        "count": 3
-      }
-    }
+    "profile": {},
+    "project-new": {},
+    "project-not-found": {},
+    "project-start": {},
+    "project-workspace": {},
+    "project-workspace-five-tier": {},
+    "reports": {},
+    "results": {},
+    "results-magic-insights": {},
+    "signup": {}
   }
 }

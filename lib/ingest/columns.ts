@@ -23,7 +23,7 @@ export function unmappedColumnNotes(
     }
     notes.push(
       `Column "${h}" was read but not mapped${sample ? ` (e.g. "${sample.slice(0, 40)}")` : ''}` +
-        ` — if it holds material, quantity, unit, cost, or sub-assembly data we should use, say so; it is not lost.`,
+        `. If it holds material, quantity, unit, cost or sub-assembly data, give it a role below; nothing in it is lost.`,
     );
   }
   return notes;

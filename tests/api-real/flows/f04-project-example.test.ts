@@ -6,7 +6,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
 import { sql, sqlOne } from '../support/db';
 import { createUser, type TestUser } from '../support/users';
-import { EXAMPLE_STEPS } from '@/lib/example-case';
 
 let u: TestUser;
 beforeAll(async () => {
@@ -99,70 +98,24 @@ describe('F4 create a project', () => {
   });
 });
 
-describe('F4b worked example', () => {
-  it('builds the example with its functional unit (PROJ-1 fixed), runs it, and a repeat returns existed:true', async () => {
+describe('F4b sample study', () => {
+  // The sample replaced the worked example (education 2.9); its data and golden
+  // totals are checked in f28-sample-study.
+  it('builds the sample in the account, owned and flagged, and a repeat returns existed:true', async () => {
     const first = await api.post('/api/example-project', { token: u.token });
-    expect(first.status).toBe(200);
+    expect(first.status, first.text).toBe(200);
     const pid = Number(first.json.project_id);
-    const caseId = Number(first.json.case_id);
-
-    const project = await sqlOne('SELECT project_name, owner_id, lcia_method, region_code, functional_unit, system_boundary FROM project WHERE project_id = ?', [pid]);
-    expect(project).toMatchObject({
-      project_name: 'Example: painted steel bracket',
-      owner_id: u.id,
-      lcia_method: 'TRACI 2.1',
-      region_code: 'US',
-      functional_unit: '1 painted steel bracket, at the factory gate',
-    });
+    const project = await sqlOne('SELECT project_name, owner_id, is_sample, lcia_method, region_code, functional_unit FROM project WHERE project_id = ?', [pid]);
+    expect(project).toMatchObject({ project_name: 'Painted steel bracket', owner_id: u.id, is_sample: 1, lcia_method: 'TRACI 2.1', region_code: 'US', functional_unit: '1 painted steel bracket' });
     const owners = await sql(
       `SELECT pm.user_id FROM project_members pm JOIN permissions p ON p.permission_id = pm.permission_id
         WHERE pm.project_id = ? AND p.permission_name = 'owner'`,
       [pid],
     );
     expect(owners).toEqual([{ user_id: u.id }]);
-    const steps = await sql('SELECT component_type, life_cycle_stage FROM component WHERE case_id = ? ORDER BY component_id', [caseId]);
-    expect(steps.map((s: any) => s.component_type)).toEqual(['product', 'operation', 'operation', 'operation']);
-    const flows = await sql(
-      'SELECT s.substance_name, f.quantity, f.unit FROM flows f JOIN component c ON c.component_id = f.component_id JOIN substances s ON s.substance_id = f.substance_id WHERE c.case_id = ?',
-      [caseId],
-    );
-    expect(flows.length).toBeGreaterThanOrEqual(4);
-
-    // With the functional unit set, the run the UI gates on works.
-    const run = await api.post(`/api/cases/${caseId}/assessments`, { token: u.token, json: {} });
-    expect(run.status).toBe(201);
-    expect(run.json.assessment.calculation_method).toBe('TRACI 2.1');
-    expect(run.json.goal_scope.functional_unit).toBe('1 painted steel bracket, at the factory gate');
-
     const again = await api.post('/api/example-project', { token: u.token });
     expect(again.status).toBe(200);
     expect(again.json).toMatchObject({ existed: true, project_id: pid });
-    expect((await sql('SELECT COUNT(*) AS n FROM project WHERE owner_id = ? AND project_name = ?', [u.id, 'Example: painted steel bracket']))[0].n).toBe(1);
-  });
-
-  // Fixed: the example named 'Argon', which neither db/baseline nor any
-  // migration seeds, so every build answered skipped_substances ['Argon'] and
-  // the weld step lost a flow. The example now names library substances only
-  // (the file's honesty rule: quantities illustrative, factors real).
-  it('builds every flow of the worked example, none skipped', async () => {
-    const other = await createUser('f4argon');
-    const res = await api.post('/api/example-project', { token: other.token });
-    expect(res.status).toBe(200);
-    expect(res.json.skipped_substances).toEqual([]);
-    const expected = EXAMPLE_STEPS.reduce((n, s) => n + s.flows.length, 0);
-    const [built] = await sql(
-      'SELECT COUNT(*) AS n FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?',
-      [Number(res.json.case_id)],
-    );
-    expect(Number(built.n)).toBe(expected);
-  });
-
-  it('every substance the example names is a library substance', async () => {
-    const names = [...new Set(EXAMPLE_STEPS.flatMap((s) => s.flows.map((f) => f.substance)))];
-    const found = await sql(
-      `SELECT substance_name FROM substances WHERE is_custom = 0 AND substance_name IN (${names.map(() => '?').join(',')})`,
-      names,
-    );
-    expect(found.map((r: any) => r.substance_name).sort()).toEqual([...names].sort());
+    expect((await sql('SELECT COUNT(*) AS n FROM project WHERE owner_id = ? AND is_sample = 1', [u.id]))[0].n).toBe(1);
   });
 });

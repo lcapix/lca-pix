@@ -10,7 +10,7 @@ import { useNumberDrafts } from '@/lib/case-editor/use-number-drafts'
 import { useLaborRate } from '@/lib/case-editor/use-labor-rate'
 import { useMachineEnergy } from '@/lib/case-editor/use-machine-energy'
 import { useCostSuggestion } from '@/lib/case-editor/use-cost-suggestion'
-import { getLaborRate } from '@/lib/integrations/reference-rates'
+import { LABOR_RATES, getLaborRate } from '@/lib/integrations/reference-rates'
 import type { InspectorEditFormData } from '@/lib/case-editor/types'
 import { apiRequest } from '@/lib/api-client'
 import { toast } from 'sonner'
@@ -91,7 +91,7 @@ describe('useLaborRate', () => {
   it('costs typed hours at the national reference rate', () => {
     const { result, spy } = withForm({}, (fd, onChange) => useLaborRate({ nodeLabel: 'Weld tab', editFormData: fd, onChange }))
     expect(result.current.out.rate).toBe(ref.rate)
-    expect(result.current.out.rateLabel).toBe(`${ref.label} · BLS OEWS national`)
+    expect(result.current.out.rateLabel).toBe(`${ref.label} · BLS OEWS national · matched on the step name`)
     act(() => result.current.out.setHours('2'))
     expect(spy).toHaveBeenLastCalledWith({ laborHours: 2, laborOccupation: ref.soc, laborCost: Math.round(2 * ref.rate * 100) / 100 })
     expect(result.current.out.computed).toBe(Math.round(2 * ref.rate * 100) / 100)
@@ -115,6 +115,66 @@ describe('useLaborRate', () => {
     expect(result.current.out.rate).toBe(ref.rate)
   })
 
+  it('a picked trade sets the wage and its SOC code, whatever the step is called', async () => {
+    const { result, spy } = withForm({ laborHours: 2 }, (fd, onChange) => useLaborRate({ nodeLabel: 'Station 3', editFormData: fd, onChange }))
+    await act(async () => result.current.out.pickTrade('welder'))
+    expect(spy).toHaveBeenLastCalledWith({ laborCost: Math.round(2 * LABOR_RATES.welder.rate * 100) / 100, laborOccupation: '51-4121' })
+    expect(result.current.out.rate).toBe(LABOR_RATES.welder.rate)
+    expect(result.current.out.rateLabel).toBe(`${LABOR_RATES.welder.label} · BLS OEWS national`)
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('with a state chosen, the state wage follows the picked trade', async () => {
+    vi.mocked(apiRequest).mockResolvedValue(json({ success: true, rate: { rateValue: 30, source: 'BLS OEWS' } }))
+    const { result, spy } = withForm({ laborHours: 2 }, (fd, onChange) => useLaborRate({ nodeLabel: 'Station 3', editFormData: fd, onChange }))
+    await act(async () => result.current.out.pickState('CA'))
+    vi.mocked(apiRequest).mockResolvedValue(json({ success: true, rate: { rateValue: 40, source: 'BLS OEWS' } }))
+    await act(async () => result.current.out.pickTrade('welder'))
+    const [, init] = vi.mocked(apiRequest).mock.calls[1] as any
+    expect(JSON.parse(init.body)).toEqual({ occupation: '51-4121', state: 'CA' })
+    expect(spy).toHaveBeenLastCalledWith({ laborCost: 80, laborOccupation: '51-4121' })
+    expect(result.current.out.rate).toBe(40)
+  })
+
+  it('a typed rate is costed, marked as the user\'s, and kept when the hours change', () => {
+    const { result, spy } = withForm({ laborHours: 2 }, (fd, onChange) => useLaborRate({ nodeLabel: 'Weld tab', editFormData: fd, onChange }))
+    act(() => result.current.out.typeRate('44'))
+    expect(spy).toHaveBeenLastCalledWith({ laborHours: 2, laborCost: 88, laborOccupation: 'user' })
+    expect(result.current.out.rate).toBe(44)
+    expect(result.current.out.rateLabel).toBe('entered by you, not a published wage')
+    // 'user' fits labor_occupation varchar(10); 'user-entered' did not, and the save vanished.
+    expect('user'.length).toBeLessThanOrEqual(10)
+
+    act(() => result.current.out.setHours('3'))
+    expect(spy).toHaveBeenLastCalledWith({ laborHours: 3, laborOccupation: 'user', laborCost: 132 })
+
+    act(() => result.current.out.typeRate(''))
+    expect(spy).toHaveBeenLastCalledWith({ laborCost: Math.round(3 * ref.rate * 100) / 100, laborOccupation: ref.soc })
+    expect(result.current.out.rate).toBe(ref.rate)
+  })
+
+  it('reads a saved user rate back as cost ÷ hours after a reload', () => {
+    // The step as saved earlier at a typed $44/h: the panel has no typed text any more.
+    const { result, spy } = withForm(
+      { laborHours: 0.8, laborCost: 35.2, laborOccupation: 'user' },
+      (fd, onChange) => useLaborRate({ nodeLabel: 'Weld tab', editFormData: fd, onChange }),
+    )
+    expect(result.current.out.rate).toBe(44)
+    expect(result.current.out.computed).toBeCloseTo(35.2, 2)
+    expect(result.current.out.rateLabel).toBe('entered by you, not a published wage')
+    // Changing the hours keeps the user's rate and provenance.
+    act(() => result.current.out.setHours('1'))
+    expect(spy).toHaveBeenLastCalledWith({ laborHours: 1, laborOccupation: 'user', laborCost: 44 })
+  })
+
+  it('a reference occupation is never read as a user rate', () => {
+    const { result } = withForm(
+      { laborHours: 0.8, laborCost: 35.2, laborOccupation: ref.soc },
+      (fd, onChange) => useLaborRate({ nodeLabel: 'Weld tab', editFormData: fd, onChange }),
+    )
+    expect(result.current.out.rate).toBe(ref.rate)
+  })
+
   it('keeps the national rate when BLS fails', async () => {
     vi.mocked(apiRequest).mockRejectedValue(new Error('offline'))
     const { result, spy } = withForm({ laborHours: 2 }, (fd, onChange) => useLaborRate({ nodeLabel: 'Weld tab', editFormData: fd, onChange }))
@@ -122,6 +182,27 @@ describe('useLaborRate', () => {
     expect(result.current.out.rate).toBe(ref.rate)
     expect(result.current.out.wageLoading).toBe(false)
     expect(spy).not.toHaveBeenCalled()
+    expect(result.current.out.wageNote).toBe('No live BLS wage for TX could be loaded, so the national reference is used.')
+  })
+
+  it('a failed lookup after another state puts the cost back on the national rate and says so', async () => {
+    vi.mocked(apiRequest).mockResolvedValueOnce(json({ success: true, rate: { rateValue: 30, source: 'BLS OEWS' } }))
+    const { result, spy } = withForm({ laborHours: 2 }, (fd, onChange) => useLaborRate({ nodeLabel: 'Weld tab', editFormData: fd, onChange }))
+    await act(async () => result.current.out.pickState('TX'))
+    expect(spy).toHaveBeenLastCalledWith({ laborCost: 60, laborOccupation: ref.soc })
+
+    vi.mocked(apiRequest).mockRejectedValueOnce(new Error('offline'))
+    await act(async () => result.current.out.pickState('CA'))
+    // Before: the picker said CA while the cost kept the TX wage.
+    expect(spy).toHaveBeenLastCalledWith({ laborCost: Math.round(2 * ref.rate * 100) / 100, laborOccupation: ref.soc })
+    expect(result.current.out.rate).toBe(ref.rate)
+    expect(result.current.out.state).toBe('CA')
+    expect(result.current.out.wageNote).toBe('No live BLS wage for CA could be loaded, so the national reference is used.')
+
+    act(() => {
+      result.current.out.pickState('US')
+    })
+    expect(result.current.out.wageNote).toBe('')
   })
 })
 

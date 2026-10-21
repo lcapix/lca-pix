@@ -4,7 +4,7 @@ import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy'
 type Call = { sql: string; params: any[] }
 
 /** A fake mysql2 connection: SELECTs answer from fixtures, INSERTs hand out ids. */
-function fakeConn(components: any[], flows: any[]) {
+function fakeConn(components: any[], flows: any[], overrides: any[] = []) {
   const calls: Call[] = []
   let nextId = 1000
   const conn = {
@@ -14,6 +14,9 @@ function fakeConn(components: any[], flows: any[]) {
       if (/SELECT \* FROM component WHERE case_id/i.test(sql)) return [components]
       if (/SELECT \* FROM flows WHERE component_id IN/i.test(sql)) {
         return [flows.filter((f) => params.includes(f.component_id))]
+      }
+      if (/SELECT \* FROM flow_factor_overrides WHERE flow_id IN/i.test(sql)) {
+        return [overrides.filter((o) => params.includes(o.flow_id))]
       }
       if (/^\s*INSERT/i.test(sql)) return [{ insertId: nextId++, affectedRows: 1 }]
       return [{ affectedRows: 1 }]
@@ -149,6 +152,24 @@ describe('copyCaseInventory (CMP-1 / CMP-2 / CMP-3)', () => {
     })
     expect(f[0].flow_id).toBeUndefined()
     expect(result).toEqual({ components: 3, flows: 1 })
+  })
+
+  it("keeps a flow's own factor (migrate-034), on the copied flow's new id", async () => {
+    const own = {
+      override_id: 7, flow_id: flows[0].flow_id, category_id: 1, factor_value: 2.1, impact_unit: 'kg CO2 eq',
+      per_unit: 'tkm', source: 'Supplier EPD 2024', note: null, created_by: 42,
+    }
+    const conn = fakeConn([product, line, moved], flows, [own])
+    await copyCaseInventory(conn as any, 5, 8)
+    const flowInsert = conn.calls.findIndex((c) => /INSERT INTO flows\b/i.test(c.sql))
+    expect(flowInsert).toBeGreaterThan(-1)
+    const o = inserts(conn, 'flow_factor_overrides')
+    expect(o).toHaveLength(1)
+    // ids are handed out in insert order: 3 components (1000-1002), then the flow (1003).
+    expect(o[0]).toEqual({
+      flow_id: 1003, category_id: 1, factor_value: 2.1, impact_unit: 'kg CO2 eq', per_unit: 'tkm',
+      source: 'Supplier EPD 2024', note: null, created_by: 42,
+    })
   })
 })
 

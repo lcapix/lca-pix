@@ -3,7 +3,7 @@ import { readJson } from '@/lib/http';
 import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
@@ -40,6 +40,11 @@ export async function GET(
        ORDER BY c.created_at DESC`,
       [projectId, ...only.params]
     );
+    // A copy link only to a case in this list, one the caller reaches (B-A1).
+    const listed = new Set((cases as any[]).map((c) => Number(c.case_id)));
+    for (const c of cases as any[]) {
+      if (c.parent_case_id != null && !listed.has(Number(c.parent_case_id))) c.parent_case_id = null;
+    }
 
     return NextResponse.json({ success: true, cases });
   } catch (error: any) {
@@ -100,10 +105,23 @@ export async function POST(
       );
     }
 
+    // The case it is a copy of, if any: a case of this project the caller
+    // reaches. Anything else reads as not found (B-A1), never as a link.
+    let parentId: number | null = null;
+    if (parent_case_id !== undefined && parent_case_id !== null && parent_case_id !== '') {
+      parentId = parseId(parent_case_id);
+      const parent = Number.isNaN(parentId)
+        ? null
+        : await queryOne<any>(`SELECT project_id FROM case_table WHERE case_id = ?`, [parentId]);
+      if (!parent || Number(parent.project_id) !== projectId || (await caseAccessDenied(userId, parentId))) {
+        return NextResponse.json({ error: 'The case to copy from was not found in this project' }, { status: 400 });
+      }
+    }
+
     const caseId = await insert(
-      `INSERT INTO case_table (project_id, created_by, case_name, case_type, description)
-       VALUES (?, ?, ?, ?, ?)`,
-      [projectId, userId, case_name, case_type, description || null]
+      `INSERT INTO case_table (project_id, created_by, parent_case_id, case_name, case_type, description)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [projectId, userId, parentId, case_name, case_type, description || null]
     );
 
     const newCase = await queryOne(

@@ -82,3 +82,12 @@ describe('getOrFetchRate', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 });
+
+describe('isoDate (a cached DATE column)', () => {
+  it('reads a mysql2 Date by its local calendar fields, not as "Thu May 01"', async () => {
+    const { isoDate } = await import('@/lib/integrations/cost-rates')
+    expect(isoDate(new Date(2025, 4, 1))).toBe('2025-05-01')
+    expect(isoDate('2026-06-01')).toBe('2026-06-01')
+    expect(isoDate(null)).toBe('')
+  })
+})

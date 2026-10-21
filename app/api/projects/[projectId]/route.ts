@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { query, queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth } from '@/lib/auth';
+import { getProjectRole, requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
+import { recordAudit } from '@/lib/audit';
 
-/** members_see_own_cases as a boolean (the column is TINYINT(1)). */
+/** The project's TINYINT(1) flags as booleans, where the columns exist. */
 function withOwnCasesFlag(project: any) {
-  if (!project || !Object.prototype.hasOwnProperty.call(project, 'members_see_own_cases')) return project;
-  return { ...project, members_see_own_cases: Number(project.members_see_own_cases) === 1 };
+  if (!project) return project;
+  const out = { ...project };
+  for (const flag of ['members_see_own_cases', 'ai_enabled', 'is_sample']) {
+    if (Object.prototype.hasOwnProperty.call(project, flag)) out[flag] = Number(project[flag]) === 1;
+  }
+  return out;
 }
 
 /** true/false/1/0 -> 1/0; anything else -> null (400). */
@@ -66,7 +71,10 @@ export async function GET(
       members = [];
     }
 
-    return NextResponse.json({ success: true, project: { ...withOwnCasesFlag(project), members } });
+    // The caller's own role, so the client can hide what this member cannot do.
+    const my_role = await getProjectRole(userId, projectId);
+
+    return NextResponse.json({ success: true, project: { ...withOwnCasesFlag(project), members, my_role } });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -130,6 +138,18 @@ export async function PUT(
     if (ownCases === null) {
       return NextResponse.json({ error: 'members_see_own_cases must be true or false' }, { status: 400 });
     }
+    // The AI switch (D7, migrate-042): the owner's alone, since it decides
+    // whether the project's figures may be sent to the model at all.
+    const aiEnabled = Object.prototype.hasOwnProperty.call(body ?? {}, 'ai_enabled')
+      ? parseOwnCasesFlag(body.ai_enabled)
+      : undefined;
+    if (aiEnabled === null) {
+      return NextResponse.json({ error: 'ai_enabled must be true or false' }, { status: 400 });
+    }
+    if (aiEnabled !== undefined) {
+      const ownerDenied = await projectAccessDenied(userId, projectId, 'owner', { notFound: 'Project not found' });
+      if (ownerDenied) return ownerDenied;
+    }
 
     await execute(
       `UPDATE project
@@ -191,7 +211,43 @@ export async function PUT(
     }
 
     if (ownCases !== undefined) {
+      const before = await queryOne<any>(`SELECT members_see_own_cases FROM project WHERE project_id = ?`, [projectId]);
       await execute(`UPDATE project SET members_see_own_cases = ? WHERE project_id = ?`, [ownCases, projectId]);
+      const was = Number(before?.members_see_own_cases) === 1;
+      if (was !== (ownCases === 1)) {
+        await recordAudit({
+          userId,
+          action: 'update',
+          table: 'project',
+          recordId: projectId,
+          before: { members_see_own_cases: was },
+          after: { members_see_own_cases: ownCases === 1 },
+          request,
+        });
+      }
+    }
+
+    if (aiEnabled !== undefined) {
+      const before = await queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [projectId]);
+      if (before && !Object.prototype.hasOwnProperty.call(before, 'ai_enabled')) {
+        return NextResponse.json(
+          { error: 'The AI switch needs migration 042 on this database. Nothing else was changed by it.' },
+          { status: 409 },
+        );
+      }
+      const was = Number(before?.ai_enabled ?? 1) === 1;
+      if (was !== (aiEnabled === 1)) {
+        await execute(`UPDATE project SET ai_enabled = ? WHERE project_id = ?`, [aiEnabled, projectId]);
+        await recordAudit({
+          userId,
+          action: 'update',
+          table: 'project',
+          recordId: projectId,
+          before: { ai_enabled: was },
+          after: { ai_enabled: aiEnabled === 1 },
+          request,
+        });
+      }
     }
 
     const updatedProject = await queryOne(
@@ -225,7 +281,20 @@ export async function DELETE(
     const denied = await projectAccessDenied(userId, projectId, 'owner', { notFound: 'Project not found', forbidden: 'Only project owner can delete' });
     if (denied) return denied;
 
+    // SELECT * so the sample flag (migrate-038) is recorded where it exists:
+    // removing the sample is one of the audited actions.
+    const gone = await queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [projectId]);
     await execute(`DELETE FROM project WHERE project_id = ?`, [projectId]);
+    await recordAudit({
+      userId,
+      action: 'delete',
+      table: 'project',
+      recordId: projectId,
+      before: gone
+        ? { project_name: gone.project_name, owner_id: gone.owner_id, is_sample: Number(gone.is_sample ?? 0) === 1 }
+        : null,
+      request,
+    });
 
     return NextResponse.json({ success: true, message: 'Project deleted' });
   } catch (error: any) {

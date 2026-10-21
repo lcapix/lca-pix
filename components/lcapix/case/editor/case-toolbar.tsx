@@ -25,6 +25,8 @@ export interface CaseToolbarProps {
   isRunning: boolean
   canRun: boolean
   fuMissing: boolean
+  /** A "Can read" member: no Learn (it saves progress), Duplicate or Run. */
+  readOnly?: boolean
 }
 
 export function CaseToolbar({
@@ -42,6 +44,7 @@ export function CaseToolbar({
   isRunning,
   canRun,
   fuMissing,
+  readOnly = false,
 }: CaseToolbarProps) {
   return (
     <div
@@ -154,15 +157,17 @@ export function CaseToolbar({
       >
         <Icon name="refresh" size={14} /> Reset
       </button>
-      <button
-        className={learnOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
-        type="button"
-        title="Five short lessons that follow the ISO phases, done on this case"
-        onClick={onToggleLearn}
-        aria-pressed={learnOpen}
-      >
-        <Icon name="target" size={14} /> Learn
-      </button>
+      {!readOnly && (
+        <button
+          className={learnOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
+          type="button"
+          title="Five short lessons that follow the ISO phases, done on this case"
+          onClick={onToggleLearn}
+          aria-pressed={learnOpen}
+        >
+          <Icon name="target" size={14} /> Learn
+        </button>
+      )}
       <button
         className={referenceOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
         type="button"
@@ -172,23 +177,43 @@ export function CaseToolbar({
       >
         <Icon name="file" size={14} /> Reference
       </button>
-      <button
-        className="btn btn-secondary btn-sm"
-        type="button"
-        title="Copy this case (tree, flows, costs) as a what-if with one change"
-        onClick={onDuplicate}
-      >
-        <Icon name="layers" size={14} /> Duplicate
-      </button>
-      <button
-        className="btn btn-primary btn-sm"
-        type="button"
-        onClick={onRun}
-        disabled={isRunning || !canRun}
-        title={runButtonTitle(fuMissing, canRun)}
-      >
-        <Icon name="run" size={14} /> {isRunning ? 'Running…' : 'Run Assessment'}
-      </button>
+      {readOnly ? (
+        <span
+          role="status"
+          title="You can read this case. Ask the project owner for Can change to edit it."
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: 'var(--surface-raised)',
+            border: '1px solid var(--border-subtle)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          Can read
+        </span>
+      ) : (
+        <>
+          <button
+            className="btn btn-secondary btn-sm"
+            type="button"
+            title="Copy this case (tree, flows, costs) as a what-if with one change"
+            onClick={onDuplicate}
+          >
+            <Icon name="layers" size={14} /> Duplicate
+          </button>
+          <button
+            className="btn btn-primary btn-sm"
+            type="button"
+            onClick={onRun}
+            disabled={isRunning || !canRun}
+            title={runButtonTitle(fuMissing, canRun)}
+          >
+            <Icon name="run" size={14} /> {isRunning ? 'Running…' : 'Run Assessment'}
+          </button>
+        </>
+      )}
     </div>
   )
 }

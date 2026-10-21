@@ -9,7 +9,6 @@ import { EnvironmentalFlowsEditor } from '@/components/lcapix/case/environmental
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
 import { toInspectorFlows } from '@/lib/case-editor/flow-types'
 import type { InspectorFlow } from '@/lib/case-editor/types'
-import { InspectorSection } from './inspector-section'
 
 export function FlowsSection({
   node,
@@ -31,7 +30,18 @@ export function FlowsSection({
   onLiveFlows: (nodeId: string, flows: InspectorFlow[]) => void
 }) {
   return (
-    <InspectorSection title="Environmental Flows">
+    <>
+      <div
+        style={{
+          fontSize: 10.5,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: 'var(--text-tertiary)',
+          margin: '2px 0 6px',
+        }}
+      >
+        Inputs and outputs
+      </div>
       {hasChildren ? (
         <div
           style={{
@@ -123,6 +133,6 @@ export function FlowsSection({
           ))}
         </div>
       )}
-    </InspectorSection>
+    </>
   )
 }

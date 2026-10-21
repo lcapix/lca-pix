@@ -7,6 +7,9 @@ vi.mock('@/lib/api-client')
 vi.mock('next/navigation', () => ({
   useParams: () => ({ projectId: '1', caseId: '3' }),
   useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  // The results page reads ?run=<id> (an older run, read-only) and keeps the path.
+  usePathname: () => '/project/1/case/3/results',
+  useSearchParams: () => new URLSearchParams(),
 }))
 vi.mock('@/components/lcapix/magic-insights-modal', () => ({ MagicInsightsModal: () => null }))
 vi.mock('@/components/lcapix/case/write-up-card', () => ({ WriteUpCard: () => null }))
@@ -26,7 +29,7 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 } as any
 
-import ResultsPage from '@/app/project/[projectId]/case/[caseId]/results/page'
+import ResultsPage from '@/components/lcapix/results/results-page'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })

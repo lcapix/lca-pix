@@ -45,10 +45,7 @@ for (const vp of VIEWPORTS) {
       test.use({ storageState: storagePath('owner') });
       for (const state of STATES) {
         test(`${state.slug}`, async ({ page }) => {
-          // BUG (responsive): at 390 px the case editor has no phone layout;
-          // the node-details strip (a <section>) covers the outline, so
-          // "Add Component" cannot be clicked. Enable once P04 lays it out.
-          test.fixme(vp.name === 'phone' && state.slug === 'component-dialog', 'Add Component is covered by the details strip at 390 px');
+          test.skip(vp.name === 'phone' && !!state.desktopOnly, state.desktopOnly);
           await pinClock(page, readSeed().seededAt);
           await openState(page, state, readSeed());
           await snap(page, `${state.slug}-${vp.name}`, state.target?.(page));

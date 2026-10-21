@@ -53,7 +53,6 @@ const TIERS: Tier[] = [
       'Regional cost data (BLS · EIA)',
       'PubChem substance enrichment',
       'Comparative cases + delta reports',
-      'Audit log',
       'Priority support',
     ],
     cta: 'Start Pro trial',
@@ -69,7 +68,6 @@ const TIERS: Tier[] = [
     features: [
       'Everything in Pro',
       'Self-hosted or VPC',
-      'SSO (SAML · OIDC)',
       'Custom methodologies',
       'Custom factor packs',
       'Dedicated success manager',
@@ -91,8 +89,6 @@ const MATRIX = [
   { feature: 'Regional cost (BLS · EIA)', free: false, pro: true, ent: true },
   { feature: 'Comparative cases', free: true, pro: true, ent: true },
   { feature: 'Team collaboration', free: false, pro: true, ent: true },
-  { feature: 'Audit log', free: false, pro: true, ent: true },
-  { feature: 'SSO (SAML · OIDC)', free: false, pro: false, ent: true },
   { feature: 'Self-hosted / VPC', free: false, pro: false, ent: true },
   { feature: 'Support', free: 'Email', pro: 'Priority', ent: 'Dedicated' },
 ] as const
@@ -429,7 +425,7 @@ export default function PricingPage() {
                       <Icon name="check" size={14} style={{ color: 'var(--brand-primary)' }} />
                     ) : v === false ? (
                       <span style={{ color: 'var(--text-disabled, var(--text-tertiary))', opacity: 0.4 }}>
-                        —
+                        –
                       </span>
                     ) : (
                       <span className="mono" style={{ fontSize: 12 }}>{v}</span>

@@ -298,7 +298,6 @@ export function MiniCanvas({ tree, onSelect, selectedId }: MiniCanvasProps) {
                   fontSize: 8,
                   fontWeight: 600,
                   color: tone.text,
-                  opacity: 0.72,
                   textTransform: 'uppercase',
                   letterSpacing: '0.12em',
                   lineHeight: 1.2,

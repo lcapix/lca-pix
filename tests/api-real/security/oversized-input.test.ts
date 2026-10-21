@@ -87,7 +87,7 @@ const FIELD_PROBES: Array<[string, Probe, (w: World) => unknown, RegExp | null]>
     (w) => ({ substance_id: w.substances.electricity, flow_type: 'input', quantity: 1, unit: 'kWh', driver_description: LONG(70_000) }), /description is too long/i],
   ['POST /api/ingest/apply case_name 150 chars', P('POST', () => '/api/ingest/apply'),
     (w) => ({ project_id: w.P.id, case_name: LONG(150), nodes: [{ name: 'A', tier: 'product', parent: null }], flows: [], costs: [], notes: [] }), /case_name.*100/i],
-  ['PUT /api/auth/profile company 161 chars', P('PUT', () => '/api/auth/profile'), () => ({ fullName: 'ok', company: LONG(161) }), /company.*160 characters/i],
+  ['PUT /api/auth/profile company 161 chars', P('PUT', () => '/api/auth/profile'), () => ({ fullName: 'ok', company: LONG(161) }), /institution.*160 characters/i],
   ['POST /api/projects/:id/members email 5 KB', P('POST', (w) => `/api/projects/${w.P.id}/members`), () => ({ email: `${LONG(5000)}@x.test`, role: 'viewer' }), null],
   ['POST /api/auth/signup email 5 KB', P('POST', () => '/api/auth/signup'), () => ({ email: `${LONG(5000)}@x.test`, password: 'Long-enough-1' }), null],
   ['POST /api/auth/login password 5 KB', P('POST', () => '/api/auth/login'), () => ({ email: 'a@b.test', password: LONG(5000) }), null],

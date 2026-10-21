@@ -105,7 +105,7 @@ export function ImpactOverviewCard({
         }}
       >
         <span className="mono">{componentCount}</span> steps ·{' '}
-        <span className="mono">{caseImpact?.categoryCount || '—'}</span> categories ·{' '}
+        <span className="mono">{caseImpact?.categoryCount || '–'}</span> categories ·{' '}
         <span className="mono">{driverCount}</span> flows
       </div>
     </div>

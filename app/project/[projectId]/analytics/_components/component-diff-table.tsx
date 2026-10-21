@@ -75,7 +75,7 @@ export function ComponentDiffTable({
                 color: 'var(--text-secondary)',
               }}
             >
-              {val !== 0 ? fmtNum(val, 1) : '—'}
+              {val !== 0 ? fmtNum(val, 1) : '–'}
               {delta !== null && val !== 0 && (
                 <span
                   style={{

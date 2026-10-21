@@ -21,6 +21,33 @@ export function latestCompletedRun<T extends { status?: string | null }>(runs: T
 }
 
 /**
+ * The run the Results page shows: the completed run asked for (?run=<id>),
+ * else the newest completed run. A run that does not exist, failed, or is not
+ * a whole number falls back to the newest, so a stale link never shows an
+ * empty page.
+ */
+export function runToShow<T extends { run_id: number; status?: string | null }>(
+  runs: T[],
+  requestedRunId?: number | string | null,
+): T | null {
+  const id = Number(requestedRunId)
+  if (requestedRunId != null && requestedRunId !== '' && Number.isInteger(id) && id > 0) {
+    const asked = runs.find((r) => r.run_id === id)
+    if (asked && isCompletedRun(asked)) return asked
+  }
+  return latestCompletedRun(runs)
+}
+
+/** True when `shown` is a completed run older than the newest completed one. */
+export function isOlderRun<T extends { run_id: number; status?: string | null }>(
+  shown: T | null,
+  runs: T[],
+): boolean {
+  const newest = latestCompletedRun(runs)
+  return !!shown && !!newest && shown.run_id !== newest.run_id
+}
+
+/**
  * Change of one category's total, in percent, from the previous run with the
  * same method and region to the latest completed run (RES-2). Runs under
  * another method or region are not comparable and are skipped. The change is

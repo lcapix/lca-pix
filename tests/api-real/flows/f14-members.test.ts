@@ -102,4 +102,31 @@ describe('F14 members and roles', () => {
       expect((await api.delete(`/api/projects/${pid}/members${q}`, { token: t })).status, q).toBe(400);
     }
   });
+
+  it('a class list (E08): each email added, changed, already here, or with no account; a member who can read cannot add; full names come back', async () => {
+    const carol = await createUser('f14carol', { fullName: 'Carol Diaz' });
+    const dan = await createUser('f14dan', { fullName: 'Dan Ito' });
+    // Carol is here already as a viewer; Dan is new; one address has no account; one is the owner.
+    await api.post(`/api/projects/${pid}/members`, { token: owner.token, json: { email: carol.email, role: 'viewer' } });
+    const res = await api.post(`/api/projects/${pid}/members`, {
+      token: owner.token,
+      json: { emails: [carol.email, dan.email.toUpperCase(), `nobody.${Date.now()}@example.test`, owner.email, 'not-an-email', dan.email], role: 'editor' },
+    });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json.summary).toEqual({ added: 1, changed: 1, unchanged: 0, no_account: 1, other: 2, limited: 0 });
+    expect(res.json.results.map((r: any) => r.outcome)).toEqual(['changed', 'added', 'no_account', 'owner', 'invalid']);
+    expect(await roleOf(dan.id)).toBe('editor');
+    expect(await roleOf(carol.id)).toBe('editor');
+    // Sent again, nothing changes.
+    const again = await api.post(`/api/projects/${pid}/members`, { token: owner.token, json: { emails: [dan.email], role: 'editor' } });
+    expect(again.json.summary.unchanged).toBe(1);
+    // The list carries full names.
+    const list = await api.get(`/api/projects/${pid}/members`, { token: owner.token });
+    expect(list.json.members.find((m: any) => m.user_id === dan.id).full_name).toBe('Dan Ito');
+    // Too many at once, or none, is refused; someone who can only read cannot add.
+    const many = Array.from({ length: 101 }, (_, i) => `x${i}@example.test`);
+    expect((await api.post(`/api/projects/${pid}/members`, { token: owner.token, json: { emails: many, role: 'viewer' } })).status).toBe(400);
+    expect((await api.post(`/api/projects/${pid}/members`, { token: owner.token, json: { emails: [], role: 'viewer' } })).status).toBe(400);
+    expect((await api.post(`/api/projects/${pid}/members`, { token: dan.token, json: { emails: [bob.email], role: 'viewer' } })).status).toBe(403);
+  });
 });

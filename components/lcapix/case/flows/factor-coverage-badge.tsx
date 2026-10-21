@@ -22,7 +22,7 @@ export function FactorCoverageBadge({ s }: { s: { methods_with_factors?: string;
       title={
         has
           ? `Impact factors available: ${methods.join(', ')}`
-          : 'No impact factors — flows of this substance will contribute ZERO to every category'
+          : 'No impact factors: flows of this substance will contribute ZERO to every category'
       }
     >
       {has ? `✓ ${methods.map((m) => m.split(' ')[0]).join(' · ')}` : 'no impact factors'}

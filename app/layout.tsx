@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter_Tight, IBM_Plex_Mono } from "next/font/google"
 import "./globals.css"
 import "./lcapix.css"
+import "./ds.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { GlobalCommandPalette } from "@/components/global/command-palette"
 import { ShortcutHelp } from "@/components/global/shortcut-help"
@@ -25,7 +26,7 @@ const plexMono = IBM_Plex_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "LCAPIX — Botanical Precision in Sustainability Data",
+  title: "LCAPIX: Botanical Precision in Sustainability Data",
   description: "Life-cycle assessment with cost + environmental impact in one view. CML · ReCiPe · TRACI methods. ISO 14040/14044 compliant.",
   generator: "LCAPIX v3",
 }

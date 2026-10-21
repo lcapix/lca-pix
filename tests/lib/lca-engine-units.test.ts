@@ -80,9 +80,7 @@ describe('E3: no raw multiply when a unit is outside the table', () => {
 describe('E9: a non-finite quantity never poisons a category total', () => {
   it.each([
     ['NaN', NaN],
-    ['null', null],
     ["'abc'", 'abc'],
-    ["''", ''],
     ["'12abc'", '12abc'],
   ])('quantity %s is skipped with a warning; the valid flow still totals 5', async (_label, bad) => {
     const r = await run([
@@ -97,10 +95,28 @@ describe('E9: a non-finite quantity never poisons a category total', () => {
     expect(r.warnings.some((w) => w.includes('Bad') && /not a finite number/.test(w))).toBe(true);
   });
 
+  // A flow with no amount yet (migrate-033) is not an error: it is left out of
+  // the run without a per-flow warning, and the case-level data-quality
+  // statement names it instead (see tests/lib/flow-amount-missing.test.ts).
+  it.each([
+    ['null', null],
+    ["''", ''],
+  ])('quantity %s means "no amount yet": left out silently; the valid flow still totals 5', async (_label, blank) => {
+    const r = await run([
+      gwRow({ flow_id: 1, substance_name: 'Good', quantity: '5.000000' }),
+      gwRow({ flow_id: 2, substance_name: 'Pending', quantity: blank }),
+    ]);
+    expect(r.impacts).toHaveLength(1);
+    expect(r.impacts[0].impact_value).toBeCloseTo(5, 12);
+    expect(r.flow_contributions.map((c) => c.flow_id)).toEqual([1]);
+    expect(r.invalid_quantity_flows).toBe(0);
+    expect(r.warnings.some((w) => w.includes('Pending'))).toBe(false);
+  });
+
   it('warns once per flow even when the flow has factors in several categories', async () => {
     const r = await run([
-      gwRow({ flow_id: 2, substance_name: 'Bad', quantity: null }),
-      gwRow({ flow_id: 2, substance_name: 'Bad', quantity: null, category_id: 3, category_name: 'Acidification', factor_unit: 'kg SO2 eq' }),
+      gwRow({ flow_id: 2, substance_name: 'Bad', quantity: 'abc' }),
+      gwRow({ flow_id: 2, substance_name: 'Bad', quantity: 'abc', category_id: 3, category_name: 'Acidification', factor_unit: 'kg SO2 eq' }),
     ]);
     expect(r.warnings.filter((w) => w.includes('Bad'))).toHaveLength(1);
     expect(r.invalid_quantity_flows).toBe(1);

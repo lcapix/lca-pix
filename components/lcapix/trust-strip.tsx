@@ -34,8 +34,8 @@ export interface TrustStripProps {
 }
 
 const DEFAULT_ITEMS: TrustItem[] = [
-  { label: "ISO 14040", hint: "Life cycle assessment — principles and framework" },
-  { label: "ISO 14044", hint: "Life cycle assessment — requirements and guidelines" },
+  { label: "ISO 14040", hint: "Life cycle assessment: principles and framework" },
+  { label: "ISO 14044", hint: "Life cycle assessment: requirements and guidelines" },
   { label: "GHG Protocol", hint: "Greenhouse Gas Protocol corporate standard" },
   { label: "EPD", hint: "Environmental Product Declaration framework" },
   { label: "PEF", hint: "EU Product Environmental Footprint" },

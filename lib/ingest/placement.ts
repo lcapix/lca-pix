@@ -78,5 +78,5 @@ export function suggestPlacement(
   if (line.label && assembly) {
     return { stepId: assembly.id, confidence: 0.4, reason: 'purchased part → assembly step (check)' }
   }
-  return { stepId: null, confidence: 0, reason: 'no match — choose a step' }
+  return { stepId: null, confidence: 0, reason: 'No match: choose a step' }
 }

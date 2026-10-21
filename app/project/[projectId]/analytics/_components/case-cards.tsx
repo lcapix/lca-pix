@@ -116,7 +116,7 @@ function CaseCard({
               lineHeight: 1,
             }}
           >
-            {c.totalScore !== 0 ? fmtNum(c.totalScore, 2) : '—'}
+            {c.totalScore !== 0 ? fmtNum(c.totalScore, 2) : '–'}
           </div>
           <div
             style={{

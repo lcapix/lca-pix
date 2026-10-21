@@ -15,7 +15,7 @@ export interface CarbonIntensity {
 export async function fetchCarbonIntensity(zone: string): Promise<CarbonIntensity> {
   const key = process.env.ELECTRICITY_MAPS_API_KEY;
   if (!key) {
-    throw new Error('Electricity Maps API key not configured (set ELECTRICITY_MAPS_API_KEY) — sign up at https://www.electricitymaps.com/free-tier-api');
+    throw new Error('Electricity Maps API key not configured (set ELECTRICITY_MAPS_API_KEY): sign up at https://www.electricitymaps.com/free-tier-api');
   }
 
   const res = await fetch(

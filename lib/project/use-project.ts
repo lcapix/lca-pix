@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
 import { transformProjectFromDB, transformCaseFromDB } from '@/lib/data-transformers'
+import { isProjectRole } from '@/lib/project-role'
 import { summarizeCaseCosts } from '@/lib/case-tree-adapter'
 import type { DemoTreeNode } from '@/lib/lcapix-demo'
 import { buildCaseTree, initialTreeSelection } from './case-tree'
@@ -52,7 +53,9 @@ export function useProjectData(projectId: string, router: Router) {
               ? casesData.cases.map(transformCaseFromDB)
               : []
 
-          setProject({ ...transformedProject, cases: transformedCases })
+          // myRole: the caller's role, so the page can hide what they cannot do.
+          const myRole = isProjectRole(projectData.project.my_role) ? projectData.project.my_role : null
+          setProject({ ...transformedProject, cases: transformedCases, myRole })
 
           if (transformedCases.length > 0) {
             setActiveCaseId((prev) => {

@@ -20,8 +20,9 @@ describe('security headers (next.config.mjs)', () => {
   it('set HSTS, nosniff, referrer and permissions policies, frame denial and a CSP', async () => {
     const [{ headers }] = await rules();
     const h = Object.fromEntries(headers.map((x) => [x.key, x.value]));
+    // Enforced since stage 10.5; a report-only copy would only add noise.
     expect(Object.keys(h).sort()).toEqual([
-      'Content-Security-Policy-Report-Only',
+      'Content-Security-Policy',
       'Permissions-Policy',
       'Referrer-Policy',
       'Strict-Transport-Security',
@@ -37,9 +38,9 @@ describe('security headers (next.config.mjs)', () => {
     for (const feature of ['camera=()', 'microphone=()', 'geolocation=()']) expect(h['Permissions-Policy']).toContain(feature);
   });
 
-  it('the CSP (report-only for now) locks down framing, objects, base-uri, connections and form targets', async () => {
+  it('the CSP, enforced, locks down framing, objects, base-uri, connections and form targets', async () => {
     const [{ headers }] = await rules();
-    const csp = headers.find((x) => x.key === 'Content-Security-Policy-Report-Only')!.value;
+    const csp = headers.find((x) => x.key === 'Content-Security-Policy')!.value;
     const directives = Object.fromEntries(
       csp.split(';').map((d) => d.trim().split(/\s+/)).map(([name, ...values]) => [name, values]),
     );

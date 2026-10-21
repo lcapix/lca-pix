@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
+  isOlderRun,
+  runToShow,
   deltaVsPreviousRun,
   initialRunScope,
   latestCompletedRun,
@@ -88,5 +90,40 @@ describe('initialRunScope', () => {
   })
   it('leaves both unset when nothing is known, so the modal decides', () => {
     expect(initialRunScope({})).toEqual({ method: undefined, region: undefined })
+  })
+})
+
+
+describe('which run the Results page shows', () => {
+  // Newest first, as GET /api/cases/:id/assessments returns them.
+  const runs = [
+    { run_id: 31, status: 'failed' },
+    { run_id: 30, status: 'completed' },
+    { run_id: 22, status: 'completed' },
+    { run_id: 9 }, // an older row with no status counts as completed
+  ]
+
+  it('shows the newest completed run by default', () => {
+    expect(runToShow(runs)?.run_id).toBe(30)
+    expect(runToShow(runs, null)?.run_id).toBe(30)
+  })
+
+  it('shows an older completed run when asked, and says it is older', () => {
+    const shown = runToShow(runs, '22')
+    expect(shown?.run_id).toBe(22)
+    expect(isOlderRun(shown, runs)).toBe(true)
+    expect(isOlderRun(runToShow(runs, 9), runs)).toBe(true)
+    expect(isOlderRun(runToShow(runs), runs)).toBe(false)
+  })
+
+  it('falls back to the newest for a failed, missing or malformed run id', () => {
+    for (const asked of [31, 999, 'abc', '2.5', -4, 0, '']) {
+      expect(runToShow(runs, asked as never)?.run_id).toBe(30)
+    }
+  })
+
+  it('shows nothing when no run completed', () => {
+    expect(runToShow([{ run_id: 5, status: 'failed' }], 5)).toBeNull()
+    expect(isOlderRun(null, [])).toBe(false)
   })
 })

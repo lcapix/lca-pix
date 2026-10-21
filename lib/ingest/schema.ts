@@ -130,14 +130,14 @@ export function processModelWarnings(pm: ProcessModel): string[] {
   for (const f of pm.flows) {
     if (hasChildren.has(f.node)) {
       warnings.push(
-        `flow '${f.substance_text}' sits on '${f.node}', which has steps below it — move it to the step that uses it`,
+        `flow '${f.substance_text}' sits on '${f.node}', which has steps below it: move it to the step that uses it.`,
       );
     }
   }
   for (const c of pm.costs) {
     if (hasChildren.has(c.node)) {
       warnings.push(
-        `${c.category} cost sits on '${c.node}', which has steps below it — move it to the step that incurs it`,
+        `${c.category} cost sits on '${c.node}', which has steps below it: move it to the step that incurs it.`,
       );
     }
   }

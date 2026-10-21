@@ -149,9 +149,9 @@ describe('useFlowRowEdit', () => {
   it('refuses a quantity that is not a number, and shows a server refusal', async () => {
     const { result } = setup()
     act(() => result.current.startEdit(flow(1, 'Steel', 30) as any))
-    act(() => result.current.setEditing({ ...result.current.editing!, qty: '' }))
+    act(() => result.current.setEditing({ ...result.current.editing!, qty: 'abc' }))
     await act(async () => result.current.saveEdit())
-    expect(toast.error).toHaveBeenCalledWith('Quantity must be a number')
+    expect(toast.error).toHaveBeenCalledWith('Enter an amount of 0 or more, or leave it empty for now')
     expect(calls('PUT')).toHaveLength(0)
 
     fetchMock.mockImplementation(async () => ok({ error: 'Unit kWh cannot be converted to kg' }, 400))
@@ -159,6 +159,15 @@ describe('useFlowRowEdit', () => {
     await act(async () => result.current.saveEdit())
     expect(toast.error).toHaveBeenCalledWith('Unit kWh cannot be converted to kg')
     expect(result.current.editing).not.toBeNull()
+  })
+
+  it('clearing the amount saves the flow as "needs an amount" (quantity null, migrate-033)', async () => {
+    const { result } = setup()
+    act(() => result.current.startEdit(flow(1, 'Steel', 30) as any))
+    act(() => result.current.setEditing({ ...result.current.editing!, qty: '' }))
+    await act(async () => result.current.saveEdit())
+    expect(calls('PUT')).toHaveLength(1)
+    expect(JSON.parse((calls('PUT')[0][1] as any).body).quantity).toBeNull()
   })
 })
 

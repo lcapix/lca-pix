@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { LESSONS, parseLearningState } from '@/lib/lessons';
 import { parseId } from '@/lib/ids';
+import { headlineOf, pipelineStage } from '@/lib/summary/case-summary';
 
 /**
  * What an instructor needs to see: for every case in the project, how far the
@@ -30,12 +31,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // The write-up and lesson columns arrive with migrations 021 and 022; on a
     // database without them the view still lists the cases and their runs.
     const sql = (withWriteup: boolean, withFinal: boolean) =>
-      `SELECT c.case_id, c.case_name, c.case_type, c.created_at, c.updated_at, c.created_by,
+      `SELECT c.case_id, c.case_name, c.case_type, c.description, c.created_at, c.updated_at, c.created_by, c.parent_case_id,
               COALESCE(NULLIF(TRIM(creator.full_name), ''), creator.username) AS author
               ${withWriteup ? ', c.interpretation, c.assumptions, c.learning_state' : ''}
               ${withFinal ? ', c.is_final, c.finalized_at' : ''},
               (SELECT COUNT(*) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS run_count,
               (SELECT MAX(ar.run_date) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS last_run,
+              (SELECT COUNT(*) FROM assessment_runs ar
+                WHERE ar.case_id = c.case_id AND ar.status = 'completed') AS completed_runs,
+              (SELECT MAX(ar.run_id) FROM assessment_runs ar
+                WHERE ar.case_id = c.case_id AND ar.status = 'completed') AS latest_run_id,
+              (SELECT COUNT(*) FROM flows f
+                 JOIN component cm ON cm.component_id = f.component_id
+                WHERE cm.case_id = c.case_id AND f.quantity IS NULL) AS flows_missing_amount,
               (SELECT COUNT(*) FROM component cm WHERE cm.case_id = c.case_id) AS step_count,
               (SELECT COUNT(*) FROM flows f
                  JOIN component cm ON cm.component_id = f.component_id
@@ -58,8 +66,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    // Each case's latest completed run, with its headline number: one query
+    // for the whole list, reading only the snapshot's totals and scale.
+    const latestIds = rows.map((r) => Number(r.latest_run_id)).filter((id) => id > 0);
+    const latest = new Map<number, any>();
+    if (latestIds.length) {
+      const runs = await query<any>(
+        `SELECT run_id, case_id, run_date, calculation_method, region_code,
+                JSON_EXTRACT(run_snapshot, '$.totals') AS totals,
+                JSON_EXTRACT(run_snapshot, '$.goal_scope.per_fu_scale') AS per_fu_scale
+           FROM assessment_runs WHERE run_id IN (${latestIds.map(() => '?').join(', ')})`,
+        latestIds
+      );
+      for (const run of runs) latest.set(Number(run.run_id), run);
+    }
+
+    // A copy link only to a case in this list: one the caller reaches (B-A1).
+    const listed = new Set(rows.map((r) => Number(r.case_id)));
     const cases = rows.map((r) => {
       const state = parseLearningState(r.learning_state ?? null);
+      const run = latest.get(Number(r.latest_run_id));
+      const hasInterpretation = !!String(r.interpretation ?? '').trim();
       const answered = LESSONS.filter((l) => state.lessons[l.id]?.correct === true).map((l) => l.id);
       return {
         case_id: r.case_id,
@@ -74,7 +101,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         last_run: r.last_run ?? null,
         // What the student wrote, as presence not content: the instructor opens
         // the case to read it.
-        has_interpretation: !!String(r.interpretation ?? '').trim(),
+        has_interpretation: hasInterpretation,
         has_assumptions: !!String(r.assumptions ?? '').trim(),
         lessons_total: LESSONS.length,
         lessons_answered: answered,
@@ -82,6 +109,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         is_final: !!r.is_final,
         finalized_at: r.finalized_at ?? null,
         updated_at: r.updated_at ?? r.created_at ?? null,
+        // E07: "copied 2 days ago", and the line under a case's name.
+        created_at: r.created_at ?? null,
+        description: r.description ?? null,
+        // The list screens (E07, E07b, E10): where the case is, its latest run.
+        copied_from: r.parent_case_id != null && listed.has(Number(r.parent_case_id)) ? Number(r.parent_case_id) : null,
+        flows_missing_amount: Number(r.flows_missing_amount ?? 0),
+        stage: pipelineStage({
+          completedRuns: Number(r.completed_runs ?? 0),
+          hasInterpretation,
+          isFinal: !!r.is_final,
+        }),
+        latest_run: run
+          ? {
+              run_id: Number(run.run_id),
+              run_date: run.run_date,
+              method: run.calculation_method,
+              region: run.region_code,
+              headline: headlineOf(run.totals, run.per_fu_scale),
+            }
+          : null,
       };
     });
 

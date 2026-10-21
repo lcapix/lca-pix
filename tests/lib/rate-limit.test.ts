@@ -207,3 +207,36 @@ describe('request-size guards', () => {
     expect(pulled).toBeLessThan(10);
   });
 });
+
+describe('reads left without using one (education 2.11)', () => {
+  it('the memory store peeks: what is left, unchanged by looking', async () => {
+    const { MemoryRateLimitStore } = await import('@/lib/rate-limit')
+    const store = new MemoryRateLimitStore()
+    const policy = { id: 'peek-test', limit: 3, windowMs: 60_000 }
+    expect((await store.peek('u1', policy, 1000)).remaining).toBe(3)
+    await store.hit('u1', policy, 1000)
+    await store.hit('u1', policy, 2000)
+    expect((await store.peek('u1', policy, 3000)).remaining).toBe(1)
+    expect((await store.peek('u1', policy, 3000)).remaining).toBe(1)
+    await store.hit('u1', policy, 4000)
+    const none = await store.peek('u1', policy, 5000)
+    expect(none).toMatchObject({ allowed: false, remaining: 0 })
+    expect(none.retryAfterMs).toBe(56_000)
+    // Once the first hit leaves the window, one is back.
+    expect((await store.peek('u1', policy, 61_001)).remaining).toBe(1)
+  })
+
+  it('the Upstash store reads the window key with GET and counts a missing key as none used', async () => {
+    const { UpstashRestRateLimitStore } = await import('@/lib/rate-limit')
+    const calls: string[] = []
+    const fetchImpl = async (url: string) => {
+      calls.push(url)
+      return new Response(JSON.stringify({ result: url.includes('u2') ? '7' : null }), { status: 200 })
+    }
+    const store = new UpstashRestRateLimitStore('https://kv.example', 'token', fetchImpl as any)
+    const policy = { id: 'ingest-preview', limit: 10, windowMs: 3_600_000 }
+    expect((await store.peek('ingest-preview:u2', policy, 0)).remaining).toBe(3)
+    expect((await store.peek('ingest-preview:u3', policy, 0)).remaining).toBe(10)
+    expect(calls[0]).toMatch(/^https:\/\/kv\.example\/get\/rl%3Aingest-preview%3Au2%3A0$/)
+  })
+})

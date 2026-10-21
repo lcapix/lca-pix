@@ -130,7 +130,12 @@ export function dropDatabase(name, server = serverFromEnv()) {
 
 /**
  * Create and populate a throwaway database. Returns its name.
- * @param {{ name?: string, migrate?: boolean, keepOnError?: boolean, log?: (s: string) => void, server?: ReturnType<typeof serverFromEnv> }} [opts]
+ *
+ * `fromDump` starts it from a dump of a real database instead of the baseline
+ * (a copy of production, for the release journey): the dump is restored, then
+ * `baselineThrough` (if given) marks 009 to that number applied without running
+ * them, as production's ledger was started, and every later migration runs.
+ * @param {{ name?: string, migrate?: boolean, keepOnError?: boolean, log?: (s: string) => void, server?: ReturnType<typeof serverFromEnv>, fromDump?: string, baselineThrough?: number }} [opts]
  */
 export function createFreshDatabase(opts = {}) {
   const server = opts.server ?? serverFromEnv();
@@ -138,7 +143,8 @@ export function createFreshDatabase(opts = {}) {
   assertLocal(server);
   const name = opts.name ?? newName();
   if (!isThrowawayName(name)) throw new Error(`Bad name "${name}": must match ${NAME_RE}`);
-  for (const f of BASELINE_FILES) {
+  const sources = opts.fromDump ? [opts.fromDump] : BASELINE_FILES;
+  for (const f of sources) {
     if (!existsSync(f)) throw new Error(`Missing ${path.relative(REPO_ROOT, f)}`);
   }
 
@@ -147,13 +153,14 @@ export function createFreshDatabase(opts = {}) {
   sql(server, `CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
   log(`fresh: created ${name} on ${server.host}:${server.port}`);
   try {
-    for (const f of BASELINE_FILES) {
+    for (const f of sources) {
       const r = mysql(server, name, [], readFileSync(f, 'utf8'));
       if (r.status !== 0) throw new Error(`${path.relative(REPO_ROOT, f)} failed:\n${r.stderr.trim()}`);
-      log(`fresh: applied ${path.relative(REPO_ROOT, f)}`);
+      log(`fresh: ${opts.fromDump ? 'restored' : 'applied'} ${opts.fromDump ? path.basename(f) : path.relative(REPO_ROOT, f)}`);
     }
-    if (opts.migrate !== false) {
-      const r = spawnSync(process.execPath, [path.join(HERE, 'migrate.mjs')], {
+    const runs = opts.fromDump && opts.baselineThrough ? [['--baseline', `--baseline-through=${Number(opts.baselineThrough)}`], []] : [[]];
+    for (const extra of opts.migrate !== false ? runs : []) {
+      const r = spawnSync(process.execPath, [path.join(HERE, 'migrate.mjs'), ...extra], {
         env: {
           ...process.env,
           DATABASE_HOST: server.host,

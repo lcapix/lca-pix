@@ -20,7 +20,7 @@ const COST_LABEL: Record<CostKey, string> = {
   capex: 'capital',
 }
 
-const qty = (q: number) => String(Number(q.toPrecision(4)))
+const qty = (q: number | null) => (q === null ? 'no amount' : String(Number(q.toPrecision(4))))
 const side = (s: FlowSide) => `${s.substance} ${qty(s.quantity)} ${s.unit}`
 
 const KIND_STYLE: Record<FlowChange['kind'], { label: string; color: string }> = {
@@ -28,6 +28,7 @@ const KIND_STYLE: Record<FlowChange['kind'], { label: string; color: string }> =
   changed: { label: 'Changed', color: 'var(--brand-primary)' },
   added: { label: 'Added', color: GOOD },
   removed: { label: 'Removed', color: BAD },
+  factor: { label: 'Factor', color: 'var(--brand-primary)' },
 }
 
 function Tag({ children, color }: { children: React.ReactNode; color: string }) {
@@ -190,6 +191,12 @@ export function WhatDiffersPanel({
                                   <span style={{ textDecoration: 'line-through' }}>{side(f.from)}</span>
                                   {noFactorFrom(f.from) && <NoFactor method={base.run?.method ?? null} />}
                                 </>
+                              ) : f.kind === 'factor' ? (
+                                <>
+                                  {f.flow.substance}: {f.from ?? 'library factor'} →{' '}
+                                  <strong>{f.to ?? 'library factor'}</strong>
+                                  {f.to ? ' (entered by hand)' : ''}
+                                </>
                               ) : f.kind === 'changed' ? (
                                 <>
                                   {f.from.substance}: {qty(f.from.quantity)} {f.from.unit} →{' '}
@@ -246,7 +253,7 @@ export function WhatDiffersPanel({
                           <tr key={`h${i}`}>
                             <td style={{ ...td, color: 'var(--text-secondary)', width: '32%' }}>{h.step}</td>
                             <td style={td}>
-                              labor hours: {h.from ?? '—'} → <strong>{h.to ?? '—'}</strong>
+                              labor hours: {h.from ?? '–'} → <strong>{h.to ?? '–'}</strong>
                             </td>
                           </tr>
                         ))}

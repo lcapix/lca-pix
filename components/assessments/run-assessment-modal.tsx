@@ -13,8 +13,8 @@ import { HelpTip } from '@/components/lcapix/help-tip';
 // gracefully fall back to Global — but these are the canonical values the rest
 // of the app (Results-page selector) uses, kept consistent here.
 const REGIONS = [
-  { code: 'US Grid',    label: 'United States — grid average' },
-  { code: 'EU Average', label: 'Europe — average' },
+  { code: 'US Grid',    label: 'United States: grid average' },
+  { code: 'EU Average', label: 'Europe: average' },
   { code: 'Global',     label: 'Global average' },
 ];
 
@@ -24,9 +24,9 @@ const REGIONS = [
 // produced all-zero runs, which read as a broken assessment. Keep this list in
 // sync with the method_name values present in the factor table.
 const LCIA_METHODS = [
-  { value: 'CML 2001',            label: 'CML 2001 — midpoint, EU baseline' },
+  { value: 'CML 2001',            label: 'CML 2001: midpoint, EU baseline' },
   { value: 'ReCiPe Midpoint (H)', label: 'ReCiPe Midpoint (H)' },
-  { value: 'TRACI 2.1',           label: 'TRACI 2.1 — US EPA' },
+  { value: 'TRACI 2.1',           label: 'TRACI 2.1: US EPA' },
 ];
 
 interface Props {

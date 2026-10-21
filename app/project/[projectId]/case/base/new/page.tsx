@@ -202,7 +202,7 @@ export default function CreateBaseCasePage() {
             }}
           >
             Define the current-state scenario your comparative cases will be
-            measured against. The base case is your zero-line — the version of
+            measured against. The base case is your zero-line: the version of
             the process you want to improve on.
           </p>
         </header>
@@ -278,7 +278,7 @@ export default function CreateBaseCasePage() {
               <textarea
                 id="caseDescription"
                 className="input"
-                placeholder="Key processes, materials, assumptions — anything a teammate would need to reproduce the model."
+                placeholder="Key processes, materials, assumptions: anything a teammate would need to reproduce the model."
                 value={formData.description}
                 onChange={(e) =>
                   setFormData((prev) => ({
@@ -400,7 +400,7 @@ export default function CreateBaseCasePage() {
               }}
             >
               Your base case is the reference scenario every comparative case
-              is measured against — typically your current process or standard
+              is measured against: typically your current process or standard
               practice. Each base case models one product end-to-end so the
               CO<sub>2</sub>e, cost, and resource deltas stay focused.
             </p>

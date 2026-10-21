@@ -20,6 +20,7 @@ export function GoalScopeCard({
   openSignal = 0,
   onChange,
   onSaved,
+  readOnly = false,
 }: {
   projectId: string
   caseId: string
@@ -29,6 +30,8 @@ export function GoalScopeCard({
   onChange?: (summary: GoalScopeSummary | null) => void
   /** Called after a successful save (the data basis also rewrites the product's quantity). */
   onSaved?: () => void
+  /** A "Can read" member sees the goal and scope but no Edit. */
+  readOnly?: boolean
 }) {
   const { saved, form, open, saving, rootRef, set, toggle, cancel, save } = useGoalScope({
     projectId,
@@ -92,13 +95,15 @@ export function GoalScopeCard({
           </span>
         )}
         <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={toggle}
-        >
-          {open ? 'Close' : fuSet ? 'Edit' : 'Set it'}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={toggle}
+          >
+            {open ? 'Close' : fuSet ? 'Edit' : 'Set it'}
+          </button>
+        )}
       </div>
 
       {open && (

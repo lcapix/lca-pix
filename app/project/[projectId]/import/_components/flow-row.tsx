@@ -1,13 +1,20 @@
 'use client'
 
+// One line we read (F2.6): the tick (saved as a material), what the file says
+// and where, what it matched with its score (and the picker), the amount (a
+// correction keeps what the file said), the step it goes on, and its status.
+
 import { fmtSig } from '@/components/lcapix/formatters'
 import type { MappedFlow, SubstanceCandidate } from '@/lib/ingest/maplca'
-import { percent, scoreColor } from '@/lib/import/display'
-import type { FlowEdit } from '@/lib/import/review'
+import { percent } from '@/lib/import/display'
+import { correctedQuantity, type FlowEdit } from '@/lib/import/review'
+import { LINE_STATUS_WORD, lineStatus } from '@/lib/import/line-status'
+import { shortLocator } from '@/lib/import/steps-hours'
 
 import { StepCell, type StepPicker } from './step-cell'
 
-/** One extracted flow: apply tick, source text, direction, quantity (with unit override), substance, match, step. */
+const STATUS_TONE = { counted: 'counted', no_factor: 'warn', check_match: 'warn', pick_match: 'error' } as const
+
 export function FlowRow({
   flow: f,
   edit: e,
@@ -15,6 +22,7 @@ export function FlowRow({
   appending,
   stepKey,
   picker,
+  placed,
 }: {
   flow: MappedFlow
   edit: FlowEdit
@@ -22,115 +30,103 @@ export function FlowRow({
   appending: boolean
   stepKey: string
   picker: StepPicker
+  placed: boolean
 }) {
+  const status = lineStatus(f, e)
+  const score = f.candidates.find((c) => c.substance_id === e.substance_id)?.score ?? f.match_score
+  const tone = score >= 0.9 ? 'good' : score >= 0.55 ? 'mid' : 'low'
   return (
-    <tr style={{ borderTop: '1px solid var(--border-subtle)', verticalAlign: 'top' }}>
-      <td style={{ padding: '8px' }}>
+    <tr className={status === 'pick_match' || !placed ? 'ws-row-warn' : undefined}>
+      <td>
         <input
           type="checkbox"
+          className="ws-check"
           checked={e.include}
           disabled={e.substance_id === null}
-          onChange={(ev) =>
-            onEdit({ ...e, include: ev.target.checked })
-          }
-          aria-label={`Apply flow ${f.substance_text}`}
+          onChange={(ev) => onEdit({ ...e, include: ev.target.checked })}
+          aria-label={`Save ${f.substance_text} as a material`}
         />
       </td>
-      <td style={{ padding: '8px' }}>
-        <div>
-          {f.label && f.label !== f.substance_text && (
-            <strong style={{ fontWeight: 600 }}>{f.label} · </strong>
-          )}
+      <td>
+        <strong style={{ display: 'block', fontSize: 15 }}>
+          {f.label && f.label !== f.substance_text ? `${f.label} · ` : ''}
           {f.substance_text}
-        </div>
-        <div className="mono" style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
-          {f.provenance}
-        </div>
-      </td>
-      <td style={{ padding: '8px', textTransform: 'uppercase', fontSize: 10.5 }}>{f.direction}</td>
-      <td style={{ padding: '8px' }}>
-        <span className="mono">
-          {fmtSig(Number(f.quantity))} {f.unit}
+        </strong>
+        <span className="ds-mono" style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
+          {shortLocator(String(f.provenance ?? '').split(' · ')[0] || null) ?? ''}
+          {f.direction === 'output' ? ' · OUT' : ''}
         </span>
-        {f.conversion_note && (
-          <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 2 }}>
-            {f.conversion_note}
-          </div>
-        )}
-        {f.unit_compatible === false && (
-          <div style={{ marginTop: 2 }}>
-            <div
-              style={{
-                fontSize: 10.5,
-                color: 'var(--signal-error, #dc2626)',
-                fontWeight: 600,
-              }}
-            >
-              ⚠ unit won't convert to this substance — will be held
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                gap: 4,
-                alignItems: 'center',
-                marginTop: 3,
-              }}
-            >
-              <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
-                override unit:
-              </span>
-              <input
-                className="input mono"
-                style={{ height: 24, fontSize: 11, width: 74 }}
-                placeholder={f.unit}
-                value={e.unit ?? ''}
-                onChange={(ev) =>
-                  onEdit({ ...e, unit: ev.target.value })
-                }
-                aria-label="Override unit"
-              />
-              <span style={{ fontSize: 9.5, color: 'var(--text-tertiary)' }}>
-                e.g. "kg" for "kg CO2e"
-              </span>
-            </div>
-          </div>
-        )}
       </td>
-      <td style={{ padding: '8px' }}>
+      <td>
         <select
-          className="input"
-          style={{ fontSize: 12, padding: '4px 8px', minWidth: 200 }}
+          className="ds-input"
+          style={{ minWidth: 200, maxWidth: 260 }}
           value={e.substance_id ?? ''}
+          aria-label={`What ${f.substance_text} matches in the library`}
           onChange={(ev) => {
             const sid = ev.target.value ? Number(ev.target.value) : null
             const cand = f.candidates.find((c: SubstanceCandidate) => c.substance_id === sid)
             onEdit({
+              // Choosing a match is the reviewer's confirmation: it ticks the line.
               include: sid !== null,
               substance_id: sid,
               substance_name: cand?.substance_name ?? null,
+              // A corrected quantity is about the file, not the match: keep it.
+              quantity: e.quantity,
+              unit: e.unit,
             })
           }}
         >
-          <option value="">— hold for review (not applied) —</option>
+          <option value="">No match yet (held, not saved)</option>
           {f.candidates.map((c: SubstanceCandidate) => (
             <option key={c.substance_id} value={c.substance_id}>
-              {c.substance_name} · match {percent(c.score)}%
-              {c.factor_count === 0 ? ' · NO IMPACT DATA' : ''}
+              {c.substance_name} · {percent(c.score)}%{c.factor_count === 0 ? ' · no climate factor' : ''}
             </option>
           ))}
         </select>
-      </td>
-      <td style={{ padding: '8px' }}>
-        <span
-          className="mono"
-          style={{ fontSize: 11, fontWeight: 600, color: scoreColor(f.match_score) }}
-        >
-          {percent(f.match_score)}%
+        <span className={`ip-score ip-score--${tone}`}>
+          {e.substance_id === null ? `best ${percent(f.match_score)}%` : `${percent(score)}% match`}
         </span>
       </td>
+      <td style={{ textAlign: 'right' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <input
+            className="ds-input ds-mono"
+            style={{ width: 92, textAlign: 'right' }}
+            value={e.quantity ?? String(f.quantity)}
+            inputMode="decimal"
+            aria-label={`Amount of ${f.substance_text}`}
+            title="What the file said. Correct it here if it was read wrong; the file's figure is kept with the line."
+            onChange={(ev) => onEdit({ ...e, quantity: ev.target.value })}
+          />
+          <span className="ds-mono" style={{ fontSize: 13 }}>
+            {e.unit?.trim() || f.unit}
+          </span>
+        </span>
+        {correctedQuantity(f, e) !== null && <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-2)' }}>file said {fmtSig(Number(f.quantity))}</span>}
+        {f.conversion_note && <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-2)' }}>{f.conversion_note}</span>}
+        {f.unit_compatible === false && (
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end', marginTop: 4, fontSize: 12, color: 'var(--ds-error)' }}>
+            Unit can&apos;t convert. Use
+            <input
+              className="ds-input ds-mono"
+              style={{ width: 72, height: 30 }}
+              placeholder={f.unit}
+              value={e.unit ?? ''}
+              aria-label={`Unit to use for ${f.substance_text}`}
+              onChange={(ev) => onEdit({ ...e, unit: ev.target.value })}
+            />
+          </label>
+        )}
+      </td>
       {appending && (
-        <td style={{ padding: '8px' }}><StepCell stepKey={stepKey} picker={picker} /></td>
+        <td>
+          <StepCell stepKey={stepKey} picker={picker} />
+        </td>
       )}
+      <td>
+        <span className={`ip-status ip-status--${STATUS_TONE[status]}`}>{LINE_STATUS_WORD[status]}</span>
+      </td>
     </tr>
   )
 }

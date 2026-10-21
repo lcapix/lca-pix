@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
+import { uploadTooLargeMessage } from '@/lib/upload-limits'
 
 export type CaseDocumentRow = {
   document_id: number
@@ -80,6 +81,13 @@ export function useCaseDocuments(caseId: string | number) {
   }
 
   const attach = async (file: File) => {
+    // Over the hosting limit the platform refuses the upload unexplained; say why first.
+    const tooLarge = uploadTooLargeMessage(file)
+    if (tooLarge) {
+      toast.error(tooLarge)
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
     setUploading(true)
     try {
       const form = new FormData()

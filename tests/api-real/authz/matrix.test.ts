@@ -16,8 +16,11 @@
  * it.fails naming the bug, so the suite goes red when the fix lands.
  *
  * `own_cases` rows run with P's members_see_own_cases switched on for the
- * cell (B-A1 student isolation): P's cases were made by the owner, so an
- * editor or viewer reaches none of them.
+ * cell (B-A1 student isolation), and with P's owner-made cases credited to
+ * another plain member (the `deactivated` editor) for the cell: a case the
+ * owner or an admin made is readable by members (D2, f26-privacy-d2), so the
+ * isolation rows need another student's case, which an editor or viewer
+ * never reaches.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, setCookies } from '../support/http';
@@ -61,18 +64,32 @@ async function runCell(row: PermissionRow, caller: Caller, expected: number) {
     await runCellAsIs(row, caller, expected);
   } finally {
     await sql('UPDATE project SET members_see_own_cases = 0 WHERE project_id = ?', [w.P.id]);
+    await asStudentCases(false);
   }
 }
 
-/** Case ids of P that `caller` created, and all of P's case ids. */
+/**
+ * Credit P's owner-made cases to another plain member (on), or back (off).
+ * updated_at is kept, so staleness checks see no edit.
+ */
+async function asStudentCases(on: boolean) {
+  const [from, to] = on ? [w.users.owner.id, w.users.deactivated.id] : [w.users.deactivated.id, w.users.owner.id];
+  await sql('UPDATE case_table SET created_by = ?, updated_at = updated_at WHERE project_id = ? AND created_by = ?', [to, w.P.id, from]);
+}
+
+/**
+ * Case ids of P a restricted `caller` reaches (`own`: their own, plus, D2,
+ * the owner's and, for an editor, the admins'), and all of P's case ids.
+ */
 async function casesOfP(caller: Caller): Promise<{ own: number[]; all: number[] }> {
   const all = (await sql<{ case_id: number; created_by: number | null }>(
     'SELECT case_id, created_by FROM case_table WHERE project_id = ? ORDER BY case_id',
     [w.P.id],
   )) as Array<{ case_id: number; created_by: number | null }>;
   const id = w.user(caller)?.id;
+  const readable = new Set([id, w.users.owner.id, ...(caller === 'editor' ? [w.users.adminm.id] : [])]);
   return {
-    own: all.filter((c) => c.created_by != null && Number(c.created_by) === id).map((c) => Number(c.case_id)),
+    own: all.filter((c) => c.created_by != null && readable.has(Number(c.created_by))).map((c) => Number(c.case_id)),
     all: all.map((c) => Number(c.case_id)),
   };
 }
@@ -82,6 +99,7 @@ const restricted = (caller: Caller) => caller === 'editor' || caller === 'viewer
 async function runCellAsIs(row: PermissionRow, caller: Caller, expected: number) {
   const fresh: Record<string, number> = {};
   if (row.fresh) fresh[row.fresh] = await w.fresh[row.fresh]();
+  if (row.own_cases) await asStudentCases(true);
   const { url, template, opts } = buildRowRequest(row, { w, caller, fresh });
   const handler = await loadHandler(template, row.method);
   const isWrite = row.method !== 'GET';
@@ -163,10 +181,10 @@ async function runCellAsIs(row: PermissionRow, caller: Caller, expected: number)
 }
 
 describe('permissions matrix (docs/flows/flows.yaml)', () => {
-  it('has 106 rows covering 66 route x method pairs (69 base, 36 own-cases, R10b)', () => {
-    expect(rows).toHaveLength(106);
-    expect(rows.filter((r) => r.own_cases)).toHaveLength(36);
-    expect(new Set(rows.map((r) => `${r.method} ${r.path.split('?')[0]}`)).size).toBe(66);
+  it('has 130 rows covering 80 route x method pairs (83 base, 46 own-cases, R10b)', () => {
+    expect(rows).toHaveLength(130);
+    expect(rows.filter((r) => r.own_cases)).toHaveLength(46);
+    expect(new Set(rows.map((r) => `${r.method} ${r.path.split('?')[0]}`)).size).toBe(80);
   });
 
   for (const row of rows) {

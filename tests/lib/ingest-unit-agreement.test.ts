@@ -46,19 +46,19 @@ describe('Ingest mapping (convertIngestUnit) reads units as the engine does', ()
   it("does not read 'Mg' as milligrams: passed through, loudly", () => {
     const r = convertIngestUnit(5, 'Mg', 'Argon')
     expect(r).toMatchObject({ quantity: 5, unit: 'Mg' })
-    expect(r.note).toMatch(/NO CONVERSION RULE/)
+    expect(r.note).toMatch(/No conversion for/)
     expect(r.note).toMatch(/ambiguous/)
   })
 
   it("does not read 'mwh' as megawatt-hours", () => {
     const r = convertIngestUnit(2, 'mwh', 'Electricity')
     expect(r).toMatchObject({ quantity: 2, unit: 'mwh' })
-    expect(r.note).toMatch(/NO CONVERSION RULE/)
+    expect(r.note).toMatch(/No conversion for/)
   })
 
   it("reads 'm³' as m3 and 'MWh' / 'KWH' by their canonical names", () => {
     expect(convertIngestUnit(3, 'm³', 'Water')).toMatchObject({ quantity: 3, unit: 'm3' })
-    expect(convertIngestUnit(3, 'm³', 'Water').note).not.toMatch(/NO CONVERSION RULE/)
+    expect(convertIngestUnit(3, 'm³', 'Water').note).not.toMatch(/No conversion for/)
     expect(convertIngestUnit(2, 'MWh', 'Electricity')).toMatchObject({ quantity: 2, unit: 'MWh' })
     expect(convertIngestUnit(7, 'KWH', 'Electricity')).toMatchObject({ quantity: 7, unit: 'kWh' })
   })

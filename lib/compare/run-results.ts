@@ -157,6 +157,8 @@ export function snapshotDrift(
     flowIds: number[]
     referenceFlow?: number | string | null
     modeledOutput?: number | string | null
+    /** Flows that have an own factor now (migrate-034). */
+    ownFactorFlowIds?: number[]
   },
 ): boolean {
   if (!hasFrozenResults(snapshot)) return false
@@ -168,6 +170,14 @@ export function snapshotDrift(
   if (!sameSet(snapshot.steps.map((s) => s.component_id), current.componentIds)) return true
   if (Array.isArray(snapshot.inventory) && !sameSet(snapshot.inventory.map((f) => f.flow_id), current.flowIds)) {
     return true
+  }
+  // A number entered by hand that the run used and that is gone now. (One set
+  // or changed after the run is caught by its updated_at.)
+  if (current.ownFactorFlowIds) {
+    const now = new Set(current.ownFactorFlowIds.map(Number))
+    if (snapshot.flow_detail.some((r) => r.origin === 'hand' && r.flow_id != null && !now.has(Number(r.flow_id)))) {
+      return true
+    }
   }
   const gs = snapshot.goal_scope
   if (gs) {

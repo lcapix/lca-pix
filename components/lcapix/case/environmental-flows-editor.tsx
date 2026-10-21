@@ -15,7 +15,7 @@
 // useSubstanceCatalog, useAddFlowForm, useAddSubstance, useFlowRowEdit); the
 // list, row and add form in ./flows/.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Icon } from '@/components/lcapix/icon'
 import type { FlowRow } from '@/lib/case-editor/flow-types'
 import { suggestFlowsFor } from '@/lib/case-editor/substance-search'
@@ -54,6 +54,21 @@ export function EnvironmentalFlowsEditor({
   })
   const rowEdit = useFlowRowEdit({ flows, substances, loadFlows })
 
+  // A process picked while creating the step opens the library here, already on
+  // that process (dispatched by the case editor after the step is created).
+  const [libraryTemplateId, setLibraryTemplateId] = useState<number | null>(null)
+  const { setAdding, setLibraryOpen } = form
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent).detail?.templateId
+      setLibraryTemplateId(typeof id === 'number' ? id : null)
+      setAdding(true)
+      setLibraryOpen(true)
+    }
+    window.addEventListener('lcapix:open-process-library', onOpen)
+    return () => window.removeEventListener('lcapix:open-process-library', onOpen)
+  }, [setAdding, setLibraryOpen])
+
   const suggestions = useMemo(
     () => suggestFlowsFor({ substances, flows, componentName, componentType }),
     [substances, flows, componentName, componentType],
@@ -82,7 +97,26 @@ export function EnvironmentalFlowsEditor({
         <FlowSuggestions suggestions={suggestions} onPick={form.applySuggestion} />
       )}
 
-      {/* Add-flow affordance */}
+      {/* Add-flow affordance. The process library used to be reachable only
+          from inside the add form, after opening it and before picking a
+          substance, which is three steps away from anybody who does not already
+          know it exists. It sits here instead, next to Add flow. */}
+      {!form.adding && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ flex: 1, justifyContent: 'center' }}
+            type="button"
+            onClick={() => {
+              form.setAdding(true)
+              form.setLibraryOpen(true)
+            }}
+            title="Pick the kind of process this step is: the library lists what it consumes and in which unit"
+          >
+            <Icon name="list" size={12} /> Process library
+          </button>
+        </div>
+      )}
       {!form.adding ? (
         <button
           className="btn btn-ghost btn-sm"
@@ -98,6 +132,7 @@ export function EnvironmentalFlowsEditor({
           substances={substances}
           form={form}
           substanceForm={substanceForm}
+          initialTemplateId={libraryTemplateId}
           onLibraryAdded={() => {
             loadFlows()
             announceComponentsChanged()

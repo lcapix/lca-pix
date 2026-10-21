@@ -141,7 +141,7 @@ export function CostPanel({
                           <span style={{ fontWeight: 600 }}>{signedMoney(ci.costPerUnitAvoided)}</span>
                         ) : (
                           <span style={{ color: 'var(--text-tertiary)' }}>
-                            {!hasRuns ? '—' : ci.impactDelta >= 0 ? 'no reduction' : 'cost unchanged'}
+                            {!hasRuns ? '–' : ci.impactDelta >= 0 ? 'no reduction' : 'cost unchanged'}
                           </span>
                         )}
                       </td>

@@ -38,8 +38,11 @@ export interface InventoryFlow {
   stepId: string
   substance: string
   dir: 'input' | 'output'
-  quantity: number
+  /** null = no amount yet ("needs an amount"). */
+  quantity: number | null
   unit: string
+  /** The flow's own factors (migrate-034) as one line; null or absent = the library's. */
+  ownFactor?: string | null
 }
 
 export interface CaseInventory {
@@ -50,7 +53,8 @@ export interface CaseInventory {
 export interface FlowSide {
   substance: string
   dir: 'input' | 'output'
-  quantity: number
+  /** null = no amount yet. */
+  quantity: number | null
   unit: string
 }
 
@@ -59,6 +63,8 @@ export type FlowChange =
   | { kind: 'changed'; step: string; from: FlowSide; to: FlowSide }
   | { kind: 'added'; step: string; to: FlowSide }
   | { kind: 'removed'; step: string; from: FlowSide }
+  /** Same flow, but its own factor was set, changed or removed (null = the library's). */
+  | { kind: 'factor'; step: string; flow: FlowSide; from: string | null; to: string | null }
 
 export interface StepChange {
   kind: 'added' | 'removed'
@@ -122,11 +128,18 @@ const subKey = (f: InventoryFlow) => `${f.substance.trim().toLowerCase()}|${f.di
  * lib/units decides, as the engine does: 'Mg' is not 'mg', 'm³' is 'm3'.
  */
 function inUnitOf(a: InventoryFlow, b: InventoryFlow): number | null {
+  if (b.quantity === null) return null
   return convertQuantity(b.quantity, b.unit, a.unit)?.quantity ?? null
 }
 
-/** Relative distance between two amounts in comparable units (Infinity if not comparable). */
+/**
+ * Relative distance between two amounts in comparable units (Infinity if not
+ * comparable). A flow with no amount on both sides is unchanged (0); on one
+ * side only it is a change (1), so "no amount -> 0.80 kg" reads as changed
+ * rather than as a change from zero.
+ */
 function distance(a: InventoryFlow, b: InventoryFlow): number {
+  if (a.quantity === null || b.quantity === null) return a.quantity === b.quantity ? 0 : 1
   const bq = inUnitOf(a, b)
   if (bq === null) return Infinity
   return Math.abs(a.quantity - bq) / Math.max(Math.abs(a.quantity), Math.abs(bq), 1e-12)
@@ -173,10 +186,20 @@ function diffStepFlows(step: string, base: InventoryFlow[], other: InventoryFlow
   )
   b = exact.left
   o = exact.right
+  // A number entered by hand changes the result as much as an amount does.
+  const factorChange = (x: InventoryFlow, y: InventoryFlow) => {
+    const from = x.ownFactor ?? null
+    const to = y.ownFactor ?? null
+    if (from !== to) changes.push({ kind: 'factor', step, flow: sideOf(y), from, to })
+  }
+  for (const [x, y] of exact.pairs) factorChange(x, y)
 
   // 2. Same substance and direction, different amount: changed.
   const sameSub = pairClosest(b, o, (x, y) => (subKey(x) === subKey(y) ? distance(x, y) : Infinity))
-  for (const [x, y] of sameSub.pairs) changes.push({ kind: 'changed', step, from: sideOf(x), to: sideOf(y) })
+  for (const [x, y] of sameSub.pairs) {
+    changes.push({ kind: 'changed', step, from: sideOf(x), to: sideOf(y) })
+    factorChange(x, y)
+  }
   b = sameSub.left
   o = sameSub.right
 
@@ -268,7 +291,7 @@ export function diffInventories(base: CaseInventory, other: CaseInventory): Case
 }
 
 const fmtScopeNumber = (v: number | null, unit?: string | null) =>
-  v === null || !Number.isFinite(v) ? '—' : `${Number(v.toPrecision(6))}${unit ? ` ${unit}` : ''}`
+  v === null || !Number.isFinite(v) ? '–' : `${Number(v.toPrecision(6))}${unit ? ` ${unit}` : ''}`
 
 /** Scope rows where the two runs differ (method, region, functional unit, ...). */
 export function diffScope(base: RunScope, other: RunScope): ScopeDifference[] {
@@ -276,7 +299,7 @@ export function diffScope(base: RunScope, other: RunScope): ScopeDifference[] {
   const text = (label: string, a: string | null, b: string | null) => {
     const x = (a ?? '').trim()
     const y = (b ?? '').trim()
-    if (x.toLowerCase() !== y.toLowerCase()) rows.push({ label, base: x || '—', other: y || '—' })
+    if (x.toLowerCase() !== y.toLowerCase()) rows.push({ label, base: x || '–', other: y || '–' })
   }
   text('LCIA method', base.method, other.method)
   text('Region (electricity grid)', base.region, other.region)

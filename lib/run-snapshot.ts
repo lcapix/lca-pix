@@ -12,6 +12,7 @@
  * Pure module: build + parse only, no DB.
  */
 import type { DataQualitySummary, LCAResult } from './lca-engine';
+import { stepCostBasis, type CostBasis } from './costs/cost-basis';
 
 /**
  * ISO 14044 goal & scope the run was computed under (4.2). Frozen with the run
@@ -115,6 +116,8 @@ export interface SnapshotFlowRow {
   source?: string;
   /** Allocation factor applied to this row, when < 1 (v2). */
   allocation?: number;
+  /** 'hand': the person's own number for this flow (migrate-034); scope reads "Entered by hand". */
+  origin?: 'hand';
 }
 
 /** Case total for one impact category (v3). */
@@ -165,6 +168,8 @@ export interface SnapshotStep {
   flows_processed: number;
   impacts: SnapshotStepImpact[];
   costs: SnapshotStepCosts;
+  /** How each cost was built and where its rate came from (migrate-035). */
+  cost_basis?: CostBasis[];
 }
 
 /** One flow of the inventory as entered, characterized or not (v3). */
@@ -174,7 +179,8 @@ export interface SnapshotInventoryRow {
   component: string;
   substance: string;
   direction: 'input' | 'output';
-  amount: number;
+  /** null = the flow had no amount when the run was made (left out of it). */
+  amount: number | null;
   unit: string;
 }
 
@@ -204,6 +210,8 @@ export interface FrozenInputs {
   /** Flows of the case with the substance name: flow_id, component_id,
    *  component_name, substance_name, flow_type, quantity, unit. */
   flows?: any[];
+  /** `SELECT b.* FROM component_cost_basis b ...` for the case (migrate-035). */
+  costBasis?: any[];
 }
 
 const numOrNull = (v: unknown): number | null => {
@@ -241,6 +249,7 @@ export function buildRunSnapshot(
         ...(f.allocation_factor != null && f.allocation_factor < 1
           ? { allocation: f.allocation_factor }
           : {}),
+        ...(f.factor_origin === 'hand' ? { origin: 'hand' as const } : {}),
       });
     }
   }
@@ -302,6 +311,7 @@ export function buildRunSnapshot(
         capex: numOrNull(c.capex),
         currency: c.currency ?? null,
       },
+      ...(frozen.costBasis ? { cost_basis: stepCostBasis(c, frozen.costBasis) } : {}),
     };
   });
 
@@ -311,7 +321,7 @@ export function buildRunSnapshot(
     component: String(f.component_name ?? ''),
     substance: String(f.substance_name ?? `Substance #${f.substance_id ?? '?'}`),
     direction: f.flow_type === 'output' ? 'output' : 'input',
-    amount: numOr0(f.quantity),
+    amount: numOrNull(f.quantity),
     unit: String(f.unit ?? ''),
   }));
 
@@ -354,6 +364,29 @@ export function snapshotImpacts(snap: RunSnapshot): Record<string, { value: numb
   const out: Record<string, { value: number; unit: string }> = {};
   for (const t of snap.totals ?? []) out[t.category_name] = { value: t.value, unit: t.unit };
   return out;
+}
+
+/**
+ * Every step as the run froze it, with its cost: the six kinds summed (opex and
+ * capex are other views of them, not more cost); null when none was entered.
+ * The tree shape here is the run's, so a later move or delete does not change
+ * what an older run says.
+ */
+export function snapshotRunSteps(snap: RunSnapshot) {
+  const kinds = ['labor', 'energy', 'material', 'transportation', 'equipment', 'overhead'] as const;
+  return (snap.steps ?? []).map((s) => {
+    const parts = kinds
+      .map((k) => s.costs?.[k])
+      .filter((v): v is number => v !== null && v !== undefined && Number.isFinite(Number(v)));
+    return {
+      component_id: s.component_id,
+      name: s.name,
+      parent_id: s.parent_id,
+      type: s.type,
+      cost: parts.length ? parts.reduce((t, v) => t + Number(v), 0) : null,
+      currency: s.costs?.currency ?? null,
+    };
+  });
 }
 
 /** The steps that produced a result, in the shape the results API returns. */

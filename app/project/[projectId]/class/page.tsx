@@ -236,15 +236,15 @@ export default function ClassPage() {
             <div style={head}>Access</div>
             <div style={head} />
 
-            <div style={cell}>{owner?.username ?? '—'}</div>
-            <div style={cell}>{owner?.email ?? '—'}</div>
+            <div style={cell}>{owner?.username ?? '–'}</div>
+            <div style={cell}>{owner?.email ?? '–'}</div>
             <div style={cell}>Owner</div>
             <div style={cell} />
 
             {members.map((m) => (
               <div key={m.member_id} style={{ display: 'contents' }}>
-                <div style={cell}>{m.username ?? '—'}</div>
-                <div style={cell}>{m.email ?? '—'}</div>
+                <div style={cell}>{m.username ?? '–'}</div>
+                <div style={cell}>{m.email ?? '–'}</div>
                 <div style={cell}>{m.permission_name ?? 'viewer'}</div>
                 <div style={cell}>
                   {canManage && (
@@ -273,7 +273,7 @@ export default function ClassPage() {
               placeholder="their email address"
               aria-label="Email address"
             />
-            <select style={input} value={role} onChange={(e) => setRole(e.target.value)}>
+            <select style={input} aria-label="Access for the person you add" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="viewer">Viewer, can read</option>
               <option value="editor">Editor, can change</option>
               {canManageAdmins && <option value="admin">Admin, can share</option>}
@@ -329,7 +329,7 @@ export default function ClassPage() {
                       {c.case_name}
                     </Link>
                   </div>
-                  <div style={cell}>{c.author ?? '—'}</div>
+                  <div style={cell}>{c.author ?? '–'}</div>
                   <div style={cell}>{c.steps}</div>
                   <div style={cell}>{c.flows}</div>
                   <div style={cell}>{c.runs}</div>
@@ -338,10 +338,10 @@ export default function ClassPage() {
                     {c.prediction_made ? ' · predicted' : ''}
                   </div>
                   <div style={cell}>
-                    {c.has_interpretation ? 'Interpretation' : '—'}
+                    {c.has_interpretation ? 'Interpretation' : '–'}
                     {c.has_assumptions ? ' + assumptions' : ''}
                   </div>
-                  <div style={cell}>{c.is_final ? 'Yes' : '—'}</div>
+                  <div style={cell}>{c.is_final ? 'Yes' : '–'}</div>
                 </div>
               ))}
             </div>

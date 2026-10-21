@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
 import { transformCaseFromDB, transformComponentFromDB } from '@/lib/data-transformers'
 import type { Case, ComponentNode } from '@/lib/store'
+import { isProjectRole, type ProjectRole } from '@/lib/project-role'
 import { completedRuns, hasRunSibling, topClimateStep } from './run-assessment'
 import type { CompletenessReport } from './types'
 
@@ -168,6 +169,8 @@ export function useCaseAndComponents({
   // model the student built.
   const [learningState, setLearningState] = useState<unknown>(null)
   const [hasWriteUp, setHasWriteUp] = useState(false)
+  // The caller's role in the project, sent with the case (null until known).
+  const [myRole, setMyRole] = useState<ProjectRole | null>(null)
 
   const loadedCaseId = useRef<string | null>(null)
   const componentsSeq = useRef(0)
@@ -207,6 +210,7 @@ export function useCaseAndComponents({
           }))
           setLearningState(caseData.case.learning_state ?? null)
           setHasWriteUp(!!String(caseData.case.interpretation ?? '').trim())
+          setMyRole(isProjectRole(caseData.case.my_role) ? caseData.case.my_role : null)
           loadedCaseId.current = caseId
         } else {
           toast.error('Case not found')
@@ -232,7 +236,7 @@ export function useCaseAndComponents({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, projectId, router, refreshKey])
 
-  return { currentCase, components, isLoading, learningState, hasWriteUp, reloadComponents }
+  return { currentCase, components, isLoading, learningState, hasWriteUp, myRole, reloadComponents }
 }
 
 /** All of the above, wired to one refresh key. */

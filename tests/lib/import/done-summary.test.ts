@@ -54,9 +54,9 @@ describe('doneSummary', () => {
 
 describe('missingLayerHint', () => {
   it('names up to two suggested documents, else the by-hand fallback', () => {
-    expect(missingLayerHint({ layer: 'energy', label: 'E', suggestedDocs: ['A', 'B', 'C'] })).toBe(' — from a A or B')
-    expect(missingLayerHint({ layer: 'energy', label: 'E', suggestedDocs: ['A'] })).toBe(' — from a A')
-    const byHand = ' — no document type for this yet; enter it by hand on the step that uses it'
+    expect(missingLayerHint({ layer: 'energy', label: 'E', suggestedDocs: ['A', 'B', 'C'] })).toBe(': from a A or B')
+    expect(missingLayerHint({ layer: 'energy', label: 'E', suggestedDocs: ['A'] })).toBe(': from a A')
+    const byHand = ': no document type for this yet, so enter it by hand on the step that uses it'
     expect(missingLayerHint({ layer: 'transport', label: 'T', suggestedDocs: [] })).toBe(byHand)
     expect(missingLayerHint({ layer: 'transport', label: 'T' })).toBe(byHand)
   })

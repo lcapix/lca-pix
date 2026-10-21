@@ -54,21 +54,8 @@ export function sumComponentCosts(
   return costs
 }
 
-/**
- * Money in `currency` for the user's locale: no decimals from 1000 up, at most
- * two below. An unknown currency code falls back to a "$" prefix.
- */
-export function fmtMoney(v: number, currency = 'USD'): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: v >= 1000 ? 0 : 2,
-    }).format(v)
-  } catch {
-    return `$${v.toLocaleString()}`
-  }
-}
+/** Moved to lib/money.ts so every screen formats money the same way. */
+export { fmtMoney } from '@/lib/money'
 
 /** Currency the cost panel shows: the first case's, else USD. */
 export function costPanelCurrency(assessmentData: AssessmentData[]): string {

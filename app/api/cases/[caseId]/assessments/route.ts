@@ -3,12 +3,11 @@ import { internalError, newRequestId, readJson } from '@/lib/http';
 import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
-import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
+import { type LCAResult } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 import {
   buildGoalScope,
-  buildRunSnapshot,
   canonicalMethod,
   hasFrozenResults,
   LEGACY_RESULTS_SOURCE,
@@ -16,10 +15,13 @@ import {
   snapshotComponentBreakdown,
   snapshotImpacts,
   SUPPORTED_METHODS,
+  snapshotRunSteps,
   type GoalScope,
   type RunSnapshot,
 } from '@/lib/run-snapshot';
 import { parseId } from '@/lib/ids';
+import { runCaseInTransaction } from '@/lib/runs/run-case';
+import { inRunOrder, newestRunIds, placeholders } from '@/lib/runs/newest-first';
 
 /** Flow-level detail of a snapshot, as the results screen reads it. */
 function snapshotFlowDetail(snapshot: RunSnapshot) {
@@ -100,14 +102,24 @@ export async function GET(
     // the `run_at` alias so any client that still reads `run_at` keeps working.
     // run_date has one-second precision: run_id breaks the tie, so the newest
     // run is first even when several were made in the same second.
-    const assessments = await query(
-      `SELECT ar.*, ar.run_date AS run_at, a.username as executed_by_username
-       FROM assessment_runs ar
-       LEFT JOIN account a ON ar.executed_by = a.id
-       WHERE ar.case_id = ?
-       ORDER BY ar.run_date DESC, ar.run_id DESC`,
-      [caseId]
-    );
+    // ?latest=1: only the newest completed run (the workspace's note against
+    // the Base case reads one total, not the whole history).
+    // The ids are sorted alone and the rows read by id (lib/runs/newest-first):
+    // sorting ar.* with its snapshot fails on a large case.
+    const latestOnly = request.nextUrl.searchParams.get('latest') === '1';
+    const runIds = await newestRunIds(caseId, latestOnly ? { status: 'completed', limit: 1 } : {});
+    const assessments = runIds.length
+      ? inRunOrder(
+          runIds,
+          await query<any>(
+            `SELECT ar.*, ar.run_date AS run_at, a.username as executed_by_username
+               FROM assessment_runs ar
+               LEFT JOIN account a ON ar.executed_by = a.id
+              WHERE ar.run_id IN (${placeholders(runIds.length)})`,
+            runIds,
+          ),
+        )
+      : [];
 
     // Each run reports what it froze at run time (snapshot v3): totals, the
     // per-step breakdown with stages, flow detail. Runs made before v3 fall back
@@ -135,6 +147,9 @@ export async function GET(
             warnings: snapshot.warnings,
             goal_scope: snapshot.goal_scope ?? null,
             data_quality: snapshot.data_quality ?? null,
+            // The run's own tree with each step's frozen cost (E05 "What
+            // builds this number" and "Cost beside impact").
+            run_steps: snapshotRunSteps(snapshot),
             detail_source: 'snapshot' as const,
             results_source: 'snapshot' as const,
           };
@@ -381,74 +396,9 @@ export async function POST(
 
     let result: { runId: number; lcaResult: LCAResult; snapshot: RunSnapshot };
     try {
-      result = await transaction(async (conn) => {
-        const [runResult] = await conn.query(
-          `INSERT INTO assessment_runs (case_id, run_name, calculation_method, region_code, status, executed_by)
-           VALUES (?, ?, ?, ?, 'running', ?)`,
-          [caseId, runName, method, regionCode, userId]
-        );
-        const runId = (runResult as any).insertId;
-
-        console.log(`\n${'='.repeat(80)}`);
-        console.log(`🔬 RUNNING LCA ASSESSMENT - Run ID: ${runId}`);
-        console.log(`   Case: ${caseData.case_name} (ID: ${caseId})`);
-        console.log(`   Method: ${method}`);
-        console.log(`${'='.repeat(80)}\n`);
-
-        // Run LCA calculation using the core engine
-        const lcaResult: LCAResult = await calculateCaseImpacts(caseId, conn, { method, regionCode });
-
-        console.log('\n📊 ALGORITHM EXECUTION STEPS:\n');
-        formatAlgorithmSteps(lcaResult.algorithm_steps).forEach(step => console.log(step));
-        console.log(`\n✅ CALCULATION SUMMARY:`);
-        console.log(`   • Total Components: ${lcaResult.summary.total_components}`);
-        console.log(`   • Components with Flows: ${lcaResult.summary.components_with_flows}`);
-        console.log(`   • Total Flows Processed: ${lcaResult.summary.total_flows_processed}`);
-        console.log(`   • Impact Categories: ${lcaResult.summary.impact_categories_calculated}`);
-
-        // Store results in database
-        for (const compResult of lcaResult.component_results) {
-          for (const impact of compResult.impacts) {
-            await conn.query(
-              `INSERT INTO assessment_results
-               (run_id, component_id, category_id, impact_value, unit)
-               VALUES (?, ?, ?, ?, ?)`,
-              [runId, compResult.component_id, impact.category_id, impact.impact_value, impact.unit]
-            );
-          }
-        }
-
-        // Freeze what this run computed AND what it was computed from: totals,
-        // every step (id, name, parent, stage, per-category values, costs) and
-        // every flow as entered (snapshot v3), read inside the same transaction
-        // as the engine so they describe exactly the inventory it used.
-        const [components] = await conn.query(
-          `SELECT * FROM component WHERE case_id = ? ORDER BY hierarchy_level, component_id`,
-          [caseId]
-        );
-        const [flows] = await conn.query(
-          `SELECT f.flow_id, f.component_id, c.component_name, f.substance_id, s.substance_name,
-                  f.flow_type, f.quantity, f.unit
-             FROM flows f
-             JOIN component c ON c.component_id = f.component_id
-             LEFT JOIN substances s ON s.substance_id = f.substance_id
-            WHERE c.case_id = ?
-            ORDER BY c.hierarchy_level, c.component_id, f.flow_type, f.flow_id`,
-          [caseId]
-        );
-        const snapshot = buildRunSnapshot(lcaResult, method, regionCode, goalScope, {
-          components: components as any[],
-          flows: flows as any[],
-        });
-
-        await conn.query(
-          `UPDATE assessment_runs SET status = 'completed', run_snapshot = ? WHERE run_id = ?`,
-          [JSON.stringify(snapshot), runId]
-        );
-
-        console.log(`✅ ASSESSMENT COMPLETED SUCCESSFULLY (run ${runId})\n`);
-        return { runId, lcaResult, snapshot };
-      });
+      result = await transaction((conn) =>
+        runCaseInTransaction(conn, { caseId, caseName: caseData.case_name, runName, method, regionCode, userId, goalScope })
+      );
     } catch (calcError: any) {
       const requestId = newRequestId();
       // The transaction rolled the run row back; keep a record of the attempt.

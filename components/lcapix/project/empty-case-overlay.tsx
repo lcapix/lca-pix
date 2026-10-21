@@ -68,7 +68,7 @@ export function EmptyCaseOverlay({
           }}
         >
           {isComp && hasBase
-            ? `Start by cloning ${baseName ?? 'the base case'} and edit the parts you want to change — or build from scratch.`
+            ? `Start by cloning ${baseName ?? 'the base case'} and edit the parts you want to change, or build from scratch.`
             : 'Open the editor to add a product, machines, subprocesses, and elemental tasks.'}
         </div>
       </div>

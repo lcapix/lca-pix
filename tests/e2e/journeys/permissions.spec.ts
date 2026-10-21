@@ -4,53 +4,45 @@
  * Seeded: Victor Viewer is a viewer on the worked example (P1) and not a
  * member of the five-tier project (P2).
  */
-import { inspector, openCase, openSection, selectComponent } from '../support/editor';
+import { ApiError } from '../support/api';
+import { openCase } from '../support/editor';
 import { expect, storagePath, test } from '../support/fixtures';
-import { expectToast, open, settle } from '../support/ui';
+import { open, settle } from '../support/ui';
+
+const NAV = { timeout: 90_000 };
 
 test.describe('viewer member', () => {
   test.use({ storageState: storagePath('viewer') });
 
-  test('can open the workspace, the case and the results', async ({ page, seed }) => {
+  test('can open the project, the case and its Results', async ({ page, seed }) => {
     const { projectId, baseCaseId, projectName } = seed.example;
     await open(page, `/project/${projectId}`);
-    await expect(page.getByRole('heading', { level: 1, name: projectName })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: new RegExp(`^${projectName}`) })).toBeVisible(NAV);
 
     await openCase(page, projectId, baseCaseId);
-    await expect(page.getByRole('button', { name: /^\S 10\. Cut blank$/ })).toBeVisible();
+    await expect(page.getByRole('treeitem', { name: /^10\. Cut blank, / })).toBeVisible();
 
-    await open(page, `/project/${projectId}/case/${baseCaseId}/results`, { ready: 'TOTAL IMPACT' });
-    await expect(page.getByText('1.72', { exact: true }).first()).toBeVisible();
+    await open(page, `/project/${projectId}/case/${baseCaseId}?tab=results`, { ready: 'What builds this number' });
+    await expect(page.locator('.ws-answer-num')).toHaveText('1.72');
   });
 
-  // No role-based UI exists yet (USER_FLOWS §0.3 "No role-based UI"): the
-  // editor, workspace and results show Add Component, Run Assessment,
-  // Duplicate, Save, Delete, Add Case and Delete project to a viewer, and each
-  // one only fails with a 403 when clicked. Enable once the UI reads the role.
-  test.fixme('sees no edit controls', async ({ page, seed }) => {
+  test('sees no edit controls: no run, no copy, no Add step; says Can read', async ({ page, seed }) => {
     const { projectId, baseCaseId } = seed.example;
     await openCase(page, projectId, baseCaseId);
-    for (const name of ['Add Component', 'Run Assessment', 'Duplicate', 'Save', 'Delete']) {
-      await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
-    }
-    await open(page, `/project/${projectId}`);
-    for (const name of ['Add Case', 'Delete', 'Import Data']) {
+    await expect(page.getByText('Can read', { exact: true }).first()).toBeVisible();
+    for (const name of ['Run Assessment', 'Make my own copy', 'Add step']) {
       await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
   });
 
-  test('an edit is refused by the server and nothing changes', async ({ page, seed, api }) => {
-    const { projectId, baseCaseId, cutBlankId } = seed.example;
-    await openCase(page, projectId, baseCaseId);
-    await selectComponent(page, '10. Cut blank');
-    const overhead = inspector(page).getByRole('textbox', { name: 'Overhead cost' });
-    await openSection(page, 'Costs', overhead);
-    await overhead.fill('99');
-    const put = page.waitForResponse((r) => r.url().includes(`/api/components/${cutBlankId}`) && r.request().method() === 'PUT');
-    await inspector(page).getByRole('button', { name: 'Save', exact: true }).click();
-    expect((await put).status()).toBe(403);
-    await expectToast(page, /permission|not allowed|forbidden|access/i);
-
+  test('an edit sent anyway is refused by the server and nothing changes', async ({ seed, api }) => {
+    const { cutBlankId } = seed.example;
+    const err = await api
+      .as(seed.users.viewer.token)
+      .put(`/api/components/${cutBlankId}`, { overhead_cost: 99 })
+      .then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(403);
     const row = (await api.as(seed.users.owner.token).get<{ component: { overhead_cost: unknown } }>(`/api/components/${cutBlankId}`)).component;
     expect(row.overhead_cost).toBeNull();
   });
@@ -59,19 +51,22 @@ test.describe('viewer member', () => {
 test.describe('non-member', () => {
   test.use({ storageState: storagePath('viewer') });
 
-  test('opening another user’s project URL shows "not found" and none of its data', async ({ page, seed }) => {
+  test('another user’s project URL says it is not here, and shows none of its data', async ({ page, seed, api }) => {
     const { projectId, caseId, projectName } = seed.fiveTier;
-    const res = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/projects/${projectId}`);
+    // The server: 404, as for a project that does not exist.
+    const err = await api
+      .as(seed.users.viewer.token)
+      .get(`/api/projects/${projectId}`)
+      .then(() => null, (e: unknown) => e);
+    expect((err as ApiError).status).toBe(404);
+
     await page.goto(`/project/${projectId}`);
-    expect((await res).status()).toBe(404);
-    await expectToast(page, 'Project not found');
-    // …and sends you back to your own dashboard.
-    await expect(page).toHaveURL(/\/home$/);
-    await settle(page);
+    await expect(page.getByText('This project is not here. It may have been deleted, or it is not shared with you.')).toBeVisible(NAV);
     await expect(page.getByText(projectName)).toHaveCount(0);
 
     await page.goto(`/project/${projectId}/case/${caseId}`);
     await settle(page);
+    await expect(page.getByText('This case is not here. It may have been deleted, or it is not shared with you.')).toBeVisible(NAV);
     await expect(page.getByText('Frame build')).toHaveCount(0);
     await expect(page.getByText('Bicycle frame')).toHaveCount(0);
   });

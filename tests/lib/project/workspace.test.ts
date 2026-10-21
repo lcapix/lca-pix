@@ -40,8 +40,8 @@ describe('workspaceKpis', () => {
     ).toEqual([
       { label: 'Cases', value: '0', note: 'Import your routing to create the first case', tone: 'neutral' },
       { label: 'Steps', value: '0', note: 'The routing builds them', tone: 'neutral' },
-      { label: 'Global Warming', value: '—', note: 'Run an assessment', tone: 'neutral' },
-      { label: 'Cost', value: '—', note: 'Add cost data on operations', tone: 'neutral' },
+      { label: 'Global Warming', value: '–', note: 'Run an assessment', tone: 'neutral' },
+      { label: 'Cost', value: '–', note: 'Add cost data on operations', tone: 'neutral' },
     ])
   })
 

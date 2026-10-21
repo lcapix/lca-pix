@@ -2,46 +2,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-// The page toasts through sonner, whose <Toaster/> is mounted in app/layout.tsx
-// (the shadcn use-toast store had no Toaster, so nothing ever showed).
-const { toast } = vi.hoisted(() => {
-  const error = vi.fn();
-  const success = vi.fn();
-  return { toast: Object.assign(vi.fn(), { error, success }) };
-});
+// Log in (F1.2b): errors sit in the form, never in a toast (rules.md: no toast
+// covers text or a button). A ?error= code from the Google route shows as a
+// card above the form, known codes only: a crafted link never puts its own
+// words on an LCAPIX page.
 const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
-vi.mock('sonner', () => ({ toast }));
-vi.mock('@/components/lcapix/auth/auth-shell', () => ({
-  AuthShell: ({ children }: any) => <div>{children}</div>,
-}));
 
 import LoginPage from '@/app/auth/login/page';
 
 function openWith(query: string) {
   window.history.replaceState({}, '', `/auth/login${query}`);
-  render(<LoginPage />);
+  return render(<LoginPage />);
 }
+const card = async () => (await screen.findByRole('alert')).textContent ?? '';
 
 describe('Login page ?error= handling (L8)', () => {
-  beforeEach(() => {
-    toast.mockReset();
-    toast.error.mockReset();
-    toast.success.mockReset();
-  });
-
   it('never shows raw text from the URL', async () => {
-    openWith('?error=' + encodeURIComponent('Your account is locked. Call 555-0100 to verify.'));
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    const shown = JSON.stringify(toast.error.mock.calls[0]);
-    expect(shown).not.toMatch(/555-0100|locked/);
-    expect(toast.error.mock.calls[0][0]).toBe('Sign-in error');
+    const { container } = openWith('?error=' + encodeURIComponent('Your account is locked. Call 555-0100 to verify.'));
+    expect(await card()).toMatch(/Sign-in error/);
+    expect(container.textContent).not.toMatch(/555-0100|locked/);
   });
 
   it('does not crash on a malformed percent-escape', async () => {
     expect(() => openWith('?error=%25')).not.toThrow();
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    expect(JSON.stringify(toast.error.mock.calls[0])).not.toContain('%');
+    expect(await card()).toMatch(/Sign-in error/);
   });
 
   it.each([
@@ -53,24 +38,21 @@ describe('Login page ?error= handling (L8)', () => {
     ['google_not_configured', /not yet configured/i],
   ])('maps %s to its own message', async (code, re) => {
     openWith(`?error=${code}`);
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    const [title, { description }] = toast.error.mock.calls[0];
-    expect(title).not.toBe('Sign-in error');
-    expect(`${title} ${description}`).not.toContain(code);
-    expect(`${title} ${description}`).toMatch(re);
+    const text = await card();
+    expect(text).not.toMatch(/Sign-in error/);
+    expect(text).not.toContain(code);
+    expect(text).toMatch(re);
   });
 
-  it('strips the param so a reload does not re-toast', async () => {
+  it('strips the param so a reload does not show it again', async () => {
     openWith('?error=oauth_failed');
-    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    await card();
     expect(window.location.search).toBe('');
   });
 });
 
 describe('Login form', () => {
   beforeEach(() => {
-    toast.error.mockReset();
-    toast.success.mockReset();
     push.mockReset();
     localStorage.clear();
     window.history.replaceState({}, '', '/auth/login');
@@ -78,12 +60,12 @@ describe('Login form', () => {
 
   function submit(email: string, password: string) {
     render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: email } });
-    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: password } });
-    fireEvent.submit(screen.getByLabelText(/email/i).closest('form')!);
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+    fireEvent.submit(screen.getByLabelText('Email').closest('form')!);
   }
 
-  it('shows an error toast with the server message for a wrong password', async () => {
+  it('a wrong password: the server\'s neutral words under the password, nothing stored', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -94,18 +76,14 @@ describe('Login form', () => {
       ),
     );
     submit('jo@corp.com', 'wrong-password');
-
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith('Login failed', {
-        description: 'Invalid email or password',
-      }),
-    );
+    await waitFor(() => expect(screen.getByText('Invalid email or password. Try again.')).toBeTruthy());
+    expect(screen.getByLabelText('Password').getAttribute('aria-invalid')).toBe('true');
     expect(push).not.toHaveBeenCalled();
     expect(localStorage.getItem('auth_token')).toBeNull();
     vi.unstubAllGlobals();
   });
 
-  it('shows a success toast and goes home on a good password', async () => {
+  it('a good password goes home with the session stored', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
@@ -116,11 +94,32 @@ describe('Login form', () => {
       ),
     );
     submit('jo@corp.com', 'right-password');
-
     await waitFor(() => expect(push).toHaveBeenCalledWith('/home'));
-    expect(toast.success).toHaveBeenCalledWith('Welcome back!', {
-      description: 'You have successfully logged in.',
-    });
+    expect(localStorage.getItem('auth_token')).toBe('t');
     vi.unstubAllGlobals();
+  });
+
+  it.each(['Failed to fetch', 'NetworkError when attempting to fetch resource.', 'Load failed'])(
+    'the server out of reach (%s) reads the same plain words in every browser',
+    async (raw) => {
+      vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError(raw))));
+      submit('jo@corp.com', 'right-password');
+      await waitFor(() => expect(screen.getByText('We could not reach LCAPIX. Check your connection and try again.')).toBeTruthy());
+      expect(screen.queryByText(raw)).toBeNull();
+      expect(push).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    },
+  );
+
+  it('Forgot password? says Coming soon: there is no reset yet', () => {
+    render(<LoginPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
+    expect(screen.getByText('Resetting a password by email is coming soon.')).toBeTruthy();
+  });
+
+  it('the first Tab stop is Continue with Google (acceptance check 10)', () => {
+    const { container } = render(<LoginPage />);
+    const first = container.querySelector('a[href], button, input');
+    expect(first?.textContent).toContain('Continue with Google');
   });
 });

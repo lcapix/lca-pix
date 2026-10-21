@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
 import { useProjectStore } from '@/lib/store'
+import { useShellStore } from '@/lib/shell/use-shell'
 import { addCasePath, readRunPrefs, runAssessmentBody } from './workspace'
 
 type Router = { push: (href: string) => void }
@@ -53,6 +54,7 @@ export function useProjectActions(args: {
           : p,
       )
       if (activeCaseId === caseId) setActiveCaseId(null)
+      void useShellStore.getState().refresh()
       toast.success('Case deleted', { description: 'The case has been removed from your project.' })
     } catch (err: any) {
       toast.error('Could not delete case', { description: err?.message || 'Something went wrong. Please try again.' })

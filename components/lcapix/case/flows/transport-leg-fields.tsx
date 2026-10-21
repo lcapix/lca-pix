@@ -27,7 +27,7 @@ export function TransportLegFields({
       }}
     >
       <div className="label" style={{ fontSize: 11, marginBottom: 6 }}>
-        Transport leg — enter mass and distance, we compute tonne-km
+        Transport leg: enter mass and distance, we compute tonne-km
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
         <div>
@@ -53,7 +53,7 @@ export function TransportLegFields({
           />
         </div>
         <div className="mono" style={{ fontSize: 12, color: 'var(--text-secondary)', paddingBottom: 8 }}>
-          = {legTkm != null ? legTkm.toLocaleString() : '—'} tkm
+          = {legTkm != null ? legTkm.toLocaleString() : '–'} tkm
         </div>
       </div>
       {legInvalid && (

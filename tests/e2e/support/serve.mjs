@@ -6,6 +6,9 @@
  *      scripts/db/fresh.mjs (baseline schema + reference seed + every
  *      migration) on the local MySQL named by DATABASE_HOST/PORT/USER/PASSWORD.
  *      Only 127.0.0.1 / localhost / ::1 are accepted (fresh.mjs refuses others).
+ *      E2E_FROM_DUMP=<file.sql> starts it from a copy of a real database instead
+ *      (with E2E_BASELINE_THROUGH=025 for production's ledger), so a journey can
+ *      run on real data; the copy is a throwaway like any other.
  *   2. Runs `next dev -p 3120` against it, with outbound network blocked
  *      (block-outbound.cjs) and every third-party key blanked.
  *   3. On SIGTERM / SIGINT (Playwright's gracefulShutdown) or when Next exits,
@@ -52,7 +55,14 @@ for (const name of listThrowaway(server)) {
 
 // 2. A fresh database.
 const database = `${DB_PREFIX}${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`;
-createFreshDatabase({ name: database, server, log });
+createFreshDatabase({
+  name: database,
+  server,
+  log,
+  ...(process.env.E2E_FROM_DUMP
+    ? { fromDump: process.env.E2E_FROM_DUMP, baselineThrough: Number(process.env.E2E_BASELINE_THROUGH) || undefined }
+    : {}),
+});
 mkdirSync(STATE_DIR, { recursive: true });
 writeFileSync(SERVER_STATE, JSON.stringify({ database, port: PORT, pid: process.pid, startedAt: new Date().toISOString() }, null, 2));
 

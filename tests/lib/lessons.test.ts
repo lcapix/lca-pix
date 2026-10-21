@@ -62,10 +62,12 @@ describe('lessons', () => {
       NonNullable<(typeof LESSONS)[number]['question']>,
       { kind: 'number' }
     >
-    expect(q.answer).toBeCloseTo(5.6 * 0.8 * 0.08, 6) // rated power x hours x load
-    expect(numberIsRight(0.3584, q)).toBe(true)
-    expect(numberIsRight(0.36, q)).toBe(true)
-    expect(numberIsRight(4.48, q)).toBe(false) // forgot the load factor
+    // The deburr grinder (E04): 0.75 kW x 8 s x 80% load.
+    expect(q.answer).toBeCloseTo((0.75 * 8 * 0.8) / 3600, 9) // rated power x hours x load
+    expect(numberIsRight(0.0013333, q)).toBe(true)
+    expect(numberIsRight(0.0013, q)).toBe(true) // the machine calculator's rounding
+    expect(numberIsRight(0.00167, q)).toBe(false) // forgot the load factor
+    expect(numberIsRight(4.8, q)).toBe(false) // left the seconds as hours
     expect(numberIsRight(Number.NaN, q)).toBe(false)
   })
 

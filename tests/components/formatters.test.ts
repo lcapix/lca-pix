@@ -41,9 +41,9 @@ describe('fmtSig (significant-figure formatter)', () => {
   })
 
   it('renders a placeholder for missing or non-finite values', () => {
-    expect(fmtSig(null)).toBe('—')
-    expect(fmtSig(undefined)).toBe('—')
-    expect(fmtSig(NaN)).toBe('—')
+    expect(fmtSig(null)).toBe('–')
+    expect(fmtSig(undefined)).toBe('–')
+    expect(fmtSig(NaN)).toBe('–')
   })
 
   it('never returns "0" for any non-zero value', () => {

@@ -17,6 +17,8 @@
 //
 // Last reviewed: 2026-06 (values are representative, not authoritative).
 
+import { convertQuantity } from '@/lib/units'
+
 export const REFERENCE_VINTAGE = '2026-06'
 
 // ── Labor: USD / hour (BLS OEWS national mean) ──────────────────────────────
@@ -154,6 +156,20 @@ export function classifyEnergyCarrier(substance?: string | null): string | null 
   if (/diesel|gas\s*oil/.test(s)) return 'diesel'
   if (/\bwood\b|biomass|wood residual/.test(s)) return 'wood'
   return null
+}
+
+/**
+ * The dated reference price per one `unit` of an energy carrier: industrial
+ * electricity for any amount kWh converts from (what a plant pays), else the
+ * carrier's price for that unit. One rule for the Cost view's lookup, the
+ * import's costs and a step's cost from its flows, so one flow gets one price.
+ */
+export function energyReferencePrice(substance: string, unit: string): { rate: number; label: string } | null {
+  if (classifyEnergyCarrier(substance) === 'electricity') {
+    const kwh = convertQuantity(1, unit, 'kWh')
+    if (kwh) return { rate: ENERGY_RATES.electricity_industrial.rate * kwh.quantity, label: ENERGY_RATES.electricity_industrial.label }
+  }
+  return energyLineRate(substance, unit)
 }
 
 /** $/unit for an energy flow priced in its OWN unit, or null if unpriceable. */

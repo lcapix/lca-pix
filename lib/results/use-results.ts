@@ -4,18 +4,26 @@
 // components, write-up and region) and its project, the case's runs, the run
 // modal's completion, exports, and the Magic Insights inputs.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
+import { isProjectRole, type ProjectRole } from '@/lib/project-role'
 import { transformCaseFromDB } from '@/lib/data-transformers'
 import type { Case } from '@/lib/store'
 import { useNotificationsStore } from '@/lib/notifications-store'
-import { latestCompletedRun } from '@/lib/results/run-math'
+import { isOlderRun, latestCompletedRun, runToShow } from '@/lib/results/run-math'
 import { buildAssessmentResult, toAssessmentResult, type AssessmentResult, type FilterDir } from './assessment'
 import { insightsBreakdownOf, insightsMaterialsOf, insightsStepCostsOf } from './insights-inputs'
 import { exportFileName } from './results-view'
 
-export function useResults(projectId: string, caseId: string) {
+/**
+ * @param requestedRunId the run to show (?run=<id>); the newest completed run
+ * when absent, failed or unknown. An older run is shown read-only, exactly as
+ * it was frozen when it ran.
+ */
+export function useResults(projectId: string, caseId: string, requestedRunId?: string | null) {
+  // The run the page was asked for; kept in a ref so a refetch honours it.
+  const requestedRun = useRef<string | null>(requestedRunId ?? null)
   // Case data
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
   const [projectName, setProjectName] = useState<string>('Project')
@@ -58,6 +66,8 @@ export function useResults(projectId: string, caseId: string) {
   // a run of its own.
   const [studyMethod, setStudyMethod] = useState<string | null>(null)
   const [studyRegion, setStudyRegion] = useState<string | null>(null)
+  // The caller's role, sent with the case: a "Can read" member gets no Run or write-up editing.
+  const [myRole, setMyRole] = useState<ProjectRole | null>(null)
 
   // Fetch case + components (PRESERVED)
   useEffect(() => {
@@ -78,6 +88,7 @@ export function useResults(projectId: string, caseId: string) {
           if (!(caseData.success && caseData.case)) setCaseLoadError('notfound')
           if (caseData.success && caseData.case) {
             setCaseRegion(caseData.case.region_code ?? null)
+            setMyRole(isProjectRole(caseData.case.my_role) ? caseData.case.my_role : null)
             const transformedCase = transformCaseFromDB(caseData.case)
 
             if (componentsData.success && componentsData.components) {
@@ -134,7 +145,7 @@ export function useResults(projectId: string, caseId: string) {
           const transformedAssessments: AssessmentResult[] = data.assessments.map(toAssessmentResult)
           setAssessmentResults(transformedAssessments)
           // The newest run that completed: a failed run has no results.
-          setCurrentAssessment(latestCompletedRun(transformedAssessments))
+          setCurrentAssessment(runToShow(transformedAssessments, requestedRun.current))
         }
       }
     } catch (error: any) {
@@ -156,6 +167,8 @@ export function useResults(projectId: string, caseId: string) {
   // PRESERVED handler — assessment completed
   const handleAssessmentCompleted = (data: any) => {
     try {
+      // A new run is the one to read, whatever older run was open.
+      requestedRun.current = null
       const result = buildAssessmentResult(data, currentCase?.components)
       setAssessmentResults((prev) => [result, ...prev])
       setCurrentAssessment(result)
@@ -182,6 +195,14 @@ export function useResults(projectId: string, caseId: string) {
       toast.error(`Failed to process assessment result: ${error.message}`)
     }
   }
+
+  /** Show an older completed run read-only, or the newest again with null. */
+  const viewRun = (runId: number | null) => {
+    requestedRun.current = runId == null ? null : String(runId)
+    setCurrentAssessment(runToShow(assessmentResults, requestedRun.current))
+  }
+  const latestRun = latestCompletedRun(assessmentResults)
+  const viewingOlderRun = isOlderRun(currentAssessment, assessmentResults)
 
   // Magic Insights keys its narration request on these props, so they are
   // built once per run / case instead of inline on every render: new arrays
@@ -234,6 +255,10 @@ export function useResults(projectId: string, caseId: string) {
   }
 
   return {
+    myRole,
+    viewRun,
+    latestRun,
+    viewingOlderRun,
     currentCase,
     projectName,
     isLoadingCase,

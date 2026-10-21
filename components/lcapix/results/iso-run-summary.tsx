@@ -19,7 +19,7 @@ const BOUNDARY_LABEL: Record<string, string> = {
 }
 
 function fmt(v: number): string {
-  if (!Number.isFinite(v)) return '—'
+  if (!Number.isFinite(v)) return '–'
   if (v === 0) return '0'
   const a = Math.abs(v)
   if (a >= 1000) return v.toLocaleString(undefined, { maximumFractionDigits: 0 })

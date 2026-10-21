@@ -44,7 +44,7 @@ export function HierarchyDialog({ state }: { state: HierarchyDialogState }) {
             <div className="flex items-center gap-2.5">
               <Network className="h-4 w-4 text-primary" />
               <DialogTitle className="text-sm font-medium text-on-surface font-['Inter_Tight',Inter,sans-serif] tracking-tight">
-                Process Hierarchy — {modalCase?.case_name || 'Loading...'}
+                Process Hierarchy: {modalCase?.case_name || 'Loading...'}
               </DialogTitle>
               <Badge
                 variant="outline"

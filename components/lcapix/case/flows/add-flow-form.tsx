@@ -14,12 +14,15 @@ export function AddFlowForm({
   substances,
   form,
   substanceForm,
+  initialTemplateId = null,
   onLibraryAdded,
 }: {
   componentId: string
   substances: Substance[]
   form: AddFlowState
   substanceForm: AddSubstanceState
+  /** Open the process library already on this process (set when a step is created from one). */
+  initialTemplateId?: number | null
   onLibraryAdded: () => void
 }) {
   const {
@@ -61,6 +64,7 @@ export function AddFlowForm({
         substances={substances}
         form={form}
         substanceForm={substanceForm}
+        initialTemplateId={initialTemplateId}
         onLibraryAdded={onLibraryAdded}
       />
 

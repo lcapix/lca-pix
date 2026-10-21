@@ -58,7 +58,7 @@ export function TypePlacementSection({
               color: 'var(--text-tertiary)',
             }}
           >
-            Locked — {isAddChildMode ? 'add-child mode' : 'component has a parent'}
+            Locked: {isAddChildMode ? 'add-child mode' : 'component has a parent'}
           </p>
         )}
       </div>

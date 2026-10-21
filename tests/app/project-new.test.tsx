@@ -7,7 +7,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => router }))
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
 
-import NewProjectPage from '@/app/project/new/page'
+import NewProjectPage from '@/app/project/new/_components/classic-new-project'
 import { apiRequest } from '@/lib/api-client'
 import { toast } from 'sonner'
 

@@ -204,7 +204,7 @@ export default function FactorsLibraryPage() {
             </div>
             <p style={{ margin: 0 }}>
               An <strong>impact factor</strong> tells you how much environmental
-              damage one unit of a substance causes — for example, how many{' '}
+              damage one unit of a substance causes: for example, how many{' '}
               <span className="mono">kg CO₂-eq</span> are released per{' '}
               <span className="mono">kg</span> of methane emitted to air.
               LCAPIX multiplies the substance flows in your project by these
@@ -212,7 +212,7 @@ export default function FactorsLibraryPage() {
             </p>
             <p style={{ margin: '10px 0 0' }}>
               Each factor belongs to a <strong>methodology</strong> like CML
-              2001, ReCiPe Midpoint (H), or TRACI 2.1 — different scientific
+              2001, ReCiPe Midpoint (H), or TRACI 2.1: different scientific
               frameworks for converting emissions into impact scores. Factors
               also carry a <strong>geographic scope</strong> and{' '}
               <strong>source reference</strong> so results stay auditable.
@@ -366,7 +366,7 @@ export default function FactorsLibraryPage() {
                             maximumFractionDigits: 4,
                           })
                         : v.toExponential(3)
-                      : '—'
+                      : '–'
                     return (
                       <tr
                         key={f.factor_id}
@@ -374,15 +374,15 @@ export default function FactorsLibraryPage() {
                           borderTop: '1px solid var(--border-subtle)',
                         }}
                       >
-                        <Td>{f.driver_name ?? '—'}</Td>
-                        <Td>{f.method_name ?? '—'}</Td>
-                        <Td>{f.category_name ?? '—'}</Td>
+                        <Td>{f.driver_name ?? '–'}</Td>
+                        <Td>{f.method_name ?? '–'}</Td>
+                        <Td>{f.category_name ?? '–'}</Td>
                         <Td align="right" mono>
                           {display}
                         </Td>
-                        <Td mono>{f.unit ?? '—'}</Td>
-                        <Td>{f.geographic_scope ?? '—'}</Td>
-                        <Td>{f.source_reference ?? '—'}</Td>
+                        <Td mono>{f.unit ?? '–'}</Td>
+                        <Td>{f.geographic_scope ?? '–'}</Td>
+                        <Td>{f.source_reference ?? '–'}</Td>
                       </tr>
                     )
                   })}

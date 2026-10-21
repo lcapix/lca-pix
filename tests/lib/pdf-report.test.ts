@@ -81,8 +81,8 @@ const data: ReportData = {
   assumptions: 'Parts we did not weigh were estimated by difference from the published bike weight. The saddle is modelled as plastic because the library has no leather factor.',
 }
 
-const render = async () => {
-  const doc = generateAssessmentPDF(data)
+const render = async (d: ReportData = data) => {
+  const doc = generateAssessmentPDF(d)
   const chunks: Buffer[] = []
   return await new Promise<Buffer>((resolve, reject) => {
     doc.on('data', (c: Buffer) => chunks.push(c))
@@ -108,6 +108,15 @@ describe('assessment report (PDF)', () => {
     const out = join(tmpdir(), 'lcapix-report-fixture')
     mkdirSync(out, { recursive: true })
     writeFileSync(join(out, 'report.pdf'), pdf)
+    expect(pdf.length).toBeGreaterThan(8000)
+  })
+
+  it('renders a flow that had no amount yet (migrate-033) without printing "null"', async () => {
+    const pdf = await render({
+      ...data,
+      flows: [...data.flows, { component_name: '70. Final assembly', substance_name: 'Argon', direction: 'input', amount: null, unit: 'kg' }],
+    })
+    expect(pdf.toString('latin1').startsWith('%PDF')).toBe(true)
     expect(pdf.length).toBeGreaterThan(8000)
   })
 })

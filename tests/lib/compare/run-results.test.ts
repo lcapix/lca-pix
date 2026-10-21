@@ -192,6 +192,18 @@ describe('snapshotDrift: was the case edited after a frozen run?', () => {
     expect(snapshotDrift(frozen, { ...same, modeledOutput: 4 })).toBe(true)
   })
 
+  it('catches a number entered by hand that the run used and that is gone now (migrate-034)', () => {
+    const hand: RunSnapshot = {
+      ...frozen,
+      flow_detail: frozen.flow_detail.map((r, i) => (i === 0 ? { ...r, origin: 'hand' as const } : r)),
+    }
+    const handFlow = Number(hand.flow_detail[0].flow_id)
+    expect(snapshotDrift(hand, { ...same, ownFactorFlowIds: [handFlow] })).toBe(false)
+    expect(snapshotDrift(hand, { ...same, ownFactorFlowIds: [] })).toBe(true)
+    // Not told about own factors (an older caller): no claim either way.
+    expect(snapshotDrift(hand, same)).toBe(false)
+  })
+
   it('reads a blank reference flow as 1, like the run did', () => {
     const fu1 = { ...frozen, goal_scope: { ...frozen.goal_scope!, reference_flow: 1, modeled_output: 1 } }
     expect(snapshotDrift(fu1, { ...same, referenceFlow: null, modeledOutput: null })).toBe(false)

@@ -79,7 +79,7 @@ export function UnmappedColumnsCard({
             </select>
             {(columnRoles[c.column] ?? 'ignore') !== 'ignore' && (
               <span style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
-                recorded on the case — add the matching connector to map it
+                recorded on the case. It is mapped once that kind of file can be read.
               </span>
             )}
           </div>

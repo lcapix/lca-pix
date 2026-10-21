@@ -31,8 +31,10 @@
  */
 
 import type { Connection, RowDataPacket } from 'mysql2/promise';
+import { duplicateWarnings } from './duplicate-flows';
 import { canonicalizeRegion, selectBestScopeRows } from './factor-selection';
 import { toFactorBasis } from './units';
+import { mergeFactorOverrides, methodCategoryUnit, type OverrideRow } from './factor-override';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -60,6 +62,8 @@ export interface FlowContribution {
   source_tier?: SourceTier;
   /** Share of this unit process's burden allocated to the product (ISO 14044 4.3.4). */
   allocation_factor?: number;
+  /** 'hand': the person's own number for this flow (migrate-034), not a library factor. */
+  factor_origin?: 'hand';
 }
 
 /**
@@ -78,7 +82,7 @@ export type SourceTier = 'authoritative' | 'industry_average' | 'unverified' | '
 export function classifyFactorSource(ref?: string | null): SourceTier {
   const s = (ref ?? '').toLowerCase();
   if (!s.trim()) return 'unknown';
-  if (/legacy pack|not yet verified|zeroed|quarantin|no published source|not yet cited|user-entered/.test(s)) {
+  if (/legacy pack|not yet verified|zeroed|quarantin|no published source|not yet cited|user-entered|entered by hand/.test(s)) {
     return 'unverified';
   }
   // An industry-association average, or a declaration past its validity date,
@@ -123,6 +127,14 @@ export interface DataQualitySummary {
   }>;
   /** Up to 10 substance names of those flows, for the statement. */
   uncharacterized_examples: string[];
+  /** Flows with no amount yet (left out of the run). */
+  missing_amount_flows?: number;
+  /** Up to 10 of them as "Substance at Step". */
+  missing_amount_examples?: string[];
+  /** Contributions that used a number entered by hand (migrate-034). */
+  hand_entered?: number;
+  /** Up to 10 of them as "Substance (Category)". */
+  hand_entered_examples?: string[];
   /** Plain-language statement lines for the results page and report. */
   statement: string[];
 }
@@ -146,6 +158,8 @@ export interface ComponentImpactResult {
   warnings: string[];
   /** Flow × category pairs left out because the flow's unit could not be converted. */
   excluded_flows?: number;
+  /** The flows behind excluded_flows (and own factors refused for their unit), by id. */
+  excluded_flow_ids?: number[];
   /** Flows skipped because their quantity is not a finite number (NULL, '', 'abc'). */
   invalid_quantity_flows?: number;
   /** Flows with at least one applicable factor (after the direction rule). */
@@ -194,6 +208,71 @@ export interface CalcOptions {
   regionCode?: string;   // default 'Global'
 }
 
+/**
+ * Every step's rows for one case, read with one query each instead of three
+ * queries per step (stage 10.3: 3,000 round trips for a 1,000-step case).
+ * calculateCaseImpacts builds it; calculateComponentImpacts uses it when given
+ * and queries for itself when not, with the same rows in the same order.
+ */
+interface CaseRows {
+  components: Map<number, RowDataPacket>;
+  flows: Map<number, RowDataPacket[]>;
+  overrides: Map<number, OverrideRow[]>;
+}
+
+/**
+ * The flows of one step (scope 'component', bound to its id) or of a whole
+ * case (scope 'case', bound to the case id, with each row's component_id),
+ * joined to the method's factors. Within a step the order is the same either
+ * way: category, the exact region before Global, flow.
+ */
+function flowFactorSql(scope: 'component' | 'case'): string {
+  return `SELECT${scope === 'case' ? '\n       f.component_id AS row_component_id,' : ''}
+       f.flow_id,
+       f.substance_id,
+       s.substance_name,
+       s.cas_number,
+       s.unit as substance_default_unit,
+       f.flow_type,
+       f.quantity,
+       f.unit as flow_unit,
+       dif.category_id,
+       dif.geographic_scope,
+       dif.factor_basis,
+       ic.category_name,
+       ic.unit as category_unit,
+       dif.unit as factor_unit,
+       dif.source_reference as factor_source,
+       dif.factor_value as characterization_factor
+     FROM flows f${scope === 'case' ? '\n     JOIN component rc ON rc.component_id = f.component_id' : ''}
+     INNER JOIN substances s ON f.substance_id = s.substance_id
+     INNER JOIN driver_impact_factors dif
+       ON f.substance_id = dif.substance_id
+      AND dif.method_name = ?
+      AND dif.geographic_scope IN (?, 'Global')
+     INNER JOIN impact_categories ic ON dif.category_id = ic.category_id
+     -- Bug #9: count every flow on the component, not just is_driver=TRUE.
+     -- New flows default is_driver=1, but older rows may be 0; treating every
+     -- attached flow as a driver keeps assessments from returning 0.
+     WHERE ${scope === 'case' ? 'rc.case_id' : 'f.component_id'} = ?
+     ORDER BY ${scope === 'case' ? 'f.component_id, ' : ''}dif.category_id,
+              CASE WHEN dif.geographic_scope = ? THEN 0 ELSE 1 END,
+              f.flow_id`;
+}
+
+/** Rows carrying row_component_id, grouped by it (order kept), without that column. */
+function byComponent<T>(rows: RowDataPacket[]): Map<number, T[]> {
+  const out = new Map<number, T[]>();
+  for (const r of rows) {
+    const { row_component_id, ...rest } = r as RowDataPacket & { row_component_id: number };
+    const id = Number(row_component_id);
+    const list = out.get(id);
+    if (list) list.push(rest as T);
+    else out.set(id, [rest as T]);
+  }
+  return out;
+}
+
 // ============================================================================
 // CORE CALCULATION FUNCTIONS
 // ============================================================================
@@ -214,7 +293,8 @@ export interface CalcOptions {
 export async function calculateComponentImpacts(
   componentId: number,
   connection: Connection,
-  options: CalcOptions = {}
+  options: CalcOptions = {},
+  caseRows?: CaseRows,
 ): Promise<ComponentImpactResult> {
   const method = options.method ?? 'CML 2001';
   // UI labels ('US Grid') and stored scopes ('US') must agree before the query
@@ -223,12 +303,17 @@ export async function calculateComponentImpacts(
   const region = canonicalizeRegion(options.regionCode);
 
   // Step 1: Get component details
-  const [components] = await connection.query<RowDataPacket[]>(
-    `SELECT component_id, component_name, component_type, hierarchy_level
-     FROM component
-     WHERE component_id = ?`,
-    [componentId]
-  );
+  const known = caseRows?.components.get(componentId);
+  const components: RowDataPacket[] = known
+    ? [known]
+    : (
+        await connection.query<RowDataPacket[]>(
+          `SELECT component_id, component_name, component_type, hierarchy_level
+           FROM component
+           WHERE component_id = ?`,
+          [componentId]
+        )
+      )[0];
 
   if (components.length === 0) {
     throw new Error(`Component ${componentId} not found`);
@@ -240,61 +325,42 @@ export async function calculateComponentImpacts(
   // The driver_impact_factors table joins to flows via substance_id.
   // Filter by method_name and geographic_scope, with a fallback to 'Global'
   // when the requested region has no factor. Region-specific rows are
-  // preferred over the Global fallback via the ORDER BY below.
-  const [flowsData] = await connection.query<RowDataPacket[]>(
-    `SELECT
-       f.flow_id,
-       f.substance_id,
-       s.substance_name,
-       s.cas_number,
-       s.unit as substance_default_unit,
-       f.flow_type,
-       f.quantity,
-       f.unit as flow_unit,
-       dif.category_id,
-       dif.geographic_scope,
-       dif.factor_basis,
-       ic.category_name,
-       ic.unit as category_unit,
-       dif.unit as factor_unit,
-       dif.source_reference as factor_source,
-       dif.factor_value as characterization_factor
-     FROM flows f
-     INNER JOIN substances s ON f.substance_id = s.substance_id
-     INNER JOIN driver_impact_factors dif
-       ON f.substance_id = dif.substance_id
-      AND dif.method_name = ?
-      AND dif.geographic_scope IN (?, 'Global')
-     INNER JOIN impact_categories ic ON dif.category_id = ic.category_id
-     -- Bug #9: count every flow on the component, not just is_driver=TRUE.
-     -- New flows default is_driver=1, but older rows may be 0; treating every
-     -- attached flow as a driver keeps assessments from returning 0.
-     WHERE f.component_id = ?
-     ORDER BY dif.category_id,
-              CASE WHEN dif.geographic_scope = ? THEN 0 ELSE 1 END,
-              f.flow_id`,
-    [method, region, componentId, region]
-  );
+  // preferred over the Global fallback via the ORDER BY (flowFactorSql).
+  const flowsData: RowDataPacket[] = caseRows
+    ? caseRows.flows.get(componentId) ?? []
+    : (await connection.query<RowDataPacket[]>(flowFactorSql('component'), [method, region, componentId, region]))[0];
 
   // Step 2b: keep exactly ONE factor row per flow × category. The IN-join
   // returns both the regional row and the Global fallback when both exist;
   // summing both double-counts. Exact-region rows win.
-  const { selected: selectedRows } = selectBestScopeRows(
+  const { selected: libraryRows } = selectBestScopeRows(
     flowsData as Array<RowDataPacket & { flow_id: number; category_id: number; geographic_scope: string }>,
     region,
   );
+
+  // Step 2c: a person's own number for a flow (migrate-034) takes the place of
+  // the library factor for that flow and category, or adds one where the
+  // library has none. It is used only in the result unit the method reports
+  // the category in. A database without the table runs on the library alone.
+  const overrides = caseRows
+    ? caseRows.overrides.get(componentId) ?? []
+    : await fetchFactorOverrides(connection, componentId, method);
+  const merged = mergeFactorOverrides(libraryRows, overrides);
+  const selectedRows = merged.rows as typeof libraryRows;
 
   // Step 3: Calculate impact contributions. A factor is stored per the
   // substance's default unit; the flow quantity must be expressed in that
   // unit before multiplying. Convertible units are converted (and recorded);
   // unconvertible ones are EXCLUDED and reported — never multiplied raw.
-  const warnings: string[] = [];
+  const warnings: string[] = [...merged.warnings];
   let untypedFactorSeen = false;
   const flowContributions: FlowContribution[] = [];
   // For the completeness check: which flows had an applicable factor, and how
   // many flow × category pairs a unit problem left out.
   const characterized = new Set<number>();
   let excluded = 0;
+  // Own factors refused for their result unit count as left out too.
+  const excludedIds = new Set<number>(merged.refusedFlowIds);
   const invalidQuantityFlows = new Set<number>();
   for (const row of selectedRows) {
     // Direction rule: 'embodied' factors describe PRODUCING a substance and
@@ -308,14 +374,19 @@ export async function calculateComponentImpacts(
     if (!row.factor_basis) untypedFactorSeen = true;
     characterized.add(row.flow_id);
 
-    // E9: a quantity that is not a finite number (NULL, '', 'abc', NaN) is
-    // skipped and named. One NaN would otherwise turn the category total NaN.
+    // A flow with no amount yet (migration 033: NULL) is left out of the run.
+    // That is not an error: the case-level pass counts every such flow and the
+    // data-quality statement names them, so no per-flow warning here.
+    if (isMissingAmount(row.quantity)) continue;
+
+    // E9: a quantity that is not a finite number ('abc', NaN) is skipped and
+    // named. One NaN would otherwise turn the category total NaN.
     const rawQuantity = finiteNumber(row.quantity);
     if (rawQuantity === null) {
       if (!invalidQuantityFlows.has(row.flow_id)) {
         invalidQuantityFlows.add(row.flow_id);
         warnings.push(
-          `Flow ${row.flow_id} (${row.substance_name}): quantity ${JSON.stringify(row.quantity ?? null)} is not a finite number — SKIPPED in every category.`,
+          `Flow ${row.flow_id} (${row.substance_name}): quantity ${JSON.stringify(row.quantity ?? null)} is not a finite number: SKIPPED in every category.`,
         );
       }
       continue;
@@ -323,7 +394,7 @@ export async function calculateComponentImpacts(
     const factor = finiteNumber(row.characterization_factor);
     if (factor === null) {
       warnings.push(
-        `Flow ${row.flow_id} (${row.substance_name}): the ${row.category_name} factor is not a finite number — SKIPPED from ${row.category_name}.`,
+        `Flow ${row.flow_id} (${row.substance_name}): the ${row.category_name} factor is not a finite number: SKIPPED from ${row.category_name}.`,
       );
       continue;
     }
@@ -340,9 +411,10 @@ export async function calculateComponentImpacts(
     );
     if (!basis.ok) {
       warnings.push(
-        `Flow ${row.flow_id} (${row.substance_name}): ${basis.reason} — EXCLUDED from ${row.category_name}.`,
+        `Flow ${row.flow_id} (${row.substance_name}): ${basis.reason}: EXCLUDED from ${row.category_name}.`,
       );
       excluded++;
+      excludedIds.add(Number(row.flow_id));
       continue;
     }
     const quantityInFactorUnit = basis.quantity;
@@ -364,12 +436,13 @@ export async function calculateComponentImpacts(
       unit_conversion: conversionNote,
       factor_source: row.factor_source ?? null,
       source_tier: classifyFactorSource(row.factor_source),
+      ...(row.factor_origin === 'hand' ? { factor_origin: 'hand' as const } : {}),
     });
   }
 
   if (untypedFactorSeen) {
     warnings.push(
-      `Component ${component.component_name}: some factors have no direction typing (embodied/elementary) — run migration 009; until then those factors count on both inputs and outputs.`,
+      `Component ${component.component_name}: some factors have no direction typing (embodied/elementary): run migration 009; until then those factors count on both inputs and outputs.`,
     );
   }
 
@@ -394,7 +467,7 @@ export async function calculateComponentImpacts(
   }
   if (inputFuels.size > 0 && outputGases.size > 0) {
     warnings.push(
-      `Component ${component.component_name}: possible DOUBLE COUNT — fuel input(s) [${[...inputFuels].join(', ')}] already include combustion emissions in their factors, and combustion gas output(s) [${[...outputGases].join(', ')}] are modeled on the same component. Keep the gas output only if it is a separate process emission (not from burning the listed fuel).`,
+      `Component ${component.component_name}: possible DOUBLE COUNT: fuel input(s) [${[...inputFuels].join(', ')}] already include combustion emissions in their factors, and combustion gas output(s) [${[...outputGases].join(', ')}] are modeled on the same component. Keep the gas output only if it is a separate process emission (not from burning the listed fuel).`,
     );
   }
 
@@ -419,7 +492,7 @@ export async function calculateComponentImpacts(
       const name =
         flowContributions.find((c) => c.category_id === catId)?.category_name ?? `category ${catId}`;
       warnings.push(
-        `Component ${component.component_name}: ${name} mixes reference units (${[...units].join(', ')}) under ${method} — the total is not comparable; the factor data needs fixing.`,
+        `Component ${component.component_name}: ${name} mixes reference units (${[...units].join(', ')}) under ${method}: the total is not comparable; the factor data needs fixing.`,
       );
     }
   }
@@ -464,16 +537,73 @@ export async function calculateComponentImpacts(
     flow_contributions: flowContributions,
     // Flows the engine evaluated (at least one factor row in this method),
     // counted once each however many categories they have factors in.
-    total_flows_processed: new Set(flowsData.map((r) => r.flow_id)).size,
+    total_flows_processed: new Set([...flowsData, ...selectedRows].map((r) => r.flow_id)).size,
     driver_flows_count: new Set(flowContributions.map((f) => f.flow_id)).size,
     warnings,
-    excluded_flows: excluded,
+    excluded_flows: excluded + merged.refused,
+    excluded_flow_ids: [...excludedIds],
     invalid_quantity_flows: invalidQuantityFlows.size,
     characterized_flow_ids: [...characterized],
   };
 }
 
+/**
+ * The overrides on a component's flows, with what the engine needs to use them
+ * and the result unit the method reports each category in. Empty on a database
+ * without migrate-034.
+ */
+async function fetchFactorOverrides(
+  connection: Connection,
+  componentId: number,
+  method: string,
+): Promise<OverrideRow[]> {
+  return (await queryFactorOverrides(connection, 'component', componentId, method)) as OverrideRow[];
+}
+
+/** The same rows for every step of a case at once, grouped by step. */
+async function fetchCaseFactorOverrides(connection: Connection, caseId: number, method: string): Promise<Map<number, OverrideRow[]>> {
+  return byComponent<OverrideRow>(await queryFactorOverrides(connection, 'case', caseId, method));
+}
+
+async function queryFactorOverrides(
+  connection: Connection,
+  scope: 'component' | 'case',
+  id: number,
+  method: string,
+): Promise<RowDataPacket[]> {
+  try {
+    const [rows] = await connection.query<RowDataPacket[]>(
+      `SELECT ${scope === 'case' ? 'f.component_id AS row_component_id, ' : ''}o.flow_id, o.category_id, o.factor_value, o.impact_unit, o.per_unit, o.source, o.note,
+              ic.category_name, ic.unit AS category_unit,
+              f.substance_id, s.substance_name, s.cas_number, s.unit AS substance_default_unit,
+              f.flow_type, f.quantity, f.unit AS flow_unit,
+              (SELECT GROUP_CONCAT(DISTINCT TRIM(SUBSTRING_INDEX(d.unit, '/', 1)) SEPARATOR '|')
+                 FROM driver_impact_factors d
+                WHERE d.method_name = ? AND d.category_id = o.category_id) AS method_units
+         FROM flow_factor_overrides o
+         JOIN flows f ON f.flow_id = o.flow_id${scope === 'case' ? '\n         JOIN component rc ON rc.component_id = f.component_id' : ''}
+         JOIN substances s ON s.substance_id = f.substance_id
+         JOIN impact_categories ic ON ic.category_id = o.category_id
+        WHERE ${scope === 'case' ? 'rc.case_id' : 'f.component_id'} = ?
+        ORDER BY ${scope === 'case' ? 'f.component_id, ' : ''}o.flow_id, o.category_id`,
+      [method, id],
+    );
+    return (rows ?? []).map((r) => ({
+      ...(r as any),
+      method_unit: methodCategoryUnit(String(r.method_units ?? '').split('|')),
+    })) as RowDataPacket[];
+  } catch (err: any) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') return [];
+    throw err;
+  }
+}
+
 /** A number, or null when the value is not a finite number ('' and null included). */
+/** True for a flow amount that was never entered (NULL, absent or blank): "needs an amount". */
+export function isMissingAmount(v: unknown): boolean {
+  return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+}
+
 function finiteNumber(v: unknown): number | null {
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   if (typeof v !== 'string' || v.trim() === '') return null;
@@ -587,19 +717,43 @@ export async function calculateCaseImpacts(
     flow_count: row.flow_count,
   }));
 
-  // Terminating-node rule: a node with children is the sum of its children
-  // (ISO 14044 unit processes; the patent's baseline process). Flows sitting
-  // on such a node still count, but say so: the same flow modeled on a step
-  // below would be counted twice.
-  const nodesWithChildren = new Set(
-    components.map((c) => c.parent_component_id).filter((id) => id != null),
-  );
-  const structureWarnings = componentsWithFlows
-    .filter((c) => nodesWithChildren.has(c.component_id))
-    .map(
-      (c) =>
-        `Component ${c.component_name} has steps below it and also ${c.flow_count} flow(s) of its own. A parent should be the sum of its steps: move these flows onto the step that uses them, or check they are not also modeled below (double count).`,
+  // Where a flow may sit: anywhere. The tier names are nomenclature — the v1
+  // manual calls them "for identification purposes only" and leaves the
+  // hierarchy "completely under the control of the user" — so a flow on a line
+  // is as valid as a flow on an operation, and both are counted.
+  //
+  // What is worth saying is the real error: the SAME substance counted twice on
+  // one path through the tree. The previous warning fired on every parent that
+  // carried flows, which taught people to ignore it.
+  let structureWarnings: string[] = [];
+  try {
+    const [flowRows] = await connection.query<RowDataPacket[]>(
+      `SELECT c.component_id, c.component_name, c.parent_component_id,
+              f.substance_id, s.substance_name
+         FROM flows f
+         JOIN component c ON c.component_id = f.component_id
+         LEFT JOIN substances s ON s.substance_id = f.substance_id
+        WHERE c.case_id = ?`,
+      [caseId],
     );
+    structureWarnings = duplicateWarnings(
+      flowRows.map((r) => ({
+        component_id: r.component_id,
+        component_name: r.component_name,
+        parent_component_id: r.parent_component_id ?? null,
+        substance_id: r.substance_id,
+        substance_name: r.substance_name ?? `substance ${r.substance_id}`,
+      })),
+    );
+  } catch (err: any) {
+    // Advisory only: a run must not fail because the check could not be made,
+    // but it must say so, or a skipped check reads as "no double counts".
+    console.warn('[engine] duplicate-flow check skipped:', err);
+    structureWarnings = [
+      'The double-count check could not run, so a substance counted twice on one path would not be ' +
+        `flagged in this run (${err?.code || err?.message || 'unknown error'}).`,
+    ];
+  }
 
   algorithmSteps.push({
     step_number: 4,
@@ -609,7 +763,31 @@ export async function calculateCaseImpacts(
     },
   });
 
-  // STEP 3: Calculate impacts for each component
+  // STEP 3: Calculate impacts for each component, from rows read for the
+  // whole case at once (CaseRows).
+  const caseRegion = canonicalizeRegion(options.regionCode);
+  const [caseFlowRows] = await connection.query<RowDataPacket[]>(flowFactorSql('case'), [
+    calculationMethod,
+    caseRegion,
+    caseId,
+    caseRegion,
+  ]);
+  const caseRows: CaseRows = {
+    components: new Map(
+      (components as RowDataPacket[]).map((c) => [
+        Number(c.component_id),
+        {
+          component_id: c.component_id,
+          component_name: c.component_name,
+          component_type: c.component_type,
+          hierarchy_level: c.hierarchy_level,
+        } as RowDataPacket,
+      ]),
+    ),
+    flows: byComponent<RowDataPacket>(caseFlowRows ?? []),
+    overrides: await fetchCaseFactorOverrides(connection, caseId, calculationMethod),
+  };
+
   const componentResults: ComponentImpactResult[] = [];
   let totalFlowsProcessed = 0;
   let totalDriverFlows = 0;
@@ -624,7 +802,7 @@ export async function calculateCaseImpacts(
       },
     });
 
-    const result = await calculateComponentImpacts(comp.component_id, connection, options);
+    const result = await calculateComponentImpacts(comp.component_id, connection, options, caseRows);
     // Allocation (ISO 14044 4.3.4): a process that also makes other products
     // carries only its allocated share into this product's result.
     const share = allocation.get(comp.component_id) ?? 1;
@@ -668,7 +846,7 @@ export async function calculateCaseImpacts(
       if (existing) {
         if (existing.unit && impact.unit && existing.unit !== impact.unit) {
           crossUnitWarnings.add(
-            `${impact.category_name}: components report different reference units (${existing.unit} vs ${impact.unit}) under ${calculationMethod} — the case total is not comparable; the factor data needs fixing.`,
+            `${impact.category_name}: components report different reference units (${existing.unit} vs ${impact.unit}) under ${calculationMethod}: the case total is not comparable; the factor data needs fixing.`,
           );
         }
         existing.impact_value += impact.impact_value;
@@ -695,7 +873,7 @@ export async function calculateCaseImpacts(
     componentResults.flatMap((r) => r.characterized_flow_ids ?? []),
   );
   const [caseFlows] = await connection.query<RowDataPacket[]>(
-    `SELECT f.flow_id, s.substance_name, c.component_name
+    `SELECT f.flow_id, f.quantity, s.substance_name, c.component_name
      FROM flows f
      JOIN component c ON c.component_id = f.component_id
      JOIN substances s ON s.substance_id = f.substance_id
@@ -708,14 +886,19 @@ export async function calculateCaseImpacts(
       substance_name: String(f.substance_name),
       component_name: String(f.component_name),
     }));
+  // Flows with no amount yet are left out of the run; the statement names them.
+  const missingAmounts = (caseFlows ?? [])
+    .filter((f) => isMissingAmount(f.quantity))
+    .map((f) => ({ substance_name: String(f.substance_name), component_name: String(f.component_name) }));
   const dataQuality = summarizeDataQuality(componentResults, {
     region: options.regionCode ?? 'Global',
     uncharacterized,
+    missingAmounts,
   });
   if (allWarnings.length > 0) {
     algorithmSteps.push({
       step_number: 5 + componentResults.length + 1.5,
-      step_description: `${allWarnings.length} data-quality warning(s) — see run warnings`,
+      step_description: `${allWarnings.length} data-quality warning(s): see run warnings`,
       details: { warnings: allWarnings },
     });
   }
@@ -815,7 +998,7 @@ const SOURCE_TIERS: SourceTier[] = ['authoritative', 'industry_average', 'unveri
 const TIER_PHRASE: Record<SourceTier, string> = {
   authoritative: 'authoritative sources (published LCIA methods and official datasets such as TRACI, CML, IPCC, eGRID)',
   industry_average: 'industry-average factors',
-  unverified: 'unverified legacy factors',
+  unverified: 'unverified factors (legacy values or numbers entered by hand)',
   unknown: 'factors with no recorded source',
 };
 
@@ -830,6 +1013,8 @@ export function summarizeDataQuality(
   opts: {
     region?: string;
     uncharacterized?: Array<{ substance_name: string; component_name?: string }>;
+    /** Flows with no amount yet, as the case-level pass found them. */
+    missingAmounts?: Array<{ substance_name: string; component_name?: string }>;
   } = {},
 ): DataQualitySummary {
   const zero = (): Record<SourceTier, number> => ({
@@ -855,6 +1040,9 @@ export function summarizeDataQuality(
   const inputsByCategory = new Map<string, Set<number>>();
   const allCharacterizedInputs = new Set<number>();
   const substanceByFlow = new Map<number, string>();
+  // Numbers entered by hand (migrate-034) say nothing about the region.
+  let hand_entered = 0;
+  const handNames = new Set<string>();
 
   for (const r of componentResults) {
     for (const c of r.flow_contributions) {
@@ -872,7 +1060,10 @@ export function summarizeDataQuality(
         // Magnitude, so a credit (negative contribution) cannot push a share past 100%.
         gwMagnitude[tier] += Math.abs(c.impact_contribution);
       }
-      if (regional && (c.geographic_scope ?? 'Global').toLowerCase() === 'global') {
+      if (c.factor_origin === 'hand') {
+        hand_entered++;
+        handNames.add(`${c.substance_name} (${c.category_name})`);
+      } else if (regional && (c.geographic_scope ?? 'Global').toLowerCase() === 'global') {
         regional_fallbacks++;
       } else if (regional) {
         regionalSubstances.add(c.substance_name);
@@ -915,6 +1106,14 @@ export function summarizeDataQuality(
   const statement: string[] = [
     'Quantities are case data, entered by hand or extracted from the case documents. Every factor is secondary data; the flow table lists its source per row.',
   ];
+  // Early, because it changes what the total means: flows left out for want of an amount.
+  const missing = opts.missingAmounts ?? [];
+  const missingNames = missing.map((m) => (m.component_name ? `${m.substance_name} at ${m.component_name}` : m.substance_name));
+  if (missing.length > 0) {
+    statement.push(
+      `${missing.length} ${plural(missing.length, 'flow has', 'flows have')} no amount yet and ${missing.length === 1 ? 'is' : 'are'} left out of this run: ${listed(missingNames, 3)}.`,
+    );
+  }
   if (contributions === 0) {
     statement.push('No flow was characterized, so there is nothing to grade yet.');
   } else if (gwTotal > 0) {
@@ -928,12 +1127,19 @@ export function summarizeDataQuality(
     );
     statement.push(`Of ${contributions} contributions, ${parts.join(', ')}.`);
   }
-  if (contributions > 0) {
+  if (hand_entered > 0) {
+    statement.push(
+      `${hand_entered} ${plural(hand_entered, 'factor was', 'factors were')} entered by hand, not taken from the library: ${listed([...handNames], 3)}. The flow table shows each source.`,
+    );
+  }
+  // The region statements are about library factors only.
+  const libraryContributions = contributions - hand_entered;
+  if (libraryContributions > 0) {
     if (!regional) {
       statement.push('All factors are Global averages (no region selected).');
     } else if (regional_fallbacks > 0) {
       statement.push(
-        `${regional_fallbacks} of ${contributions} contributions use a Global factor because no ${region} factor exists, so geographic representativeness is limited for them.`,
+        `${regional_fallbacks} of ${libraryContributions} contributions use a Global factor because no ${region} factor exists, so geographic representativeness is limited for them.`,
       );
       // Which ones the region did change. Without this the reader assumes the
       // whole model is regional, when in practice it is the grid and little else.
@@ -999,6 +1205,10 @@ export function summarizeDataQuality(
     allocated_components: allocated.length,
     uncharacterized_flows: unchar.length,
     uncharacterized_examples: uncharNames.slice(0, 10),
+    missing_amount_flows: missing.length,
+    missing_amount_examples: missingNames.slice(0, 10),
+    hand_entered,
+    hand_entered_examples: [...handNames].slice(0, 10),
     category_coverage,
     statement,
   };

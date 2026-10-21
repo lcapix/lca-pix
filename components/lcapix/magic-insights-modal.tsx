@@ -35,6 +35,8 @@ interface MagicInsightsModalProps {
   initialCategory?: string
   projectId: string
   caseId: string
+  /** The run being read (AI narration needs it: access and the project's AI switch). */
+  runId?: number | null
 }
 
 export function MagicInsightsModal({
@@ -50,6 +52,7 @@ export function MagicInsightsModal({
   initialCategory,
   projectId,
   caseId,
+  runId,
 }: MagicInsightsModalProps) {
   const ins = useMagicInsights({
     open,
@@ -61,6 +64,7 @@ export function MagicInsightsModal({
     totalCost,
     stepCosts,
     initialCategory,
+    runId,
   })
 
   if (!open) return null
@@ -130,7 +134,13 @@ export function MagicInsightsModal({
       )}
 
       {/* Footer actions */}
-      <MagicInsightsFooter projectId={projectId} caseId={caseId} onClose={onClose} />
+      <MagicInsightsFooter
+        projectId={projectId}
+        caseId={caseId}
+        onClose={onClose}
+        usingAI={ins.usingAI && ins.aiStatus === 'done'}
+        aiModel={ins.aiModel}
+      />
     </MagicInsightsShell>
   )
 }

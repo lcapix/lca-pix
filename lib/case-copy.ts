@@ -55,6 +55,33 @@ const FLOW_COLUMNS = [
   'transport_mode',
 ]
 
+/** component_cost_basis columns copied with a step (migrate-035). */
+const COST_BASIS_COLUMNS = [
+  'cost_kind',
+  'driver_quantity',
+  'driver_unit',
+  'rate',
+  'rate_unit',
+  'rate_label',
+  'rate_code',
+  'region',
+  'source_kind',
+  'source_name',
+  'vintage',
+  'updated_by',
+]
+
+/** flow_factor_overrides columns copied with a flow (migrate-034). */
+const OVERRIDE_COLUMNS = [
+  'category_id',
+  'factor_value',
+  'impact_unit',
+  'per_unit',
+  'source',
+  'note',
+  'created_by',
+]
+
 const CASE_REFERENCE_COLUMNS = ['reference_flow', 'reference_flow_unit', 'modeled_output']
 
 const present = (row: Record<string, unknown>, cols: string[]) =>
@@ -117,6 +144,7 @@ export async function copyCaseInventory(
     idMap.set(Number(comp.component_id), newId)
     depth.set(Number(comp.component_id), level)
   }
+  await copyCostBasis(conn, idMap)
 
   let flowsCopied = 0
   const oldIds = [...idMap.keys()]
@@ -125,14 +153,69 @@ export async function copyCaseInventory(
       `SELECT * FROM flows WHERE component_id IN (${oldIds.map(() => '?').join(', ')}) ORDER BY flow_id`,
       oldIds,
     )
+    const flowIdMap = new Map<number, number>()
     for (const flow of flows) {
-      await insertRow(conn, 'flows', [
+      const newFlowId = await insertRow(conn, 'flows', [
         ['component_id', idMap.get(Number(flow.component_id))],
         ...present(flow, FLOW_COLUMNS).map((c) => [c, flow[c] ?? null] as [string, unknown]),
       ])
+      flowIdMap.set(Number(flow.flow_id), newFlowId)
       flowsCopied++
     }
+    await copyFactorOverrides(conn, flowIdMap)
   }
 
   return { components: idMap.size, flows: flowsCopied }
+}
+
+/**
+ * A copy keeps how each cost was built (migrate-035), on the new step ids.
+ * Nothing to do on a database without the table.
+ */
+async function copyCostBasis(conn: Conn, idMap: Map<number, number>): Promise<void> {
+  const oldIds = [...idMap.keys()]
+  if (!oldIds.length) return
+  let rows: any[]
+  try {
+    ;[rows] = await conn.query(
+      `SELECT * FROM component_cost_basis WHERE component_id IN (${oldIds.map(() => '?').join(', ')})`,
+      oldIds,
+    )
+  } catch (err: any) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') return
+    throw err
+  }
+  for (const r of Array.isArray(rows) ? rows : []) {
+    await insertRow(conn, 'component_cost_basis', [
+      ['component_id', idMap.get(Number(r.component_id))],
+      ['cost_lines', jsonText(r.cost_lines)],
+      ...COST_BASIS_COLUMNS.map((c) => [c, r[c] ?? null] as [string, unknown]),
+    ])
+  }
+}
+
+/**
+ * A copy keeps every number the source used, the person's own factors
+ * included (migrate-034). Who entered one stays with it. Nothing to do on a
+ * database without the table.
+ */
+async function copyFactorOverrides(conn: Conn, flowIdMap: Map<number, number>): Promise<void> {
+  const oldFlowIds = [...flowIdMap.keys()]
+  if (!oldFlowIds.length) return
+  let overrides: any[]
+  try {
+    ;[overrides] = await conn.query(
+      `SELECT * FROM flow_factor_overrides WHERE flow_id IN (${oldFlowIds.map(() => '?').join(', ')}) ORDER BY override_id`,
+      oldFlowIds,
+    )
+  } catch (err: any) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') return
+    throw err
+  }
+  for (const o of Array.isArray(overrides) ? overrides : []) {
+    await insertRow(conn, 'flow_factor_overrides', [
+      ['flow_id', flowIdMap.get(Number(o.flow_id))],
+      ...OVERRIDE_COLUMNS.map((c) => [c, o[c] ?? null] as [string, unknown]),
+    ])
+  }
 }

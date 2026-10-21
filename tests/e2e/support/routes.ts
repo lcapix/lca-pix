@@ -8,7 +8,8 @@ import type { Seed } from './seed';
 import { open, settle } from './ui';
 
 export type Actor = 'owner' | 'viewer' | 'empty' | 'newcomer' | 'anon';
-export type RouteDef = { slug: string; path: string; as?: Actor; ready?: string; landsOn?: string; brief: string };
+/** phoneReady: what shows at phone width instead (a case is read-only there, stage 8). */
+export type RouteDef = { slug: string; path: string; as?: Actor; ready?: string; phoneReady?: string; landsOn?: string; brief: string };
 export type Viewport = { name: string; width: number; height: number };
 
 export const ROUTES = data.routes as RouteDef[];
@@ -36,7 +37,8 @@ export function resolvePath(template: string, ids: Record<string, number | strin
 
 /** Open a route and wait until it is ready (and has redirected, if it does). */
 export async function openRoute(page: Page, route: RouteDef, seed: Seed): Promise<void> {
-  await open(page, resolvePath(route.path, idsFromSeed(seed)), { ready: route.ready });
+  const phone = (page.viewportSize()?.width ?? 1440) <= 600;
+  await open(page, resolvePath(route.path, idsFromSeed(seed)), { ready: (phone && route.phoneReady) || route.ready });
   if (route.landsOn) {
     await expect(page).toHaveURL(new RegExp(`${route.landsOn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
     await settle(page);

@@ -61,7 +61,7 @@ export function buildInsightText({
     activeTotal !== undefined
       ? `${fmtSig(activeTotal)} ${activeUnit}`
       : 'an indicative overall load'
-  const costStr = totalCost !== undefined ? `$${totalCost.toLocaleString()}` : '—'
+  const costStr = totalCost !== undefined ? `$${totalCost.toLocaleString()}` : '–'
   const loadLabel = selectedCategory === OVERALL_KEY ? 'environmental load' : activeLabel
 
   switch (activeChip) {
@@ -70,7 +70,7 @@ export function buildInsightText({
       const byMaterial = m0
         ? ` By material, {{${m0.name}}} makes up {{${m0.pct.toFixed(1)}%}} of it, across ${m0.steps} step${m0.steps === 1 ? '' : 's'}: that is the biggest lever.`
         : ''
-      return `Your ${caseName} assessment under ${method} totals {{${totalStr}}} for {{${loadLabel}}} at {{${costStr}}}.${byMaterial} By step, {{${top ? stepLabel(top.name) : 'your top step'}}} carries the most ({{${top?.pct.toFixed(1) ?? '—'}%}}), and the top two steps account for {{${((top?.pct ?? 0) + (second?.pct ?? 0)).toFixed(1)}%}}.`
+      return `Your ${caseName} assessment under ${method} totals {{${totalStr}}} for {{${loadLabel}}} at {{${costStr}}}.${byMaterial} By step, {{${top ? stepLabel(top.name) : 'your top step'}}} carries the most ({{${top?.pct.toFixed(1) ?? '–'}%}}), and the top two steps account for {{${((top?.pct ?? 0) + (second?.pct ?? 0)).toFixed(1)}%}}.`
     }
 
     case 'reduce': {

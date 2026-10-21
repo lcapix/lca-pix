@@ -12,7 +12,7 @@ import { exists, queryOne } from './db-helpers';
 // app refuses to start without a real one (tests may inject their own).
 const JWT_SECRET = process.env.JWT_SECRET as string;
 if (!JWT_SECRET && process.env.NODE_ENV !== 'test') {
-  throw new Error('JWT_SECRET is not set — configure it in .env.local / Vercel env');
+  throw new Error('JWT_SECRET is not set: configure it in .env.local / Vercel env');
 }
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
@@ -301,6 +301,31 @@ export async function checkProjectAccess(
   };
 
   return permissionLevel[result.permission_name] >= permissionLevel[requiredPermission];
+}
+
+/**
+ * The caller's role in a project: 'owner' for project.owner_id, otherwise the
+ * member row's permission, or null for a non-member or a missing project.
+ * Read by GET routes so the client can hide controls the member cannot use;
+ * the write routes still check access themselves.
+ */
+export async function getProjectRole(
+  userId: number,
+  projectId: number
+): Promise<ProjectPermission | null> {
+  const project = await queryOne<any>(`SELECT owner_id FROM project WHERE project_id = ?`, [projectId]);
+  if (!project) return null;
+  if (Number(project.owner_id) === userId) return 'owner';
+
+  const member = await queryOne<any>(
+    `SELECT p.permission_name
+     FROM project_members pm
+     JOIN permissions p ON pm.permission_id = p.permission_id
+     WHERE pm.project_id = ? AND pm.user_id = ?`,
+    [projectId, userId]
+  );
+  const name = member?.permission_name;
+  return name === 'owner' || name === 'admin' || name === 'editor' || name === 'viewer' ? name : null;
 }
 
 /**

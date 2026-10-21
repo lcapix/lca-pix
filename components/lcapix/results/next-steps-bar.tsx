@@ -9,10 +9,13 @@ export function NextStepsBar({
   projectId,
   caseId,
   setMagicOpen,
+  readOnly = false,
 }: {
   projectId: string
   caseId: string
   setMagicOpen: (open: boolean) => void
+  /** A "Can read" member cannot copy a case, so the copy step is left out. */
+  readOnly?: boolean
 }) {
   return (
     <div
@@ -40,9 +43,11 @@ export function NextStepsBar({
         See what drives it
       </button>
       {/* Opens the case editor's Duplicate dialog (RES-6). */}
+      {!readOnly && (
       <Link href={`/project/${projectId}/case/${caseId}?duplicate=1`} className="btn btn-ghost btn-sm">
         Duplicate and change one thing
       </Link>
+      )}
       <Link href={`/project/${projectId}/comparison`} className="btn btn-ghost btn-sm">
         Compare cases
       </Link>

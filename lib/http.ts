@@ -2,6 +2,7 @@
  * Request-body helpers shared by the API routes.
  */
 import { NextResponse } from 'next/server';
+import { reportError } from './observability/report';
 
 export type JsonObject = Record<string, any>;
 
@@ -61,8 +62,8 @@ export function newRequestId(): string {
 /**
  * A 500 that tells the client nothing internal (security audit L1): a generic
  * message and a request id. The error itself, with its SQL, codes and stack,
- * goes to the server log under the same id, so a user who reports the id can
- * be matched to the cause.
+ * goes to the server log (one structured line, lib/observability) under the
+ * same id, so a user who reports the id can be matched to the cause.
  */
 export function internalError(
   label: string,
@@ -71,6 +72,6 @@ export function internalError(
   opts: { requestId?: string; extra?: Record<string, unknown> } = {},
 ): NextResponse {
   const requestId = opts.requestId ?? newRequestId();
-  console.error(`[${label}] request ${requestId}:`, err);
+  reportError(err, { event: label, request_id: requestId });
   return NextResponse.json({ error: publicMessage, request_id: requestId, ...opts.extra }, { status: 500 });
 }

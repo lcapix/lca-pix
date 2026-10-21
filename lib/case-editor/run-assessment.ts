@@ -19,7 +19,7 @@ export function isInventoryReady(completeness: CompletenessReport | null): boole
 export function runBlockedMessage(fuMissing: boolean): string {
   return fuMissing
     ? 'Set the functional unit first (Goal & scope), so the result is per something.'
-    : 'Nothing to assess yet — add at least one input or emission (materials, energy, or a direct output). A case with no flows would return 0.'
+    : 'Nothing to assess yet: add at least one input or emission (materials, energy, or a direct output). A case with no flows would return 0.'
 }
 
 /** The Run Assessment button's tooltip. */
@@ -63,7 +63,7 @@ export function assessmentCompleteMessage(data: any): string {
     (t: any) => /global warming/i.test(t.category_name),
   )?.impact_value
   return typeof total === 'number'
-    ? `Assessment complete — ${total.toFixed(3)} kg CO₂-eq`
+    ? `Assessment complete: ${total.toFixed(3)} kg CO₂-eq`
     : 'Assessment complete'
 }
 

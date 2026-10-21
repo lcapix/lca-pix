@@ -3,6 +3,7 @@
 // no browser globals.
 
 import { LAYER_LABEL } from '@/lib/ingest/doc-types'
+import type { IngestPlan } from '@/lib/ingest/maplca'
 
 /** Chip label for each hierarchy tier (hierarchy preview, DEFAULT STEP picker). */
 export const TIER_LABEL: Record<string, string> = {
@@ -48,8 +49,8 @@ export function applyButtonLabel(applying: boolean, appending: boolean): string 
       ? 'Adding…'
       : 'Creating case…'
     : appending
-      ? 'Apply — add to case'
-      : 'Apply — create this case'
+      ? 'Add to the case'
+      : 'Create this case'
 }
 
 /** Where the back link goes: the target case when one is chosen (truthy id), else the project. */
@@ -67,4 +68,21 @@ export function noFlowsMessage(connector: string): string {
   return connector === 'routing'
     ? 'A routing gives the steps and their hours, not materials or energy. Add the BOM for materials and the equipment list for machine energy next.'
     : 'This document has no material or energy lines to add.'
+}
+
+/** What a document says each step costs: the total and its categories, keyed by the step's name in the plan. */
+export function costsByStep(costs: IngestPlan['costs']): Map<string, { total: number; kinds: string }> {
+  const out = new Map<string, { total: number; kinds: Set<string> }>()
+  for (const c of costs) {
+    const cur = out.get(c.node) ?? { total: 0, kinds: new Set<string>() }
+    cur.total += Number(c.amount) || 0
+    cur.kinds.add(c.category)
+    out.set(c.node, cur)
+  }
+  return new Map([...out].map(([k, v]) => [k, { total: v.total, kinds: [...v.kinds].join(', ') }]))
+}
+
+/** The document's total cost across every step. */
+export function documentCostTotal(costs: IngestPlan['costs']): number {
+  return costs.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
 }

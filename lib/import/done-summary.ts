@@ -51,8 +51,8 @@ export function doneSummary(applied: ApplyResult): string {
 /** Where a missing layer comes from: the first two suggested documents, or the by-hand fallback. */
 export function missingLayerHint(m: MissingLayer): string {
   return m.suggestedDocs?.length
-    ? ` — from a ${m.suggestedDocs.slice(0, 2).join(' or ')}`
-    : ' — no document type for this yet; enter it by hand on the step that uses it'
+    ? `: from a ${m.suggestedDocs.slice(0, 2).join(' or ')}`
+    : ': no document type for this yet, so enter it by hand on the step that uses it'
 }
 
 /**

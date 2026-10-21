@@ -6,8 +6,8 @@ import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
-  parseFlowQuantity,
   QUANTITY_ERROR,
+  parseOptionalFlowQuantity,
   findUsableSubstance,
   SUBSTANCE_ERROR,
 } from '@/lib/flow-fields';
@@ -48,13 +48,17 @@ export async function PUT(
     const quantityProvided =
       Object.prototype.hasOwnProperty.call(body, 'quantity') ||
       Object.prototype.hasOwnProperty.call(body, 'amount');
-    const quantity = quantityProvided ? parseFlowQuantity(body.quantity ?? body.amount) : null;
-    const unit = body.unit;
-
-    // FLOW-4: quantity is NOT NULL and must be a real, non-negative number.
-    if (quantityProvided && quantity === null) {
+    // A blank amount clears it (migration 033: NULL = "needs an amount");
+    // words, NaN and negatives are refused (FLOW-4).
+    const parsedQuantity = quantityProvided
+      ? parseOptionalFlowQuantity(body.quantity ?? body.amount)
+      : ({ ok: true, value: null } as const);
+    if (!parsedQuantity.ok) {
       return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
     }
+    const quantity = parsedQuantity.value;
+    const clearQuantity = quantityProvided && quantity === null;
+    const unit = body.unit;
     if (flow_type != null && !['input', 'output'].includes(flow_type)) {
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
@@ -103,25 +107,45 @@ export async function PUT(
       }
     }
 
-    await execute(
-      `UPDATE flows
-       SET substance_id = COALESCE(?, substance_id),
-           flow_type = COALESCE(?, flow_type),
-           quantity = COALESCE(?, quantity),
-           unit = COALESCE(?, unit)
-       WHERE flow_id = ?`,
-      [substance_id != null ? Number(substance_id) : null, flow_type ?? null, quantity, unit ?? null, flowId]
-    );
+    try {
+      await execute(
+        `UPDATE flows
+         SET substance_id = COALESCE(?, substance_id),
+             flow_type = COALESCE(?, flow_type),
+             quantity = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, quantity) END,
+             unit = COALESCE(?, unit)
+         WHERE flow_id = ?`,
+        [
+          substance_id != null ? Number(substance_id) : null,
+          flow_type ?? null,
+          clearQuantity ? 1 : 0,
+          quantity,
+          unit ?? null,
+          flowId,
+        ]
+      );
+    } catch (updateErr: any) {
+      // A database before migration 033 refuses a flow without an amount.
+      if (clearQuantity && updateErr?.code === 'ER_BAD_NULL_ERROR') {
+        return NextResponse.json(
+          { error: 'This database needs migration 033 before an amount can be cleared. Enter an amount instead.' },
+          { status: 409 }
+        );
+      }
+      throw updateErr;
+    }
 
     // A quantity typed by hand is no longer the mass x distance a transport
     // leg was computed from (TKM-2): drop the leg rather than keep two
     // numbers that disagree.
     if (quantityProvided) {
       try {
+        // A cleared amount drops the leg too: nothing is left for it to explain.
         await execute(
           `UPDATE flows SET transport_mass_kg = NULL, transport_distance_km = NULL, transport_mode = NULL
             WHERE flow_id = ? AND transport_mass_kg IS NOT NULL
-              AND ABS(transport_mass_kg / 1000 * transport_distance_km - quantity) > 0.000001 * GREATEST(1, ABS(quantity))`,
+              AND (quantity IS NULL
+                   OR ABS(transport_mass_kg / 1000 * transport_distance_km - quantity) > 0.000001 * GREATEST(1, ABS(quantity)))`,
           [flowId],
         );
       } catch (legErr: any) {

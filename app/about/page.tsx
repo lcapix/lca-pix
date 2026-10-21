@@ -67,7 +67,7 @@ export default function AboutPage() {
             </p>
             <p style={{ margin: 0 }}>
               Where existing tools treat cost and environmental impact as separate analyses, we
-              unify them — so an engineer can answer the question that actually lands a project:
+              unify them: so an engineer can answer the question that actually lands a project:
               {' '}“for how much more, and how much less carbon?”
             </p>
           </div>

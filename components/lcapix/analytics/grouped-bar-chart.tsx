@@ -85,7 +85,7 @@ export function GroupedBarChart({
               const y = H - padY - h
               const valLabel =
                 rawVal === 0
-                  ? '—'
+                  ? '–'
                   : rawVal < 0.01 && rawVal > 0
                   ? rawVal.toExponential(1)
                   : rawVal < 1

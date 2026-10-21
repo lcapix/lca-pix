@@ -163,17 +163,17 @@ export function CostAnalysisPanel({
           >
             <div style={{ color: 'var(--text-primary)' }}>{r.scenario}</div>
             <div className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-              {r.cost > 0 ? fmtMoney(r.cost, currency) : '—'}
+              {r.cost > 0 ? fmtMoney(r.cost, currency) : '–'}
             </div>
             <div className="mono" style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
-              {r.impact !== 0 ? fmtNum(r.impact, 2) : '—'}
+              {r.impact !== 0 ? fmtNum(r.impact, 2) : '–'}
             </div>
             <div
               className="mono"
               style={{ textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}
-              title="Cost per unit of total environmental impact — lower is more cost-efficient"
+              title="Cost per unit of total environmental impact: lower is more cost-efficient"
             >
-              {r.intensity > 0 ? fmtMoney(r.intensity, currency) : '—'}
+              {r.intensity > 0 ? fmtMoney(r.intensity, currency) : '–'}
             </div>
           </div>
         ))}

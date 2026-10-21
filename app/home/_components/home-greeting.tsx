@@ -27,7 +27,7 @@ export function HomeGreeting({
         sub={
           projectCount > 0
             ? `You have ${projectCount} ${projectCount === 1 ? 'project' : 'projects'} in flight${isLoadingProjects ? ' · loading…' : '.'}`
-            : 'Run an LCA project end-to-end — model, assess, compare, defend.'
+            : 'Run an LCA project end-to-end: model, assess, compare, defend.'
         }
         actions={
           <div style={{ display: 'flex', gap: 8 }}>

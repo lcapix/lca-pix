@@ -167,10 +167,16 @@ describe('fmtMoney', () => {
     expect(fmtMoney(1000, 'EUR')).toBe(intl(1000, 'EUR', 0))
   })
 
-  it('keeps at most two decimals below 1000, negatives included', () => {
+  it('keeps at most two decimals below 1000', () => {
     expect(fmtMoney(12.345, 'USD')).toBe(intl(12.345, 'USD', 2))
-    expect(fmtMoney(-5000, 'USD')).toBe(intl(-5000, 'USD', 2))
+    expect(fmtMoney(-12.345, 'USD')).toBe(intl(-12.345, 'USD', 2))
     expect(fmtMoney(0)).toBe(intl(0, 'USD', 2))
+  })
+
+  it('formats a credit like a charge of the same size', () => {
+    // -5,000 used to print with cents because only v >= 1000 dropped them.
+    expect(fmtMoney(-5000, 'USD')).toBe(intl(-5000, 'USD', 0))
+    expect(fmtMoney(-999.5, 'USD')).toBe(intl(-999.5, 'USD', 2))
   })
 
   it('defaults to USD', () => {

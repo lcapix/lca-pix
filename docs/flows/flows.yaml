@@ -1249,7 +1249,9 @@ x_expect:
   admin_200: &AD200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 200, owner: 200, padmin: 404}
   owner_200: &O200 {anon: 401, nonmem: 404, viewer: 403, editor: 403, adminm: 403, owner: 200, padmin: 404}
   padmin_200: &PA200 {anon: 401, nonmem: 403, viewer: 403, editor: 403, adminm: 403, owner: 403, padmin: 200}
-  # own_cases rows: a case the caller did not create, in a project with members_see_own_cases = 1
+  # own_cases rows: a case another member (not the owner or an admin) created, in a project with
+  # members_see_own_cases = 1. A case the owner or an admin made is read-only to members (D2):
+  # tests/api-real/flows/f26-privacy-d2.test.ts.
   own_cases_200: &OWN200 {anon: 401, nonmem: 404, viewer: 404, editor: 404, adminm: 200, owner: 200, padmin: 404}
   own_cases_201: &OWN201 {anon: 401, nonmem: 404, viewer: 404, editor: 404, adminm: 201, owner: 201, padmin: 404}
   auth_failures: {deactivated: 401, revoked: 401, tampered: 401}
@@ -1383,6 +1385,38 @@ permissions:
   - {id: R52bo, method: POST, path: /api/ingest/preview, rule: 'editor on the target case; own cases: admin, or the case creator', own_cases: true, mode: 'connector = equipment', multipart: equipment_csv, primary: form.target_case_id, expect: *OWN200, not_found: 'Case not found'}
   - {id: R53o, method: POST, path: /api/ingest/apply, rule: 'editor on project_id', own_cases: true, mode: create, body: {project_id: $P, case_name: 'Import {run} {role}', nodes: [{name: 'Mug {role}', tier: product, parent: null}], flows: [], costs: [], notes: []}, primary: body.project_id, expect: *E201, not_found: 'Project not found', note: 'an import creates a case the caller owns'}
   - {id: R53bo, method: POST, path: /api/ingest/apply, rule: 'editor on the target case; own cases: admin, or the case creator', own_cases: true, mode: append, body: {target_case_id: $P.base, attach_component_id: $P.base.op, flows: [], costs: [], notes: []}, primary: body.target_case_id, expect: *OWN200, not_found: 'Target case not found'}
+
+  # --- education build: own factor (migrate-034) and step costs (migrate-035) ---
+  # category_id 1 is Global Warming in db/baseline/001-reference.sql.
+  - {id: R65, method: GET, path: '/api/flows/{flowId}/factor', params: {flowId: $P.base.flow}, rule: member, expect: *M200, not_found: 'Flow not found'}
+  - {id: R66, method: PUT, path: '/api/flows/{flowId}/factor', params: {flowId: $P.base.flow}, rule: editor, body: {category_id: 1, factor_value: 0.5, source: 'Utility bill {role}'}, expect: *E200, not_found: 'Flow not found', note: 'zod-validated; a per_unit the flow cannot use -> 400; 409 without migrate-034'}
+  - {id: R67, method: DELETE, path: '/api/flows/{flowId}/factor?category_id=1', params: {flowId: $P.base.flow}, rule: editor, expect: *E200, not_found: 'Flow not found'}
+  - {id: R68, method: GET, path: '/api/components/{componentId}/costs', params: {componentId: $P.base.op}, rule: member, expect: *M200, not_found: 'Component not found'}
+  - {id: R69, method: PUT, path: '/api/components/{componentId}/costs', params: {componentId: $P.base.op}, rule: editor, body: {kind: overhead, mode: entered, amount: 0.12}, expect: *E200, not_found: 'Component not found', note: 'mode lookup: the server finds the rate (a rate in the body -> 400) and counts against the cost-rates budget; mode flows (material or energy): the server prices the step''s own flows at the reference table, a step none of whose flows has a price -> 400 naming them (F35)'}
+  - {id: R70, method: DELETE, path: '/api/components/{componentId}/costs?kind=overhead', params: {componentId: $P.base.op}, rule: editor, expect: *E200, not_found: 'Component not found'}
+  - {id: R65o, method: GET, path: '/api/flows/{flowId}/factor', params: {flowId: $P.base.flow}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Flow not found'}
+  - {id: R66o, method: PUT, path: '/api/flows/{flowId}/factor', params: {flowId: $P.base.flow}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {category_id: 1, factor_value: 0.5, source: 'Utility bill {role}'}, expect: *OWN200, not_found: 'Flow not found'}
+  - {id: R67o, method: DELETE, path: '/api/flows/{flowId}/factor?category_id=1', params: {flowId: $P.base.flow}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Flow not found'}
+  - {id: R68o, method: GET, path: '/api/components/{componentId}/costs', params: {componentId: $P.base.op}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R69o, method: PUT, path: '/api/components/{componentId}/costs', params: {componentId: $P.base.op}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {kind: overhead, mode: entered, amount: 0.12}, expect: *OWN200, not_found: 'Component not found'}
+  - {id: R70o, method: DELETE, path: '/api/components/{componentId}/costs?kind=overhead', params: {componentId: $P.base.op}, rule: 'editor; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Component not found'}
+  # --- education build: import lines held for review (migrate-040) ---
+  - {id: R71, method: GET, path: '/api/cases/{caseId}/held-lines', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found'}
+  - {id: R72, method: PUT, path: '/api/held-lines/{heldId}', params: {heldId: $fresh.heldLine}, fresh: heldLine, rule: editor, body: {action: dismiss}, expect: *E200, not_found: 'Held line not found', note: 'resolve: a step of the same case, the substance and unit checked as a new flow; a line acts once (409)'}
+  - {id: R71o, method: GET, path: '/api/cases/{caseId}/held-lines', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  - {id: R72o, method: PUT, path: '/api/held-lines/{heldId}', params: {heldId: $fresh.heldLine}, fresh: heldLine, rule: 'editor; own cases: admin, or the case creator', own_cases: true, body: {action: dismiss}, expect: *OWN200, not_found: 'Held line not found'}
+  # --- education build: reads left this hour (F2.2) ---
+  - {id: R73, method: GET, path: /api/ingest/reads-left, rule: authenticated, expect: *A200, note: 'the caller own allowance only; reading it uses none'}
+  # --- education build: pinned projects (migrate-041) ---
+  - {id: R74, method: PUT, path: '/api/projects/{projectId}/pin', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found', note: 'the pin is the caller own; 20 at most (409)'}
+  - {id: R75, method: DELETE, path: '/api/projects/{projectId}/pin', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found'}
+  # --- education build: the case inventory for the workspace (stage 4) ---
+  - {id: R76, method: GET, path: '/api/cases/{caseId}/inventory', params: {caseId: $P.base}, rule: member, expect: *M200, not_found: 'Case not found', note: 'reads only: the engine pass, no run written'}
+  - {id: R76o, method: GET, path: '/api/cases/{caseId}/inventory', params: {caseId: $P.base}, rule: 'member; own cases: admin, or the case creator', own_cases: true, expect: *OWN200, not_found: 'Case not found'}
+  # Analytics (E10): the flows left with no amount, across the cases the caller reaches.
+  - {id: R77, method: GET, path: '/api/projects/{projectId}/empty-flows', params: {projectId: $P}, rule: member, expect: *M200, not_found: 'Project not found', note: 'reads only; with own cases on, a member counts only the cases they reach'}
+  - {id: R77o, method: GET, path: '/api/projects/{projectId}/empty-flows', params: {projectId: $P}, rule: member, own_cases: true, expect: *M200, not_found: 'Project not found', assert: 'editor and viewer count only the cases they reach (tests/api-real/flows/f24-list-summaries.test.ts)'}
+  - {id: R78, method: GET, path: /api/health, rule: public, expect: *PUB200, note: 'uptime and smoke test; 503 only when the database does not answer within 3 s; reveals no host, name or data'}
 
 # Routes a flow needs that do not exist (see PERMISSIONS_MATRIX.md §2.9).
 missing_routes:

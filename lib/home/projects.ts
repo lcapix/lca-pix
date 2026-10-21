@@ -23,7 +23,7 @@ export interface CoercedProject {
 /** "just now", "5m ago", "3h ago", "2d ago", "1w ago", "4mo ago", "2y ago"; '—' for an invalid date. */
 export function formatRelative(d: Date, now: number = Date.now()): string {
   const diff = now - d.getTime()
-  if (Number.isNaN(diff)) return '—'
+  if (Number.isNaN(diff)) return '–'
   const m = Math.floor(diff / 60_000)
   if (m < 1) return 'just now'
   if (m < 60) return `${m}m ago`
@@ -56,7 +56,7 @@ export function coerceProject(p: any, now: number = Date.now()): CoercedProject 
   const type: 'base' | 'comparative' = caseCount > 1 ? 'comparative' : 'base'
   const status: 'active' | 'archived' = p?.archived ? 'archived' : 'active'
   const updatedAt = p?.updatedAt ? new Date(p.updatedAt) : null
-  const updatedLabel = updatedAt ? formatRelative(updatedAt, now) : '—'
+  const updatedLabel = updatedAt ? formatRelative(updatedAt, now) : '–'
   const lastRunLabel = p?.lastRun ?? p?.lastAssessmentAt
     ? formatRelative(new Date(p.lastRun ?? p.lastAssessmentAt), now)
     : updatedLabel
@@ -198,7 +198,7 @@ export const ISO_STEPS: Array<{ title: string; description: string }> = [
   {
     title: 'Inventory',
     description:
-      'List the inputs and outputs at every stage — materials, energy, emissions.',
+      'List the inputs and outputs at every stage: materials, energy, emissions.',
   },
   {
     title: 'Impact assessment',

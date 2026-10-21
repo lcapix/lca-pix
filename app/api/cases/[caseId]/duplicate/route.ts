@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
+import { caseAccessDenied, caseReadableByClass, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, fitToColumn, lengthError } from '@/lib/field-limits';
@@ -35,7 +35,11 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
+    // A copy is a new case of the caller's: they must reach the source (a
+    // student reads the instructor's base case, D2) and may create cases.
+    const denied =
+      (await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' })) ??
+      (await projectAccessDenied(userId, Number(sourceCase.project_id), 'editor', { notFound: 'Case not found' }));
     if (denied) return denied;
 
     // Copying a case whose steps have not landed yet produces a silently empty
@@ -60,6 +64,10 @@ export async function POST(
     const askedName = typeof body.case_name === 'string' ? body.case_name.trim() : '';
     const nameError = lengthError('Case name', askedName, C.case_name);
     if (nameError) return NextResponse.json({ error: nameError }, { status: 400 });
+    // "What will you change?" (E18): one line, kept as the copy's description.
+    const askedDescription = typeof body.description === 'string' ? body.description.trim() : '';
+    const descriptionError = lengthError('Description', askedDescription, C.description);
+    if (descriptionError) return NextResponse.json({ error: descriptionError }, { status: 400 });
     // The default name is composed here, so it is cut to fit rather than refused.
     const newName: string =
       askedName || `${fitToColumn(sourceCase.case_name, { kind: 'chars', max: C.case_name.max - ' (Copy)'.length })} (Copy)`;
@@ -81,21 +89,28 @@ export async function POST(
       ? body.case_type
       : 'comparative';
 
+    // A copy of a case the class cannot read stays from the class, whoever
+    // makes it (the instructor copying a student's work, migrate-037).
+    const hidden = (await caseReadableByClass(sourceCase)) ? 0 : 1;
+
     const result = await transaction(async (conn) => {
       const [caseIns]: any = await conn.query(
-        `INSERT INTO case_table (project_id, created_by, case_name, case_type, description, region_code)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO case_table (project_id, created_by, hidden_from_members, parent_case_id, case_name, case_type, description, region_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           sourceCase.project_id,
           userId,
+          hidden,
+          caseId, // the copy link: the case this one came from
           newName,
           newType,
-          fitToColumn(
-            sourceCase.description
-              ? `${sourceCase.description} [duplicated from "${sourceCase.case_name}"]`
-              : `Duplicated from "${sourceCase.case_name}"`,
-            C.description,
-          ),
+          askedDescription ||
+            fitToColumn(
+              sourceCase.description
+                ? `${sourceCase.description} [duplicated from "${sourceCase.case_name}"]`
+                : `Duplicated from "${sourceCase.case_name}"`,
+              C.description,
+            ),
           sourceCase.region_code ?? null,
         ]
       );

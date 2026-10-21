@@ -11,7 +11,8 @@ export interface FlowRow {
   substance_category?: string
   cas_number?: string
   flow_type: 'input' | 'output'
-  quantity: number | string
+  /** null = no amount yet (migration 033). */
+  quantity: number | string | null
   unit: string
 }
 
@@ -35,6 +36,7 @@ export function toInspectorFlows(rows: FlowRow[]): InspectorFlow[] {
     id: String(f.flow_id),
     substance: f.substance_name ?? '',
     dir: f.flow_type === 'output' ? 'OUT' : 'IN',
+    // Feeds the cost Suggest: a flow with no amount adds no cost.
     amount: Number(f.quantity) || 0,
     unit: f.unit,
   }))

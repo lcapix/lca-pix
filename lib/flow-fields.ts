@@ -19,6 +19,22 @@ export function parseFlowQuantity(v: unknown): number | null {
 
 export const QUANTITY_ERROR = 'quantity must be a number of 0 or more';
 
+/** True for a value that means "no amount yet": absent, null or blank text. */
+export function isBlankQuantity(v: unknown): boolean {
+  return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+}
+
+/**
+ * A flow quantity that may be left blank (migration 033: NULL = "needs an
+ * amount"). ok with value null for a blank, ok with the number for a valid
+ * amount, not ok for anything else (words, NaN, negatives, booleans).
+ */
+export function parseOptionalFlowQuantity(v: unknown): { ok: true; value: number | null } | { ok: false } {
+  if (isBlankQuantity(v)) return { ok: true, value: null };
+  const n = parseFlowQuantity(v);
+  return n === null ? { ok: false } : { ok: true, value: n };
+}
+
 /**
  * The substance, if the caller may use it: a library row, or a custom
  * substance the caller created (security audit L3). Another user's private

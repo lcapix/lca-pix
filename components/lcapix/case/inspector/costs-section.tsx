@@ -11,7 +11,6 @@ import type { InspectorEditFormData, InspectorFlow } from '@/lib/case-editor/typ
 import type { NumberDrafts } from '@/lib/case-editor/use-number-drafts'
 import { InlineError } from './inline-error'
 import { InlineSuggestStrip } from './inline-suggest-strip'
-import { InspectorSection } from './inspector-section'
 import { LaborBreakdown } from './labor-breakdown'
 import { MachineEnergy } from './machine-energy'
 
@@ -63,7 +62,20 @@ export function CostsSection({
   drafts: NumberDrafts
 }) {
   return (
-    <InspectorSection title="Costs">
+    <>
+      <div
+        style={{
+          fontSize: 10.5,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: 'var(--text-tertiary)',
+          margin: '16px 0 6px',
+          paddingTop: 12,
+          borderTop: '1px solid var(--border-subtle)',
+        }}
+      >
+        What it costs
+      </div>
       {hasChildren && (
         <div
           style={{
@@ -161,6 +173,6 @@ export function CostsSection({
         ))}
       </div>
       )}
-    </InspectorSection>
+    </>
   )
 }

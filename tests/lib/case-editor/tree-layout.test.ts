@@ -85,8 +85,11 @@ describe('cards and edges', () => {
   })
   it('writes the roll-up line', () => {
     expect(rollupLine({ cost: 1234.4, flows: 3 }, true)).toBe('Σ $1,234 · 3 flows')
-    expect(rollupLine({ cost: 12, flows: 1 }, false)).toBe('$12 · 1 flow')
-    expect(rollupLine({ cost: 0, flows: 0 }, false)).toBe('$0')
+    expect(rollupLine({ cost: 12, flows: 1 }, false)).toBe('$12.00 · 1 flow')
+    expect(rollupLine({ cost: 0, flows: 0 }, false)).toBe('$0.00')
+    // Cents below $1,000: the design's $0.55 weld step must not read as $1.
+    expect(rollupLine({ cost: 0.55, flows: 2 }, false)).toBe('$0.55 · 2 flows')
+    expect(rollupLine({ cost: 1.45, flows: 0 }, true)).toBe('Σ $1.45')
   })
   it('matches the canvas search by label or id; blank matches nothing', () => {
     expect(matchesQuery({ id: '7', label: 'Cut blank' }, 'cut')).toBe(true)

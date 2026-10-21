@@ -18,7 +18,7 @@ export function ContributorsList({ activeLabel, contributors }: { activeLabel: s
         className="eyebrow"
         style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 14, marginBottom: 8 }}
       >
-        Source data — top contributors for {activeLabel}
+        Source data: top contributors for {activeLabel}
       </div>
       {contributors.slice(0, 5).map((c) => (
         <div

@@ -141,6 +141,6 @@ export function swapOptionsFor(substances: Substance[], substanceId: number) {
   return { options, variants, others }
 }
 
-/** "Steel — EAF" for a version, else the name. */
+/** "Steel (EAF)" for a version, else the name. */
 export const substanceOptionLabel = (s: Substance) =>
-  (s as any).variant_label ? `${s.substance_name} — ${(s as any).variant_label}` : s.substance_name
+  (s as any).variant_label ? `${s.substance_name} (${(s as any).variant_label})` : s.substance_name

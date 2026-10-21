@@ -48,6 +48,8 @@ export interface RateLimitResult {
 /** A backing store: record one hit for `key` under `policy` at time `now`. */
 export interface RateLimitStore {
   hit(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitResult>;
+  /** What is left for `key`, without recording a hit ("Reads left this hour"). */
+  peek?(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitResult>;
 }
 
 const MINUTE = 60_000;
@@ -56,8 +58,9 @@ const HOUR = 60 * MINUTE;
 /**
  * The limits the app applies, each enforced by one route (or the helper it
  * calls): login and signup (app/api/auth), insights, ingest preview,
- * assessment runs (POST /api/cases/:id/assessments), PubChem enrichment, and
- * the BLS / EIA / Metals cost lookups (lib/integrations/rate-lookup.ts).
+ * assessment runs (POST /api/cases/:id/assessments), PubChem enrichment, the
+ * BLS / EIA / Metals cost lookups (lib/integrations/rate-lookup.ts), building
+ * the sample study, and the emails looked up when adding people.
  * tests/lib/rate-limit-wiring.test.ts fails if a policy here is not enforced.
  */
 export const RATE_LIMITS = {
@@ -75,6 +78,10 @@ export const RATE_LIMITS = {
   pubchemEnrich: { id: 'pubchem-enrich', limit: 5, windowMs: HOUR },
   /** Per user, shared by the BLS / EIA / Metals rate lookups (upstream quotas). */
   costRates: { id: 'cost-rates', limit: 60, windowMs: HOUR },
+  /** Per user: building the sample study writes a project and runs two cases. */
+  sampleBuild: { id: 'sample-build', limit: 5, windowMs: HOUR },
+  /** Per user, per email looked up when adding people (a class list is one request). */
+  memberLookups: { id: 'member-lookups', limit: 200, windowMs: HOUR },
 } satisfies Record<string, RateLimitPolicy>;
 
 // ── In-memory store ──────────────────────────────────────────────────────────
@@ -124,6 +131,18 @@ export class MemoryRateLimitStore implements RateLimitStore {
       limit: policy.limit,
       remaining: policy.limit - entry.hits.length,
       retryAfterMs: 0,
+    };
+  }
+
+  async peek(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitResult> {
+    const cutoff = now - policy.windowMs;
+    const hits = (this.entries.get(key)?.hits ?? []).filter((t) => t > cutoff);
+    const remaining = Math.max(0, policy.limit - hits.length);
+    return {
+      allowed: remaining > 0,
+      limit: policy.limit,
+      remaining,
+      retryAfterMs: remaining > 0 ? 0 : Math.max(1, hits[0] + policy.windowMs - now),
     };
   }
 
@@ -192,6 +211,25 @@ export class UpstashRestRateLimitStore implements RateLimitStore {
       retryAfterMs: allowed ? 0 : (window + 1) * policy.windowMs - now,
     };
   }
+
+  async peek(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitResult> {
+    const window = Math.floor(now / policy.windowMs);
+    const res = await this.fetchImpl(`${this.baseUrl}/get/${encodeURIComponent(`rl:${key}:${window}`)}`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) throw new Error(`rate-limit store HTTP ${res.status}`);
+    const out = (await res.json()) as { result?: unknown };
+    const count = out?.result == null ? 0 : Number(out.result);
+    if (!Number.isFinite(count)) throw new Error('rate-limit store returned no count');
+    const remaining = Math.max(0, policy.limit - count);
+    return {
+      allowed: remaining > 0,
+      limit: policy.limit,
+      remaining,
+      retryAfterMs: remaining > 0 ? 0 : (window + 1) * policy.windowMs - now,
+    };
+  }
 }
 
 // ── Store selection ──────────────────────────────────────────────────────────
@@ -246,6 +284,25 @@ export async function rateLimit(
   }
 }
 
+/**
+ * What is left for the caller under `policy`, without using any of it. A
+ * store that cannot say (or fails) answers "the full allowance", the same
+ * fail-open rule as rateLimit.
+ */
+export async function rateLimitStatus(
+  policy: RateLimitPolicy,
+  parts: Array<string | number>,
+): Promise<RateLimitResult> {
+  const full = { allowed: true, limit: policy.limit, remaining: policy.limit, retryAfterMs: 0 };
+  try {
+    const s = getStore();
+    return s.peek ? await s.peek(keyFor(policy, parts), policy, Date.now()) : full;
+  } catch (err: any) {
+    console.warn(`[rate-limit] store error reading status (${policy.id}):`, err?.message ?? err);
+    return full;
+  }
+}
+
 /** A 429 carrying Retry-After (seconds) and the usual X-RateLimit headers. */
 export function rateLimitResponse(
   result: RateLimitResult,
@@ -269,13 +326,18 @@ export function rateLimitResponse(
   );
 }
 
-/** null when the request may proceed; otherwise the 429 to return. */
+/**
+ * null when the request may proceed; otherwise the 429 to return.
+ * `onResult` sees the count, for a route that reports what is left.
+ */
 export async function enforceRateLimit(
   policy: RateLimitPolicy,
   parts: Array<string | number>,
   extra?: Record<string, unknown>,
+  onResult?: (result: RateLimitResult) => void,
 ): Promise<NextResponse | null> {
   const result = await rateLimit(policy, parts);
+  onResult?.(result);
   return result.allowed ? null : rateLimitResponse(result, extra);
 }
 

@@ -15,7 +15,7 @@ export interface MetalPrice {
 export async function fetchMetalPrice(symbol: string): Promise<MetalPrice | null> {
   const key = process.env.METALS_API_KEY;
   if (!key) {
-    throw new Error('METALS_API_KEY not configured — sign up at https://metals-api.com/');
+    throw new Error('METALS_API_KEY not configured: sign up at https://metals-api.com/');
   }
 
   const url = `${BASE}?access_key=${encodeURIComponent(key)}&base=USD&symbols=${encodeURIComponent(symbol)}`;

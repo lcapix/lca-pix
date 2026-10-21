@@ -115,6 +115,11 @@ describe('F12 comparative case -> compare', () => {
     // What differs: the two lowered flows.
     const diff = res.json.diffs.find((d: any) => d.caseId === String(w.P.comp.id));
     expect(JSON.stringify(diff.inventory)).toMatch(/Electricity/);
+    // Each step's flows now, by step name, for the lines under each step (E09).
+    const lines = comp.stepFlows.filter((f: any) => /Electricity/.test(f.substance));
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).toEqual({ step: expect.any(String), substance: expect.stringMatching(/Electricity/), dir: expect.stringMatching(/^(input|output)$/), quantity: expect.any(Number), unit: expect.any(String) });
+    expect(comp.stepFlows.length).toBe(comp.inventory.flows);
   });
 
   it('a case with no flows, or no run, is "incomplete" and never ranked; an edited one is "stale"', async () => {

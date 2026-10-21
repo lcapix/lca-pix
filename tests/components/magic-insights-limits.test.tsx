@@ -85,7 +85,7 @@ describe('<MagicInsightsModal> AI limits', () => {
     fireEvent.click(screen.getByRole('button', { name: 'AI' }))
 
     expect(
-      await screen.findByText("You've used this hour's insights — showing the computed summary"),
+      await screen.findByText("You've used this hour's insights, so this is the computed summary"),
     ).toBeInTheDocument()
     expect(screen.queryByText(/no model key configured/)).not.toBeInTheDocument()
     // The computed insight is what is on screen.

@@ -1,39 +1,30 @@
 'use client'
 
-import { applyButtonLabel } from '@/lib/import/display'
+// Save and Back on Check what we read (F2.3, F2.6): "Save 5 steps to a new
+// case" / "Save 3 lines to Base case", blocked with its reason while a line
+// still needs a step or the case's own steps are still being read.
 
-/** Apply (blocked while lines lack a step) and Start over. */
+import { Button } from '@/components/lcapix/ds'
+
 export function ReviewActions({
   applying,
-  appending,
-  unplacedCount,
+  saveLabel,
+  blockedReason,
   onApply,
-  onStartOver,
+  onBack,
 }: {
   applying: boolean
-  appending: boolean
-  unplacedCount: number
+  saveLabel: string
+  blockedReason: string | null
   onApply: () => void
-  onStartOver: () => void
+  onBack: () => void
 }) {
   return (
-    <div style={{ display: 'flex', gap: 10 }}>
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={applying || unplacedCount > 0}
-        title={unplacedCount > 0 ? `${unplacedCount} line(s) still need a step` : undefined}
-        onClick={onApply}
-      >
-        {applyButtonLabel(applying, appending)}
-      </button>
-      <button
-        type="button"
-        className="btn btn-ghost"
-        onClick={() => onStartOver()}
-      >
-        Start over
-      </button>
-    </div>
+    <span style={{ display: 'inline-flex', gap: 10, alignItems: 'flex-start' }}>
+      <Button onClick={onBack}>Back</Button>
+      <Button variant="primary" onClick={onApply} busy={applying} disabled={!!blockedReason} disabledReason={blockedReason ?? undefined}>
+        ✓ {saveLabel}
+      </Button>
+    </span>
   )
 }

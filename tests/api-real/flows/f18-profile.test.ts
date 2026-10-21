@@ -46,12 +46,14 @@ describe('F18 profile', () => {
     expect(theirs.full_name).not.toBe('Mine');
   });
 
-  it('400 for missing required fields and an unknown use case', async () => {
+  it('400 for a missing full name and an unknown or not-yet-offered use case', async () => {
     for (const [json, msg] of [
       [{ company: 'x' }, /Full name is required/],
-      [{ fullName: 'x' }, /Company/],
       [{ fullName: '   ', company: 'x' }, /Full name is required/],
       [{ fullName: 'x', company: 'y', useCase: 'hacking' }, /Invalid use case/],
+      // "A company workspace" is shown as In development and cannot be chosen (F1.3).
+      [{ fullName: 'x', useCase: 'company' }, /Invalid use case/],
+      [{ skip: true, fullName: 'x' }, /Skip takes no other fields/],
     ] as const) {
       const r = await api.put('/api/auth/profile', { token: u.token, json });
       expect(r.status, JSON.stringify(json)).toBe(400);
@@ -65,7 +67,7 @@ describe('F18 profile', () => {
   it('over-long fields get 400, not 500 (PROF-1)', async () => {
     for (const [json, msg] of [
       [{ fullName: 'F'.repeat(121), company: 'ok' }, /full name.*120/i],
-      [{ fullName: 'ok', company: 'C'.repeat(161) }, /company.*160/i],
+      [{ fullName: 'ok', company: 'C'.repeat(161) }, /institution.*160/i],
       [{ fullName: 'ok', company: 'ok', role: 'R'.repeat(121) }, /role.*120/i],
       [{ fullName: 'ok', company: 'ok', country: 'Z'.repeat(81) }, /country.*80/i],
     ] as const) {
@@ -76,5 +78,29 @@ describe('F18 profile', () => {
     // At the limit is fine.
     const ok = await api.put('/api/auth/profile', { token: u.token, json: { fullName: 'F'.repeat(120), company: 'C'.repeat(160) } });
     expect(ok.status, ok.text).toBe(200);
+  });
+
+  // F1.3 (education build 2.7): institution optional, three uses, skip allowed.
+  it('saves with no institution and accepts teaching, lab and own study', async () => {
+    const me = await createUser('onboardOptional');
+    for (const useCase of ['teaching', 'lab', 'own_study']) {
+      const r = await api.put('/api/auth/profile', { token: me.token, json: { fullName: 'Elena Rivera', useCase } });
+      expect(r.status, `${useCase} ${r.text}`).toBe(200);
+    }
+    const row = await sqlOne('SELECT full_name, company, use_case FROM account WHERE id = ?', [me.id]);
+    expect(row).toMatchObject({ full_name: 'Elena Rivera', company: null, use_case: 'own_study' });
+    expect((await api.get('/api/auth/profile', { token: me.token })).json.profile.needsOnboarding).toBe(false);
+  });
+
+  it('"Skip for now" finishes onboarding and saves nothing', async () => {
+    const me = await createUser('onboardSkip');
+    await sqlOne('UPDATE account SET onboarded_at = NULL, company = NULL WHERE id = ?', [me.id]);
+    expect((await api.get('/api/auth/profile', { token: me.token })).json.profile.needsOnboarding).toBe(true);
+    const before = await sqlOne('SELECT full_name, company, use_case FROM account WHERE id = ?', [me.id]);
+    const r = await api.put('/api/auth/profile', { token: me.token, json: { skip: true } });
+    expect(r.status, r.text).toBe(200);
+    expect(r.json).toEqual({ success: true, skipped: true });
+    expect(await sqlOne('SELECT full_name, company, use_case FROM account WHERE id = ?', [me.id])).toEqual(before);
+    expect((await api.get('/api/auth/profile', { token: me.token })).json.profile.needsOnboarding).toBe(false);
   });
 });

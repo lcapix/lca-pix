@@ -44,7 +44,7 @@ export function structureItac(
   const products = String(r['PRODUCTS'] ?? '').trim() || 'Plant output';
   const fy = num(r['FY']);
   const prodlevel = num(r['PRODLEVEL']);
-  const root = fy ? `${products} — FY${fy}` : products;
+  const root = fy ? `${products}, FY${fy}` : products;
   const caseName = `Ingested: ITAC ${plantId} (${products}${fy ? `, FY${fy}` : ''})`.slice(0, 100);
 
   const nodes: IngestNode[] = [];

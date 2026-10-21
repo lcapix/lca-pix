@@ -2,179 +2,87 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError } from '@/lib/route-guard';
-import {
-  EXAMPLE_CASE,
-  EXAMPLE_POINTS,
-  EXAMPLE_PROJECT,
-  EXAMPLE_STEPS,
-} from '@/lib/example-case';
+import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import { buildSampleStudy, SampleUnavailable } from '@/lib/sample/build-sample';
+
+/** What the sample is meant to teach, shown once when it is built. */
+const SAMPLE_POINTS = [
+  'Read it in order: the question, the tree, what goes in, the answer.',
+  'Then make your own copy and change one thing.',
+];
 
 /**
- * Build the worked example in the signed-in account.
- *
- * Loaded on demand rather than at signup: it is one button on an empty
- * dashboard, it can be deleted like any other project, and a failure here can
- * never block somebody creating an account.
+ * Build the sample study in the signed-in account (education F1.3, F1.4, E02):
+ * the painted steel bracket, read-only, with its base case run and the
+ * "Shorter cure cycle" what-if run (lib/sample/). One per account: a repeat
+ * returns the one that exists. Everything is written in one transaction, so a
+ * failure leaves nothing behind.
  */
 export async function POST(request: NextRequest) {
   try {
     const userId = await requireAuth(request);
 
-    // One example per account, so the button cannot litter the dashboard.
-    const already = await queryOne<any>(
-      'SELECT project_id FROM project WHERE owner_id = ? AND project_name = ? LIMIT 1',
-      [userId, EXAMPLE_PROJECT.name],
+    const existing = await queryOne<any>(
+      'SELECT project_id FROM project WHERE owner_id = ? AND is_sample = 1 ORDER BY project_id LIMIT 1',
+      [userId],
     );
-    if (already) {
-      return NextResponse.json({
-        success: true,
-        project_id: already.project_id,
-        existed: true,
-        points: EXAMPLE_POINTS,
-      });
-    }
+    if (existing) return NextResponse.json(await describe(Number(existing.project_id), true));
 
-    // One transaction: a failure part-way used to leave a half-built project
-    // that the name check above then returned as `existed: true` (PROJ-2).
-    const { projectId, caseId, missing } = await transaction(async (conn) => {
-      const run = async (sql: string, params: unknown[]) => (await conn.query(sql, params))[0] as any;
-      /** A column a later migration added: an older database just goes without. */
-      const optional = async (sql: string, params: unknown[]) => {
-        try {
-          await run(sql, params);
-        } catch (err: any) {
-          if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
-        }
-      };
+    const limited = await enforceRateLimit(RATE_LIMITS.sampleBuild, [userId]);
+    if (limited) return limited;
 
-      const projectId = Number(
-        (
-          await run(`INSERT INTO project (project_name, description, owner_id) VALUES (?, ?, ?)`, [
-            EXAMPLE_PROJECT.name,
-            EXAMPLE_PROJECT.description,
-            userId,
-          ])
-        ).insertId,
+    const built = await transaction(async (conn) => {
+      // Two requests at once (a double click) must not build two samples: the
+      // account row is the lock, and the check runs again under it.
+      await conn.query('SELECT id FROM account WHERE id = ? FOR UPDATE', [userId]);
+      const [[again]]: any = await conn.query(
+        'SELECT project_id FROM project WHERE owner_id = ? AND is_sample = 1 LIMIT 1',
+        [userId],
       );
-
-      // Method, region and goal (migrate-018/014).
-      await optional(
-        'UPDATE project SET lcia_method = ?, region_code = ?, goal_statement = ? WHERE project_id = ?',
-        [EXAMPLE_PROJECT.method, EXAMPLE_PROJECT.region, EXAMPLE_PROJECT.goal, projectId],
-      );
-      // PROJ-1: functional unit and boundary are study-level and live on the
-      // PROJECT (migrate-014). Writing them to case_table threw
-      // ER_BAD_FIELD_ERROR, which was swallowed along with the reference
-      // flow in the same statement, so Run stayed disabled on the example.
-      await optional(
-        'UPDATE project SET functional_unit = ?, system_boundary = ? WHERE project_id = ?',
-        [EXAMPLE_CASE.functionalUnit, EXAMPLE_CASE.boundary, projectId],
-      );
-
-      // The owner's membership row, as POST /api/projects creates for every
-      // other project.
-      const [owner] = await run(`SELECT permission_id FROM permissions WHERE permission_name = 'owner'`, []);
-      if (owner?.permission_id != null) {
-        await run('INSERT INTO project_members (project_id, user_id, permission_id) VALUES (?, ?, ?)', [
-          projectId,
-          userId,
-          owner.permission_id,
-        ]);
-      }
-
-      const caseId = Number(
-        (
-          await run('INSERT INTO case_table (project_id, created_by, case_name, case_type, description) VALUES (?, ?, ?, ?, ?)', [
-            projectId,
-            userId,
-            EXAMPLE_CASE.name,
-            'base',
-            EXAMPLE_CASE.description,
-          ])
-        ).insertId,
-      );
-
-      // This alternative's reference flow and data basis (migrate-014).
-      await optional(
-        `UPDATE case_table
-            SET reference_flow = ?, reference_flow_unit = ?, modeled_output = ?
-          WHERE case_id = ?`,
-        [EXAMPLE_CASE.referenceFlow, EXAMPLE_CASE.referenceFlowUnit, EXAMPLE_CASE.referenceFlow, caseId],
-      );
-
-      const productId = Number(
-        (
-          await run(
-            `INSERT INTO component (case_id, component_name, component_type, hierarchy_level, quantity, unit, description)
-             VALUES (?, ?, 'product', 1, ?, 'unit', ?)`,
-            [caseId, EXAMPLE_CASE.name, EXAMPLE_CASE.referenceFlow, 'The finished part this study is about.'],
-          )
-        ).insertId,
-      );
-
-      const missing: string[] = [];
-
-      for (const step of EXAMPLE_STEPS) {
-        const stepId = Number(
-          (
-            await run(
-              `INSERT INTO component
-                 (case_id, parent_component_id, component_name, component_type, hierarchy_level, quantity, unit)
-               VALUES (?, ?, ?, 'operation', 2, 1, 'unit')`,
-              [caseId, productId, step.name],
-            )
-          ).insertId,
-        );
-
-        await optional('UPDATE component SET life_cycle_stage = ? WHERE component_id = ?', [
-          step.stage,
-          stepId,
-        ]);
-
-        for (const flow of step.flows) {
-          // Library substances only (a user's private one is never borrowed).
-          let rows: any[];
-          try {
-            rows = await run(
-              'SELECT substance_id FROM substances WHERE substance_name = ? AND is_custom = 0 LIMIT 1',
-              [flow.substance],
-            );
-          } catch (err: any) {
-            if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
-            rows = await run('SELECT substance_id FROM substances WHERE substance_name = ? LIMIT 1', [
-              flow.substance,
-            ]);
-          }
-          const substance = rows?.[0];
-          // A catalog without that substance simply gets a smaller example, and
-          // the response says which lines were left out.
-          if (!substance) {
-            missing.push(flow.substance);
-            continue;
-          }
-          await run(
-            `INSERT INTO flows (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
-             VALUES (?, ?, ?, ?, ?, 1, ?)`,
-            [stepId, substance.substance_id, flow.direction, flow.quantity, flow.unit, flow.note.slice(0, 255)],
-          );
-        }
-      }
-
-      return { projectId, caseId, missing };
+      if (again) return { projectId: Number(again.project_id), existed: true };
+      const sample = await buildSampleStudy(conn, userId);
+      return { projectId: sample.projectId, existed: false };
     });
 
-    return NextResponse.json({
-      success: true,
-      project_id: projectId,
-      case_id: caseId,
-      points: EXAMPLE_POINTS,
-      skipped_substances: missing,
-    });
+    return NextResponse.json(await describe(built.projectId, built.existed));
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.error('Example project error:', error);
-    return NextResponse.json({ error: 'Could not build the example' }, { status: 500 });
+    if (error instanceof SampleUnavailable || error?.code === 'ER_BAD_FIELD_ERROR' || error?.code === 'ER_NO_SUCH_TABLE') {
+      console.error('Sample study unavailable:', error);
+      return NextResponse.json(
+        { error: 'The sample study is not available on this database yet. Nothing was created.' },
+        { status: 409 },
+      );
+    }
+    console.error('Sample study error:', error);
+    return NextResponse.json({ error: 'Could not build the sample study. Nothing was created.' }, { status: 500 });
   }
+}
+
+/** The sample's ids: the project, its base case and what-if, and their latest runs. */
+async function describe(projectId: number, existed: boolean) {
+  const base = await queryOne<any>(
+    `SELECT case_id,
+            (SELECT MAX(run_id) FROM assessment_runs ar WHERE ar.case_id = c.case_id AND ar.status = 'completed') AS run_id
+       FROM case_table c WHERE c.project_id = ? AND c.case_type = 'base' ORDER BY c.case_id LIMIT 1`,
+    [projectId],
+  );
+  const whatIf = await queryOne<any>(
+    `SELECT case_id,
+            (SELECT MAX(run_id) FROM assessment_runs ar WHERE ar.case_id = c.case_id AND ar.status = 'completed') AS run_id
+       FROM case_table c WHERE c.project_id = ? AND c.case_type = 'comparative' ORDER BY c.case_id LIMIT 1`,
+    [projectId],
+  );
+  return {
+    success: true,
+    existed,
+    project_id: projectId,
+    case_id: base ? Number(base.case_id) : null,
+    run_id: base?.run_id != null ? Number(base.run_id) : null,
+    what_if_case_id: whatIf ? Number(whatIf.case_id) : null,
+    what_if_run_id: whatIf?.run_id != null ? Number(whatIf.run_id) : null,
+    points: SAMPLE_POINTS,
+  };
 }

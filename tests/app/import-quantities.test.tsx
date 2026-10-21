@@ -104,18 +104,39 @@ describe('import review quantities', () => {
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
     const file = new File(['part,qty\n'], 'bom.csv', { type: 'text/csv' })
     fireEvent.change(fileInput, { target: { files: [file] } })
-    fireEvent.change(screen.getByPlaceholderText('WV0661'), { target: { value: 'WV0661' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Preview extraction' }))
+    fireEvent.click(screen.getByRole('button', { name: /Check what we read/ }))
 
     expect(await screen.findByText('Powder coat pigment')).toBeInTheDocument()
-    const text = document.body.textContent ?? ''
-    // Flow quantities.
-    expect(text).toContain('4e-4 kg')
-    expect(text).toContain('4.2e-7 kg')
-    expect(text).toContain('12,501 kg')
+    // Quantities are editable at review (a document can be read wrong), so each
+    // sits in a field holding the document's exact value: never rounded to 0,
+    // and an untouched field never reads as a correction.
+    const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value
+    expect(value('Amount of Powder coat pigment')).toBe('0.0004')
+    expect(value('Amount of Solvent vapour')).toBe('4.2e-7')
+    expect(value('Amount of Steel tube')).toBe('12500.5')
     // The hierarchy's step quantity.
-    expect(text).toContain('4e-4 h')
+    expect(value('Quantity of Coat frame')).toBe('0.0004')
+    const text = document.body.textContent ?? ''
     expect(text).not.toMatch(/(^|[^\d.e-])0 kg/)
     expect(text).not.toMatch(/(^|[^\d.e-])0 h/)
+    expect(text).not.toContain('file said')
+  })
+
+  it('shows what the document said once a quantity is corrected', async () => {
+    const params = Promise.resolve({ projectId: '1' })
+    await act(async () => {
+      render(
+        <Suspense fallback={null}>
+          <ImportPage params={params} />
+        </Suspense>,
+      )
+    })
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(fileInput, { target: { files: [new File(['part,qty\n'], 'bom.csv', { type: 'text/csv' })] } })
+    fireEvent.click(screen.getByRole('button', { name: /Check what we read/ }))
+    expect(await screen.findByText('Powder coat pigment')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Amount of Powder coat pigment'), { target: { value: '0.004' } })
+    expect(document.body.textContent).toContain('file said 4e-4')
   })
 })

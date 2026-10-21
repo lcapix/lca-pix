@@ -11,7 +11,7 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 
-import AnalyticsPage from '@/app/project/[projectId]/analytics/page'
+import AnalyticsPage from '@/app/project/[projectId]/analytics/_components/classic-analytics'
 import { apiRequest } from '@/lib/api-client'
 
 const json = (body: unknown, status = 200) =>

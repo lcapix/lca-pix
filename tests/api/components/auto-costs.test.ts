@@ -91,7 +91,7 @@ describe('POST /api/components/:id/auto-costs', () => {
     vi.mocked(auth.requireAuth).mockResolvedValue(1);
     vi.mocked(db.queryOne).mockResolvedValue({ project_id: 7 } as any);
     vi.mocked(auth.checkProjectAccess).mockResolvedValue(true);
-    vi.mocked(ap.autoPopulateCosts).mockResolvedValue({ laborSet: true, energySet: true, totalsSet: 2 });
+    vi.mocked(ap.autoPopulateCosts).mockResolvedValue({ laborSet: true, energySet: true, totalsSet: 2, skipped: [] });
     vi.mocked(log.logIntegration).mockResolvedValue(1);
 
     const res = await POST(req() as any, ctx());

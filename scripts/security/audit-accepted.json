@@ -1,0 +1,130 @@
+{
+  "reviewed": "2026-10-21",
+  "note": "Advisories in packages production dependencies reach on paper but that never see user input. scripts/security/audit-deps.mjs fails on any high or critical advisory not listed here. Review on every dependency change; remove an entry when its package is upgraded past the fix.",
+  "accepted": {
+    "GHSA-23hp-3jrh-7fpw": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-28wg-ghj8-5hjv": {
+      "package": "nanoid",
+      "reason": "build time only: postcss ids while compiling the app's own CSS."
+    },
+    "GHSA-2v37-7h3g-55p8": {
+      "package": "nanoid",
+      "reason": "build time only: postcss ids while compiling the app's own CSS."
+    },
+    "GHSA-34x7-hfp2-rc4v": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-3jxr-9vmj-r5cp": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-5p2g-fcmc-qvqq": {
+      "package": "image-size",
+      "reason": "runtime but unreached: pptxgenjs sizes images added to a deck; lib/pptx-generator.ts adds none (no addImage), and next/image optimisation is off (images.unoptimized)."
+    },
+    "GHSA-68fv-2mgg-jv7q": {
+      "package": "source-map-js",
+      "reason": "build time only: postcss source maps for the app's own CSS."
+    },
+    "GHSA-6g55-p6wh-862q": {
+      "package": "postcss",
+      "reason": "build time only: next and autoprefixer compile the app's own CSS; no user CSS is ever processed."
+    },
+    "GHSA-6j4f-fj2g-mc7p": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-73wf-gq98-2v4g": {
+      "package": "browserslist",
+      "reason": "build time only: autoprefixer reads the app's own browser targets."
+    },
+    "GHSA-83g3-92jg-28cx": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-8qq5-rm4j-mr97": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-8x88-c5mf-7j5w": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-9ppj-qmqm-q256": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-c83g-rgw3-j3cx": {
+      "package": "browserslist",
+      "reason": "build time only: autoprefixer reads the app's own browser targets."
+    },
+    "GHSA-fxqj-rqcc-2cmp": {
+      "package": "postcss",
+      "reason": "build time only: next and autoprefixer compile the app's own CSS; no user CSS is ever processed."
+    },
+    "GHSA-gvwx-54wh-qm9j": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-jxxr-4gwj-5jf2": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-mh99-v99m-4gvg": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-q2hr-2g5m-vwhr": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-qffp-2rhf-9h96": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-qhr7-859c-m2p7": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-qx2v-qp2m-jg93": {
+      "package": "postcss",
+      "reason": "build time only: next and autoprefixer compile the app's own CSS; no user CSS is ever processed."
+    },
+    "GHSA-r28c-9q8g-f849": {
+      "package": "postcss",
+      "reason": "build time only: next and autoprefixer compile the app's own CSS; no user CSS is ever processed."
+    },
+    "GHSA-r292-9mhp-454m": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-r6q2-hw4h-h46w": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-rgw5-rvv9-x895": {
+      "package": "brace-expansion",
+      "reason": "install time only: canvas@2 > node-pre-gyp > rimraf > glob > minimatch; no user input reaches a glob."
+    },
+    "GHSA-vmf3-w455-68vh": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-w3rx-r6r6-pgpr": {
+      "package": "image-size",
+      "reason": "runtime but unreached: pptxgenjs sizes images added to a deck; lib/pptx-generator.ts adds none (no addImage), and next/image optimisation is off (images.unoptimized)."
+    },
+    "GHSA-w8wr-v893-vjvp": {
+      "package": "tar",
+      "reason": "install time only: canvas@2 > @mapbox/node-pre-gyp unpacks its own prebuilt binary; the app never reads a tar file."
+    },
+    "GHSA-xwg4-73v4-xw9w": {
+      "package": "nanoid",
+      "reason": "build time only: postcss ids while compiling the app's own CSS."
+    }
+  }
+}

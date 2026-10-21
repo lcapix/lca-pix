@@ -80,13 +80,13 @@ export function ProvenanceLine({
       {usingAI ? (
         <>
           Narrated by <span className="mono">{aiModel || 'an open model'}</span> via Hugging
-          Face, grounded on your computed figures — the model phrases the analysis, the
+          Face, grounded on your computed figures: the model phrases the analysis, the
           numbers come from the engine.
         </>
       ) : aiMode && aiStatus === 'limited' ? (
-        <span role="status">You&apos;ve used this hour&apos;s insights — showing the computed summary</span>
+        <span role="status">You&apos;ve used this hour&apos;s insights, so this is the computed summary</span>
       ) : aiMode && aiStatus === 'fallback' ? (
-        <>AI narration unavailable (no model key configured) — showing the computed insight.</>
+        <>AI narration unavailable (no model key configured): showing the computed insight.</>
       ) : (
         <>Computed deterministically from your assessment results. Not AI-generated.</>
       )}

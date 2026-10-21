@@ -1,174 +1,89 @@
 /**
- * Contract tests: the hooks that scripts, the E2E guide, the guided tour and
- * the unit tests rely on. Each must survive the refactor and redesign;
- * these fail the moment one goes.
+ * Contract tests: the hooks that scripts, the guides and the unit tests rely
+ * on, on the education screens. They fail the moment one goes.
  *
- * Accessible names are matched case-insensitively, with an optional leading
- * "+" (the plus icon the guide writes as "+") and trailing "→". Where today's
- * casing differs from the guardrail spelling the test notes it in an
- * annotation instead of failing.
+ *   - The tree: one role=tree holding one role=treeitem per step, each with
+ *     id "step-<component id>" and the name "<name>, <tier>".
+ *   - The accessible names a guide tells people to press.
+ *
+ * The classic product tour (lib/lcapix-tour-steps.ts) and its data-tour
+ * anchors belong to the classic pages, shown only with
+ * NEXT_PUBLIC_LCAPIX_SHELL=classic; the education shell's guide is Guided
+ * mode (the Docs button turns it on).
  */
 import type { Locator, Page } from '@playwright/test';
-import { LCAPIX_TOUR_STEPS } from '@/lib/lcapix-tour-steps';
-import { inspector, openCase, selectComponent } from '../support/editor';
+import { openCase } from '../support/editor';
 import { expect, readSeed, storagePath, test } from '../support/fixtures';
 import { open } from '../support/ui';
 
 test.use({ storageState: storagePath('owner') });
 
 const seed = () => readSeed();
-const editor = () => `/project/${seed().example.projectId}/case/${seed().example.baseCaseId}`;
-const results = () => `${editor()}/results`;
-const workspace = () => `/project/${seed().example.projectId}`;
-
-function nameRe(name: string): RegExp {
-  const core = name.replace(/^\+\s*/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^\\+?\\s*${core}\\s*→?$`, 'i');
-}
+const NAV = { timeout: 90_000 };
 
 /** A control with this accessible name, as a button, tab, link or menu item. */
-function control(page: Page, name: string): Locator {
-  const re = nameRe(name);
+function control(page: Page, name: string | RegExp): Locator {
   return page
-    .getByRole('button', { name: re })
-    .or(page.getByRole('tab', { name: re }))
-    .or(page.getByRole('link', { name: re }))
-    .or(page.getByRole('menuitem', { name: re }));
+    .getByRole('button', { name })
+    .or(page.getByRole('tab', { name }))
+    .or(page.getByRole('link', { name }))
+    .or(page.getByRole('menuitem', { name }));
 }
 
-async function expectName(page: Page, name: string): Promise<void> {
-  const found = control(page, name).first();
-  await expect(found, `a control named "${name}"`).toBeVisible();
-  const actual = ((await found.getAttribute('aria-label')) ?? (await found.innerText())).replace(/\s+/g, ' ').trim();
-  if (actual.replace(/^\+\s*/, '').replace(/\s*→$/, '') !== name.replace(/^\+\s*/, '')) {
-    test.info().annotations.push({ type: 'name differs in case or symbols', description: `guardrail "${name}", today "${actual}"` });
-  }
-}
-
-test.describe('test ids', () => {
-  test('tree canvas: data-testid tree-canvas-viewport and tree-canvas-stage', async ({ page }) => {
-    await openCase(page, seed().example.projectId, seed().example.baseCaseId);
-    await expect(page.getByTestId('tree-canvas-viewport')).toBeVisible();
-    await expect(page.getByTestId('tree-canvas-stage')).toHaveCount(1);
-    // Nodes carry data-node-id (guardrails §5).
-    await expect(page.getByTestId('tree-canvas-stage').locator('[data-node-id]')).toHaveCount(4);
-  });
-
-  // Graph ("Plot") view: nodes are 54 px tall (components/lcapix/case/graph-view.tsx:29,
-  // used at :293) but hold three rows, so the flex column squeezes the name row
-  // (overflow hidden) to 2 px and no node shows its name. They also carry
-  // data-node, not the data-node-id guardrails §5 asks of every canvas node (:286).
-  test('Graph view nodes show their names and carry data-node-id', async ({ page }) => {
-    test.fail(true, 'Graph nodes clip their names to 2 px and have data-node instead of data-node-id');
-    await openCase(page, seed().example.projectId, seed().example.baseCaseId);
-    await page.getByRole('button', { name: /^(Graph|Plot)$/ }).click();
-    const name = page.getByText('20. Weld tab', { exact: true }).last();
-    await expect.poll(async () => (await name.boundingBox())?.height ?? 0, { timeout: 5_000 }).toBeGreaterThan(10);
-    await expect(page.locator('[data-node-id]')).toHaveCount(4, { timeout: 5_000 });
+test.describe('the tree', () => {
+  test('one role=tree; a treeitem per step, id "step-<component id>", named "<name>, <tier>"', async ({ page }) => {
+    const { projectId, baseCaseId, cutBlankId } = seed().example;
+    await openCase(page, projectId, baseCaseId);
+    await expect(page.getByRole('tree')).toHaveCount(1);
+    // The sample study: 17 steps on five tiers.
+    await expect(page.getByRole('treeitem')).toHaveCount(17);
+    const cut = page.locator(`#step-${cutBlankId}`);
+    await expect(cut).toHaveAttribute('role', 'treeitem');
+    await expect(cut).toHaveAttribute('aria-label', '10. Cut blank, Operation');
+    await expect(page.getByRole('treeitem', { name: 'Painted steel bracket, Product' })).toHaveAttribute('aria-level', '1');
   });
 });
 
-test.describe('accessible names (guardrails §4)', () => {
-  test('case editor: Tree, List, Add Component, Run Assessment, View Results', async ({ page }) => {
-    await open(page, editor());
-    for (const name of ['Tree', 'List', 'Add Component', 'Run Assessment', 'View Results']) await expectName(page, name);
+test.describe('accessible names', () => {
+  test('a case you can change: the four tabs and Run Assessment', async ({ page }) => {
+    const { projectId, compCaseId } = seed().example;
+    await openCase(page, projectId, compCaseId);
+    for (const tab of [/^Tree/, /^Inventory/, /^Results/, /^Write-up/]) await expect(page.getByRole('tab', { name: tab })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toBeVisible();
+    await expect(control(page, 'Hide panel')).toBeVisible();
   });
 
-  // The third view tab is labelled "Plot" today; P04 renames it back to
-  // "Graph" (guardrails §4). Expected to fail until then.
-  test('case editor: Graph', async ({ page }) => {
-    test.fail(true, 'The view tab is labelled "Plot" (guardrails §4: rename to "Graph" in P04)');
-    await open(page, editor());
-    await expect(control(page, 'Graph')).toBeVisible({ timeout: 5_000 });
+  test('the sample’s read-only base case: Make my own copy, not Run Assessment', async ({ page }) => {
+    const { projectId, baseCaseId } = seed().example;
+    await openCase(page, projectId, baseCaseId);
+    await expect(page.getByRole('button', { name: 'Make my own copy' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toHaveCount(0);
   });
 
-  test('case editor inspector: Suggest (on a step with costs)', async ({ page }) => {
-    await openCase(page, seed().example.projectId, seed().example.baseCaseId);
-    await selectComponent(page, '10. Cut blank');
-    await expect(inspector(page).getByRole('button', { name: nameRe('Suggest') })).toBeVisible();
+  test('Results: Magic Insights and Try a what-if', async ({ page }) => {
+    const { projectId, compCaseId } = seed().example;
+    await open(page, `/project/${projectId}/case/${compCaseId}?tab=results`, { ready: 'What builds this number' });
+    await expect(control(page, /^Magic Insights/).first()).toBeVisible(NAV);
+    await expect(page.getByRole('button', { name: 'Try a what-if' })).toBeVisible();
   });
 
-  test('home: + New Project', async ({ page }) => {
-    await open(page, '/home', { ready: 'Welcome back' });
-    await expectName(page, '+ New Project');
-  });
-
-  test('project workspace: + Add Case, Compare Cases', async ({ page }) => {
-    await open(page, workspace());
-    await expectName(page, '+ Add Case');
-    await expectName(page, 'Compare Cases');
-  });
-
-  test('results: Magic Insights', async ({ page }) => {
-    await open(page, results(), { ready: 'TOTAL IMPACT' });
-    await expectName(page, 'Magic Insights');
-  });
-
-  test('Add Component dialog: the tier radios Product, Machine/Line, Subprocess, Operation, Elemental', async ({ page }) => {
-    await openCase(page, seed().example.projectId, seed().example.baseCaseId);
-    await page.getByRole('button', { name: 'Add Component', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'New component' });
-    // An intercepting route: its first open can wait on a next dev compile (see support/states.ts).
-    await expect(dialog).toBeVisible({ timeout: 90_000 });
-    for (const tier of ['Product', 'Machine/Line', 'Subprocess', 'Operation', 'Elemental']) {
-      await expect(dialog.getByRole('radio', { name: tier, exact: true })).toBeVisible();
-    }
-  });
-
-  // Guardrails §4 name the radiogroup "Process tier"; TypeSegmentedControl
-  // defaults its label to "Component type" (component-form/type-segmented-control.tsx:55).
-  test('Add Component dialog: radiogroup named "Process tier"', async ({ page }) => {
-    test.fail(true, 'The radiogroup is named "Component type" today');
-    await openCase(page, seed().example.projectId, seed().example.baseCaseId);
-    await page.getByRole('button', { name: 'Add Component', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'New component' }).getByRole('radiogroup', { name: 'Process tier' })).toBeVisible({
-      timeout: 5_000,
-    });
+  test('the sidebar: Home, Findings, Reports, New project; a project’s Cases with + New case', async ({ page }) => {
+    const { projectId } = seed().example;
+    await open(page, `/project/${projectId}/cases`, { ready: 'Your cases' });
+    const nav = page.getByRole('navigation').first();
+    for (const name of ['Home', 'Findings', 'Reports']) await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'New project' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '+ New case' }).first()).toBeVisible();
   });
 });
 
-test.describe('guided tour anchors (lib/lcapix-tour-steps.ts)', () => {
-  const anchors = LCAPIX_TOUR_STEPS.map((s) => /data-tour="([^"]+)"/.exec(s.selector)?.[1]).filter((a): a is string => !!a);
-
-  /** Where each anchor lives, by its prefix. */
-  const routeFor = (anchor: string): string =>
-    anchor.startsWith('home-') ? '/home' : anchor.startsWith('project-') ? workspace() : anchor.startsWith('results-') ? results() : editor();
-
-  // In the app today (03-design-audit §8.4: 7 exist). The tour's other steps
-  // point at anchors P11 adds; they are listed as fixme below.
-  const EXISTING = ['home-greeting', 'home-kpi-projects', 'home-new-project', 'project-header', 'project-add-case', 'project-open-editor', 'case-goal-scope'];
-
-  test('every tour selector is a [data-tour] anchor classified here', () => {
-    expect(anchors).toHaveLength(LCAPIX_TOUR_STEPS.length);
-    expect(anchors.filter((a) => !EXISTING.includes(a))).toEqual([
-      'case-add-component',
-      'case-flow-input',
-      'case-suggest-costs',
-      'case-run-assessment',
-      'results-total-impact',
-      'results-magic-insights',
-    ]);
-  });
-
-  for (const anchor of anchors) {
-    const missing = !EXISTING.includes(anchor);
-    const t = missing ? test.fixme : test;
-    // fixme: not in the markup yet (TOUR-1). The tour step floats mid-screen.
-    // Add data-tour="<anchor>" in P11, then drop it from this list.
-    t(`[data-tour="${anchor}"] is on its page`, async ({ page }) => {
-      await open(page, routeFor(anchor));
-      await expect(page.locator(`[data-tour="${anchor}"]`).first()).toBeVisible();
-    });
-  }
-});
-
-test.describe('landing walkthrough anchors (hero-mockup.tsx)', () => {
+test.describe('the landing', () => {
   test.use({ storageState: storagePath('anon') });
 
-  test('cat-0..2, method-pill, contributor-0 and total are on /', async ({ page }) => {
-    await open(page, '/');
-    for (const anchor of ['cat-0', 'cat-1', 'cat-2', 'method-pill', 'contributor-0', 'total']) {
-      await expect(page.locator(`[data-tour="${anchor}"]`), anchor).toHaveCount(1);
-    }
+  test('Get started and Log in, and a skip link to the content', async ({ page }) => {
+    await open(page, '/', { ready: 'Know the footprint of anything you make.' });
+    await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Get started/ }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Skip to content' })).toHaveAttribute('href', '#lp-main');
   });
 });

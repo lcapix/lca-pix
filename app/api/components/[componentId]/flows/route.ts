@@ -6,7 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { convertQuantity, compatibleUnits } from '@/lib/units';
 import {
-  parseFlowQuantity,
+  parseOptionalFlowQuantity,
   QUANTITY_ERROR,
   findUsableSubstance,
   SUBSTANCE_ERROR,
@@ -58,6 +58,30 @@ export async function GET(
       [componentId]
     );
 
+    // Each flow's own factors (migrate-034), so the editor can tag them
+    // "Entered by hand". One query for the step; none on an older database.
+    try {
+      const own = await query<any>(
+        `SELECT o.flow_id, o.category_id, ic.category_name, o.factor_value, o.impact_unit,
+                o.per_unit, o.source, o.note
+           FROM flow_factor_overrides o
+           JOIN flows f ON f.flow_id = o.flow_id
+           JOIN impact_categories ic ON ic.category_id = o.category_id
+          WHERE f.component_id = ?
+          ORDER BY o.flow_id, o.category_id`,
+        [componentId]
+      );
+      const byFlow = new Map<number, any[]>();
+      for (const { flow_id, ...rest } of own) {
+        const list = byFlow.get(Number(flow_id)) ?? [];
+        list.push(rest);
+        byFlow.set(Number(flow_id), list);
+      }
+      for (const f of flows as any[]) f.own_factors = byFlow.get(Number(f.flow_id)) ?? [];
+    } catch (ownErr: any) {
+      if (ownErr?.code !== 'ER_NO_SUCH_TABLE') throw ownErr;
+    }
+
     return NextResponse.json({ success: true, flows });
   } catch (error: any) {
     if (isAuthError(error)) {
@@ -104,9 +128,11 @@ export async function POST(
     const unit = body.unit;
     const driver_description = body.driver_description ?? null;
 
-    if (!substance_id || !flow_type || rawQuantity === undefined || !unit) {
+    // The amount may be left blank (migration 033): the flow is kept as
+    // "needs an amount", left out of a run and counted until it gets one.
+    if (!substance_id || !flow_type || !unit) {
       return NextResponse.json(
-        { error: 'Substance, flow_type, quantity, and unit are required' },
+        { error: 'Substance, flow_type and unit are required' },
         { status: 400 }
       );
     }
@@ -122,11 +148,13 @@ export async function POST(
     ]);
     if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
-    // FLOW-4: null, words, NaN and negatives used to reach MySQL or the engine.
-    const quantity = parseFlowQuantity(rawQuantity);
-    if (quantity === null) {
+    // FLOW-4: words, NaN and negatives used to reach MySQL or the engine. A
+    // blank is allowed and stored as NULL ("needs an amount").
+    const parsedQuantity = parseOptionalFlowQuantity(rawQuantity);
+    if (!parsedQuantity.ok) {
       return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
     }
+    const quantity = parsedQuantity.value;
 
     // L3: only a library substance or the caller's own custom one.
     const substanceRow = await findUsableSubstance(substance_id, userId);
@@ -161,12 +189,24 @@ export async function POST(
     }
 
     // Bug #9: default is_driver to TRUE so new flows count in assessments.
-    const flowId = await insert(
-      `INSERT INTO flows
-         (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [componentId, Number(substance_id), flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
-    );
+    let flowId: number;
+    try {
+      flowId = await insert(
+        `INSERT INTO flows
+           (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [componentId, Number(substance_id), flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
+      );
+    } catch (insertErr: any) {
+      // A database before migration 033 refuses a flow without an amount.
+      if (quantity === null && insertErr?.code === 'ER_BAD_NULL_ERROR') {
+        return NextResponse.json(
+          { error: 'This database needs migration 033 before a flow can be saved without an amount. Enter the amount, or ask the administrator to run the migrations.' },
+          { status: 409 }
+        );
+      }
+      throw insertErr;
+    }
 
     // What a transport leg was computed from (migrate-022). Its own statement,
     // so a database without the columns still records the flow itself.

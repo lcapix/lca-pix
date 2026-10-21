@@ -4,23 +4,19 @@ import { COLUMN_LIMITS, firstLengthError } from "@/lib/field-limits"
 import { requireAuth } from "@/lib/auth"
 import { isAuthError } from "@/lib/route-guard"
 import { query, execute } from "@/lib/db-helpers"
+import { isAcceptedUseCase, needsOnboarding } from "@/lib/onboarding"
 
 /**
  * GET  /api/auth/profile  → return the current user's profile fields.
- * PUT  /api/auth/profile  → update full_name / company / role / use_case /
- *                           country. On the first save we also stamp
- *                           onboarded_at so the onboarding gate stops firing.
+ * PUT  /api/auth/profile  → update full_name / company (institution) / role /
+ *                           use_case / country. On the first save we also
+ *                           stamp onboarded_at so the onboarding gate stops
+ *                           firing. { skip: true } stamps it and saves nothing
+ *                           ("Skip for now", F1.3).
  *
- * Required fields on PUT: full_name and company. Everything else is optional.
+ * Required on a save: full_name. Institution and the rest are optional
+ * (lib/onboarding.ts).
  */
-
-const ALLOWED_USE_CASES = new Set([
-  "product",
-  "facility",
-  "comparative",
-  "research",
-  "other",
-])
 
 interface AccountRow {
   id: number
@@ -60,7 +56,7 @@ export async function GET(request: NextRequest) {
         useCase: u.use_case,
         country: u.country,
         onboardedAt: u.onboarded_at,
-        needsOnboarding: !u.onboarded_at || !u.full_name || !u.company,
+        needsOnboarding: needsOnboarding(u),
       },
     })
   } catch (e: any) {
@@ -79,6 +75,16 @@ export async function PUT(request: NextRequest) {
     if (!json.ok) return json.response
     const body = json.body
 
+    // "Skip for now": finish onboarding, change nothing else.
+    if (body.skip === true) {
+      const keys = Object.keys(body).filter((k) => k !== "skip")
+      if (keys.length) {
+        return NextResponse.json({ error: "Skip takes no other fields." }, { status: 400 })
+      }
+      await execute(`UPDATE account SET onboarded_at = COALESCE(onboarded_at, NOW()) WHERE id = ?`, [userId])
+      return NextResponse.json({ success: true, skipped: true })
+    }
+
     const fullName = trimOrNull(body.fullName)
     const company = trimOrNull(body.company)
     const role = trimOrNull(body.role)
@@ -91,17 +97,11 @@ export async function PUT(request: NextRequest) {
         { status: 400 },
       )
     }
-    if (!company) {
-      return NextResponse.json(
-        { error: "Company / organization is required." },
-        { status: 400 },
-      )
-    }
     // PROF-1: each value must fit its column (strict mode refuses a longer one).
     const A = COLUMN_LIMITS.account
     const tooLong = firstLengthError([
       ["Full name", fullName, A.full_name],
-      ["Company / organization", company, A.company],
+      ["Institution", company, A.company],
       ["Role", role, A.role],
       ["Use case", useCase, A.use_case],
       ["Country", country, A.country],
@@ -109,7 +109,7 @@ export async function PUT(request: NextRequest) {
     if (tooLong) {
       return NextResponse.json({ error: tooLong }, { status: 400 })
     }
-    if (useCase && !ALLOWED_USE_CASES.has(useCase)) {
+    if (useCase && !isAcceptedUseCase(useCase)) {
       return NextResponse.json(
         { error: "Invalid use case." },
         { status: 400 },

@@ -52,7 +52,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Each preview can fan out to several LLM calls: 10 per user per hour.
-    const limited = await enforceRateLimit(RATE_LIMITS.ingestPreview, [userId]);
+    // What is left is returned with the plan (F2.2 "Reads left this hour").
+    let readsLeft = 0;
+    const limited = await enforceRateLimit(RATE_LIMITS.ingestPreview, [userId], undefined, (r) => {
+      readsLeft = r.remaining;
+    });
     if (limited) return limited;
 
     let form: FormData;
@@ -310,7 +314,7 @@ export async function POST(request: NextRequest) {
     }
     const plan = mapModel(pm, substances as CatalogSubstance[]);
 
-    return NextResponse.json({ success: true, connector, plant_id: plantId, plan });
+    return NextResponse.json({ success: true, connector, plant_id: plantId, plan, reads_left: readsLeft });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -6,6 +6,7 @@ import { queryOne } from '@/lib/db-helpers';
 import { autoPopulateCosts } from '@/lib/costs/auto-populate';
 import { logIntegration } from '@/lib/integrations/log';
 import { parseId } from '@/lib/ids';
+import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
@@ -41,6 +42,10 @@ export async function POST(
     console.error('auto-costs access check failed:', err);
     return NextResponse.json({ error: 'Failed to auto-populate costs' }, { status: 500 });
   }
+
+  // It may reach BLS and EIA: the same hourly budget as the rate lookups.
+  const limited = await enforceRateLimit(RATE_LIMITS.costRates, [userId]);
+  if (limited) return limited;
 
   try {
     const result = await autoPopulateCosts(id);

@@ -48,7 +48,7 @@ describe('assessmentCompleteMessage', () => {
   it('quotes the global-warming total when there is one', () => {
     expect(
       assessmentCompleteMessage({ total_impacts: [{ category_name: 'Global Warming', impact_value: 1.7234 }] }),
-    ).toBe('Assessment complete — 1.723 kg CO₂-eq')
+    ).toBe('Assessment complete: 1.723 kg CO₂-eq')
     expect(assessmentCompleteMessage({})).toBe('Assessment complete')
     expect(assessmentCompleteMessage(null)).toBe('Assessment complete')
   })

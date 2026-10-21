@@ -36,22 +36,22 @@ export default function FirstAssessmentPage() {
             scenario you&apos;ll compare. Mandatory at this stage:
             <Ul>
               <Li>
-                <strong>Project name</strong> — short, distinctive (e.g.{' '}
+                <strong>Project name</strong>: short, distinctive (e.g.{' '}
                 <em>EV Battery LCA 2025</em>).
               </Li>
               <Li>
-                <strong>Functional unit</strong> — the unit of service every
+                <strong>Functional unit</strong>: the unit of service every
                 scenario is normalised to (<em>1 kWh battery capacity</em>,{' '}
                 <em>1 painted box</em>). Pick this first; every scenario in
                 the project must share it.
               </Li>
               <Li>
-                <strong>System boundary</strong> — cradle-to-gate,
+                <strong>System boundary</strong>: cradle-to-gate,
                 cradle-to-grave, gate-to-gate. Determines which life-cycle
                 stages you&apos;ll account for.
               </Li>
               <Li>
-                <strong>Methodology + region</strong> — defaults you can
+                <strong>Methodology + region</strong>: defaults you can
                 override per run (CML 2001 / ReCiPe / TRACI · Global / US-CA
                 / EU).
               </Li>
@@ -81,7 +81,7 @@ export default function FirstAssessmentPage() {
             </CodeBlock>
             <p style={{ marginTop: 12 }}>
               Drag nodes to restructure. Right-click for clone / remove /
-              import-from-library. The case auto-saves on every change — no
+              import-from-library. The case auto-saves on every change: no
               explicit Save button.
             </p>
           </>
@@ -97,13 +97,13 @@ export default function FirstAssessmentPage() {
             . Each flow needs:
             <Ul>
               <Li>
-                <strong>Direction</strong> — input (resource consumed) or
+                <strong>Direction</strong>: input (resource consumed) or
                 output (emission / waste).
               </Li>
               <Li>
-                <strong>Substance / resource</strong> — pulled from the
+                <strong>Substance / resource</strong>: pulled from the
                 Integrations &gt; Library catalog (openLCA, PubChem). Avoid
-                free-text — the engine matches against
+                free-text: the engine matches against
                 characterisation-factor rows by substance ID.
               </Li>
               <Li>
@@ -135,12 +135,12 @@ export default function FirstAssessmentPage() {
             <Chip>▶ Run Assessment</Chip>. The modal asks for:
             <Ul>
               <Li>
-                <strong>Valuation method</strong> — CML 2001 (default, EU
+                <strong>Valuation method</strong>: CML 2001 (default, EU
                 baseline), CML-IA 2016, ReCiPe Midpoint (H) / Endpoint, TRACI
                 2.1 (US EPA), EF 3.1, IPCC 2021, or EPS 2020.
               </Li>
               <Li>
-                <strong>Region</strong> — used for location-specific factors
+                <strong>Region</strong>: used for location-specific factors
                 (grid carbon, transport mixes). Global fallback otherwise.
               </Li>
             </Ul>
@@ -162,21 +162,21 @@ export default function FirstAssessmentPage() {
             You land on <Chip>Results</Chip>, which has four reading lenses:
             <Ul>
               <Li>
-                <strong>KPI strip</strong> — total impact, active categories,
+                <strong>KPI strip</strong>: total impact, active categories,
                 components assessed, last-run timestamp.
               </Li>
               <Li>
-                <strong>Category tabs</strong> — switch between Global
+                <strong>Category tabs</strong>: switch between Global
                 warming, Ozone depletion, Smog formation, Acidification,
                 Particulate matter (or whatever the method emits).
               </Li>
               <Li>
-                <strong>Component contribution</strong> — stacked bar that
+                <strong>Component contribution</strong>: stacked bar that
                 tells you which leaf is dominating, in percent and absolute
                 terms.
               </Li>
               <Li>
-                <strong>Flow-level detail</strong> — per-substance impact
+                <strong>Flow-level detail</strong>: per-substance impact
                 row, filterable by direction.
               </Li>
             </Ul>

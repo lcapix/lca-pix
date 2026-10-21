@@ -6,11 +6,13 @@
  *   owner, the TA is P's admin member, student A is P's editor, a second
  *   editor is student B, and P's viewer is an auditing student.
  *
- * With the setting on, an editor or viewer reaches only the cases they
- * created: every other case, and everything under it, answers exactly like a
- * missing case (404, same body), whatever the action; project-level lists
- * leave those cases out. The owner and admins reach everything. Turning the
- * setting off restores the old behaviour.
+ * With the setting on, an editor or viewer reaches the cases they created and
+ * (D2, approved 2026-10-20) reads, without changing, the cases the staff made:
+ * an editor the owner's and admins', a viewer the owner's, unless a case is
+ * kept from members (migrate-037). A classmate's case, and everything under
+ * it, answers exactly like a missing case (404, same body), whatever the
+ * action; project-level lists leave those cases out. The owner and admins
+ * reach everything. Turning the setting off restores the old behaviour.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { api, expectStatus } from '../support/api';
@@ -64,6 +66,18 @@ async function createdByOf(caseId: number): Promise<number | null> {
 async function casesCreatedBy(user: TestUser): Promise<number[]> {
   const r = await sql<{ case_id: number }>('SELECT case_id FROM case_table WHERE project_id = ? AND created_by = ? ORDER BY case_id', [w.P.id, user.id]);
   return r.map((x) => Number(x.case_id));
+}
+
+/** The cases of P a student (editor) or auditor (viewer) reaches under D2. */
+async function reachableFor(user: TestUser, role: 'editor' | 'viewer'): Promise<number[]> {
+  const staff = role === 'editor' ? [instructor.id, ta.id] : [instructor.id];
+  const r = await sql<{ case_id: number; created_by: number | null; hidden_from_members: number }>(
+    'SELECT case_id, created_by, hidden_from_members FROM case_table WHERE project_id = ? ORDER BY case_id',
+    [w.P.id],
+  );
+  return r
+    .filter((c) => c.created_by != null && (Number(c.created_by) === user.id || (Number(c.hidden_from_members) === 0 && staff.includes(Number(c.created_by)))))
+    .map((c) => Number(c.case_id));
 }
 
 async function allCasesOfP(): Promise<number[]> {
@@ -175,8 +189,8 @@ describe('the setting', () => {
 describe("another student's case answers exactly like a missing one", () => {
   it('covers every case-scoped route family', () => {
     const families = new Set(caseRows.map((r) => r.path.split('?')[0]));
-    expect(caseRows).toHaveLength(26);
-    expect(families.size).toBe(16);
+    expect(caseRows).toHaveLength(34);
+    expect(families.size).toBe(20);
   });
 
   for (const caller of ['editor', 'viewer'] as const) {
@@ -208,11 +222,25 @@ describe("another student's case answers exactly like a missing one", () => {
     expect(await tableChecksums()).toEqual(before);
   });
 
-  it("the instructor's own case is hidden from students too", async () => {
+  it("D2: the instructor's own case is readable by students and the auditor, never writable; kept from members, it is hidden", async () => {
     for (const u of [studentA, studentB, auditor]) {
       const res = await api.get(`/api/cases/${w.P.base.id}`, { token: u.token });
-      expect(res.status, u.label).toBe(404);
-      expect(res.json).toEqual({ error: 'Case not found' });
+      expect(res.status, u.label).toBe(200);
+      expect(res.json.case.my_role, u.label).toBe('viewer');
+      const before = await tableChecksums();
+      const put = await api.put(`/api/cases/${w.P.base.id}`, { token: u.token, json: { description: 'student edit' } });
+      expect(put.status, u.label).toBe(403);
+      expect(await tableChecksums()).toEqual(before);
+    }
+    expectStatus(await api.put(`/api/cases/${w.P.base.id}`, { token: instructor.token, json: { hidden_from_members: true } }), 200, 'hide');
+    try {
+      for (const u of [studentA, auditor]) {
+        const res = await api.get(`/api/cases/${w.P.base.id}`, { token: u.token });
+        expect(res.status, u.label).toBe(404);
+        expect(res.json).toEqual({ error: 'Case not found' });
+      }
+    } finally {
+      expectStatus(await api.put(`/api/cases/${w.P.base.id}`, { token: instructor.token, json: { hidden_from_members: false } }), 200, 'unhide');
     }
   });
 });
@@ -256,7 +284,10 @@ describe('each student keeps full use of their own case', () => {
       ).json.case_id,
     );
     expect(await createdByOf(staff)).toBe(instructor.id);
-    expect((await api.get(`/api/cases/${staff}`, { token: studentB.token })).status).toBe(404);
+    // A staff copy of a student's work stays from the class, B included (migrate-037).
+    for (const u of [studentA, studentB, auditor]) {
+      expect((await api.get(`/api/cases/${staff}`, { token: u.token })).status, u.label).toBe(404);
+    }
   });
 
   it("names only clash with cases the student can see: B may reuse A's case name (and rename to it)", async () => {
@@ -298,9 +329,9 @@ describe('project-level lists only include reachable cases', () => {
   it('GET /api/projects/:id/cases: each student sees their own, the auditor none, instructor and TA all', async () => {
     const all = await allCasesOfP();
     for (const [u, expected] of [
-      [studentA, await casesCreatedBy(studentA)],
-      [studentB, await casesCreatedBy(studentB)],
-      [auditor, []],
+      [studentA, await reachableFor(studentA, 'editor')],
+      [studentB, await reachableFor(studentB, 'editor')],
+      [auditor, await reachableFor(auditor, 'viewer')],
       [instructor, all],
       [ta, all],
     ] as const) {
@@ -309,13 +340,17 @@ describe('project-level lists only include reachable cases', () => {
     }
     expect(await casesCreatedBy(studentA)).toContain(aCase);
     expect(await casesCreatedBy(studentB)).toContain(bCase);
+    // Classmates stay apart; the instructor's base case is in both lists (D2).
+    expect(await reachableFor(studentA, 'editor')).not.toContain(bCase);
+    expect(await reachableFor(studentB, 'editor')).not.toContain(aCase);
+    expect(await reachableFor(studentA, 'editor')).toContain(w.P.base.id);
   });
 
   it('GET /api/projects/:id/progress: the same sets, and the instructor sees who wrote each case', async () => {
     const all = await allCasesOfP();
     for (const [u, expected] of [
-      [studentA, await casesCreatedBy(studentA)],
-      [auditor, []],
+      [studentA, await reachableFor(studentA, 'editor')],
+      [auditor, await reachableFor(auditor, 'viewer')],
       [ta, all],
     ] as const) {
       const res = expectStatus(await api.get(`/api/projects/${w.P.id}/progress`, { token: u.token }), 200, `${u.label} progress`);
@@ -360,9 +395,10 @@ describe('project-level lists only include reachable cases', () => {
       ids.length
         ? Number((await sqlOne<{ n: number }>(`SELECT COUNT(*) AS n FROM component WHERE case_id IN (${ids.map(() => '?').join(',')})`, ids))?.n)
         : 0;
-    const aIds = await casesCreatedBy(studentA);
+    const aIds = await reachableFor(studentA, 'editor');
     expect(await countFor(studentA)).toEqual({ cases: aIds.length, steps: await stepsOf(aIds) });
-    expect(await countFor(auditor)).toEqual({ cases: 0, steps: 0 });
+    const auditorIds = await reachableFor(auditor, 'viewer');
+    expect(await countFor(auditor)).toEqual({ cases: auditorIds.length, steps: await stepsOf(auditorIds) });
     const all = await allCasesOfP();
     expect(await countFor(instructor)).toEqual({ cases: all.length, steps: await stepsOf(all) });
     expect(await countFor(ta)).toEqual({ cases: all.length, steps: await stepsOf(all) });

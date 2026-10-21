@@ -53,6 +53,12 @@ beforeAll(async () => {
     `INSERT INTO comparison_runs (comparison_name, project_id, case_ids, base_case_id, created_by) VALUES (?, ?, ?, ?, ?)`,
     [`Q legacy ${w.tag}`, w.Q.id, JSON.stringify([w.Q.caseId, qCopy]), w.Q.caseId, B.id],
   );
+  // A held import line on Q's case (migrate-040).
+  const qHeld: any = await sql(
+    `INSERT INTO import_held_lines (case_id, line_kind, reason, step_name, substance_text, direction, quantity, unit, created_by)
+     VALUES (?, 'flow', 'no_substance', 'Q kiln', ?, 'input', 1, 'kg', ?)`,
+    [w.Q.caseId, `Q secret primer ${w.tag}`, B.id],
+  );
   await sql(
     `INSERT INTO project_members (project_id, user_id, permission_id)
      SELECT ?, ?, permission_id FROM permissions WHERE permission_name = 'viewer'`,
@@ -78,6 +84,7 @@ beforeAll(async () => {
     '$fresh.leaf': qLeaf,
     '$fresh.flow': qFlow2,
     '$fresh.legacyComparison': Number(qLegacy.insertId),
+    '$fresh.heldLine': Number(qHeld.insertId),
   };
 });
 

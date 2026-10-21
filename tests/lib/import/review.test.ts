@@ -176,6 +176,12 @@ describe('countUnplaced', () => {
     expect(countUnplaced({ plan: p, appending: true, edits, placement: {}, attachComponentId: 9 })).toBe(0)
   })
 
+  it('counts a line going to a step the document creates as placed', () => {
+    const all = countUnplaced({ plan: p, appending: true, edits, placement: {}, attachComponentId: null })
+    const withNew = countUnplaced({ plan: p, appending: true, edits, placement: {}, attachComponentId: null, newStep: { 'row 2': 'Paint' } })
+    expect(withNew).toBe(all - 1)
+  })
+
   it('falls back to the default step when a line was cleared to null', () => {
     const placement = { 'row 2': null, 'bom.csv · row 2': null, 'cost-1': null }
     expect(countUnplaced({ plan: p, appending: true, edits, placement, attachComponentId: null })).toBe(3)

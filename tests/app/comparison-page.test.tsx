@@ -12,7 +12,7 @@ vi.mock('next/navigation', () => ({
 }))
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 
-import ComparisonPage from '@/app/project/[projectId]/comparison/page'
+import ComparisonPage from '@/app/project/[projectId]/comparison/_components/classic-comparison'
 import { apiRequest } from '@/lib/api-client'
 
 const json = (body: unknown, status = 200) =>
@@ -99,7 +99,7 @@ beforeEach(() => {
 })
 
 describe('Compare page: a case that cannot be ranked is never called a winner', () => {
-  it('marks a 0-flow copy "Incomplete — not ranked" and names the real lowest copy', async () => {
+  it('marks a 0-flow copy "Incomplete: not ranked" and names the real lowest copy', async () => {
     routeApi([
       kase('1', 'Base'),
       kase('2', 'Empty copy', { status: 'incomplete', statusReason: 'No flows yet', totals: gw(0, 0), inventory: { steps: 3, flows: 0 } }),
@@ -108,7 +108,7 @@ describe('Compare page: a case that cannot be ranked is never called a winner', 
     render(<ComparisonPage />)
 
     const empty = await card('Empty copy')
-    expect(within(empty).getByText(/Incomplete — not ranked/)).toBeInTheDocument()
+    expect(within(empty).getByText(/Incomplete: not ranked/)).toBeInTheDocument()
     expect(within(empty).getByText(/No flows yet/)).toBeInTheDocument()
     // No value or change pill on the empty card.
     expect(within(empty).queryByText(/%/)).toBeNull()
@@ -130,14 +130,14 @@ describe('Compare page: a case that cannot be ranked is never called a winner', 
     expect(verdict.textContent).toMatch(/Not ranked: Empty copy/)
   })
 
-  it('says "Incomplete — not ranked" for a copy that has never been run', async () => {
+  it('says "Incomplete: not ranked" for a copy that has never been run', async () => {
     routeApi([
       kase('1', 'Base'),
       kase('2', 'New copy', { run: null, runs: [], status: 'incomplete', statusReason: 'Not run yet', totals: [] }),
     ])
     render(<ComparisonPage />)
     const c = await card('New copy')
-    expect(within(c).getByText(/Incomplete — not ranked/)).toBeInTheDocument()
+    expect(within(c).getByText(/Incomplete: not ranked/)).toBeInTheDocument()
     expect(within(c).getByText(/Not run yet/)).toBeInTheDocument()
   })
 

@@ -23,6 +23,10 @@ export interface ResultsHeaderProps {
   setMagicOpen: (open: boolean) => void
   handleRunAssessment: () => void
   isRunningAssessment: boolean
+  /** A "Can read" member: exports and Magic Insights, no Re-run. */
+  readOnly?: boolean
+  /** The run shown is an older one, opened from the run history. */
+  olderRun?: boolean
 }
 
 export function ResultsHeader({
@@ -40,6 +44,8 @@ export function ResultsHeader({
   setMagicOpen,
   handleRunAssessment,
   isRunningAssessment,
+  readOnly = false,
+  olderRun = false,
 }: ResultsHeaderProps) {
   return (
     <div
@@ -85,7 +91,7 @@ export function ResultsHeader({
                   marginRight: 8,
                 }}
               >
-                LATEST RUN
+                {olderRun ? 'OLDER RUN' : 'LATEST RUN'}
               </span>
               Run #{mostRecentAssessment.run_id} ·{' '}
               {safeRunDate(mostRecentAssessment.run_date)}
@@ -96,7 +102,7 @@ export function ResultsHeader({
               again.
             </span>
           ) : (
-            'No assessments yet — run one to see results.'
+            'No assessments yet: run one to see results.'
           )}
         </div>
       </div>
@@ -238,14 +244,16 @@ export function ResultsHeader({
       >
         <Icon name="sparkle" size={14} /> Magic Insights
       </button>
-      <button
-        className="btn btn-primary btn-sm"
-        onClick={handleRunAssessment}
-        disabled={isRunningAssessment}
-      >
-        <Icon name="run" size={14} />{' '}
-        {mostRecentAssessment ? 'Re-run' : 'Run new'}
-      </button>
+      {!readOnly && (
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={handleRunAssessment}
+          disabled={isRunningAssessment}
+        >
+          <Icon name="run" size={14} />{' '}
+          {mostRecentAssessment ? 'Re-run' : 'Run new'}
+        </button>
+      )}
     </div>
   )
 }

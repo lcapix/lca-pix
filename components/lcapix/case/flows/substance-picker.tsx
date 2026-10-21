@@ -20,12 +20,15 @@ export function SubstancePicker({
   substances,
   form: { search, searchFor, substanceId, selectedSubstance, matches, versionsOfSelected, pickSubstance, libraryOpen, setLibraryOpen },
   substanceForm,
+  initialTemplateId = null,
   onLibraryAdded,
 }: {
   componentId: string
   substances: Substance[]
   form: AddFlowForm
   substanceForm: AddSubstanceState
+  /** Open the process library already on this process (set when a step is created from one). */
+  initialTemplateId?: number | null
   /** The process library added flows: reload and announce. */
   onLibraryAdded: () => void
 }) {
@@ -167,6 +170,7 @@ export function SubstancePicker({
       {libraryOpen && (
         <ProcessLibrary
           componentId={componentId}
+          initialTemplateId={initialTemplateId}
           onAdded={onLibraryAdded}
           onClose={() => setLibraryOpen(false)}
         />

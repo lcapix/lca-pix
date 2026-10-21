@@ -18,7 +18,7 @@ interface Row {
 
 const share = (c: CompareCase, tiers: string[]) => {
   const s = c.dataQuality?.gw_share_by_tier
-  if (!s) return '—'
+  if (!s) return '–'
   return `${fmtNum(tiers.reduce((sum, t) => sum + (Number(s[t]) || 0), 0) * 100, 0)}%`
 }
 
@@ -55,7 +55,7 @@ const ROWS: Row[] = [
     label: 'Global factor used for the region',
     help: 'Contributions where no factor exists for the run region, so the Global factor was used instead.',
     value: (c) =>
-      c.dataQuality ? `${fmtInt(c.dataQuality.regional_fallbacks)} of ${fmtInt(c.dataQuality.contributions)}` : '—',
+      c.dataQuality ? `${fmtInt(c.dataQuality.regional_fallbacks)} of ${fmtInt(c.dataQuality.contributions)}` : '–',
   },
   {
     label: 'Exchanges with no factor',
@@ -71,7 +71,7 @@ const ROWS: Row[] = [
           )}
         </>
       ) : (
-        '—'
+        '–'
       ),
   },
   // The coverage row was removed on 2026-09-29 at Shreya's call, with the
@@ -80,17 +80,17 @@ const ROWS: Row[] = [
   {
     label: 'Exchanges left out (unit mismatch)',
     help: "Exchanges whose unit could not be converted to the factor's unit, so they were left out and flagged.",
-    value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.excluded_flows) : '—'),
+    value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.excluded_flows) : '–'),
   },
   {
     label: 'Unit conversions applied',
     help: 'Contributions whose amount was converted to the factor unit (grams to kilograms, for example). Recorded with the run.',
-    value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.unit_conversions) : '—'),
+    value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.unit_conversions) : '–'),
   },
   {
     label: 'Steps with allocation',
     help: 'Steps whose burden was split with another product (ISO 14044 allocation).',
-    value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.allocated_components) : '—'),
+    value: (c) => (c.dataQuality ? fmtInt(c.dataQuality.allocated_components) : '–'),
   },
 ]
 

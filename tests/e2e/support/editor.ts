@@ -11,15 +11,26 @@ export function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** The worked example in `user`'s account: one base case, TRACI 2.1 / US, FU set. */
-export async function workedExample(api: Api, user: ApiUser): Promise<{ projectId: number; caseId: number }> {
-  const r = await api.as(user.token).post<{ project_id: number; case_id: number }>('/api/example-project');
-  return { projectId: r.project_id, caseId: r.case_id };
+/**
+ * The sample study in `user`'s account (TRACI 2.1 / US, run), and the user's
+ * own copy of its base case to change and run: the sample's base case is
+ * read-only (migrate-038). `caseId` is the copy; `baseCaseId` the sample's.
+ */
+export async function workedExample(
+  api: Api,
+  user: ApiUser,
+  copyName = 'My bracket',
+): Promise<{ projectId: number; caseId: number; baseCaseId: number; baseRunId: number }> {
+  const as = api.as(user.token);
+  const r = await as.post<{ project_id: number; case_id: number; run_id: number }>('/api/example-project');
+  const copy = await as.post<{ case_id: number }>(`/api/cases/${r.case_id}/duplicate`, { case_name: copyName });
+  return { projectId: r.project_id, caseId: copy.case_id, baseCaseId: r.case_id, baseRunId: r.run_id };
 }
 
+/** A case in the workspace (E03): its tree is the one Tab stop named after the case. */
 export async function openCase(page: Page, projectId: number, caseId: number): Promise<void> {
   await open(page, `/project/${projectId}/case/${caseId}`);
-  await expect(page.getByTestId('tree-canvas-viewport')).toBeVisible();
+  await expect(page.getByRole('tree')).toBeVisible();
 }
 
 /** The left pane: the component list with its "Components" filter box. */

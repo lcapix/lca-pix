@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useState, useMemo } from 'react'
 import { Icon } from '@/components/lcapix'
 import { MarketingNav } from '@/components/lcapix/marketing-nav'
@@ -173,7 +172,7 @@ export default function ChangelogPage() {
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
           {filtered.length === 0 && (
             <div style={{ padding: '40px 0', fontSize: 14, color: 'var(--text-tertiary)' }}>
-              No entries with that tag — yet.
+              No entries with that tag: yet.
             </div>
           )}
           {filtered.map((e, i) => (
@@ -238,7 +237,8 @@ export default function ChangelogPage() {
                     fontSize: 10,
                     padding: '2px 8px',
                     background: `${e.accent}22`,
-                    color: e.accent,
+                    // The accent tints the pill; the word stays body-coloured so it reads (WCAG 1.4.3).
+                    color: 'var(--text-primary)',
                     borderRadius: 999,
                     fontWeight: 600,
                     letterSpacing: '0.1em',
@@ -311,11 +311,7 @@ export default function ChangelogPage() {
                 border: '2px solid var(--border-subtle)',
               }}
             />
-            That's all — we'll keep adding here. Follow{' '}
-            <Link href="/" style={{ color: 'var(--brand-primary)' }}>
-              @lcapix
-            </Link>{' '}
-            for shipping notes.
+            That's all for now. New entries are added here as they ship.
           </div>
         </div>
       </section>

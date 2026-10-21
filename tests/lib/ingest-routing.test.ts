@@ -10,6 +10,21 @@ const ROWS = [
 ]
 
 describe('detectRoutingColumns', () => {
+  it('reads a time column that names its basis, e.g. "Run Hours Per Unit"', () => {
+    // Half the ERP exports qualify these headers. The pattern was anchored, so
+    // "Run Hours Per Unit" matched nothing: the run time was read as zero and
+    // a step's labour came out ten times too small, or vanished entirely when
+    // no lot size was given to spread the setup.
+    for (const header of ['Run Hours Per Unit', 'Run Hrs/Unit', 'Cycle Time per piece', 'Labor Hours per ea']) {
+      const cols = detectRoutingColumns(['Op No', 'Operation', header])
+      expect(cols.runHrs ?? cols.laborHrs, `${header} should be read as a time column`).toBe(header)
+    }
+    // And a setup column that does the same.
+    expect(detectRoutingColumns(['Operation', 'Setup Hours per unit']).setupHrs).toBe(
+      'Setup Hours per unit',
+    )
+  })
+
   it('detects op/description/work-center/hours by header', () => {
     const cols = detectRoutingColumns(Object.keys(ROWS[0]))
     expect(cols.seq).toBe('Op No')

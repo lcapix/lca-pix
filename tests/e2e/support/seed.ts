@@ -5,8 +5,9 @@
  * ids and names come out the same on every run.
  *
  *   owner    Olivia Owner, onboarded
- *     P1  "Example: painted steel bracket" (POST /api/example-project, TRACI 2.1 / US)
- *         C1  base "Painted steel bracket"                     run R1
+ *     P1  the sample study (POST /api/example-project, TRACI 2.1 / US): built with
+ *         its run and its what-if; its base case is read-only (migrate-038)
+ *         C1  base "Base case"                                 run R1 (the sample's own)
  *         C2  comparative "Painted steel bracket (lighter blank)" — duplicate of C1 with
  *             the Steel input cut from 0.8 to 0.6 kg              run R2
  *     P2  "Five-tier bicycle frame" (CML 2001 / Global)
@@ -74,14 +75,10 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
   const api = anon.as(owner.token);
 
   // ── P1: the worked example, with its functional unit set and a run ─────────
-  const ex = await api.post<{ project_id: number; case_id: number }>('/api/example-project');
-  await api.put(`/api/projects/${ex.project_id}`, {
-    functional_unit: '1 painted steel bracket, at the factory gate',
-    system_boundary: 'cradle-to-gate',
-  });
-  const run1 = await api.post<{ run_id: number; total_impacts: unknown }>(`/api/cases/${ex.case_id}/assessments`, {
-    run_name: 'Assessment',
-  });
+  // The sample arrives run (its base case is read-only, so it is never run here).
+  const ex = await api.post<{ project_id: number; case_id: number; run_id: number }>('/api/example-project');
+  const run1 = { run_id: ex.run_id, ...(await api.get<{ total_impacts: unknown }>(`/api/assessments/${ex.run_id}`)) };
+  const exProject = (await api.get<{ project: { project_name: string } }>(`/api/projects/${ex.project_id}`)).project;
 
   const baseComponents = (await api.get<{ components: Component[] }>(`/api/cases/${ex.case_id}/components`)).components;
   const product = baseComponents.find((c) => c.parent_component_id == null)!;
@@ -141,7 +138,7 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
     users: { owner, viewer, empty, newcomer },
     example: {
       projectId: ex.project_id,
-      projectName: 'Example: painted steel bracket',
+      projectName: exProject.project_name,
       baseCaseId: ex.case_id,
       baseCaseName: baseCase.case?.case_name ?? 'Painted steel bracket',
       compCaseId: dup.case_id,

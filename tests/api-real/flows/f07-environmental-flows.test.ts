@@ -71,17 +71,19 @@ describe('F7 environmental flows', () => {
     expect(ok.json.flow.unit).toBe('g');
   });
 
-  it('quantity null, "abc", NaN, negative or boolean -> 400 (FLOW-4 fixed); missing fields -> 400', async () => {
+  // A blank amount (null, missing, '') is "needs an amount" since migrate-033,
+  // not a 400: see 'a flow may have no amount yet' below.
+  it('quantity "abc", NaN, negative or boolean -> 400 (FLOW-4 fixed); missing fields -> 400', async () => {
     const t = w.users.editor.token;
     const base = { substance_id: w.substances.electricity, flow_type: 'input', unit: 'kWh' };
-    for (const raw of ['null', '"abc"', '-1', 'true', '"NaN"', '1e309']) {
+    for (const raw of ['"abc"', '-1', 'true', '"NaN"', '1e309']) {
       const r = await api.post(`/api/components/${w.P.base.task}/flows`, {
         token: t,
         raw: `{"substance_id":${base.substance_id},"flow_type":"input","unit":"kWh","quantity":${raw}}`,
       });
       expect(r.status, raw).toBe(400);
     }
-    for (const json of [{ ...base }, { quantity: 1, flow_type: 'input', unit: 'kWh' }, { ...base, quantity: 1, flow_type: 'sideways' }, { ...base, quantity: 1, unit: '' }]) {
+    for (const json of [{ quantity: 1, flow_type: 'input', unit: 'kWh' }, { ...base, quantity: 1, flow_type: 'sideways' }, { ...base, quantity: 1, unit: '' }]) {
       const r = await api.post(`/api/components/${w.P.base.task}/flows`, { token: t, json });
       expect(r.status, JSON.stringify(json)).toBe(400);
     }
@@ -101,7 +103,7 @@ describe('F7 environmental flows', () => {
     const swap = await api.put(`/api/flows/${id}`, { token: t, json: { substance_id: w.substances.steel, unit: 'kg' } });
     expect(swap.status).toBe(200);
     expect(swap.json.flow).toMatchObject({ substance_name: 'Steel', unit: 'kg' });
-    for (const json of [{ quantity: null }, { quantity: -2 }, { flow_type: 'both' }]) {
+    for (const json of [{ quantity: 'abc' }, { quantity: -2 }, { flow_type: 'both' }]) {
       expect((await api.put(`/api/flows/${id}`, { token: t, json })).status, JSON.stringify(json)).toBe(400);
     }
     const del = await api.delete(`/api/flows/${id}`, { token: t });

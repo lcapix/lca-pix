@@ -3,6 +3,7 @@
 // and the roll-up line on each card. Pure numbers; the canvas renders them.
 
 import type { CaseTreeNode } from '@/lib/case-tree-adapter-types'
+import { fmtMoney } from '@/lib/money'
 
 export const NODE_W = 220
 export const NODE_H = 72
@@ -134,9 +135,9 @@ export function edgePath(a: NodePos, b: NodePos): string {
   return `M ${ax} ${ay} C ${ax} ${my}, ${bx} ${my}, ${bx} ${by}`
 }
 
-/** A card's roll-up line: "Σ $1,234 · 3 flows" for a parent, "$12 · 1 flow" for a leaf. */
+/** A card's roll-up line: "Σ $1,234 · 3 flows" for a parent, "$0.55 · 1 flow" for a leaf (cents below $1,000). */
 export function rollupLine(r: { cost: number; flows: number }, hasKids: boolean): string {
-  return `${hasKids ? 'Σ ' : ''}$${Math.round(r.cost).toLocaleString()}${
+  return `${hasKids ? 'Σ ' : ''}${fmtMoney(r.cost)}${
     r.flows > 0 ? ` · ${r.flows} flow${r.flows === 1 ? '' : 's'}` : ''
   }`
 }

@@ -67,9 +67,7 @@ beforeEach(() => vi.resetAllMocks())
 
 describe('POST /api/components/:id/flows — quantity (FLOW-4)', () => {
   it.each([
-    ['null', null],
     ['a word', 'abc'],
-    ['an empty string', ''],
     ['a negative number', -2],
     ['Infinity as a string', 'Infinity'],
   ])('rejects %s with 400 and inserts nothing', async (_label, quantity) => {
@@ -77,6 +75,16 @@ describe('POST /api/components/:id/flows — quantity (FLOW-4)', () => {
     const res = await post({ ...base, quantity })
     expect(res.status).toBe(400)
     expect(db.insert).not.toHaveBeenCalled()
+  })
+
+  // migrate-033: a blank amount is "needs an amount", stored as NULL.
+  it.each([
+    ['null', null],
+    ['an empty string', ''],
+  ])('accepts %s as no amount yet (NULL)', async (_label, quantity) => {
+    setup()
+    expect((await post({ ...base, quantity })).status).toBe(201)
+    expect(vi.mocked(db.insert).mock.calls[0][1]![3]).toBeNull()
   })
 
   it('accepts 0 and positive numbers', async () => {
@@ -109,8 +117,15 @@ describe('PUT /api/flows/:id', () => {
     setup()
     expect((await put({ quantity: 'abc' })).status).toBe(400)
     expect((await put({ quantity: -1 })).status).toBe(400)
-    expect((await put({ quantity: null })).status).toBe(400)
     expect(db.execute).not.toHaveBeenCalled()
+  })
+
+  it('a null quantity clears the amount (migrate-033: needs an amount)', async () => {
+    setup()
+    expect((await put({ quantity: null })).status).toBe(200)
+    const [sql, params] = vi.mocked(db.execute).mock.calls[0]
+    expect(sql).toMatch(/quantity = CASE WHEN \? = 1 THEN NULL/)
+    expect(params![2]).toBe(1) // substance_id, flow_type, then the clear flag
   })
 
   it('rejects swapping to another user’s private substance (L3)', async () => {

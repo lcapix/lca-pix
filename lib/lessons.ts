@@ -1,5 +1,6 @@
 /**
- * The five lessons a student works through, in the app, on their own case.
+ * The six exercises a student works through, in the app, on their own copy of
+ * the sample study (the painted steel bracket) or any case of theirs.
  *
  * Each lesson has a task done in the real editor, a check that reads the
  * student's own data (so nothing can be passed by clicking through), and one
@@ -59,20 +60,20 @@ export const LESSONS: Lesson[] = [
     id: 'scope',
     title: 'Goal and scope',
     goal: 'Every result is per something. Decide what, before you measure anything.',
-    task: 'Open Goal & scope and write the functional unit, the reference flow and the boundary.',
+    task: 'Set the functional unit, the reference flow and the boundary. Every amount in the case is per that unit.',
     checkLabel: 'Functional unit written and reference flow above zero',
     done: (f) => f.functionalUnitSet,
     question: {
       kind: 'choice',
       prompt: 'Which of these is a functional unit?',
       options: [
-        { id: 'a', text: '2.2 kg of aluminum tube' },
-        { id: 'b', text: 'One touring bicycle, at the factory gate' },
-        { id: 'c', text: 'The frame shop in Portland' },
+        { id: 'a', text: '0.80 kg of steel sheet' },
+        { id: 'b', text: 'One painted steel bracket, at the factory gate' },
+        { id: 'c', text: 'The coating line' },
       ],
       correct: 'b',
       because:
-        'A functional unit names the service delivered, how much of it, and where the boundary ends. 2.2 kg of tube is a flow inside the model, and a factory is a place, not a unit of service.',
+        'A functional unit names the service delivered, how much of it, and where the boundary ends. 0.80 kg of steel is a flow inside the model, and a line is a place, not a unit of service.',
     },
   },
   {
@@ -85,11 +86,11 @@ export const LESSONS: Lesson[] = [
     question: {
       kind: 'choice',
       prompt:
-        'Your bill of materials lists 2.2 kg of aluminum tube. Which step should carry that flow?',
+        'The bill of materials lists 0.80 kg of steel sheet. Which step should carry that flow?',
       options: [
-        { id: 'a', text: 'The product node, so it covers the whole bike' },
-        { id: 'b', text: 'The step that first consumes the tube, the one that cuts it' },
-        { id: 'c', text: 'Final assembly, because that is where the bike exists' },
+        { id: 'a', text: 'The product, so it covers the whole bracket' },
+        { id: 'b', text: 'The step that first consumes the sheet: 10. Cut blank' },
+        { id: 'c', text: '40. Pack and ship, because that is where the bracket is finished' },
       ],
       correct: 'b',
       because:
@@ -106,12 +107,13 @@ export const LESSONS: Lesson[] = [
     question: {
       kind: 'number',
       prompt:
-        'A 5.6 kW machine runs for 0.8 hours at 8% average load. How many kWh does that step use?',
-      answer: 0.3584,
-      tolerance: 0.02,
+        'Deburr edges runs a 0.75 kW grinder for 8 seconds at 80% load. How many kWh is that?',
+      // 0.75 x (8 / 3600) x 0.8, the machine calculator's own sum (E04).
+      answer: (0.75 * 8 * 0.8) / 3600,
+      tolerance: 0.05,
       unit: 'kWh',
       because:
-        'kWh = rated power x hours x load. 5.6 x 0.8 x 0.08 = 0.3584 kWh. Skipping the load factor overstates shop electricity by more than ten times.',
+        'kWh = rated power x hours x load. 8 seconds is 8 / 3600 hours, so 0.75 x 0.00222 x 0.8 = 0.0013 kWh. Leave the seconds as hours and you are 3,600 times too high; skip the load and you are a quarter too high.',
     },
   },
   {
@@ -158,7 +160,7 @@ export const LESSONS: Lesson[] = [
     id: 'handin',
     title: 'Hand-in',
     goal: 'The judgement is the assignment. The engine cannot write it for you.',
-    task: 'Write your interpretation and your assumptions on the results page, then export the report.',
+    task: 'Write your interpretation and your assumptions on the Write-up tab, then export the report.',
     checkLabel: 'Interpretation written on this case',
     done: (f) => f.hasWriteUp,
   },

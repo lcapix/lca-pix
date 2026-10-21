@@ -190,7 +190,7 @@ export function FlowTable({
           <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>
             {f.scope ? (
               isGlobalFallback(f.scope, runRegion) ? (
-                <span title="No region-specific factor on file for this substance — the engine fell back to the Global factor. Your region choice was applied where a regional factor exists (e.g. electricity).">
+                <span title="No region-specific factor on file for this substance: the engine fell back to the Global factor. Your region choice was applied where a regional factor exists (e.g. electricity).">
                   Global{' '}
                   <span style={{ color: 'var(--signal-warn)' }}>(fallback)</span>
                 </span>
@@ -198,7 +198,7 @@ export function FlowTable({
                 f.scope
               )
             ) : (
-              '—'
+              '–'
             )}
           </div>
           <div

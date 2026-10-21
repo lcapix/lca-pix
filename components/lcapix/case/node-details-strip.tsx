@@ -20,8 +20,8 @@ export interface NodeDetailsStripProps {
 const TIER_HELP: Record<string, string> = {
   Product:
     'The finished thing being assessed. Its totals are the sum of every line, subprocess and operation below it.',
-  Machine: 'A production line or major stage — a roll-up of the subprocesses beneath it.',
-  Subprocess: 'A group of related steps, such as a work center — a roll-up of its operations.',
+  Machine: 'A production line or major stage: a roll-up of the subprocesses beneath it.',
+  Subprocess: 'A group of related steps, such as a work center: a roll-up of its operations.',
   Operation:
     'One processing step: a unit process in ISO 14044 terms. Its inputs (materials, energy), outputs (emissions) and costs (labor, machine time) are recorded here.',
   Task: 'An optional finer sub-step of an operation, used only when you split an operation into parts.',
@@ -116,12 +116,12 @@ export function NodeDetailsStrip({
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {hasChildren
-                  ? 'Roll-up node — its numbers are the totals of everything below it.'
+                  ? 'Roll-up node: its numbers are the totals of everything below it.'
                   : t?.id === 'Operation'
-                    ? 'Unit process — its materials, energy, emissions and labor live here.'
+                    ? 'Unit process: its materials, energy, emissions and labor live here.'
                     : t?.id === 'Task'
-                      ? 'Sub-step of an operation — its flows and costs live here.'
-                      : 'Terminating node — flows and costs attach here.'}
+                      ? 'Sub-step of an operation: its flows and costs live here.'
+                      : 'Terminating node: flows and costs attach here.'}
               </span>
               {t?.id && TIER_HELP[t.id] ? (
                 <HelpTip label={`What is a ${t.label}?`}>{TIER_HELP[t.id]}</HelpTip>
@@ -173,12 +173,12 @@ export function NodeDetailsStrip({
             different counts of different things. They are not: every flow on a
             leaf is a driver flow, so the second tile is gone and the remaining
             ones each say something the other does not. */}
-        <MetricMini label={'Flows' + sigma} value={node ? flowsCount : '—'} />
+        <MetricMini label={'Flows' + sigma} value={node ? flowsCount : '–'} />
         <MetricMini
           label={'Cost' + sigma}
-          value={node ? '$' + costUsd.toLocaleString() : '—'}
+          value={node ? '$' + costUsd.toLocaleString() : '–'}
         />
-        <MetricMini label="Impact" value="—" unit="" />
+        <MetricMini label="Impact" value="–" unit="" />
       </div>
 
       <div

@@ -7,7 +7,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Functional unit',
-    def: 'The unit of service every scenario in a project is normalised to (e.g. "1 painted metal box", "1 kWh battery capacity", "1000 food containers"). Pick this before you start building cases — alternatives can only be compared if they share the same functional unit.',
+    def: 'The unit of service every scenario in a project is normalised to (e.g. "1 painted metal box", "1 kWh battery capacity", "1000 food containers"). Pick this before you start building cases: alternatives can only be compared if they share the same functional unit.',
   },
   {
     term: 'Reference flow',
@@ -15,7 +15,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'System boundary',
-    def: 'Which life-cycle stages the study covers — cradle-to-gate (raw material → factory door), cradle-to-grave (… → end-of-life), or gate-to-gate (single facility only).',
+    def: 'Which life-cycle stages the study covers: cradle-to-gate (raw material → factory door), cradle-to-grave (… → end-of-life), or gate-to-gate (single facility only).',
   },
   {
     term: 'Process tree',
@@ -23,7 +23,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Elemental Task',
-    def: 'The leaf level of the tree. The only level that can carry flows (drivers) — everything above just structures the calculation.',
+    def: 'The leaf level of the tree. The only level that can carry flows (drivers): everything above just structures the calculation.',
   },
   {
     term: 'Driver / flow',
@@ -51,7 +51,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Impact category',
-    def: 'A class of environmental effect — Global warming, Ozone depletion, Smog formation, Acidification, Particulate matter, Eutrophication, etc.',
+    def: 'A class of environmental effect: Global warming, Ozone depletion, Smog formation, Acidification, Particulate matter, Eutrophication, etc.',
   },
   {
     term: 'Base case',
@@ -71,11 +71,11 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Hot spot',
-    def: 'The component or category contributing the largest share of total impact. The first place to look when designing a comparative scenario — cutting hot spots delivers most of the win.',
+    def: 'The component or category contributing the largest share of total impact. The first place to look when designing a comparative scenario: cutting hot spots delivers most of the win.',
   },
   {
     term: 'ECP Library',
-    def: 'Environmental Component Profile library — reusable tree templates with pre-bound flows (e.g. "standard steel sheet stamping operation"). Carried over from v1 as a roadmap item for v3.',
+    def: 'Environmental Component Profile library: reusable tree templates with pre-bound flows (e.g. "standard steel sheet stamping operation"). Carried over from v1 as a roadmap item for v3.',
   },
   {
     term: 'EcoSpold / ILCD',

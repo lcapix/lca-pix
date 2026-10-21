@@ -416,7 +416,7 @@ export const DEMO_ACTIVITY: readonly DemoActivity[] = [
   { t: '3h ago', actor: 'Gary', action: 'created Renewable Energy Scenario', source: 'editor', status: 'info' },
   { t: '1d ago', actor: 'System', action: 'BLS occupation pull partial (rate limit)', source: 'bls', status: 'warn' },
   { t: '2d ago', actor: 'Kavish', action: 'exported PDF: EV Manufacturing Baseline', source: 'export', status: 'success' },
-  { t: '3d ago', actor: 'System', action: 'Metals-API key expired — pricing unavailable', source: 'metals', status: 'error' },
+  { t: '3d ago', actor: 'System', action: 'Metals-API key expired: pricing unavailable', source: 'metals', status: 'error' },
   { t: '5d ago', actor: 'Kavish', action: 'imported 47 components from openLCA', source: 'openlca', status: 'success' },
 ]
 

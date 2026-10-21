@@ -147,7 +147,7 @@ export default function StartPage() {
 
       <div style={{ marginTop: 24, fontSize: 12.5, color: 'var(--text-tertiary)' }}>
         Not sure yet?{' '}
-        <Link href={`/project/${projectId}`} style={{ color: 'var(--text-secondary)' }}>
+        <Link href={`/project/${projectId}`} style={{ color: 'var(--text-secondary)', textDecoration: 'underline', textUnderlineOffset: 2 }}>
           Open the project
         </Link>{' '}
         and decide later.

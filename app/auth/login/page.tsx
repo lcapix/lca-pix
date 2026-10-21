@@ -1,14 +1,21 @@
 "use client"
 
+// Log in (F1.2b): Continue with Google first, then email and password. The
+// error sits under the password, in the server's neutral words (it never says
+// whether the email has an account). "Forgot password?" is Coming soon: there
+// is no reset route yet. A ?error= code from the Google route shows as a card
+// above the form, known codes only.
+
 import type React from "react"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
-import { toast } from "sonner"
 import { AuthShell } from "@/components/lcapix/auth/auth-shell"
-import { Icon } from "@/components/lcapix/icon"
+import { EduAuthShell, EyeIcon, FieldError, GoogleMark } from "@/components/lcapix/auth/edu-auth-shell"
+import { ComingSoon, ErrorCard } from "@/components/lcapix/ds"
+import { EDU_SHELL } from "@/lib/ui-flags"
 
 type LoginError = { title: string; description: string }
 
@@ -68,232 +75,137 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({})
   const [isLoading, setIsLoading] = useState(false)
-
+  const [linkError, setLinkError] = useState<LoginError | null>(null)
+  const [resetAsked, setResetAsked] = useState(false)
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
 
-  // Surface sign-in errors as toasts. The Google route and the API client
-  // bounce here with ?error=<code>. Only known codes are shown; anything else
-  // gets a generic message, so a crafted link cannot put its own words in an
-  // app-branded toast. Reading window.location.search (instead of
-  // useSearchParams) avoids forcing the page off Next.js's static prerender path.
+  // The Google route and the API client come back here with ?error=<code>.
+  // Only known codes are shown; anything else gets the generic words, so a
+  // crafted link cannot put its own words on an LCAPIX page. Reading
+  // window.location.search keeps the page off useSearchParams (static prerender).
   useEffect(() => {
-    if (typeof window === "undefined") return
     const params = new URLSearchParams(window.location.search)
     const err = params.get("error")
     if (!err) return
-    const msg = Object.prototype.hasOwnProperty.call(LOGIN_ERRORS, err)
-      ? LOGIN_ERRORS[err]
-      : GENERIC_LOGIN_ERROR
-    toast.error(msg.title, { description: msg.description })
-    // Strip the param so reloads don't re-toast.
+    setLinkError(Object.prototype.hasOwnProperty.call(LOGIN_ERRORS, err) ? LOGIN_ERRORS[err] : GENERIC_LOGIN_ERROR)
     const url = new URL(window.location.href)
     url.searchParams.delete("error")
     window.history.replaceState({}, "", url.toString())
   }, [])
 
-  const validateForm = () => {
-    const newErrors: { email?: string; password?: string } = {}
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!email) {
-      newErrors.email = "Email is required"
-    } else if (!emailRegex.test(email)) {
-      newErrors.email = "Please enter a valid email address"
-    }
-
-    // Password validation
-    if (!password) {
-      newErrors.password = "Password is required"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+  const validate = () => {
+    const next: typeof errors = {}
+    if (!email) next.email = "Enter your email."
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Enter an email like you@university.edu."
+    if (!password) next.password = "Enter your password."
+    setErrors(next)
+    return Object.keys(next).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!validateForm()) return
-
+    if (!validate()) return
     setIsLoading(true)
     setErrors({})
-
     try {
-      // Call backend API
+      // A fetch that cannot reach the server rejects with browser-specific text
+      // ("Failed to fetch", "NetworkError when ...", "Load failed"); say it plainly.
       const response = await fetch("/api/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+      }).catch(() => {
+        throw new Error("We could not reach LCAPIX. Check your connection and try again.")
       })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed")
+      const data = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        setErrors({ password: `${data.error || "Invalid email or password"}. Try again.` })
+        return
       }
-
-      // Store token and user data
+      if (!response.ok) throw new Error(data.error || "You were not logged in.")
       localStorage.setItem("auth_token", data.token)
       localStorage.setItem("user", JSON.stringify(data.user))
-
-      // Update auth store
-      const user = {
-        id: data.user.id.toString(),
-        name: data.user.username,
-        email: data.user.email,
-        createdAt: new Date(),
-      }
-
-      login(user)
-      toast.success("Welcome back!", {
-        description: "You have successfully logged in.",
-      })
+      login({ id: data.user.id.toString(), name: data.user.username, email: data.user.email, createdAt: new Date() })
       router.push("/home")
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Invalid email or password. Please try again."
-      setErrors({ general: message })
-      toast.error("Login failed", { description: message })
+      setErrors({ general: error instanceof Error ? error.message : "You were not logged in. Try again." })
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Google sign-in: always live in the UI. Navigate to the server route, which
-  // owns the OAuth URL construction and will redirect to a friendly error toast
-  // here if env vars are missing on the server (see /api/auth/google).
-  const handleGoogleLogin = () => {
-    window.location.href = "/api/auth/google"
-  }
+  const form = (
+    <>
+      <p className="edu-eyebrow">Welcome back</p>
+      <h1 className="edu-h1">Log in</h1>
+      <p className="edu-sub">Use the email or Google account you signed up with.</p>
+      {linkError && (
+        <div style={{ marginBottom: 20 }}>
+          <ErrorCard title={linkError.title} cause={linkError.description} />
+        </div>
+      )}
 
-  return (
-    <AuthShell>
-      <h1
-        className="display"
-        style={{ fontSize: 32, fontWeight: 600, margin: 0, marginBottom: 8, letterSpacing: "-0.01em" }}
-      >
-        Welcome back.
-      </h1>
-      <p style={{ color: "var(--text-secondary)", fontSize: 14, margin: 0, marginBottom: 32 }}>
-        Sign in to continue your assessments.
-      </p>
+      <button type="button" className="edu-google" onClick={() => (window.location.href = "/api/auth/google")} disabled={isLoading}>
+        <GoogleMark />
+        Continue with Google
+      </button>
+      <div className="edu-or">or with email</div>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div>
-          <label className="label" htmlFor="email">
-            Email
-          </label>
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="edu-field">
+          <label htmlFor="email">Email</label>
           <input
             id="email"
-            className="input"
+            className="edu-input"
             type="email"
             autoComplete="email"
-            placeholder="you@company.com"
             value={email}
+            aria-invalid={!!errors.email || undefined}
+            aria-describedby={errors.email ? "email-error" : undefined}
             onChange={(e) => setEmail(e.target.value)}
           />
-          {errors.email && (
-            <div style={{ fontSize: 12, color: "var(--status-error, #c13b2b)", marginTop: 6 }}>{errors.email}</div>
-          )}
+          {errors.email && <FieldError id="email-error">{errors.email}</FieldError>}
         </div>
-
-        <div>
-          <label className="label" htmlFor="password">
-            Password
-          </label>
-          <div style={{ position: "relative" }}>
+        <div className="edu-field">
+          <span className="edu-field-label" style={{ justifyContent: "space-between" }}>
+            <label htmlFor="password">Password</label>
+            <button type="button" className="ds-link" aria-expanded={resetAsked} onClick={() => setResetAsked((v) => !v)} style={{ fontWeight: 600 }}>
+              Forgot password?
+            </button>
+          </span>
+          <div className="edu-pass">
             <input
               id="password"
-              className="input"
+              className="edu-input"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
-              placeholder="••••••••"
               value={password}
+              aria-invalid={!!errors.password || undefined}
+              aria-describedby={errors.password ? "password-error" : undefined}
               onChange={(e) => setPassword(e.target.value)}
-              style={{ paddingRight: 40 }}
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((s) => !s)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              style={{
-                position: "absolute",
-                right: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                color: "var(--text-tertiary)",
-                cursor: "pointer",
-                padding: 8,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Icon name="eye" size={16} />
+            <button type="button" onClick={() => setShowPassword((s) => !s)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>
+              <EyeIcon open={!showPassword} />
             </button>
           </div>
-          {errors.password && (
-            <div style={{ fontSize: 12, color: "var(--status-error, #c13b2b)", marginTop: 6 }}>{errors.password}</div>
-          )}
+          {errors.password && <FieldError id="password-error">{errors.password}</FieldError>}
+          {resetAsked && <ComingSoon>Resetting a password by email is coming soon.</ComingSoon>}
         </div>
-
-        {errors.general ? (
-          <div role="alert" style={{ fontSize: 13, color: "var(--status-error, #c13b2b)" }}>
-            {errors.general}
-          </div>
-        ) : null}
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="btn btn-primary"
-          style={{ height: 44, justifyContent: "center", marginTop: 8 }}
-        >
-          {isLoading ? "Signing in…" : "Log in"}
+        {errors.general && <FieldError id="general-error">{errors.general}</FieldError>}
+        <button type="submit" className="edu-submit" disabled={isLoading} aria-busy={isLoading || undefined} style={{ marginTop: 8 }}>
+          {isLoading && <span className="ds-spinner" aria-hidden />}
+          {isLoading ? "Logging in…" : "Log in"}
         </button>
-
-        <div
-          className="divider-tonal"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            margin: "8px 0",
-            color: "var(--text-tertiary)",
-            fontSize: 12,
-          }}
-        >
-          <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-          <span>or</span>
-          <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
-        </div>
-
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={isLoading}
-          className="btn btn-secondary"
-          style={{ height: 44, justifyContent: "center" }}
-          title="Sign in with your Google account"
-        >
-          <Icon name="google" size={16} /> Continue with Google
-        </button>
-
-        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 16 }}>
-          Don&apos;t have an account?{" "}
-          <Link
-            href="/auth/signup"
-            style={{ color: "var(--brand-primary)", textDecoration: "none" }}
-          >
-            Sign up →
-          </Link>
-        </div>
       </form>
-    </AuthShell>
+      <p className="edu-foot">
+        No account yet?{" "}
+        <Link href="/auth/signup" className="ds-link" style={{ fontWeight: 600 }}>
+          Create one
+        </Link>
+      </p>
+    </>
   )
+
+  return EDU_SHELL ? <EduAuthShell pane="account">{form}</EduAuthShell> : <AuthShell>{form}</AuthShell>
 }

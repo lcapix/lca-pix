@@ -1,13 +1,14 @@
 const isDev = process.env.NODE_ENV === 'development'
 
-// Content Security Policy. Shipped as Report-Only for now: browsers log
-// violations to the console but block nothing. Once a release shows no
-// violations in normal use, rename the header below to
-// `Content-Security-Policy` to enforce it (and ideally move to per-request
-// nonces via middleware so 'unsafe-inline' can go from script-src).
-// 'unsafe-inline' is needed while scripts carry no nonce, because the App
-// Router injects inline bootstrap scripts. 'unsafe-eval' is only needed by
-// the dev server (React Refresh / eval source maps).
+// Content Security Policy, enforced. The browser talks only to this origin
+// and Google Fonts (every third-party API is called from the server), and
+// tests/e2e/contracts/csp.spec.ts walks every screen in routes.json failing on
+// any violation. A later step is per-request nonces via middleware so
+// 'unsafe-inline' can go from script-src; it is needed while scripts carry no
+// nonce, because the App Router injects inline bootstrap scripts.
+// 'unsafe-eval' is only needed by the dev server (React Refresh / eval source
+// maps). Vercel's preview toolbar (vercel.live) is not allowed, so preview
+// deployments show no toolbar; production has none anyway.
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
@@ -27,7 +28,7 @@ const securityHeaders = [
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'Content-Security-Policy-Report-Only', value: contentSecurityPolicy },
+  { key: 'Content-Security-Policy', value: contentSecurityPolicy },
 ]
 
 /** @type {import('next').NextConfig} */

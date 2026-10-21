@@ -87,8 +87,8 @@ describe('summary', () => {
         materials: [],
       }),
     ).toBe(
-      'Your Bike assessment under TRACI 2.1 totals {{an indicative overall load}} for {{environmental load}} at {{—}}.' +
-        ' By step, {{your top step}} carries the most ({{—%}}), and the top two steps account for {{0.0%}}.',
+      'Your Bike assessment under TRACI 2.1 totals {{an indicative overall load}} for {{environmental load}} at {{–}}.' +
+        ' By step, {{your top step}} carries the most ({{–%}}), and the top two steps account for {{0.0%}}.',
     )
   })
 })
@@ -218,7 +218,7 @@ describe('trade-off', () => {
       buildInsightText({ ...BASE, activeChip: 'tradeoff', costView: costView({ material: 60, labor: 40, energy: 0, other: 0 }) }),
     ).toContain('of the {{$500}} cost')
     expect(buildInsightText({ ...BASE, activeChip: 'tradeoff', totalCost: undefined, costView: costView({ material: 60, labor: 40, energy: 0, other: 0 }) })).toContain(
-      'of the {{—}} cost',
+      'of the {{–}} cost',
     )
   })
 })
