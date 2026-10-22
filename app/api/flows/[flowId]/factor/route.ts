@@ -120,9 +120,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       `INSERT INTO flow_factor_overrides
          (flow_id, category_id, factor_value, impact_unit, per_unit, source, note, created_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE factor_value = VALUES(factor_value), impact_unit = VALUES(impact_unit),
-         per_unit = VALUES(per_unit), source = VALUES(source), note = VALUES(note),
-         created_by = VALUES(created_by)`,
+       ON CONFLICT (flow_id, category_id) DO UPDATE SET factor_value = EXCLUDED.factor_value, impact_unit = EXCLUDED.impact_unit,
+         per_unit = EXCLUDED.per_unit, source = EXCLUDED.source, note = EXCLUDED.note,
+         created_by = EXCLUDED.created_by`,
       [flowId, input.category_id, input.factor_value, impactUnit, perUnit, input.source, note, userId],
     );
     return NextResponse.json({ success: true, factors: await listOverrides(flowId) });

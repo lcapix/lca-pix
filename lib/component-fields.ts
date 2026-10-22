@@ -128,7 +128,12 @@ export async function updateExistingColumns(
   } catch (err: any) {
     if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
     const present = new Set(
-      (await query<any>('SHOW COLUMNS FROM component')).map((r: any) => String(r.Field)),
+      (
+        await query<any>(
+          `SELECT column_name AS "Field" FROM information_schema.columns
+            WHERE table_schema = current_schema() AND table_name = 'component'`,
+        )
+      ).map((r: any) => String(r.Field)),
     );
     const kept = values.filter(([c]) => present.has(c));
     console.warn(

@@ -169,10 +169,15 @@ export async function generateUniqueUsername(seed: string): Promise<string> {
   return `${base}-${Date.now().toString(36)}${randomBytes(2).toString('hex')}`.slice(0, 50);
 }
 
-/** A MySQL duplicate-key error, optionally on a named unique key. */
+/**
+ * A duplicate-key error (lib/db-dialect.ts gives Postgres's the MySQL code),
+ * optionally on a named unique key: Postgres names the violated index, which
+ * db/pg/000-schema.sql calls <table>__<key>.
+ */
 export function isDuplicateKeyError(err: any, key?: string): boolean {
   if (err?.code !== 'ER_DUP_ENTRY') return false;
   if (!key) return true;
+  if (typeof err?.constraint === 'string') return err.constraint === key || err.constraint.endsWith(`__${key}`);
   return new RegExp(`for key '(?:[\\w]+\\.)?${key}'`).test(String(err?.message ?? err?.sqlMessage ?? ''));
 }
 

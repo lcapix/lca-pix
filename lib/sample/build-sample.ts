@@ -44,7 +44,7 @@ async function librarySubstance(conn: Conn, name: string): Promise<number> {
   const [row] = await rows(
     conn,
     `SELECT substance_id FROM substances
-      WHERE is_custom = 0 AND substance_name IN (?, CONCAT(?, ' (library)'))
+      WHERE is_custom = 0 AND substance_name IN (?, CAST(? AS text) || ' (library)')
       ORDER BY substance_name = ? DESC LIMIT 1`,
     [name, name, name],
   )
@@ -193,10 +193,10 @@ export async function buildSampleStudy(conn: Conn, userId: number): Promise<Buil
     (
       await conn.query(
         `UPDATE flows f
-           JOIN component c ON c.component_id = f.component_id
-           JOIN substances s ON s.substance_id = f.substance_id
-            SET f.quantity = ?
-          WHERE c.case_id = ? AND c.component_name = ? AND s.substance_id = ? AND f.quantity = ?`,
+            SET quantity = ?
+           FROM component c, substances s
+          WHERE c.component_id = f.component_id AND s.substance_id = f.substance_id
+            AND c.case_id = ? AND c.component_name = ? AND s.substance_id = ? AND f.quantity = ?`,
         [SAMPLE_WHAT_IF.to, whatIfCaseId, SAMPLE_WHAT_IF.step, substanceIds.get(SAMPLE_WHAT_IF.substance), SAMPLE_WHAT_IF.from],
       )
     )[0] as any

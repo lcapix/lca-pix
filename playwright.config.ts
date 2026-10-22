@@ -9,7 +9,7 @@
  *   pnpm e2e:update     rewrite the screenshot baseline
  *
  * Each run gets its own database: the webServer (tests/e2e/support/serve.mjs)
- * builds lcapix_t_e2e_* with scripts/db/fresh.mjs on the local MySQL and
+ * builds lcapix_t_e2e_* with scripts/db/fresh.mjs on the local Postgres and
  * starts `next dev -p 3120` on it; global setup seeds it through the app's
  * API; global teardown (and the server's own shutdown) drops it.
  */

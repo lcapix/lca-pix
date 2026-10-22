@@ -1,12 +1,14 @@
 /**
- * Helpers for tests/db: connections to the throwaway database, the repo's
- * db scripts run as child processes, and a schema snapshot for diffs.
+ * Helpers for tests/db: connections to the throwaway Postgres database (they
+ * answer in mysql2's shapes through lib/db's runner, as the app's do), the
+ * repo's db scripts run as child processes, and a schema snapshot for diffs.
  */
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import { inject } from 'vitest';
+import { PG_TYPES, runner } from '@/lib/db';
 import type { TestDbConfig } from './context';
 
 export const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -18,16 +20,26 @@ export function testDb(): TestDbConfig {
 }
 
 /** A single connection (not a pool) to the suite's database, or another lcapix_t_* one. */
-export function connect(database: string = testDb().database) {
+export async function connect(database: string = testDb().database) {
   const db = testDb();
-  return mysql.createConnection({
+  const client = new pg.Client({
     host: db.host,
     port: Number(db.port),
     user: db.user,
-    password: db.password,
+    password: db.password || undefined,
     database,
-    charset: 'utf8mb4',
+    types: PG_TYPES,
   });
+  await client.connect();
+  return {
+    ...runner(client),
+    beginTransaction: async () => void (await client.query('BEGIN')),
+    commit: async () => void (await client.query('COMMIT')),
+    rollback: async () => void (await client.query('ROLLBACK')),
+    // A lone client, not a pooled one: nothing to give back (end() closes it).
+    release: () => {},
+    end: () => client.end(),
+  };
 }
 
 /** Env for a child script: the suite's server, pointed at `database`. */
@@ -35,6 +47,7 @@ export function scriptEnv(database: string): NodeJS.ProcessEnv {
   const db = testDb();
   return {
     ...process.env,
+    DATABASE_URL: '',
     DATABASE_HOST: db.host,
     DATABASE_PORT: db.port,
     DATABASE_USER: db.user,
@@ -78,19 +91,19 @@ export function dropDb(name: string) {
   if (r.status !== 0) throw new Error(`fresh.mjs --drop ${name} failed:\n${r.stderr}`);
 }
 
-/** Feed SQL text to the mysql CLI (the way migrate.mjs applies a file). */
-export function mysqlCli(database: string, sql: string): RunResult {
+/** Run a SQL file's text on `database` the way migrate.mjs applies a file (one simple query). */
+export async function sqlFile(database: string, sql: string): Promise<{ ok: boolean; error: string }> {
   const db = testDb();
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  if (db.password) env.MYSQL_PWD = db.password;
-  else delete env.MYSQL_PWD;
-  const r = spawnSync(
-    'mysql',
-    [`--host=${db.host}`, `--port=${db.port}`, `--user=${db.user}`, '--default-character-set=utf8mb4', database],
-    { input: sql, env, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 },
-  );
-  if (r.error) throw r.error;
-  return { status: r.status, stdout: r.stdout, stderr: r.stderr, out: `${r.stdout}${r.stderr}` };
+  const client = new pg.Client({ host: db.host, port: Number(db.port), user: db.user, password: db.password || undefined, database });
+  await client.connect();
+  try {
+    await client.query(sql);
+    return { ok: true, error: '' };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e) };
+  } finally {
+    await client.end();
+  }
 }
 
 type Conn = Awaited<ReturnType<typeof connect>>;
@@ -102,46 +115,43 @@ export async function rows<T = any>(conn: Conn, sql: string, params: unknown[] =
 
 /**
  * Everything that makes up the schema, as sorted text lines: tables, columns,
- * indexes, foreign keys and CHECK constraints. Two databases with equal
- * snapshots have the same structure.
+ * indexes, constraints (keys, foreign keys, checks), triggers and functions.
+ * Two databases with equal snapshots have the same structure.
  */
-export async function schemaSnapshot(conn: Conn, database: string) {
-  const q = (sql: string) => rows<Record<string, unknown>>(conn, sql, [database]);
+export async function schemaSnapshot(conn: Conn) {
+  const q = (sql: string) => rows<Record<string, unknown>>(conn, sql);
   const line = (r: Record<string, unknown>) => Object.values(r).map((v) => (v === null ? '<null>' : String(v))).join(' | ');
   const tables = await q(
-    `SELECT TABLE_NAME, ENGINE, TABLE_COLLATION FROM information_schema.TABLES
-      WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`,
+    `SELECT table_name FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`,
   );
   const columns = await q(
-    `SELECT TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, COLLATION_NAME
-       FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, ORDINAL_POSITION`,
+    `SELECT c.table_name, c.ordinal_position, c.column_name, format_type(a.atttypid, a.atttypmod) AS type,
+            c.is_nullable, c.column_default, c.is_identity, c.collation_name
+       FROM information_schema.columns c
+       JOIN pg_attribute a ON a.attrelid = ('public.' || quote_ident(c.table_name))::regclass AND a.attname = c.column_name
+      WHERE c.table_schema = 'public' ORDER BY c.table_name, c.ordinal_position`,
   );
-  const indexes = await q(
-    `SELECT TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME
-       FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`,
+  const indexes = await q(`SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' ORDER BY tablename, indexname`);
+  const constraints = await q(
+    `SELECT rel.relname AS table_name, con.conname, con.contype, pg_get_constraintdef(con.oid) AS def
+       FROM pg_constraint con JOIN pg_class rel ON rel.oid = con.conrelid JOIN pg_namespace n ON n.oid = rel.relnamespace
+      WHERE n.nspname = 'public' ORDER BY rel.relname, con.conname`,
   );
-  const fks = await q(
-    `SELECT k.TABLE_NAME, k.CONSTRAINT_NAME, k.COLUMN_NAME, k.REFERENCED_TABLE_NAME, k.REFERENCED_COLUMN_NAME,
-            rc.DELETE_RULE, rc.UPDATE_RULE
-       FROM information_schema.KEY_COLUMN_USAGE k
-       JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
-         ON rc.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA AND rc.CONSTRAINT_NAME = k.CONSTRAINT_NAME
-        AND rc.TABLE_NAME = k.TABLE_NAME
-      WHERE k.TABLE_SCHEMA = ? ORDER BY k.TABLE_NAME, k.CONSTRAINT_NAME, k.ORDINAL_POSITION`,
+  const triggers = await q(
+    `SELECT c.relname AS table_name, t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+      WHERE NOT t.tgisinternal ORDER BY c.relname, t.tgname`,
   );
-  const checks = await q(
-    `SELECT tc.TABLE_NAME, cc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
-       FROM information_schema.CHECK_CONSTRAINTS cc
-       JOIN information_schema.TABLE_CONSTRAINTS tc
-         ON tc.CONSTRAINT_SCHEMA = cc.CONSTRAINT_SCHEMA AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
-      WHERE cc.CONSTRAINT_SCHEMA = ? ORDER BY tc.TABLE_NAME, cc.CONSTRAINT_NAME`,
+  const functions = await q(
+    `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' ORDER BY p.proname`,
   );
   return {
     tables: tables.map(line),
     columns: columns.map(line),
     indexes: indexes.map(line),
-    foreignKeys: fks.map(line),
-    checks: checks.map(line),
+    constraints: constraints.map(line),
+    triggers: triggers.map(line),
+    functions: functions.map(line),
   };
 }
 

@@ -45,7 +45,8 @@ export async function GET(
        LEFT JOIN component parent
          ON c.parent_component_id = parent.component_id AND parent.case_id = c.case_id
        WHERE c.case_id = ?
-       ORDER BY c.component_type, c.created_at, c.component_id`,
+       ORDER BY array_position(ARRAY['product', 'machine_line', 'subprocess', 'operation', 'elemental_task'], c.component_type::text),
+                c.created_at, c.component_id`,
       [caseId]
     );
 

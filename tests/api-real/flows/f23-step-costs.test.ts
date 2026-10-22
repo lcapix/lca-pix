@@ -20,7 +20,8 @@ beforeAll(async () => {
     await sql(
       `INSERT INTO cost_rates (rate_type, rate_key, region_code, rate_value, rate_unit, effective_date, source, fetched_at)
        VALUES ('labor', '51-4121', ?, ?, '$/hr', ?, ?, NOW())
-       ON DUPLICATE KEY UPDATE rate_value = VALUES(rate_value), source = VALUES(source), fetched_at = NOW()`,
+       ON CONFLICT (rate_type, rate_key, region_code, effective_date)
+       DO UPDATE SET rate_value = EXCLUDED.rate_value, source = EXCLUDED.source, fetched_at = NOW()`,
       [region, value, date, source],
     );
   }
@@ -157,7 +158,7 @@ describe('F23 step costs', () => {
       `SELECT b.cost_kind, b.rate, b.source_kind FROM component_cost_basis b
          JOIN component c ON c.component_id = b.component_id
         WHERE c.case_id = ? AND c.component_name = (SELECT component_name FROM component WHERE component_id = ?)
-        ORDER BY b.cost_kind`,
+        ORDER BY array_position(ARRAY['labor', 'energy', 'material', 'transportation', 'equipment', 'overhead'], b.cost_kind::text)`,
       [dup.json.case_id, w.P.base.op],
     );
     expect(copied).toEqual([

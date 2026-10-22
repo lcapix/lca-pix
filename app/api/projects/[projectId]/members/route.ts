@@ -249,7 +249,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     const raw = new URL(request.url).searchParams.get('user_id');
     if (!raw || !/^\d+$/.test(raw)) return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
-    const userId = parseInt(raw);
+    const userId = parseId(raw);
 
     const target = await memberRow(g.projectId, userId);
     if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 });

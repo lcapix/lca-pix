@@ -269,9 +269,9 @@ export async function PUT(
       try {
         await execute(
           `UPDATE case_table ct
-             JOIN component c ON c.case_id = ct.case_id
-              SET ct.modeled_output = c.quantity
-            WHERE c.component_id = ? AND c.parent_component_id IS NULL
+              SET modeled_output = c.quantity
+             FROM component c
+            WHERE c.case_id = ct.case_id AND c.component_id = ? AND c.parent_component_id IS NULL
               AND c.component_type = 'product' AND c.quantity > 0`,
           [componentId],
         );

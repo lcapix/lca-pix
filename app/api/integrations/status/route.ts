@@ -70,10 +70,8 @@ export async function GET(request: NextRequest) {
            COUNT(*)                            AS events,
            MAX(executed_at)                    AS last_sync,
            COALESCE(SUM(records_affected), 0)  AS records,
-           SUM(status = 'failed')              AS fails,
-           SUBSTRING_INDEX(
-             GROUP_CONCAT(status ORDER BY executed_at DESC), ',', 1
-           )                                   AS last_status
+           COUNT(*) FILTER (WHERE status = 'failed') AS fails,
+           (array_agg(status ORDER BY executed_at DESC))[1] AS last_status
       FROM integration_log
      GROUP BY source`);
   const statBySource = new Map<string, any>((logStats ?? []).map((r) => [r.source, r]));

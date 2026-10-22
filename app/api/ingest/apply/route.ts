@@ -442,7 +442,7 @@ export async function POST(request: NextRequest) {
           costs[0]?.provenance?.doc || String(flows[0]?.provenance ?? '').split(' · ')[0] || 'a document';
         await conn.query(
           `UPDATE case_table
-              SET description = LEFT(CONCAT(COALESCE(description, ''), ?), 2000)
+              SET description = LEFT(COALESCE(description, '') || CAST(? AS text), 2000)
             WHERE case_id = ?`,
           [
             ` Added ${sourceDoc}: ${applied} flow(s) on ${usedSteps.size} step(s)` +

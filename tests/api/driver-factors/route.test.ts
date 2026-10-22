@@ -37,7 +37,7 @@ describe('GET /api/driver-factors', () => {
 
     await get();
     const [sql] = vi.mocked(db.query).mock.calls[0];
-    expect(sql).toMatch(/dif\.method_name NOT LIKE 'QUARANTINE%'/);
+    expect(sql).toMatch(/dif\.method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'/);
   });
 
   it('?substance_id= filters by the substance id, not by name', async () => {

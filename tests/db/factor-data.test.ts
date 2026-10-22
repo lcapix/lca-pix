@@ -25,7 +25,7 @@ async function globalWarming(substance: string) {
        JOIN substances s ON s.substance_id = d.substance_id
        JOIN impact_categories ic ON ic.category_id = d.category_id
       WHERE s.substance_name = ? AND ic.category_name = 'Global Warming' AND d.geographic_scope = 'Global'
-        AND d.method_name NOT LIKE 'QUARANTINE%'
+        AND d.method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'
       ORDER BY d.method_name`,
     [substance],
   );
@@ -83,7 +83,7 @@ describe('factor library', () => {
          FROM driver_impact_factors d
          JOIN substances s ON s.substance_id = d.substance_id
          JOIN impact_categories ic ON ic.category_id = d.category_id
-        WHERE d.method_name NOT LIKE 'QUARANTINE%'`,
+        WHERE d.method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'`,
     );
     // The same test the engine applies before multiplying (lib/units
     // toFactorBasis): a denominator that is not the substance's unit must at
@@ -127,7 +127,7 @@ describe('factor library', () => {
     // which proves migrate-009 did not run after migrate-015.
     const [traci] = await rows<{ gwp_vintage: string }>(
       conn,
-      `SELECT gwp_vintage FROM lcia_gwp_vintage WHERE method_name = 'TRACI 2.1' AND factor_group LIKE 'lciafmt%'`,
+      `SELECT gwp_vintage FROM lcia_gwp_vintage WHERE method_name = 'TRACI 2.1' AND factor_group COLLATE "C" ILIKE 'lciafmt%'`,
     );
     expect(traci?.gwp_vintage).toBe('IPCC AR4');
   });
@@ -139,7 +139,7 @@ describe('factor library', () => {
          FROM driver_impact_factors d
          JOIN substances s ON s.substance_id = d.substance_id
          JOIN impact_categories ic ON ic.category_id = d.category_id
-        WHERE ic.category_name = 'Global Warming' AND d.method_name NOT LIKE 'QUARANTINE%'
+        WHERE ic.category_name = 'Global Warming' AND d.method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'
           AND s.substance_name IN ('Electricity', 'Natural Gas')`,
     );
     const value = (s: string, scope: string) =>

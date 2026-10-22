@@ -8,7 +8,7 @@
  * found it on the large case). The fix is a deferred join: sort the run ids
  * alone, then read the wide rows by id and put them back in that order.
  */
-import type { RowDataPacket } from 'mysql2';
+import type { RowDataPacket } from '@/lib/db';
 import { query } from '@/lib/db-helpers';
 
 /** Which runs count: completed only, or completed plus the older rows that predate status. */

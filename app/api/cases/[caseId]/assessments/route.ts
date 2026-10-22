@@ -161,7 +161,8 @@ export async function GET(
            FROM assessment_results ar
            JOIN impact_categories ic ON ar.category_id = ic.category_id
            WHERE ar.run_id = ?
-           GROUP BY ic.category_id, ic.category_name, ar.unit`,
+           GROUP BY ic.category_id, ic.category_name, ar.unit
+           ORDER BY ic.category_id`,
           [assessment.run_id]
         );
 
@@ -183,13 +184,14 @@ export async function GET(
             c.process_type as component_type,
             ${withStage ? 'c.life_cycle_stage,' : ''}
             COUNT(DISTINCT ar.result_id) as flows_processed,
-            JSON_ARRAYAGG(
-              JSON_OBJECT(
+            jsonb_agg(
+              jsonb_build_object(
                 'category_id', ic.category_id,
                 'category_name', ic.category_name,
                 'impact_value', ar.impact_value,
                 'unit', ar.unit
               )
+              ORDER BY ic.category_id
             ) as impacts
            FROM assessment_results ar
            LEFT JOIN component c ON ar.component_id = c.component_id
@@ -197,7 +199,8 @@ export async function GET(
            WHERE ar.run_id = ?
            GROUP BY ar.component_id, c.component_name, c.process_type${
              withStage ? ', c.life_cycle_stage' : ''
-           }`;
+           }
+           ORDER BY ar.component_id NULLS FIRST`;
 
         let componentResults: any[];
         try {

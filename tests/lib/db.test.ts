@@ -5,10 +5,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const createPool = vi.fn();
 
-vi.mock('mysql2/promise', () => ({
-  default: { createPool: (...args: unknown[]) => createPool(...args) },
-  createPool: (...args: unknown[]) => createPool(...args),
-}));
+// pg.Pool is constructed with `new`; the mock records its options.
+vi.mock('pg', () => {
+  function Pool(this: unknown, opts: unknown) {
+    return createPool(opts);
+  }
+  return { default: { Pool, types: { getTypeParser: () => (v: string) => v } } };
+});
 
 const DB_VARS = [
   'DATABASE_HOST',
@@ -18,21 +21,22 @@ const DB_VARS = [
   'DATABASE_NAME',
   'DATABASE_SSL',
   'DATABASE_SSL_CA',
+  'DATABASE_URL',
 ] as const;
 
 const saved: Record<string, string | undefined> = {};
 
 function fakePool() {
   return {
-    execute: vi.fn(async () => [[{ ok: 1 }], []]),
-    getConnection: vi.fn(async () => ({ release: vi.fn() })),
+    query: vi.fn(async () => ({ command: 'SELECT', rows: [{ ok: 1 }], fields: [{ name: 'ok' }], rowCount: 1 })),
+    connect: vi.fn(async () => ({ query: vi.fn(), release: vi.fn() })),
     end: vi.fn(async () => undefined),
   };
 }
 
 function setLocalEnv() {
   process.env.DATABASE_HOST = '127.0.0.1';
-  process.env.DATABASE_PORT = '3306';
+  process.env.DATABASE_PORT = '5432';
   process.env.DATABASE_USER = 'app_user';
   process.env.DATABASE_PASSWORD = 'not-a-real-password';
   process.env.DATABASE_NAME = 'lcapix_test';
@@ -105,12 +109,41 @@ describe('lib/db', () => {
     const opts = createPool.mock.calls[0][0];
     expect(opts).toMatchObject({
       host: '127.0.0.1',
-      port: 3306,
+      port: 5432,
       user: 'app_user',
       password: 'not-a-real-password',
       database: 'lcapix_test',
     });
     expect(opts.ssl).toBeUndefined();
+  });
+
+  it('answers in mysql2 shapes: [rows, fields] for a read', async () => {
+    setLocalEnv();
+    const { default: pool } = await import('@/lib/db');
+    const [rows, fields] = await pool.execute('SELECT 1 AS ok WHERE 1 = ?', [1]);
+    expect(rows).toEqual([{ ok: 1 }]);
+    expect(fields).toEqual([{ name: 'ok' }]);
+    const sent = createPool.mock.results[0].value.query.mock.calls[0][0];
+    expect(sent).toEqual({ text: 'SELECT 1 AS ok WHERE 1 = $1', values: [1] });
+  });
+
+  it('takes DATABASE_URL (Neon and other hosts) instead of the separate variables', async () => {
+    process.env.DATABASE_URL = 'postgres://app@db.example.test/lcapix?sslmode=require';
+    const { dbConfigFromEnv } = await import('@/lib/db');
+    expect(dbConfigFromEnv()).toMatchObject({ connectionString: 'postgres://app@db.example.test/lcapix?sslmode=require' });
+    expect(dbConfigFromEnv().host).toBeUndefined();
+    // Its own sslmode applies: nothing is added on top.
+    expect(dbConfigFromEnv().ssl).toBeUndefined();
+  });
+
+  it('never connects to a remote database in plain text: a URL without sslmode gets verified TLS; a local one does not', async () => {
+    const { dbConfigFromEnv } = await import('@/lib/db');
+    process.env.DATABASE_URL = 'postgresql://app@ep-x.us-east-1.aws.neon.tech/neondb';
+    expect(dbConfigFromEnv().ssl).toEqual({ rejectUnauthorized: true });
+    process.env.DATABASE_URL = 'postgres://postgres@127.0.0.1:5433/lcapix_t_x';
+    expect(dbConfigFromEnv().ssl).toBeUndefined();
+    process.env.DATABASE_URL = 'not a url';
+    expect(() => dbConfigFromEnv()).toThrow(/DATABASE_URL is not a valid connection string/);
   });
 
   it('turns on verified TLS with DATABASE_SSL=true and reads the CA from a file', async () => {

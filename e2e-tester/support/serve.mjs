@@ -4,7 +4,7 @@
  *
  *   1. Runs the Playwright suite's server, tests/e2e/support/serve.mjs, on
  *      E2E_PORT (3150): it builds a throwaway database lcapix_t_e2e_<time>_<hex>
- *      with scripts/db/fresh.mjs on the local MySQL (127.0.0.1 / localhost only),
+ *      with scripts/db/fresh.mjs on the local Postgres (127.0.0.1 / localhost only),
  *      starts `next dev` on it with every third-party key blanked and outbound
  *      network blocked, and drops the database when it stops.
  *   2. Warms the app: signs up one warm-up account through the API, loads its

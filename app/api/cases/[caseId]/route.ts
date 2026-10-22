@@ -245,7 +245,7 @@ export async function PUT(
             const byAuthor = self && Object.prototype.hasOwnProperty.call(self, 'created_by');
             await conn.query(
               `UPDATE case_table SET is_final = 0, finalized_at = NULL
-                WHERE project_id = ? AND case_id <> ? AND is_final = 1${byAuthor ? ' AND created_by <=> ?' : ''}`,
+                WHERE project_id = ? AND case_id <> ? AND is_final = 1${byAuthor ? ' AND created_by IS NOT DISTINCT FROM ?' : ''}`,
               [caseData.project_id, caseId, ...(byAuthor ? [self.created_by] : [])],
             );
           }

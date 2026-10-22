@@ -29,18 +29,17 @@ export async function GET(request: NextRequest) {
       FROM substances s
       LEFT JOIN (
         SELECT substance_id,
-               GROUP_CONCAT(DISTINCT method_name ORDER BY method_name SEPARATOR '|') AS methods_with_factors,
+               string_agg(DISTINCT method_name, '|' ORDER BY method_name) AS methods_with_factors,
                COUNT(*) AS factor_count,
                SUBSTRING(
-                 GROUP_CONCAT(
-                   DISTINCT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(source_reference, ' (', 1), ',', 1))
-                   ORDER BY TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(source_reference, ' (', 1), ',', 1))
-                   SEPARATOR ' · '
+                 string_agg(
+                   DISTINCT TRIM(split_part(split_part(source_reference COLLATE "C", ' (', 1), ',', 1)), ' · '
+                   ORDER BY TRIM(split_part(split_part(source_reference COLLATE "C", ' (', 1), ',', 1)) NULLS FIRST
                  ),
                  1, 160
                ) AS data_source
         FROM driver_impact_factors
-        WHERE factor_value <> 0 AND method_name NOT LIKE 'QUARANTINE%'
+        WHERE factor_value <> 0 AND method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'
         GROUP BY substance_id
       ) fc ON fc.substance_id = s.substance_id`;
     const params: any[] = [];

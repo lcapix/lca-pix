@@ -221,11 +221,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
            (component_id, cost_kind, driver_quantity, driver_unit, rate, rate_unit, rate_label, rate_code,
             region, source_kind, source_name, vintage, cost_lines, updated_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
-         ON DUPLICATE KEY UPDATE driver_quantity = VALUES(driver_quantity), driver_unit = VALUES(driver_unit),
-           rate = VALUES(rate), rate_unit = VALUES(rate_unit), rate_label = VALUES(rate_label),
-           rate_code = VALUES(rate_code), region = VALUES(region), source_kind = VALUES(source_kind),
-           source_name = VALUES(source_name), vintage = VALUES(vintage), cost_lines = NULL,
-           updated_by = VALUES(updated_by)`,
+         ON CONFLICT (component_id, cost_kind) DO UPDATE SET driver_quantity = EXCLUDED.driver_quantity, driver_unit = EXCLUDED.driver_unit,
+           rate = EXCLUDED.rate, rate_unit = EXCLUDED.rate_unit, rate_label = EXCLUDED.rate_label,
+           rate_code = EXCLUDED.rate_code, region = EXCLUDED.region, source_kind = EXCLUDED.source_kind,
+           source_name = EXCLUDED.source_name, vintage = EXCLUDED.vintage, cost_lines = NULL,
+           updated_by = EXCLUDED.updated_by`,
         [
           componentId, kind, basis.driver_quantity, basis.driver_unit, basis.rate, basis.rate_unit,
           basis.rate_label, basis.rate_code, basis.region, basis.source_kind, basis.source_name,
@@ -264,10 +264,10 @@ async function useFlows(componentId: number, body: any, userId: number) {
          (component_id, cost_kind, driver_quantity, driver_unit, rate, rate_unit, rate_label, rate_code,
           region, source_kind, source_name, vintage, cost_lines, updated_by)
        VALUES (?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, 'reference', ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE driver_quantity = NULL, driver_unit = NULL, rate = NULL, rate_unit = NULL,
-         rate_label = NULL, rate_code = VALUES(rate_code), region = NULL, source_kind = VALUES(source_kind),
-         source_name = VALUES(source_name), vintage = VALUES(vintage), cost_lines = VALUES(cost_lines),
-         updated_by = VALUES(updated_by)`,
+       ON CONFLICT (component_id, cost_kind) DO UPDATE SET driver_quantity = NULL, driver_unit = NULL, rate = NULL, rate_unit = NULL,
+         rate_label = NULL, rate_code = EXCLUDED.rate_code, region = NULL, source_kind = EXCLUDED.source_kind,
+         source_name = EXCLUDED.source_name, vintage = EXCLUDED.vintage, cost_lines = EXCLUDED.cost_lines,
+         updated_by = EXCLUDED.updated_by`,
       [componentId, kind, FROM_FLOWS, "Reference prices for the step's flows", REFERENCE_VINTAGE, JSON.stringify(suggestion.lines), userId],
     );
   });

@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         FROM driver_impact_factors dif
         LEFT JOIN impact_categories ic ON dif.category_id = ic.category_id
         LEFT JOIN substances s          ON dif.substance_id = s.substance_id
-        WHERE dif.method_name NOT LIKE 'QUARANTINE%'
+        WHERE dif.method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'
       `;
       const params: any[] = [];
 

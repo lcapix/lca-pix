@@ -4,14 +4,16 @@ import { requireAuth } from '@/lib/auth'
 import { query } from '@/lib/db-helpers'
 import { jsonArray } from '@/lib/compare/legacy'
 import { isAuthError, projectAccessDenied, reachableCasesFilter, unreachableCaseIds } from '@/lib/route-guard'
+import { parseId } from '@/lib/ids'
 
 // Legacy saved comparisons. Nothing new is saved any more (Compare Cases at
 // /project/[id]/comparison reads live runs); these routes only list what was
 // saved before, for the "Saved comparisons" list on the Compare page.
 
+/** A plain id (lib/ids.ts parseId: digits only, within an id column), or null. */
 const positiveInt = (v: unknown): number | null => {
-  const n = Number(v)
-  return Number.isInteger(n) && n > 0 ? n : null
+  const n = parseId(v)
+  return Number.isNaN(n) ? null : n
 }
 
 // POST /api/comparisons - checks the cases; saves nothing (see above).

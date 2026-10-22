@@ -3,7 +3,7 @@
  * Compares environmental impacts across multiple cases
  */
 
-import { Connection, RowDataPacket } from 'mysql2/promise'
+import type { Connection, RowDataPacket } from '@/lib/db'
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -187,7 +187,8 @@ async function fetchCaseAssessment(
      FROM assessment_results ar
      JOIN impact_categories ic ON ar.category_id = ic.category_id
      WHERE ar.run_id = ?
-     GROUP BY ic.category_id, ic.category_name, ic.unit`,
+     GROUP BY ic.category_id, ic.category_name, ic.unit
+     ORDER BY ic.category_id`,
     [runId]
   )
 

@@ -161,7 +161,7 @@ async function cachedReply(runId: number, hash: string): Promise<{ reply: string
 
 async function keepReply(runId: number, hash: string, model: string, reply: string): Promise<void> {
   try {
-    await execute(`INSERT IGNORE INTO insight_cache (run_id, prompt_hash, model, reply) VALUES (?, ?, ?, ?)`, [
+    await execute(`INSERT INTO insight_cache (run_id, prompt_hash, model, reply) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`, [
       runId,
       hash,
       model.slice(0, 100),

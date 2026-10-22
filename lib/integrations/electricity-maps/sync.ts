@@ -45,7 +45,7 @@ export async function syncZoneFactor(zone: string, method = 'CML 2001'): Promise
 
   const gw = await queryOne<any>(
     `SELECT category_id FROM impact_categories
-      WHERE LOWER(category_name) LIKE '%global warming%' LIMIT 1`,
+      WHERE category_name COLLATE "C" ILIKE '%global warming%' LIMIT 1`,
   );
   if (!gw) throw new Error('Global Warming impact category not found');
 

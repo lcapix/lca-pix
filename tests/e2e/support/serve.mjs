@@ -3,12 +3,12 @@
  * Playwright's webServer for the browser suite.
  *
  *   1. Builds a throwaway database lcapix_t_e2e_<time>_<hex> from nothing with
- *      scripts/db/fresh.mjs (baseline schema + reference seed + every
- *      migration) on the local MySQL named by DATABASE_HOST/PORT/USER/PASSWORD.
+ *      scripts/db/fresh.mjs (db/pg schema + library + every migration) on the
+ *      local Postgres named by DATABASE_HOST/PORT/USER/PASSWORD.
  *      Only 127.0.0.1 / localhost / ::1 are accepted (fresh.mjs refuses others).
- *      E2E_FROM_DUMP=<file.sql> starts it from a copy of a real database instead
- *      (with E2E_BASELINE_THROUGH=025 for production's ledger), so a journey can
- *      run on real data; the copy is a throwaway like any other.
+ *      E2E_FROM_DB=<local database> starts it as a copy of that database
+ *      instead (the production copy the load made), so a journey can run on
+ *      real data; the copy is a throwaway like any other.
  *   2. Runs `next dev -p 3120` against it, with outbound network blocked
  *      (block-outbound.cjs) and every third-party key blanked.
  *   3. On SIGTERM / SIGINT (Playwright's gracefulShutdown) or when Next exits,
@@ -43,31 +43,31 @@ const server = serverFromEnv();
 
 // 1. Leftovers from killed runs.
 const STALE_MS = 3 * 60 * 60 * 1000;
-for (const name of listThrowaway(server)) {
+for (const name of await listThrowaway(server)) {
   const m = new RegExp(`^${DB_PREFIX}([0-9a-z]+)_[0-9a-f]{6}$`).exec(name);
   if (!m) continue;
   const t = parseInt(m[1], 36);
   if (Number.isFinite(t) && Date.now() - t > STALE_MS) {
-    dropDatabase(name, server);
+    await dropDatabase(name, server);
     log(`dropped stale ${name}`);
   }
 }
 
 // 2. A fresh database.
 const database = `${DB_PREFIX}${Date.now().toString(36)}_${randomBytes(3).toString('hex')}`;
-createFreshDatabase({
+// E2E_FROM_DB: a copy of another local database (the production copy, for the
+// release journey) instead of one built from the baseline.
+await createFreshDatabase({
   name: database,
   server,
   log,
-  ...(process.env.E2E_FROM_DUMP
-    ? { fromDump: process.env.E2E_FROM_DUMP, baselineThrough: Number(process.env.E2E_BASELINE_THROUGH) || undefined }
-    : {}),
+  ...(process.env.E2E_FROM_DB ? { fromTemplate: process.env.E2E_FROM_DB } : {}),
 });
 mkdirSync(STATE_DIR, { recursive: true });
 writeFileSync(SERVER_STATE, JSON.stringify({ database, port: PORT, pid: process.pid, startedAt: new Date().toISOString() }, null, 2));
 
 let dropped = false;
-function dropOnce() {
+async function dropOnce() {
   if (dropped) return;
   dropped = true;
   if (process.env.E2E_KEEP_DB === '1') {
@@ -75,7 +75,7 @@ function dropOnce() {
     return;
   }
   try {
-    dropDatabase(database, server);
+    await dropDatabase(database, server);
     log(`dropped ${database}`);
   } catch (e) {
     log(`could not drop ${database}: ${e?.message ?? e}`);
@@ -94,6 +94,7 @@ const blanked = [
 const env = { ...process.env };
 for (const k of blanked) env[k] = '';
 Object.assign(env, {
+  DATABASE_URL: '',
   DATABASE_HOST: server.host,
   DATABASE_PORT: server.port,
   DATABASE_USER: server.user,
@@ -129,7 +130,7 @@ function stop(signal) {
 }
 for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => stop(sig));
 
-child.on('exit', (code, signal) => {
-  dropOnce();
+child.on('exit', async (code, signal) => {
+  await dropOnce();
   process.exit(stopping ? 0 : code ?? (signal ? 1 : 0));
 });

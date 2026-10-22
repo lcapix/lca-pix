@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
               description, source_reference, is_custom
          FROM process_templates
         WHERE is_custom = 0 OR created_by = ?
-        ORDER BY is_custom, process_family, template_name`,
+        ORDER BY is_custom, process_family NULLS FIRST, template_name`,
       [userId],
     );
 

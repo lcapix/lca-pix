@@ -97,17 +97,18 @@ export async function POST(
         let flowsScaled = 0;
         if (mode === 'scale-inputs') {
           const [fr]: any = await conn.query(
-            `UPDATE flows f JOIN component c ON c.component_id = f.component_id
-                SET f.quantity = f.quantity * ?
-              WHERE c.case_id = ?`,
+            `UPDATE flows f
+                SET quantity = f.quantity * ?
+               FROM component c
+              WHERE c.component_id = f.component_id AND c.case_id = ?`,
             [factor, caseId]
           );
           flowsScaled = fr.affectedRows ?? 0;
           // Only the cost columns this database has (later migrations add some).
           const [cols]: any = await conn.query(
-            `SELECT COLUMN_NAME FROM information_schema.COLUMNS
-              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'component'
-                AND COLUMN_NAME IN (${PER_UNIT_COST_COLUMNS.map(() => '?').join(', ')})`,
+            `SELECT column_name AS "COLUMN_NAME" FROM information_schema.columns
+              WHERE table_schema = current_schema() AND table_name = 'component'
+                AND column_name IN (${PER_UNIT_COST_COLUMNS.map(() => '?').join(', ')})`,
             PER_UNIT_COST_COLUMNS
           );
           const present: string[] = cols.map((r: any) => r.COLUMN_NAME);

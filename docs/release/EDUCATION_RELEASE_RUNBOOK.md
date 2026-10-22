@@ -1,7 +1,7 @@
-# Release runbook: the education screens
+# Release runbook: the education screens, on Postgres
 
-The release that puts the 35 education screens live. Do the steps **in order**. Every step that
-touches production needs Shreya's go; nothing here has been run on production yet.
+The release that puts the 35 education screens live, now on Postgres (Neon, through Vercel) instead of
+MySQL on AWS RDS. Do the steps **in order**. Every step that touches production needs Shreya's go.
 
 ## What people will see change
 
@@ -13,81 +13,58 @@ touches production needs Shreya's go; nothing here has been run on production ye
   or energy cost from the flows ("Material cost from these flows: $0.12 · Use it") and names any
   material with no price ("No price for Packaging tape: add its cost"). Nothing changes until Use it.
 - **New accounts** get a finished sample study (the painted steel bracket, 1.72 kg CO₂-eq) built
-  when they sign up. **Existing accounts** keep their projects, which appear on the new Home; they
-  can add the sample from Home ("Add the sample study").
-- **Nobody is signed out.** `JWT_SECRET` does not change in this release.
-- **Preview deployments** lose Vercel's toolbar: the Content Security Policy is now enforced and does
-  not allow `vercel.live`. Production never shows the toolbar.
-- **Nothing else.** The data people entered is untouched: the release migrations add tables and
-  columns and four library substances, and remove nothing (rehearsed, below).
+  when they sign up. **Existing accounts** keep their projects, which appear on the new Home.
+- **Their data is production as of Oct 14, 2026** (the newest copy that could be taken before AWS
+  access was lost). Anything entered on the live site after Oct 14 is not carried over.
+- **Nobody is signed out.** `JWT_SECRET` does not change, and every account keeps its id.
+- **The database moves; nothing about it is visible.** Every case computes exactly what it did on
+  MySQL: all 32 production cases, 64 runs, 655 values, bit-identical (port log, P4).
 
 ## What the release contains
 
 | Part | Detail |
 |---|---|
-| Code | branch `v1-production` (on top of 9227580; one commit, made with her go) |
-| Migrations | 033 to 042, all additive and idempotent: 033 a flow may have no amount yet, 034 own factor per flow, 035 cost basis per step, 036 list indexes, 037 per-case privacy, 038 sample flags, 039 four sample substances, 040 held import lines, 041 pinned projects, 042 the AI switch and checked-reply cache |
-| Deploy gate | `pnpm vercel-build` runs `scripts/db/check-migrations.mjs` before `next build`: a production build stops if a migration has not reached its database |
+| Code | branch `v1-postgres` (on top of `66d49ff`, the tested MySQL release; one commit, made together) |
+| Database | Neon Postgres 17, loaded once from the Oct 14 production copy by `~/lca/ops/load-neon-2026-10-22.sh`: schema (`db/pg/000-schema.sql`) and every row in one transaction, then proved (row count and fingerprint per table, schema 0 differences, deploy gate) |
+| Data layer | `lib/db.ts` (pg, mysql2-shaped results) and `lib/db-dialect.ts`; MySQL-only SQL rewritten at the site; port log `~/lca/research/postgres-port-log.md` |
+| Deploy gate | `pnpm vercel-build` runs `scripts/db/check-migrations.mjs` before `next build`: a production build stops unless the database records the baseline and every file in `db/pg/migrations` |
 | Health | `GET /api/health`: 200 `{"status":"ok","db":"ok","commit":"<sha>"}`, 503 when the database does not answer |
 | Logs | production server lines are JSON (lib/observability); errors carry `"alert":true` |
-| Dependencies | Next.js 15.5.27 (the 15.5.26 advisories fixed); six "latest" ranges pinned |
 
-## Before the day
+## The load (once, before the merge)
 
-1. **Environment variables on Vercel (Production).** Required and already set: `DATABASE_HOST`,
-   `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`, `JWT_SECRET`,
-   `NEXT_PUBLIC_APP_URL`. Recommended: `DATABASE_SSL=true` with `DATABASE_SSL_CA`. Optional, each
-   switches a feature on with no code change:
-   - `KV_REST_API_URL` and `KV_REST_API_TOKEN` (or the Upstash pair): rate limits shared across
-     server instances, so "reads left this hour" is exact. Without them each instance counts alone.
-   - `HF_TOKEN`: Magic Insights' written narration. Without it the computed summary shows.
-   - `NEXT_PUBLIC_LCAPIX_LMS_NAME=Canvas`: names the course system on the hand-in line.
-   - Error monitoring: a Vercel log drain to the provider, filtered on `"alert":true`.
-2. **A fresh dump of production**, then the rehearsal on it, locally:
-   ```bash
-   node scripts/db/rehearse.mjs <today's lcapix-prod dump> --from=033 --baseline-through=025
-   ```
-   It must end with `every check held`. On the Oct 14 copy it did (2026-10-21): 033 to 042 applied
-   in 2.1 s; five new empty tables, four substances, ten ledger rows; no row removed anywhere; a second
-   runner pass applied nothing; each file run again by hand changed none of the 28 table checksums;
-   the final schema matched the tested one with 0 differences.
-   `--baseline-through=025` mirrors how production's ledger was started. Production now has a
-   ledger (24 rows, 009 to 032): **never run `--baseline` on production again.**
+1. In Vercel, Storage, the Neon database: copy `DATABASE_URL_UNPOOLED` (the direct connection) into
+   `~/lca/.neon.env` as `NEON_URL=…`. Never commit it, never paste it in a chat.
+2. Run `bash ~/lca/ops/load-neon-2026-10-22.sh` and type the Neon database name when asked.
+3. It must end with all three: `27 tables copied, every row count and fingerprint the same`,
+   `0 differences`, `[migrations] all 2 migrations are on <database>`. If the load fails, Neon is
+   left exactly as it was: fix the cause and run it again.
 
-## The day
+## Vercel
 
-1. **Snapshot the database** (RDS snapshot of `lcapix-prod`) and keep a `mysqldump` beside it.
-2. **Dry run against production.** From a machine that can reach it, with the production values in a
-   local env file that is never committed:
-   ```bash
-   node --env-file=<prod env file> scripts/db/migrate.mjs --dry-run --allow-remote
-   ```
-   It asks you to type the database name. It must list exactly `migrate-033` to `migrate-042` as
-   pending. Anything else pending, or a checksum warning on 033 to 042: stop and look.
-3. **Apply them.** The same command without `--dry-run`. Each file is recorded as it applies; a
-   failure stops the run and records nothing for that file. The code now live keeps working on the
-   new schema: every change is a new table, an index, or a new column with a default, and 033 only
-   allows an empty flow amount, which only the new code writes. Verified 2026-10-21: production's code
-   (b5bed3d) passed its own API suite, 1,550 of 1,550, on a database built with all 34 migrations.
-4. **Confirm the gate will pass:**
-   ```bash
-   node --env-file=<prod env file> scripts/db/check-migrations.mjs --force
-   ```
-   Expect `all 34 migrations are on <database>`.
-5. **Vercel: production branch = `main`** (Project, Settings, Git). Today it is `v1-hardening`.
-6. **Merge.** Push `v1-production`, open a pull request into `main`, wait
-   for the checks (CI: typecheck, unit, build, gitleaks, DB, API, browser tests), merge with "Create a
-   merge commit".
-   The push to `main` deploys production twice if both paths stay on: the GitHub workflow's
-   `vercel --prod` job (needs the `VERCEL_TOKEN`, `ORG_ID`, `PROJECT_ID` secrets) and Vercel's own Git
-   deploy of the production branch. Both run the migration gate; keep one (Vercel's Git deploy is the
-   simpler) and disable the other.
-7. **Watch the build.** It prints `[migrations] all 34 migrations are on …` before `next build`. A
-   build that stops there means step 3 did not reach the database the deployment uses.
+1. **Environment variables (Production, and Preview).** The Neon integration added `DATABASE_URL`
+   (the pooled connection). The new code reads it first. **Leave the old `DATABASE_HOST`,
+   `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME` (RDS) in place for now:** the current
+   production deployment uses them, and Instant Rollback needs them. Remove them once the release
+   has run cleanly. `JWT_SECRET` and `NEXT_PUBLIC_APP_URL` stay as they are. Optional, each switches
+   a feature on with no code change: `KV_REST_API_URL` and `KV_REST_API_TOKEN` (exact "reads left"),
+   `HF_TOKEN` (Magic Insights narration; needs credits), `NEXT_PUBLIC_LCAPIX_LMS_NAME=Canvas`.
+2. **Preview deployments** need a database with the schema too. If the Neon integration makes a
+   branch per preview, it copies the loaded database and works; if Preview points at an empty
+   database, previews answer 500 (the gate only warns on previews).
+3. **Production branch = `main`** (Project, Settings, Git). Today it is `v1-hardening`.
+4. **One production deploy path.** A push to `main` runs both the GitHub workflow's `vercel --prod`
+   job and Vercel's own Git deploy if both are on; keep one (Vercel's Git deploy is the simpler).
+
+## The merge
+
+1. Push `v1-postgres` and open a pull request into `main`. The checks (typecheck, unit, build,
+   gitleaks, DB, API and browser tests, now on a Postgres 17 service) must pass.
+2. Merge with "Create a merge commit".
+3. Watch the build: it prints `[migrations] all 2 migrations are on <database>` before `next build`.
+   A build that stops there means the deployment's `DATABASE_URL` is not the loaded Neon database.
 
 ## The live smoke test
-
-Read-only, no account needed:
 
 ```bash
 curl -s https://<domain>/api/health
@@ -97,28 +74,35 @@ Expect `{"status":"ok","db":"ok","commit":"<the merge commit's first 7>"}`.
 ```bash
 node scripts/security/check-headers.mjs https://<domain>
 ```
-Expect `0 misses` (the enforced CSP, HSTS, nosniff, frame denial and the rest, on a page, log in, an API
-route, a 404 and a static file).
+Expect `0 misses`.
 
-Then in a browser: the landing page shows the bracket and 1.72; `/auth/login` loads; an unauthenticated
-`/api/projects` answers 401. With the team's own account: Home opens, a project opens, a case runs.
+Then in a browser: the landing page shows the bracket and 1.72; log in with an existing account;
+Home lists its projects; open a case and run it: the numbers are the ones it had before.
 
 ## Rollback
 
-- **Code:** Vercel, Deployments, the previous production deployment, Instant Rollback. The schema stays;
-  the old code runs on it (step 3, verified).
-- **Only the screens:** `NEXT_PUBLIC_LCAPIX_SHELL=classic` (and `NEXT_PUBLIC_LCAPIX_WORKSPACE=classic` for
-  the case workspace) bring the classic screens back. They are read at build time, so set them and
-  redeploy.
-- **The database:** the migrations are not reversed. Restore the snapshot from step 1 only if data is
-  damaged, which the rehearsal says these migrations do not do.
+- **Code and database together:** Vercel, Deployments, the previous production deployment, Instant
+  Rollback. It runs the MySQL release against RDS, as before. Anything written on Neon after the
+  switch is not on RDS: say so to anyone affected. This works only while RDS runs and its variables
+  are still set.
+- **Only the screens:** `NEXT_PUBLIC_LCAPIX_SHELL=classic` (and `NEXT_PUBLIC_LCAPIX_WORKSPACE=classic`
+  for the case workspace), then redeploy. They are read at build time.
+
+## After the release
+
+- Remove the RDS `DATABASE_*` variables from Vercel once the release has run cleanly.
+- When AWS access is back: a final snapshot of `lcapix-prod`, then delete it, and check that the old
+  `lca-dev-db` (about $354 a month in September) and the EC2 box are gone.
+- A schema change from now on: a numbered file in `db/pg/migrations`, rehearsed on a restored copy of
+  Neon (`node scripts/db/rehearse.mjs --from=<local copy>`), applied with
+  `node --env-file=<prod env> scripts/db/migrate.mjs --allow-remote` before the merge that needs it.
 
 ## Still open (not blocking the release)
 
 - Cardboard in the sample: the library has a factor for it (0.937), so the design's "no factor" line
   is false; the sample leaves cardboard out for now (1.72, not 1.78). Her decision.
 - The Pricing and Security pages still carry lines the D10 review flagged.
-- The Overview of a project of your own is still the classic page.
-- The members API still allows sharing a sample project (the screens never offer it).
+- Production's data has three old findings (integrity report, the same on MySQL and Postgres): 3 steps
+  whose level is not their depth, 27 library substances with an empty category, 51 texts encoded twice.
 - 31 advisories in build-time and install-time packages are accepted with reasons in
   `scripts/security/audit-accepted.json`; review on every dependency change.

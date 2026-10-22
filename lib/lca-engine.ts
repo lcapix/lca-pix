@@ -30,7 +30,7 @@
  * tests/lib/calculations-doc-example.test.ts.
  */
 
-import type { Connection, RowDataPacket } from 'mysql2/promise';
+import type { Connection, RowDataPacket } from '@/lib/db';
 import { duplicateWarnings } from './duplicate-flows';
 import { canonicalizeRegion, selectBestScopeRows } from './factor-selection';
 import { toFactorBasis } from './units';
@@ -577,7 +577,7 @@ async function queryFactorOverrides(
               ic.category_name, ic.unit AS category_unit,
               f.substance_id, s.substance_name, s.cas_number, s.unit AS substance_default_unit,
               f.flow_type, f.quantity, f.unit AS flow_unit,
-              (SELECT GROUP_CONCAT(DISTINCT TRIM(SUBSTRING_INDEX(d.unit, '/', 1)) SEPARATOR '|')
+              (SELECT string_agg(DISTINCT TRIM(split_part(d.unit COLLATE "C", '/', 1)) COLLATE ci, '|')
                  FROM driver_impact_factors d
                 WHERE d.method_name = ? AND d.category_id = o.category_id) AS method_units
          FROM flow_factor_overrides o
@@ -707,7 +707,8 @@ export async function calculateCaseImpacts(
      LEFT JOIN flows f ON c.component_id = f.component_id
      WHERE c.case_id = ?
      GROUP BY c.component_id, c.component_name
-     HAVING flow_count > 0`,
+     HAVING COUNT(f.flow_id) > 0
+     ORDER BY c.component_id`,
     [caseId]
   );
 

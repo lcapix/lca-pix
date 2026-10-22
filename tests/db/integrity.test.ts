@@ -26,15 +26,18 @@ const check = (id: string) => {
 };
 const run = (id: string) => rows<Record<string, unknown>>(conn, check(id).sql);
 
-/** Run `body` in a transaction that is always rolled back. */
+/**
+ * Run `body` in a transaction that is always rolled back. fkOff plants rows
+ * no foreign key would allow: Postgres's replica role skips the key checks
+ * (MySQL's FOREIGN_KEY_CHECKS = 0), for this transaction only.
+ */
 async function inRollback(body: () => Promise<void>, { fkOff = false } = {}) {
   await conn.query('START TRANSACTION');
-  if (fkOff) await conn.query('SET FOREIGN_KEY_CHECKS = 0');
+  if (fkOff) await conn.query(`SET LOCAL session_replication_role = 'replica'`);
   try {
     await body();
   } finally {
     await conn.query('ROLLBACK');
-    if (fkOff) await conn.query('SET FOREIGN_KEY_CHECKS = 1');
   }
 }
 

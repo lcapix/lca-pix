@@ -188,8 +188,8 @@ async function addHomeSummaries(projects: any[], userId: number) {
   if (runIds.length) {
     const rows = await query<any>(
       `SELECT run_id, run_date,
-              JSON_EXTRACT(run_snapshot, '$.totals') AS totals,
-              JSON_EXTRACT(run_snapshot, '$.goal_scope.per_fu_scale') AS per_fu_scale
+              run_snapshot->'totals' AS totals,
+              run_snapshot->'goal_scope'->'per_fu_scale' AS per_fu_scale
          FROM assessment_runs WHERE run_id IN (${runIds.map(() => '?').join(', ')})`,
       runIds,
     );

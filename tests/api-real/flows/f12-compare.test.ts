@@ -137,7 +137,7 @@ describe('F12 comparative case -> compare', () => {
 
     // Edit the copy after its run: stale, not ranked on old numbers.
     const [flow] = await sql('SELECT f.flow_id FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ? LIMIT 1', [w.P.comp.id]);
-    await sql('UPDATE assessment_runs SET run_date = run_date - INTERVAL 5 SECOND WHERE run_id = ?', [w.P.comp.run]);
+    await sql(`UPDATE assessment_runs SET run_date = run_date - INTERVAL '5 seconds' WHERE run_id = ?`, [w.P.comp.run]);
     await api.put(`/api/flows/${flow.flow_id}`, { token: owner.token, json: { quantity: 1.2 } });
     const stale = await api.get(`/api/projects/${w.P.id}/compare?cases=${w.P.base.id},${w.P.comp.id}`, { token: owner.token });
     expect(stale.json.cases[1]).toMatchObject({ status: 'stale', statusReason: 'Edited after this run' });

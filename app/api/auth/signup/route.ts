@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
       try {
         userId = await insert(
           `INSERT INTO account (username, full_name, email, password_hash, account_type, is_active)
-           VALUES (?, ?, ?, ?, 'user', TRUE)`,
+           VALUES (?, ?, ?, ?, 'user', 1)`,
           [username, fullName, normalizedEmail, password_hash]
         );
       } catch (err: any) {

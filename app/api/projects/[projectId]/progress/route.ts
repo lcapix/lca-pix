@@ -73,8 +73,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (latestIds.length) {
       const runs = await query<any>(
         `SELECT run_id, case_id, run_date, calculation_method, region_code,
-                JSON_EXTRACT(run_snapshot, '$.totals') AS totals,
-                JSON_EXTRACT(run_snapshot, '$.goal_scope.per_fu_scale') AS per_fu_scale
+                run_snapshot->'totals' AS totals,
+                run_snapshot->'goal_scope'->'per_fu_scale' AS per_fu_scale
            FROM assessment_runs WHERE run_id IN (${latestIds.map(() => '?').join(', ')})`,
         latestIds
       );

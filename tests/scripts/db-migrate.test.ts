@@ -1,8 +1,8 @@
 /**
- * scripts/db/migrate.mjs — the migration runner (audit 2026-09-29 §5).
- * Pure helpers are tested directly; the host policy is tested by running the
- * CLI against a non-local host name, which it must refuse before it runs any
- * mysql command (nothing is contacted).
+ * scripts/db/migrate.mjs, the Postgres migration runner (audit 2026-09-29 §5;
+ * the port, P2). Pure helpers are tested directly; the host policy is tested
+ * by running the CLI against a non-local host name, which it must refuse
+ * before it connects to anything.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -13,9 +13,10 @@ import {
   listMigrations,
   isLocalHost,
   planMigrations,
-  baselineCandidates,
   sha256,
   parseArgs,
+  connectionFromEnv,
+  pgConfigFromUrl,
 } from '../../scripts/db/migrate.mjs';
 
 const SCRIPT = path.resolve(__dirname, '../../scripts/db/migrate.mjs');
@@ -84,21 +85,41 @@ describe('planMigrations', () => {
   });
 });
 
-describe('baselineCandidates', () => {
-  it('marks only 009 through 025 by default, and only those not yet recorded', () => {
-    const files = listMigrations(dir);
-    const got = baselineCandidates(files, new Map([['migrate-010-b.sql', 'x']]));
-    expect(got.map((f: { filename: string }) => f.filename)).toEqual(['migrate-009-a.sql', 'migrate-025-z.sql']);
+describe('pgConfigFromUrl', () => {
+  it('adds verified TLS to a remote URL without sslmode, and nothing to a local one or one that sets sslmode', () => {
+    expect(pgConfigFromUrl('postgresql://u@ep-x.us-east-1.aws.neon.tech/neondb')).toEqual({
+      connectionString: 'postgresql://u@ep-x.us-east-1.aws.neon.tech/neondb',
+      ssl: { rejectUnauthorized: true },
+    });
+    expect(pgConfigFromUrl('postgresql://u@ep-x.aws.neon.tech/neondb?sslmode=require')).toEqual({ connectionString: 'postgresql://u@ep-x.aws.neon.tech/neondb?sslmode=require' });
+    expect(pgConfigFromUrl('postgres://postgres@127.0.0.1:5433/x')).toEqual({ connectionString: 'postgres://postgres@127.0.0.1:5433/x' });
+  });
+});
+
+describe('connectionFromEnv', () => {
+  it('takes DATABASE_URL first, else the separate variables, else nothing', () => {
+    expect(connectionFromEnv({ DATABASE_URL: 'postgres://u@db.example.test/lcapix' } as any)).toMatchObject({
+      host: 'db.example.test',
+      database: 'lcapix',
+      config: { connectionString: 'postgres://u@db.example.test/lcapix' },
+    });
+    expect(connectionFromEnv({ DATABASE_HOST: '127.0.0.1', DATABASE_PORT: '5433', DATABASE_NAME: 'lcapix_t_x' } as any)).toMatchObject({
+      host: '127.0.0.1',
+      database: 'lcapix_t_x',
+      config: { port: 5433, user: 'postgres' },
+    });
+    expect(connectionFromEnv({ DATABASE_HOST: '127.0.0.1' } as any)).toBeNull();
   });
 });
 
 describe('parseArgs', () => {
   it('reads the flags', () => {
-    expect(parseArgs(['--baseline', '--dry-run'])).toMatchObject({ baseline: true, dryRun: true, allowRemote: false });
+    expect(parseArgs(['--dry-run'])).toMatchObject({ dryRun: true, allowRemote: false });
     expect(parseArgs(['--allow-remote', '--dir=/x'])).toMatchObject({ allowRemote: true, dir: '/x' });
   });
-  it('rejects unknown flags', () => {
+  it("rejects unknown flags, MySQL's --baseline among them", () => {
     expect(() => parseArgs(['--force'])).toThrow(/--force/);
+    expect(() => parseArgs(['--baseline'])).toThrow(/--baseline/);
   });
 });
 

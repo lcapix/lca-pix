@@ -33,7 +33,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (Number(count?.n ?? 0) >= MAX_PINS) {
         return NextResponse.json({ error: `You can pin up to ${MAX_PINS} projects. Unpin one first.` }, { status: 409 });
       }
-      await execute(`INSERT IGNORE INTO project_pins (user_id, project_id) VALUES (?, ?)`, [userId, projectId]);
+      await execute(`INSERT INTO project_pins (user_id, project_id) VALUES (?, ?) ON CONFLICT DO NOTHING`, [userId, projectId]);
     }
     return NextResponse.json({ success: true, project_id: projectId, pinned: true });
   } catch (error: any) {

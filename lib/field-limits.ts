@@ -6,13 +6,15 @@
  * every entry against each fresh test database, so a migration that resizes a
  * column fails that test until this file follows.
  *
- * MySQL runs in strict mode: a value longer than its column, or a number
- * outside a DECIMAL's range, is refused and the route used to answer 500. The
- * routes check against these limits first and answer 400 naming the field.
+ * The database refuses a value longer than its column, or a number outside a
+ * NUMERIC's range, and the route used to answer 500. The routes check against
+ * these limits first and answer 400 naming the field.
  *
- *   - VARCHAR(n) holds n characters (utf8mb4: code points, so an emoji is one);
- *   - TEXT holds 65,535 bytes, whatever the character count;
- *   - DECIMAL(p, s) holds up to 10^(p-s) - 10^-s.
+ *   - varchar(n) holds n characters (code points, so an emoji is one);
+ *   - TEXT is held to 65,535 bytes, whatever the character count: MySQL's TEXT
+ *     size, kept as the API's rule on Postgres (whose text holds more), so
+ *     what a person may enter did not change with the move;
+ *   - numeric(p, s) holds up to 10^(p-s) - 10^-s.
  */
 
 export type ColumnLimit =

@@ -187,7 +187,7 @@ describe('PUT /api/components/:id — costs (FLOW-2 / FLOW-3)', () => {
       return 1
     })
     vi.mocked(db.query).mockImplementation(async (sql: string) => {
-      if (/SHOW COLUMNS/i.test(sql)) {
+      if (/FROM information_schema\.columns/i.test(sql)) {
         return [{ Field: 'labor_cost' }, { Field: 'energy_cost' }] as any
       }
       if (/FROM component\s+WHERE case_id/i.test(sql)) return CASE_ROWS as any

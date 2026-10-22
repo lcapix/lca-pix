@@ -4,13 +4,15 @@
  * row) and for asserting side effects without going through the API under
  * test. Refuses any database whose name is not lcapix_t_* on a local host.
  */
-import mysql from 'mysql2/promise';
+import pg from 'pg';
 import { inject } from 'vitest';
+import { PG_TYPES, runner, type Runner } from '@/lib/db';
 import '../../db/support/context';
 
 const LOCAL = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
-let conn: mysql.Connection | null = null;
+let client: pg.Client | null = null;
+let conn: Runner | null = null;
 
 export function testDbName(): string {
   const db = inject('testDb');
@@ -20,17 +22,20 @@ export function testDbName(): string {
   return db.database;
 }
 
-async function connection(): Promise<mysql.Connection> {
+/** One connection for the file, answering as the app's do (lib/db's runner: `?` placeholders, mysql2 shapes). */
+async function connection(): Promise<Runner> {
   if (conn) return conn;
   const db = inject('testDb');
-  conn = await mysql.createConnection({
+  client = new pg.Client({
     host: db.host,
     port: Number(db.port),
     user: db.user,
-    password: db.password,
+    password: db.password || undefined,
     database: testDbName(),
-    charset: 'utf8mb4',
+    types: PG_TYPES,
   });
+  await client.connect();
+  conn = runner(client);
   return conn;
 }
 
@@ -45,7 +50,8 @@ export async function sqlOne<T = any>(query: string, params: unknown[] = []): Pr
 }
 
 export async function closeSql(): Promise<void> {
-  const c = conn;
+  const c = client;
+  client = null;
   conn = null;
   if (c) await c.end();
 }
@@ -72,23 +78,27 @@ export const WRITABLE_TABLES = [
 export async function rowCounts(): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const t of WRITABLE_TABLES) {
-    const r = await sqlOne<{ n: number }>(`SELECT COUNT(*) AS n FROM \`${t}\``);
+    const r = await sqlOne<{ n: number }>(`SELECT COUNT(*) AS n FROM "${t}"`);
     out[t] = Number(r?.n ?? 0);
   }
   return out;
 }
 
-/** CHECKSUM TABLE of every writable table: equal before and after means nothing was written. */
+/**
+ * A fingerprint of every writable table (md5 over every row's text, in a fixed
+ * order; Postgres's stand-in for MySQL's CHECKSUM TABLE): equal before and
+ * after means nothing was written.
+ */
 export async function tableChecksums(): Promise<Record<string, string>> {
-  const rows = await sql<{ Table: string; Checksum: string | number | null }>(
-    `CHECKSUM TABLE ${WRITABLE_TABLES.map((t) => `\`${t}\``).join(', ')}`,
-  );
   const out: Record<string, string> = {};
-  for (const r of rows) out[String(r.Table).split('.').pop()!] = String(r.Checksum);
+  for (const t of WRITABLE_TABLES) {
+    const r = await sqlOne<{ h: string | null }>(`SELECT md5(string_agg(x::text, '|' ORDER BY x::text COLLATE "C")) AS h FROM "${t}" x`);
+    out[t] = String(r?.h ?? '');
+  }
   return out;
 }
 
-/** A run's frozen snapshot (mysql2 returns JSON columns parsed). */
+/** A run's frozen snapshot (JSON columns come back parsed). */
 export async function snapshotOf(runId: number): Promise<any> {
   const row = await sqlOne<{ run_snapshot: unknown }>('SELECT run_snapshot FROM assessment_runs WHERE run_id = ?', [runId]);
   const v = row?.run_snapshot;

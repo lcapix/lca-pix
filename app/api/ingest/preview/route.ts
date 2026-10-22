@@ -300,7 +300,8 @@ export async function POST(request: NextRequest) {
          WHERE factor_value <> 0
          GROUP BY substance_id
        ) fc ON fc.substance_id = s.substance_id
-       ${scoped ? 'WHERE s.is_custom = 0 OR s.created_by = ?' : ''}`;
+       ${scoped ? 'WHERE s.is_custom = 0 OR s.created_by = ?' : ''}
+       ORDER BY s.substance_id`;
     let substances: any[];
     try {
       substances = await query<any>(catalogSql(true), [userId]);

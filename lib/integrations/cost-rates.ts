@@ -84,8 +84,8 @@ export async function getOrFetchRate(params: GetOrFetchParams): Promise<CostRate
     `INSERT INTO cost_rates
        (rate_type, rate_key, region_code, rate_value, rate_unit, effective_date, source)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE rate_value = VALUES(rate_value),
-       rate_unit = VALUES(rate_unit), source = VALUES(source),
+     ON CONFLICT (rate_type, rate_key, region_code, effective_date) DO UPDATE SET rate_value = EXCLUDED.rate_value,
+       rate_unit = EXCLUDED.rate_unit, source = EXCLUDED.source,
        fetched_at = CURRENT_TIMESTAMP`,
     [params.type, params.key, params.region, fresh.rateValue, fresh.unit,
      fresh.effectiveDate, fresh.source],

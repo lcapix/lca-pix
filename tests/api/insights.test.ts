@@ -231,7 +231,7 @@ describe('POST /api/insights', () => {
       const first = await POST(req(FACTS) as any);
       expect(first.headers.get('x-insights-cache')).toBe('miss');
       expect(await first.text()).toBe('Paint is 60% of it.');
-      const kept = vi.mocked(db.execute).mock.calls.find(([sql]) => /INSERT IGNORE INTO insight_cache/.test(String(sql)));
+      const kept = vi.mocked(db.execute).mock.calls.find(([sql]) => /INSERT INTO insight_cache .* ON CONFLICT DO NOTHING/.test(String(sql)));
       expect(kept?.[1]).toEqual([41, expect.stringMatching(/^[0-9a-f]{64}$/), expect.any(String), 'Paint is 60% of it.']);
 
       cached = { reply: 'Paint is 60% of it.', model: 'm' };

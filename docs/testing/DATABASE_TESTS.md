@@ -1,47 +1,54 @@
 # Database tests
 
-`pnpm test:db` builds a MySQL database from nothing, runs the database tests against it, and drops it. It needs no existing data and no dump, so it runs the same way on any machine and in CI.
+`pnpm test:db` builds a Postgres database from nothing, runs the database tests against it, and drops it. It needs no existing data and no dump, so it runs the same way on any machine and in CI.
 
 ```
-db/baseline/000-schema.sql      pre-009 schema, structure only
-db/baseline/001-reference.sql   reference rows (categories, permissions, substances, factors, cost rates)
-scripts/db/migrate.mjs          every migrate-NNN-*.sql in the repo root, recorded in schema_migrations
+db/pg/000-schema.sql            the schema (MySQL's at migration 042, ported 2026-10-21)
+db/pg/001-reference.sql         the library (categories, permissions, substances, factors, cost rates, templates)
+scripts/db/migrate.mjs          every db/pg/migrations/migrate-NNN-*.sql, recorded in schema_migrations
         │
         ▼
 lcapix_t_<time>_<random>        throwaway database → tests/db/** → dropped
 ```
 
+The app ran on MySQL until 2026-10-21. The 34 MySQL migrations (`migrate-0NN-*.sql` in the repo root) and `db/baseline/` stay as history: their result is `db/pg/000-schema.sql` and `001-reference.sql`, written by `scripts/db/pg/schema-from-mysql.mjs` and `scripts/db/pg/copy-from-mysql.mjs` and checked by `scripts/db/pg/compare-schema.mjs` (0 differences). The port is logged in `~/lca/research/postgres-port-log.md`.
+
 ## Running it
 
 You need:
 
-- A local MySQL server, 8.0 or later. It is tested on 9.6 locally and on 8.0 in CI.
-- The `mysql` command-line client on your `PATH`. Some migrations use `DELIMITER`, which only the CLI understands.
-- A user that can `CREATE DATABASE` and `DROP DATABASE`, for example local `root`.
+- A local Postgres, 17 (what CI and Neon run). No command-line client is needed: every script uses the `pg` driver.
+- A user that can `CREATE DATABASE` and `DROP DATABASE`, for example local `postgres`. The integrity tests plant broken rows with `session_replication_role`, which needs a superuser.
 - `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER` and `DATABASE_PASSWORD`, either in the environment or in `.env.local`. Values already in the environment win. `DATABASE_NAME` is ignored, so the database `.env.local` points at is never touched.
+
+A local server in Docker, reachable from this machine only:
+
+```bash
+docker run -d --name lcapix-pg -p 127.0.0.1:5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17
+```
 
 | Command | What it does |
 |---|---|
-| `pnpm test:db` | Builds a fresh database, runs `tests/db/**`, then drops the database. It takes about 10 s. |
+| `pnpm test:db` | Builds a fresh database, runs `tests/db/**`, then drops the database. It takes a few seconds. |
 | `pnpm test:db tests/db/schema.test.ts` | Runs one file, still against a fresh database. |
-| `pnpm test:db:e2e-local` | Runs the same suite, then `tests/e2e-local/**` against the same fresh database. It sets `LOCAL_DB=1` and adds one fixture account for those tests to sign in as. |
 | `DB_TESTS_KEEP=1 pnpm test:db` | Keeps the database afterwards and prints its name. |
 | `npx vitest run` | Runs the unit tests. `tests/db` is excluded because it needs a server. |
 
-The original way of running the local tests still works: `LOCAL_DB=1 npx vitest run tests/e2e-local` against whatever `.env.local` names.
+`tests/e2e-local` (`pnpm test:db:e2e-local`) holds checks written against MySQL; they are not part of any suite now.
 
 ### Safety
 
 - Only `127.0.0.1`, `localhost` and `::1` are accepted. Nothing can override this: a remote host is refused.
 - Only databases named `lcapix_t_*` are ever created or dropped. `CREATE DATABASE` fails if the name is already taken, so an existing database is never reused or overwritten.
 - If a build fails halfway, it drops its own half-built database.
-- The runner still refuses remote hosts unless given `--allow-remote` plus a typed confirmation. The database tests never pass that flag.
+- The runner refuses remote hosts unless given `--allow-remote` plus a typed confirmation. The database tests never pass that flag.
 
 ### Building a database by hand
 
 ```bash
 node --env-file=.env.local scripts/db/fresh.mjs                # build one, print its name
-node --env-file=.env.local scripts/db/fresh.mjs --no-migrate   # baseline + seed only
+node --env-file=.env.local scripts/db/fresh.mjs --no-migrate   # baseline only
+node --env-file=.env.local scripts/db/fresh.mjs --from=NAME    # a copy of another local database
 node --env-file=.env.local scripts/db/fresh.mjs --keep-on-error
 node --env-file=.env.local scripts/db/fresh.mjs --drop lcapix_t_xxx
 node --env-file=.env.local scripts/db/fresh.mjs --list
@@ -53,72 +60,29 @@ A test run that is killed (Ctrl-C) cannot drop its database. Clear leftovers wit
 
 ## The baseline
 
-### `000-schema.sql`
-
-- **Size:** 18 KB, structure only.
-- **What it is:** every `CREATE TABLE` from `lca_v3-dump-20260708-181808.sql`, the last dump of the dev database taken before `migrate-009`. That is the schema `migrate-009` onward was written against.
-- **How it relates to the old files:** it equals `lca_v3_drawsql_schema.sql` plus `database/migrations/002`–`008` as the dev database actually had them. The drawsql file itself is stale (TEST_PLAN §4.1).
-- **Verified:** baseline plus all migrations gives a schema identical to the dump plus the same migrations. Every column, type, default, collation, comment, index, foreign key, CHECK constraint and table collation was compared through `information_schema`.
-- **Two edits by the generator:**
-  - `AUTO_INCREMENT` counters are removed.
-  - The six account profile columns are removed. See the next section.
-
-### Account profile columns (AUTH-7)
-
-The profile and Google OAuth routes use six columns on `account`: `full_name`, `company`, `role`, `use_case`, `country` and `onboarded_at`. No migration created them; the dev database got them by hand. `migrate-031-account-profile.sql` now adds each one only if it is missing, with the same definition and position as the dev database.
-
-Leaving them out of the baseline means:
-
-- every fresh database proves that migration works;
-- existing databases, which already have the columns, are left unchanged.
-
-It is numbered 031 because 030 is reserved for a change being written in parallel.
-
-### `001-reference.sql`
-
-- **Size:** 34 KB.
-- **Contents:** the reference rows as they stood before `migrate-009`:
-  - `impact_categories`: 8 rows
-  - `permissions`: 4
-  - `substances`: 42
-  - `driver_impact_factors`: 162
-  - `cost_rates`: 20
-- **No user data.** Accounts, projects, cases, components, flows, runs, results, members and logs are never copied. The generator also refuses any INSERT whose columns name a user field.
-- **IDs are kept.** `migrate-011`, `012` and `013` write Global Warming as `category_id = 1`, and the factor tests name factor rows 27 and 34.
-- **Strict mode is relaxed for this file only.** 27 legacy substances have an empty `category` (`''`), which is not a valid ENUM value. Strict mode would refuse those rows. The dev and production data hold them, so the seed keeps them rather than hiding them.
-
-The later migrations bring in the TRACI library, materials, process templates and so on. After the chain, the fresh database has 3,288 substances and 4,293 factor rows. Those rows come from the migrations, not from the seed.
-
-### Regenerating
-
-Both files are generated. Do not edit them by hand.
-
-```bash
-node scripts/db/build-baseline.mjs --dump=/path/to/lca_v3-dump-20260708-181808.sql          # rewrite
-node scripts/db/build-baseline.mjs --dump=/path/to/lca_v3-dump-20260708-181808.sql --check  # verify
-```
-
-The dump is not in the repo, because it contains user accounts and password hashes. You only need it to regenerate the baseline, and that should almost never happen. A new schema change is a new migration, never a baseline edit.
+- **`db/pg/000-schema.sql`**: the schema. Every string column has the collation `ci` (ICU, case- and accent-blind, as MySQL's `*_ci` were), so `=`, unique keys and `GROUP BY` ignore case. Postgres 17 refuses `LIKE` and regular expressions on such a column: write `col COLLATE "C" ILIKE '…'`. MySQL's `tinyint(1)` is `smallint` (code compares with 0 and 1), an enum is text with a `CHECK` (plus `''`, which legacy rows hold), `ON UPDATE CURRENT_TIMESTAMP` is the `set_updated_at` trigger, and index names carry their table (`<table>__<name>`).
+- **`db/pg/001-reference.sql`**: the library as MySQL migration 042 left it, written by `pg_dump --data-only --inserts`; each id counter is set past its largest id.
+- **App SQL** still uses `?` placeholders and gets mysql2-shaped results: `lib/db.ts` and `lib/db-dialect.ts` translate (placeholders, `insertId` through `RETURNING`, MySQL error codes, booleans as 1/0). Write new SQL in Postgres's dialect with `?` placeholders.
 
 ## What each test guards
 
 | File | Test | Guards against |
 |---|---|---|
-| `migrations.test.ts` | chain applies cleanly on the bare baseline, in numeric order | a migration that only works on a hand-patched database |
-| | every file recorded with its sha256, none as baseline | the ledger missing a file |
-| | second runner pass: `Nothing to apply`; schema, ledger and reference data unchanged | a re-run of `009` resetting TRACI methane (E5), or `016` clobbering Wood (E1) |
+| `migrations.test.ts` | the baseline files are recorded with their checksums | a database built from something else |
+| | a new numbered migration is applied and recorded; a second run changes nothing (schema, ledger, library) | new migrations being missed, or re-applied |
 | | an edited, already-applied file is reported (`WARNING … changed since it was recorded`) and not re-run | silent drift between the repo and the databases |
-| | a new `migrate-NNN` file is picked up and recorded | new migrations being missed |
-| | every file applied a second time by hand: no SQL error, no schema change, no factor value change | a migration that is not guarded (audit §5). The one known change is that `009` §2e rewrites the provenance text of the 5 rows it zeroes |
-| `schema.test.ts` | `impact_value` and `contribution_percentage` are DOUBLE | small results stored as 0 (RUN-2) |
+| | a file that fails changes nothing and is not recorded (each file runs in one transaction) | a half-applied migration |
+| | a database without the baseline is refused | migrating the wrong database |
+| `schema.test.ts` | every string column has the collation `ci` | text compared by case, which MySQL never did |
+| | `impact_value` and `contribution_percentage` are double precision | small results stored as 0 (RUN-2) |
 | | `assessment_results.component_id` is nullable, with exactly one key, `ON DELETE SET NULL` | deleting a step erasing history (RUN-1) |
 | | unique keys: factor `(substance, category, method, scope)`, `substance_name`, `email`, `username`, `(project_id, user_id)`, `category_name`, `permission_name`, `cost_rates.unique_rate`, `process_templates.template_name`, `comparison_metadata.comparison_id`, `lcia_gwp_vintage` PK, `schema_migrations` PK | upserts in 015/017/028 duplicating rows; duplicate accounts and memberships |
 | | lookup indexes: component by case and parent, flows by component and substance, runs by case, results by run and component, factors by method and category, and others | slow tree, flow, run and factor loads |
 | | FK delete rules (cascades from project → case → step → flow; results cascade with the run; RESTRICT on substances and categories) | orphans, or accidental deletes of library rows |
 | | every table has a primary key | |
 | | account profile columns exist | AUTH-7 |
-| | spot checks for columns from 009–022; no leftover `lcapix_add_col` procedure | |
-| `field-limits.test.ts` | every column size in `lib/field-limits.ts` (VARCHAR length, TEXT bytes, DECIMAL precision and scale) equals `information_schema` | a migration resizing a column while the API keeps validating against the old size (the oversized-input 500s) |
+| | spot checks for columns from 009–042; an `updated_at` trigger on every table with the column, and no other function | MySQL's `ON UPDATE CURRENT_TIMESTAMP` lost |
+| `field-limits.test.ts` | every column size in `lib/field-limits.ts` (varchar length, numeric precision and scale; text columns are text, the 65,535-byte TEXT limit is the API's own rule) equals `information_schema` | a migration resizing a column while the API keeps validating against the old size (the oversized-input 500s) |
 | `integrity.test.ts` | every tenant check in `scripts/db/integrity-report.mjs` returns 0 rows on a seeded world | |
 | | each core check fires on its defect, inside a rolled-back transaction: orphan step, orphan flow, parent in another case, parent cycle, self-parent, wrong `hierarchy_level`, result without run, member without account, owner membership for a non-owner, two final cases | a check that can never fail |
 | `factor-data.test.ts` | no live factor row with a `QUARANTINE: <method>` twin | E2 |
@@ -129,7 +93,7 @@ The dump is not in the repo, because it contains user accounts and password hash
 | | at most 27 substances with an empty category | new invalid rows |
 | `run-snapshot.test.ts` | a run frozen the way `POST /api/cases/:id/assessments` freezes it (same SQL, same `lib/run-snapshot` helpers, the real engine) keeps a byte-identical snapshot, the same totals, per-step rows and report parts after a step is deleted. Its result rows survive with `component_id` NULL and still add up. A new run reflects the edit | RUN-1, STAGE-2, EXP-1 |
 | `precision.test.ts` | 4.2e-7, 4.2e-9, 1.5e-15, … round-trip exactly in `impact_value`; 0.004 in `contribution_percentage`; the SUM keeps them | RUN-2 |
-| | `flows.quantity` keeps 4.2e-7 | **Skipped** until a `migrate-030-*.sql` exists. Until then it asserts the column is still `decimal(15,6)` and says so in the output |
+| | `flows.quantity` keeps 4.2e-7, and the column is double precision | |
 
 ## Integrity report on real data
 
@@ -151,27 +115,22 @@ Every other check returned 0: orphans, cross-case parents, cycles, dangling resu
 
 ## Adding a migration
 
-1. Name it `migrate-NNN-short-name.sql` in the repo root, using the next free number. The runner orders by number and refuses two files with the same number, so a clash is caught.
-2. Make it idempotent:
-   - Guard every DDL with an `information_schema` check and `PREPARE` (see 026, 027 and 031). `DELIMITER` procedures also work, because files go through the `mysql` CLI.
-   - Make data changes upserts or delete-then-insert on natural keys.
-   - The raw second-apply test fails if the file errors or changes the schema on a second run.
+1. Name it `db/pg/migrations/migrate-NNN-short-name.sql`, using the next free number (the first is 043; the numbers carry on from the MySQL series). The runner orders by number and refuses two files with the same number.
+2. Each file runs in one transaction with its ledger row, so a failing file changes nothing. Still make data changes upserts (`ON CONFLICT`) or delete-then-insert on natural keys.
 3. Never edit a file that has been applied anywhere. Write a new one. The ledger reports an edited file and does not re-run it.
-4. Run `pnpm test:db`. The new file is picked up automatically: `fresh.mjs` hands the whole directory to `migrate.mjs`.
-5. If the migration changes something these tests pin, update the expectation in the same PR and say why. That covers:
-   - a column type, key or delete rule (`schema.test.ts`)
-   - a factor value or unit (`factor-data.test.ts`)
-   - the list of unit-family exceptions
-6. Do not touch `db/baseline/`. It is the fixed pre-009 starting point.
+4. Run `pnpm test:db`. The new file is picked up automatically: `fresh.mjs` hands the directory to `migrate.mjs`.
+5. If the migration changes something these tests pin, update the expectation in the same PR and say why: a column type, key or delete rule (`schema.test.ts`), a factor value or unit (`factor-data.test.ts`), a column size (`lib/field-limits.ts`).
+6. Before applying it to production, rehearse it on a copy: restore a `pg_dump` of Neon into a local database, then `node scripts/db/rehearse.mjs --from=<that database>`. It must end with `every check held` (no table loses rows, a second run applies nothing, the schema equals a fresh build).
+7. Apply: `node --env-file=<prod env> scripts/db/migrate.mjs --allow-remote` (it asks for the database name). The deploy gate (`scripts/db/check-migrations.mjs`, in `pnpm vercel-build`) stops a production build until every file is recorded there.
 
-Applying to a real database is unchanged: `node --env-file=.env.local scripts/db/migrate.mjs`. Use `--baseline` once for a database that had 009–025 applied by hand.
+Do not edit `db/pg/000-schema.sql` or `001-reference.sql` after the first production load: change the schema with a numbered migration.
 
 ## CI
 
 The `db-tests` job in `.github/workflows/deploy.yml` runs on pull requests only:
 
-1. A `mysql:8.0` service container starts with an empty root password.
-2. The job installs dependencies and checks for the `mysql` client.
+1. A `postgres:17` service container starts with trusted local login.
+2. The job installs dependencies (no database client is needed).
 3. It runs `pnpm test:db`.
 
 The job is not a dependency of `deploy`. To make it block merges, mark it required in branch protection.
@@ -188,7 +147,7 @@ The job is not a dependency of `deploy`. To make it block merges, mark it requir
 
 | Folder | What |
 |---|---|
-| `authz/matrix.test.ts` | Generated from `docs/flows/flows.yaml` `permissions:`: 69 rows × 7 roles, plus a deactivated account, a revoked token and a wrong-secret token on every signed-in row (673 cells). A 404 for a non-member must be byte-identical to the missing-id 404; a refused write must leave every writable table's `CHECKSUM` unchanged. |
+| `authz/matrix.test.ts` | Generated from `docs/flows/flows.yaml` `permissions:`: 69 rows × 7 roles, plus a deactivated account, a revoked token and a wrong-secret token on every signed-in row (673 cells). A 404 for a non-member must be byte-identical to the missing-id 404; a refused write must leave every writable table's fingerprint (md5 over every row) unchanged. |
 | `authz/route-coverage.test.ts` | Every exported handler in `app/api/**/route.ts` has a row, and every row a handler. |
 | `authz/cross-tenant.test.ts` | Every id-bearing row replayed with the other tenant's ids (404, no names, no writes), and body-borne ids: parent step, substance, source case, attach step, run override, legacy case ids, document and member ids. |
 | `flows/f01…f19` | USER_FLOWS F1–F19 at the API level, in the order the UI calls the routes. F19 (the tour) is client-only; its file checks the reads behind the tour's pages. |
@@ -213,7 +172,7 @@ Known bugs pinned today: none (0 `it.fails`; the matrix, error-leak and oversize
 
 Fixed on this branch, each with its own test: the export route's `details: error.message` on a 500 (`security/error-leaks.test.ts` › R42), `lib/integrations/admin-guard.ts` mapping auth failures with `isAuthError` (`tests/integrations/admin-guard.test.ts`), the stale `RATE_LIMITS` comment (`tests/lib/rate-limit-wiring.test.ts`), and the class page offering the Admin role to non-owners (`tests/app/class-page.test.tsx`).
 
-Useful switches: `API_TESTS_VERBOSE=1` keeps the routes' console output; `DB_TESTS_KEEP=1` keeps the database. CI runs the suite in the `api-tests` job (pull requests, MySQL 8.0), next to `db-tests`.
+Useful switches: `API_TESTS_VERBOSE=1` keeps the routes' console output; `DB_TESTS_KEEP=1` keeps the database. CI runs the suite in the `api-tests` job (pull requests, Postgres 17), next to `db-tests`.
 
 ## Differences from TEST_PLAN §4
 

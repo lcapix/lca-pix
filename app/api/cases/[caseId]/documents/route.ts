@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const doc = await queryOne<any>(
         `SELECT document_id, filename, doc_type, content, created_at
            FROM case_documents WHERE document_id = ? AND case_id = ?`,
-        [parseInt(id), access.caseId],
+        [parseId(id), access.caseId],
       );
       if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
       return NextResponse.json({ success: true, document: doc });
@@ -200,7 +200,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     const removed = await execute('DELETE FROM case_documents WHERE document_id = ? AND case_id = ?', [
-      parseInt(id),
+      parseId(id),
       access.caseId,
     ]);
     if (!removed) return NextResponse.json({ error: 'Document not found' }, { status: 404 });

@@ -84,18 +84,12 @@ describe('precision of stored values', () => {
   );
 
   it('documents the flows.quantity column type in force', async () => {
-    const [c] = await rows<{ COLUMN_TYPE: string }>(
+    const [c] = await rows<{ type: string }>(
       conn,
-      `SELECT LOWER(COLUMN_TYPE) AS COLUMN_TYPE FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'flows' AND COLUMN_NAME = 'quantity'`,
+      `SELECT data_type AS type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'flows' AND column_name = 'quantity'`,
     );
-    if (!MIGRATE_030) {
-      console.warn(
-        `[precision] migrate-030 has not landed: flows.quantity is ${c.COLUMN_TYPE}, so a flow of 4.2e-7 is stored as 0. The flows round-trip test is skipped.`,
-      );
-      expect(c.COLUMN_TYPE).toBe('decimal(15,6)');
-    } else {
-      expect(c.COLUMN_TYPE).not.toBe('decimal(15,6)');
-    }
+    // migrate-030 widened it to DOUBLE on MySQL; the Postgres schema carries that.
+    expect(c.type).toBe('double precision');
   });
 });

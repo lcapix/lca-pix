@@ -128,7 +128,7 @@ async function resolveAccount(
     try {
       userId = await insert(
         `INSERT INTO account (username, full_name, email, password_hash, account_type, is_active)
-         VALUES (?, ?, ?, ?, 'user', TRUE)`,
+         VALUES (?, ?, ?, ?, 'user', 1)`,
         [username, googleUser.name?.slice(0, 120) ?? null, googleUser.email, OAUTH_ONLY_PASSWORD_HASH]
       );
     } catch (err: any) {

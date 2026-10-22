@@ -255,7 +255,8 @@ export async function GET(
                    FROM assessment_results ar
                    JOIN impact_categories ic ON ic.category_id = ar.category_id
                   WHERE ar.run_id = ?
-                  GROUP BY ic.category_name, ar.unit`,
+                  GROUP BY ic.category_name, ar.unit
+                  ORDER BY MIN(ic.category_id), ar.unit`,
                 [run.run_id]
               )
             ).map((t: any) => ({ category: t.category, unit: t.unit, value: num(t.value) })),
@@ -265,7 +266,8 @@ export async function GET(
                    FROM assessment_results ar
                    JOIN impact_categories ic ON ic.category_id = ar.category_id
                   WHERE ar.run_id = ?
-                  GROUP BY ar.component_id, ic.category_name`,
+                  GROUP BY ar.component_id, ic.category_name
+                  ORDER BY ar.component_id NULLS FIRST, MIN(ic.category_id)`,
                 [run.run_id]
               )
             ).map((r: any) => ({

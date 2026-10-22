@@ -7,9 +7,9 @@
  *   node --env-file=.env.local scripts/db/integrity-report.mjs --db=NAME  report on another local database
  *   ... --rows                                                            also print up to 10 offending rows each
  *
- * Every check is one SELECT that returns the offending rows, so "0 rows" means
- * clean. The report only reads. It refuses any host but 127.0.0.1 /
- * localhost / ::1: run it on a local restore, never on RDS.
+ * Every check is one SELECT (Postgres) that returns the offending rows, so
+ * "0 rows" means clean. The report only reads. It refuses any host but
+ * 127.0.0.1 / localhost / ::1: run it on a local copy, never on production.
  *
  * kind:
  *   tenant     user data (projects, cases, steps, flows, runs, members). The
@@ -17,8 +17,8 @@
  *   reference  library data (substances, factors). Asserted where the
  *              expectation is exact, reported otherwise.
  */
-import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import pg from 'pg';
 import { isLocalHost } from './migrate.mjs';
 
 /**
@@ -27,19 +27,19 @@ import { isLocalHost } from './migrate.mjs';
  */
 const PARENT_CYCLES = `
 WITH RECURSIVE walk (start_id, cur_id, depth, path) AS (
-  SELECT component_id, parent_component_id, 1, CAST(CONCAT(',', component_id, ',') AS CHAR(4000))
+  SELECT component_id, parent_component_id, 1, ',' || component_id || ','
     FROM component
    WHERE parent_component_id IS NOT NULL
   UNION ALL
-  SELECT w.start_id, c.parent_component_id, w.depth + 1, CONCAT(w.path, w.cur_id, ',')
+  SELECT w.start_id, c.parent_component_id, w.depth + 1, w.path || w.cur_id || ','
     FROM walk w
     JOIN component c ON c.component_id = w.cur_id
-   WHERE LOCATE(CONCAT(',', w.cur_id, ','), w.path) = 0 AND w.depth < 100
+   WHERE position(',' || w.cur_id || ',' in w.path) = 0 AND w.depth < 100
 )
 SELECT DISTINCT start_id AS component_id
   FROM walk
  WHERE cur_id IS NOT NULL
-   AND (LOCATE(CONCAT(',', cur_id, ','), path) > 0 OR depth >= 100)`;
+   AND (position(',' || cur_id || ',' in path) > 0 OR depth >= 100)`;
 
 /** Depth from the root (1) versus the stored hierarchy_level (EDIT-9). */
 const LEVEL_MISMATCH = `
@@ -144,7 +144,7 @@ export const INTEGRITY_CHECKS = [
     title: "runs still 'running' an hour after they started",
     audit: 'RUN-3',
     sql: `SELECT run_id, case_id, run_date FROM assessment_runs
-           WHERE status = 'running' AND run_date < NOW() - INTERVAL 1 HOUR`,
+           WHERE status = 'running' AND run_date < now() - INTERVAL '1 hour'`,
   },
   {
     id: 'cases_missing_project',
@@ -238,8 +238,8 @@ export const INTEGRITY_CHECKS = [
             JOIN driver_impact_factors q
               ON q.substance_id = d.substance_id AND q.category_id = d.category_id
              AND q.geographic_scope = d.geographic_scope
-             AND q.method_name = CONCAT('QUARANTINE: ', d.method_name)
-           WHERE d.method_name NOT LIKE 'QUARANTINE%'`,
+             AND q.method_name = 'QUARANTINE: ' || d.method_name
+           WHERE d.method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'`,
   },
   {
     id: 'duplicate_factor_keys',
@@ -268,12 +268,13 @@ export const INTEGRITY_CHECKS = [
     id: 'mojibake_text',
     kind: 'reference',
     title: 'factor provenance or substance text that was UTF-8 encoded twice (â€ sequences)',
+    // 'â€' is the bytes C3 A2 E2 82 AC: an en or em dash encoded twice.
     sql: `SELECT 'factor' AS what, factor_id AS id FROM driver_impact_factors
-           WHERE INSTR(CAST(source_reference AS BINARY), X'C3A2E282AC') > 0
+           WHERE strpos(source_reference COLLATE "C", 'â€') > 0
           UNION ALL
           SELECT 'substance', substance_id FROM substances
-           WHERE INSTR(CAST(description AS BINARY), X'C3A2E282AC') > 0
-              OR INSTR(CAST(substance_name AS BINARY), X'C3A2E282AC') > 0`,
+           WHERE strpos(description COLLATE "C", 'â€') > 0
+              OR strpos(substance_name COLLATE "C", 'â€') > 0`,
   },
 ];
 
@@ -281,34 +282,13 @@ export const INTEGRITY_CHECKS = [
 // CLI: read-only report
 // ---------------------------------------------------------------------------
 
-function mysqlQuery(db, statement) {
-  const args = [
-    `--host=${db.host}`,
-    `--port=${db.port}`,
-    `--user=${db.user}`,
-    '--default-character-set=utf8mb4',
-    '--batch',
-    '-e',
-    statement,
-    db.database,
-  ];
-  const env = { ...process.env };
-  if (db.password) env.MYSQL_PWD = db.password;
-  else delete env.MYSQL_PWD;
-  const r = spawnSync('mysql', args, { env, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
-  if (r.error) throw r.error;
-  if (r.status !== 0) return { error: r.stderr.trim(), rows: [] };
-  const lines = r.stdout.split('\n').filter((l) => l.length);
-  return { error: null, header: lines[0] ?? '', rows: lines.slice(1) };
-}
-
-function main(argv) {
+async function main(argv) {
   const dbArg = argv.find((a) => a.startsWith('--db='));
   const showRows = argv.includes('--rows');
   const db = {
     host: (process.env.DATABASE_HOST || '127.0.0.1').trim(),
-    port: (process.env.DATABASE_PORT || '3306').trim(),
-    user: (process.env.DATABASE_USER || 'root').trim(),
+    port: (process.env.DATABASE_PORT || '5432').trim(),
+    user: (process.env.DATABASE_USER || 'postgres').trim(),
     password: process.env.DATABASE_PASSWORD || '',
     database: (dbArg ? dbArg.slice('--db='.length) : process.env.DATABASE_NAME || '').trim(),
   };
@@ -321,28 +301,41 @@ function main(argv) {
     return 2;
   }
   console.log(`Integrity report for ${db.database}@${db.host}:${db.port} (read-only)\n`);
+  const client = new pg.Client({ host: db.host, port: Number(db.port), user: db.user, password: db.password || undefined, database: db.database });
+  await client.connect();
   let problems = 0;
-  for (const c of INTEGRITY_CHECKS) {
-    const r = mysqlQuery(db, c.sql);
-    const label = `${c.id}${c.audit ? ` [${c.audit}]` : ''}`;
-    if (r.error) {
-      console.log(`  ERROR ${label}: ${r.error}`);
-      problems++;
-      continue;
+  try {
+    for (const c of INTEGRITY_CHECKS) {
+      const label = `${c.id}${c.audit ? ` [${c.audit}]` : ''}`;
+      let rows;
+      try {
+        ({ rows } = await client.query(c.sql));
+      } catch (e) {
+        console.log(`  ERROR ${label}: ${e?.message ?? e}`);
+        problems++;
+        continue;
+      }
+      const n = rows.length;
+      if (n) problems++;
+      console.log(`  ${String(n).padStart(6)}  ${label}: ${c.title}`);
+      if (showRows && n) {
+        for (const row of rows.slice(0, 10)) console.log(`          ${JSON.stringify(row)}`);
+        if (n > 10) console.log(`          ... ${n - 10} more`);
+      }
     }
-    const n = r.rows.length;
-    if (n) problems++;
-    console.log(`  ${String(n).padStart(6)}  ${label}: ${c.title}`);
-    if (showRows && n) {
-      console.log(`          ${r.header}`);
-      for (const row of r.rows.slice(0, 10)) console.log(`          ${row}`);
-      if (n > 10) console.log(`          ... ${n - 10} more`);
-    }
+  } finally {
+    await client.end();
   }
   console.log(`\n${problems} check(s) with findings.`);
   return 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exit(main(process.argv.slice(2)));
+  main(process.argv.slice(2)).then(
+    (code) => process.exit(code),
+    (e) => {
+      console.error(String(e?.message ?? e));
+      process.exit(1);
+    },
+  );
 }

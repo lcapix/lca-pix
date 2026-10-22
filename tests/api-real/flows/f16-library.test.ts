@@ -59,7 +59,7 @@ describe('F16 library', () => {
     expect(all.text).not.toContain(privateName);
     // The library listing never shows quarantined rows (FAC-1).
     expect(all.json.factors.some((f: any) => /^QUARANTINE/.test(f.method_name))).toBe(false);
-    const quarantined = await sqlOne(`SELECT COUNT(*) AS n FROM driver_impact_factors WHERE method_name LIKE 'QUARANTINE%'`);
+    const quarantined = await sqlOne(`SELECT COUNT(*) AS n FROM driver_impact_factors WHERE method_name COLLATE "C" ILIKE 'QUARANTINE%'`);
     expect(Number(quarantined.n)).toBeGreaterThan(0);
   });
 

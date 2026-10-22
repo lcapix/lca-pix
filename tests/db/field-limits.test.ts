@@ -1,12 +1,14 @@
 /**
  * lib/field-limits.ts encodes the size of every text and fixed-point column
- * the API validates against. Checked here against the fully migrated fresh
+ * the API validates against. Checked here against the fresh Postgres
  * database, so a migration that resizes a column cannot leave the API
- * validating against a stale number.
+ * validating against a stale number. A TEXT limit (65,535 bytes, MySQL's)
+ * is the API's own rule now: Postgres text holds more, so the column only
+ * has to be text.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COLUMN_LIMITS } from '@/lib/field-limits';
-import { connect, rows, testDb } from './support/db';
+import { connect, rows } from './support/db';
 
 let conn: Awaited<ReturnType<typeof connect>>;
 
@@ -23,20 +25,18 @@ describe('lib/field-limits.ts matches information_schema', () => {
       it(`${table}.${column}`, async () => {
         const [c] = await rows<any>(
           conn,
-          `SELECT LOWER(DATA_TYPE) AS type, CHARACTER_MAXIMUM_LENGTH AS chars, CHARACTER_OCTET_LENGTH AS bytes,
-                  NUMERIC_PRECISION AS p, NUMERIC_SCALE AS s
-             FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
-          [testDb().database, table, column],
+          `SELECT data_type AS type, character_maximum_length AS chars, numeric_precision AS p, numeric_scale AS s
+             FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?`,
+          [table, column],
         );
         expect(c, `${table}.${column} exists`).toBeDefined();
         if (limit.kind === 'chars') {
-          expect(c.type).toBe('varchar');
+          expect(c.type).toBe('character varying');
           expect(Number(c.chars)).toBe(limit.max);
         } else if (limit.kind === 'bytes') {
           expect(c.type).toBe('text');
-          expect(Number(c.bytes)).toBe(limit.max);
         } else {
-          expect(c.type).toBe('decimal');
+          expect(c.type).toBe('numeric');
           expect([Number(c.p), Number(c.s)]).toEqual([limit.precision, limit.scale]);
         }
       });
