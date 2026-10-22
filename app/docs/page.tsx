@@ -1,15 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { Icon } from '@/components/lcapix'
 import { MarketingNav } from '@/components/lcapix/marketing-nav'
-import { EDU_SHELL } from '@/lib/ui-flags'
-import { turnOnGuidedMode } from '@/lib/shell/use-shell'
 
-// Every item links to a real guide page (no dead anchors). The professor's
-// manual content lives under /guide/* — getting started, first assessment,
+// Every item links to a real guide page (no dead anchors). The manual's
+// content lives under /guide/* — getting started, first assessment,
 // data model, glossary, API reference, FAQ.
 const SECTIONS = [
   {
@@ -107,24 +104,8 @@ function highlight(text: string, query: string) {
 }
 
 export default function DocsPage() {
-  const router = useRouter()
   const [query, setQuery] = useState('')
 
-  // Launch the in-app guided walkthrough. It's anchored to the dashboard, so
-  // set the start flag and route to /home where <GuidedTour> auto-opens (same
-  // mechanism the navbar "Tour" button uses).
-  const startTour = () => {
-    // The education shell has no product tour: Guided mode is its guide (E02 to E06).
-    if (EDU_SHELL) {
-      turnOnGuidedMode()
-      router.push('/home')
-      return
-    }
-    try {
-      sessionStorage.setItem('lcapix:start-tour', '1')
-    } catch {}
-    router.push('/home')
-  }
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return SECTIONS.map((s) => ({ section: s, items: s.items }))
@@ -221,24 +202,6 @@ export default function DocsPage() {
                 ⌘K
               </span>
             </div>
-            {/* Guided walkthrough — opens the interactive product tour. */}
-            <button
-              type="button"
-              onClick={startTour}
-              className="btn btn-primary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '13px 20px',
-                borderRadius: 10,
-                fontSize: 14,
-                whiteSpace: 'nowrap',
-              }}
-              title={EDU_SHELL ? 'A short guide at each step of a case, on this device' : 'Take the interactive product walkthrough'}
-            >
-              <Icon name="sparkle" size={16} /> {EDU_SHELL ? 'Turn on Guided mode' : 'Take the guided tour'}
-            </button>
           </div>
         </div>
       </section>

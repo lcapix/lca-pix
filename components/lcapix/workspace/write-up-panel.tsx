@@ -2,23 +2,19 @@
 
 // The Write-up panel beside the tree (E06, behaviour spec "Write-up tab"): the
 // answer with its note against the Base case, Interpretation and Assumptions
-// (saved to the case, printed in the report), "This is my hand-in" for a
-// student (it does not lock the case), and Export the report as PDF,
+// (saved to the case, printed in the report), and Export the report as PDF,
 // PowerPoint or CSV.
 
 import { perUnit } from '@/lib/workspace/per-unit'
 import { useEffect, useState } from 'react'
-import { Button, Flag, SavedLine, Segmented } from '@/components/lcapix/ds'
+import { Button, SavedLine, Segmented } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
-import { useGuidedMode } from '@/lib/shell/use-shell'
-import { LMS_NAME } from '@/lib/ui-flags'
 import { answer, caseTotal, co2Unit } from '@/lib/ui/format'
 import { downloadRunExport } from '@/lib/results/results-view'
 import { deltaChip, runClimate } from '@/lib/workspace/results-view'
 import type { WorkspaceRun } from '@/lib/workspace/use-runs'
 import type { WorkspaceCase } from '@/lib/workspace/use-workspace'
 import { FloatingPanel } from './floating-panel'
-import { ExerciseSlot } from './exercise-card'
 
 const MAX = 20000 // the case route's cap
 type Format = 'pdf' | 'pptx' | 'csv'
@@ -34,10 +30,9 @@ export function WriteUpPanel({
   run: WorkspaceRun | null
   against: { label: string; run_id: number; total: number } | null
   readOnly: boolean
-  /** The case changed (write-up or hand-in): reload it. */
+  /** The write-up changed: reload the case. */
   onSaved: () => void
 }) {
-  const [, setGuided] = useGuidedMode()
   const [interpretation, setInterpretation] = useState(kase.interpretation ?? '')
   const [assumptions, setAssumptions] = useState(kase.assumptions ?? '')
   const [busy, setBusy] = useState<string | null>(null)
@@ -52,8 +47,6 @@ export function WriteUpPanel({
   const chip = climate && against ? deltaChip(climate.value, against) : null
   const dirty = interpretation !== (kase.interpretation ?? '') || assumptions !== (kase.assumptions ?? '')
   const tooLong = interpretation.length > MAX || assumptions.length > MAX
-  // The hand-in is a student's: someone who can change the case but does not run the project.
-  const student = kase.my_role === 'editor'
 
   const put = async (body: Record<string, unknown>, what: string, line: string) => {
     setBusy(what)
@@ -85,12 +78,6 @@ export function WriteUpPanel({
     }
   }
 
-  const tickedAt = kase.finalized_at ? new Date(kase.finalized_at) : null
-  const tickedText =
-    tickedAt && !Number.isNaN(tickedAt.getTime())
-      ? tickedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase()
-      : null
-
   return (
     <FloatingPanel
       label={`Write-up, ${kase.case_name}`}
@@ -101,25 +88,6 @@ export function WriteUpPanel({
         </>
       }
     >
-      <ExerciseSlot
-        fallback={
-        <div className="ws-guide">
-          <span style={{ flex: 1 }}>
-            <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-              Guided mode · Write it up
-            </span>
-            <br />
-            Say what your result means, then name your assumptions. The report puts this next to your numbers.
-          </span>
-          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <Flag kind="beta" />
-            <button type="button" className="ds-link" onClick={() => setGuided(false)}>
-              Turn off
-            </button>
-          </span>
-        </div>
-        }
-      />
 
       <div className="ws-panel-section">
         {climate ? (
@@ -185,36 +153,6 @@ export function WriteUpPanel({
           </span>
         )}
       </div>
-
-      {(student || kase.is_final) && (
-        <div className="ws-panel-section">
-          <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: student && !readOnly ? 'pointer' : 'default' }}>
-            <input
-              type="checkbox"
-              className="ws-check"
-              checked={kase.is_final}
-              disabled={!student || readOnly || busy === 'final'}
-              onChange={(e) =>
-                put({ is_final: e.target.checked }, 'final', e.target.checked ? 'Saved · ticked as your hand-in' : 'Saved · no longer your hand-in')
-              }
-            />
-            <span>
-              <strong style={{ fontSize: 15 }}>{student ? 'This is my hand-in' : 'Ticked as the hand-in'}</strong>
-              {kase.is_final && tickedText && (
-                <span className="ds-mono" style={{ marginLeft: 8, fontSize: 13, color: 'var(--ds-green)' }}>
-                  ✓ Ticked · {tickedText}
-                </span>
-              )}
-              {student && (
-                <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)', marginTop: 4 }}>
-                  Tells your instructor which case to look at. It doesn&apos;t lock your case
-                  {LMS_NAME ? `, and grades stay in ${LMS_NAME}.` : '.'}
-                </span>
-              )}
-            </span>
-          </label>
-        </div>
-      )}
 
       <div className="ws-panel-section" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <Button

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
-import { queryOne, execute, transaction } from '@/lib/db-helpers';
+import { queryOne, execute } from '@/lib/db-helpers';
 import { getProjectRole, requireAuth } from '@/lib/auth';
-import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
 import { recordAudit } from '@/lib/audit';
@@ -53,19 +53,12 @@ export async function GET(
     // The caller's role in the case's project, so the editor can hide what a
     // "Can read" member cannot do (the write routes still check for themselves).
     const role = await getProjectRole(userId, Number(caseData.project_id));
-    // Whoever reaches this case only to read it reads it as "Can read": an
-    // editor on an instructor's case with "members see only their own cases"
-    // on (D2), and everyone, the owner included, on the sample's read-only
-    // base case (migrate-038).
-    caseData.my_role =
-      role && role !== 'viewer' && (await caseAccessDenied(userId, caseId, 'editor')) ? 'viewer' : role;
-    // The role in the project itself: whether the caller may make cases (a
-    // copy of a read-only case needs Can change on the project).
+    caseData.my_role = role;
+    // The role in the project itself: whether the caller may make cases.
     caseData.project_role = role;
-    caseData.read_only = Number(caseData.read_only ?? 0) === 1;
 
     // The copy link (E03 "Copy of the Base case"), named only when the caller
-    // reaches that case too; otherwise not even its id is sent (B-A1).
+    // reaches that case too; otherwise not even its id is sent.
     caseData.copied_from = null;
     if (caseData.parent_case_id != null) {
       const parentId = Number(caseData.parent_case_id);
@@ -114,21 +107,6 @@ export async function PUT(
     const body = json.body;
     const { case_name, description, case_type } = body;
 
-    // Keep this case from the class (migrate-037): the owner and admins only,
-    // a strict boolean, and an audit row when it changes.
-    let hiddenChange: { from: number; to: number } | null = null;
-    if (Object.prototype.hasOwnProperty.call(body, 'hidden_from_members')) {
-      const v = body.hidden_from_members;
-      if (![true, false, 0, 1].includes(v)) {
-        return NextResponse.json({ error: 'hidden_from_members must be true or false' }, { status: 400 });
-      }
-      const staffDenied = await caseAccessDenied(userId, caseId, 'admin', { notFound: 'Case not found' });
-      if (staffDenied) return staffDenied;
-      const now = await queryOne<any>(`SELECT hidden_from_members FROM case_table WHERE case_id = ?`, [caseId]);
-      const to = v === true || v === 1 ? 1 : 0;
-      if (Number(now?.hidden_from_members) !== to) hiddenChange = { from: Number(now?.hidden_from_members ?? 0), to };
-    }
-
     // Every string must fit its column before anything is written (strict
     // mode refuses a longer one: a 500, or the "needs migrate-014" 409 below).
     const C = COLUMN_LIMITS.case_table;
@@ -164,12 +142,10 @@ export async function PUT(
       if (!String(case_name).trim()) {
         return NextResponse.json({ error: 'Case name is required' }, { status: 400 });
       }
-      // Only among the cases the caller reaches (B-A1), as on create.
-      const only = await reachableCasesFilter(userId, caseData.project_id, 'case_table');
       const clash = await queryOne<any>(
         `SELECT case_id FROM case_table
-          WHERE project_id = ? AND case_id <> ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
-        [caseData.project_id, caseId, case_name, ...only.params]
+          WHERE project_id = ? AND case_id <> ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+        [caseData.project_id, caseId, case_name]
       );
       if (clash) {
         return NextResponse.json(
@@ -193,16 +169,15 @@ export async function PUT(
     // Goal, functional unit and boundary are study-level (PUT /api/projects).
     // Separate statement so an environment without migrate-014 can still
     // rename a case; it only runs when one of these fields was sent.
-    // The student's own reading of the result and what they assumed: ISO 14044's
+    // The person's own reading of the result and what they assumed: ISO 14044's
     // reporting clause expects both, and they are printed in the report. Kept in
     // its own statement so a database without migrate-021 still saves the rest.
-    const WRITEUP_FIELDS = ['interpretation', 'assumptions', 'learning_state'] as const;
+    const WRITEUP_FIELDS = ['interpretation', 'assumptions'] as const;
     const writeup = WRITEUP_FIELDS.filter((k) => Object.prototype.hasOwnProperty.call(body, k));
     if (writeup.length) {
       const sets = writeup.map((k) => `${k} = ?`).join(', ');
       const values = writeup.map((k) => {
         const v = (body as any)[k];
-        if (k === 'learning_state') return v === null || v === undefined ? null : JSON.stringify(v);
         return v === null || v === undefined ? null : String(v).slice(0, 20000);
       });
       try {
@@ -220,62 +195,6 @@ export async function PUT(
           { status: 409 },
         );
       }
-    }
-
-    // The hand-in flag (migrate-022). Its own statement so a database without
-    // the column still saves everything else.
-    // One hand-in per author in a project (WRITE-1): marking this case clears
-    // the flag on the other cases the same author made in the project, in the
-    // same transaction, so a new hand-in replaces their previous one. Other
-    // authors' hand-ins stay (a class project with "members see only their own
-    // cases" holds one per student). Cases made before migrate-032 carry the
-    // owner as author (its backfill); without the column the whole project is
-    // one author. The project row is locked first, so two hand-ins marked at
-    // the same moment cannot both stay.
-    if (Object.prototype.hasOwnProperty.call(body, 'is_final')) {
-      const final = body.is_final ? 1 : 0;
-      try {
-        await transaction(async (conn) => {
-          if (final) {
-            await conn.query('SELECT project_id FROM project WHERE project_id = ? FOR UPDATE', [
-              caseData.project_id,
-            ]);
-            // SELECT * so a database without created_by still answers.
-            const [[self]]: any = await conn.query('SELECT * FROM case_table WHERE case_id = ?', [caseId]);
-            const byAuthor = self && Object.prototype.hasOwnProperty.call(self, 'created_by');
-            await conn.query(
-              `UPDATE case_table SET is_final = 0, finalized_at = NULL
-                WHERE project_id = ? AND case_id <> ? AND is_final = 1${byAuthor ? ' AND created_by IS NOT DISTINCT FROM ?' : ''}`,
-              [caseData.project_id, caseId, ...(byAuthor ? [self.created_by] : [])],
-            );
-          }
-          await conn.query(
-            'UPDATE case_table SET is_final = ?, finalized_at = ' +
-              (final ? 'CURRENT_TIMESTAMP' : 'NULL') +
-              ' WHERE case_id = ?',
-            [final, caseId],
-          );
-        });
-      } catch (finalErr: any) {
-        if (finalErr?.code !== 'ER_BAD_FIELD_ERROR') throw finalErr;
-        return NextResponse.json(
-          { error: 'Marking a hand-in needs migration 022. Nothing else was changed.' },
-          { status: 409 },
-        );
-      }
-    }
-
-    if (hiddenChange) {
-      await execute(`UPDATE case_table SET hidden_from_members = ? WHERE case_id = ?`, [hiddenChange.to, caseId]);
-      await recordAudit({
-        userId,
-        action: 'update',
-        table: 'case_table',
-        recordId: caseId,
-        before: { hidden_from_members: hiddenChange.from },
-        after: { hidden_from_members: hiddenChange.to },
-        request,
-      });
     }
 
     const REF_FIELDS = ['reference_flow', 'reference_flow_unit', 'modeled_output'];

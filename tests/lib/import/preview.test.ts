@@ -6,10 +6,9 @@ import {
   isLLMImport,
   previewFields,
   previewValidationError,
-  sampleProductName,
-  templateCsv,
   templateFilename,
 } from '@/lib/import/preview'
+import { TEMPLATE_HEADERS } from '@/lib/import/templates'
 
 describe('isLLMImport', () => {
   it('is true for an llm document type whatever the file', () => {
@@ -102,24 +101,12 @@ describe('previewFields', () => {
   })
 })
 
-describe('sampleProductName', () => {
-  it('fills "Touring bike" for a routing or BOM sample when no name is typed', () => {
-    expect(sampleProductName('routing', '')).toBe('Touring bike')
-    expect(sampleProductName('bom', '   ')).toBe('Touring bike')
-  })
-
-  it('keeps a typed name, and fills nothing for other samples', () => {
-    expect(sampleProductName('bom', 'My bike')).toBeNull()
-    expect(sampleProductName('equipment', '')).toBeNull()
-    expect(sampleProductName('itac', '')).toBeNull()
-  })
-})
-
-describe('templateCsv / templateFilename', () => {
-  it('keeps the header row and a newline', () => {
-    expect(templateCsv('a,b,c\n1,2,3\n4,5,6')).toBe('a,b,c\n')
-    expect(templateCsv('only,header')).toBe('only,header\n')
-    expect(templateCsv('')).toBe('\n')
+describe('blank templates', () => {
+  it('has a header row for each kind the reader takes from a template', () => {
+    expect(Object.keys(TEMPLATE_HEADERS).sort()).toEqual(['bom', 'equipment', 'routing'])
+    expect(TEMPLATE_HEADERS.bom.split(',')).toContain('Op Seq')
+    expect(TEMPLATE_HEADERS.routing.split(',')).toContain('Work Center')
+    expect(TEMPLATE_HEADERS.equipment.split(',')).toContain('Rated power (kW)')
   })
 
   it('names the template by connector', () => {

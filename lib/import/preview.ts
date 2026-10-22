@@ -61,16 +61,6 @@ export function previewFields(args: {
   return fields
 }
 
-/** The product name a loaded sample fills in: "Touring bike" for a routing or BOM when none is typed, else null. */
-export function sampleProductName(conn: string, plantId: string): string | null {
-  return (conn === 'routing' || conn === 'bom') && !plantId.trim() ? 'Touring bike' : null
-}
-
-/** A blank template from a sample CSV: its header row plus a newline. */
-export function templateCsv(content: string): string {
-  return content.split('\n')[0] + '\n'
-}
-
 /** File name of a connector's blank template. */
 export function templateFilename(conn: string): string {
   return `${conn}-template.csv`

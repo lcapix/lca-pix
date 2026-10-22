@@ -11,7 +11,6 @@ const projects = [
   { project_id: 1, project_name: 'Steel bracket · LCA 301', owner_id: 1, case_count: 34, pinned: true, pinned_at: '2026-10-20T00:00:00Z' },
   { project_id: 2, project_name: 'Aluminium enclosure', owner_id: 1, case_count: 1 },
   { project_id: 4, project_name: 'Wind turbine blade', owner_id: 7, owner_name: 'Dr. Omar Haddad', permission_name: 'editor' },
-  { project_id: 5, project_name: 'Painted steel bracket', owner_id: 1, is_sample: true, case_count: 2 },
 ]
 
 function setup(openId: number | null = 1) {
@@ -29,13 +28,13 @@ function setup(openId: number | null = 1) {
 beforeEach(() => push.mockReset())
 
 describe('ProjectSwitcher', () => {
-  it('groups: Pinned, Your projects, Shared with you (with the owner), Sample; the open one ticked', () => {
+  it('groups: Pinned, Your projects, Shared with you (with the owner); the open one ticked', () => {
     setup()
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-labelledby') && g.textContent)
     expect(groups[0]).toMatch(/^PinnedSteel bracket · LCA 30134 cases\(open\)$/)
     expect(groups[1]).toMatch(/^Your projectsAluminium enclosure1 case$/)
     expect(groups[2]).toMatch(/^Shared with youWind turbine bladeDr\. Omar Haddad$/)
-    expect(groups[3]).toMatch(/^SamplePainted steel bracket2 cases$/)
+    expect(groups).toHaveLength(3)
   })
 
   it('starts on the open project; arrows move; Enter opens', () => {

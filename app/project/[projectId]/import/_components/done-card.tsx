@@ -2,13 +2,11 @@
 
 // Saved (F2.4): what was saved and where, the file kept with the case, Where
 // this case stands (six rows, read fresh from the case), the next file as the
-// one primary, Open the tree, and with Guided mode on a short walk through
-// what to add next.
+// one primary, and Open the tree.
 
 import { useEffect, useState } from 'react'
-import { Button, Flag } from '@/components/lcapix/ds'
+import { Button } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
-import { useGuidedMode } from '@/lib/shell/use-shell'
 import { caseStands, nextFile, type StandsRow } from '@/lib/import/case-stands'
 import type { ApplyResult } from '@/lib/import/done-summary'
 
@@ -36,7 +34,6 @@ export function DoneCard({
   onOpenCase: () => void
   onStartNew: () => void
 }) {
-  const [guided] = useGuidedMode()
   const [rows, setRows] = useState<StandsRow[] | null>(null)
   // A read that never answers (offline, a dropped connection) must not leave
   // "Reading the case…" up for good.
@@ -146,38 +143,6 @@ export function DoneCard({
           </footer>
         </div>
       </div>
-      {guided && rows && (
-        <aside className="ip-walk" aria-label="Guided mode">
-          <div className="ws-guide" style={{ borderRadius: '16px 16px 0 0' }}>
-            <span style={{ flex: 1 }}>
-              <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-                Guided mode
-              </span>
-              <strong style={{ display: 'block', fontSize: 18 }}>Walk me through this case</strong>
-            </span>
-            <Flag kind="beta" />
-          </div>
-          <ol className="ip-walk-list">
-            {!rows.find((r) => r.key === 'materials')?.done && (
-              <li>
-                <strong>Add the bill of materials</strong>
-                <span>What goes into the product. You place each line on the step that uses it.</span>
-              </li>
-            )}
-            {!rows.find((r) => r.key === 'energy')?.done && (
-              <li>
-                <strong>Add the equipment list</strong>
-                <span>Each machine&apos;s power. With the hours, it gives each step&apos;s electricity.</span>
-              </li>
-            )}
-            <li>
-              <strong>Run it</strong>
-              <span>Then read which step builds the number.</span>
-            </li>
-          </ol>
-          <p className="ip-walk-foot">Guided mode is a beta. It stays off unless you turn it on.</p>
-        </aside>
-      )}
     </div>
   )
 }

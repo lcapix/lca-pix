@@ -12,7 +12,6 @@ import { useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 
 import { COMPONENT_TYPES } from '@/lib/case-editor/component-payload'
-import { lessonStepNames } from '@/lib/case-editor/case-tree'
 import { useCaseData } from '@/lib/case-editor/use-case-data'
 import { projectCapabilities } from '@/lib/project-role'
 import { useDuplicateCase } from '@/lib/case-editor/use-duplicate-case'
@@ -29,7 +28,6 @@ import { ScaleDialog } from '@/components/lcapix/case/scale-dialog'
 import { CaseNameDialog } from '@/components/lcapix/case/case-name-dialog'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { ReferencePane } from '@/components/lcapix/case/reference-pane'
-import { LessonRail } from '@/components/lcapix/case/lesson-rail'
 import { CaseEditorLoading, CaseEditorNotFound } from '@/components/lcapix/case/editor/case-editor-states'
 import { CaseToolbar } from '@/components/lcapix/case/editor/case-toolbar'
 import { CaseStatusStrip } from '@/components/lcapix/case/editor/case-status-strip'
@@ -61,10 +59,6 @@ export default function CaseViewPage() {
     studyMethod,
     completeness,
     hasAssessment,
-    topStep,
-    hasComparableCase,
-    learningState,
-    hasWriteUp,
     myRole,
   } = useCaseData({ projectId, caseId, router })
   // What this member may do. The server refuses the rest anyway; hiding it
@@ -74,8 +68,8 @@ export default function CaseViewPage() {
   // Duplicate asks for the copy's name before creating it.
   const duplicate = useDuplicateCase({ projectId, caseId, router, currentCase, searchParams })
 
-  // Guided lessons and the reference document beside the editor.
-  const { learnOpen, setLearnOpen, referenceOpen, setReferenceOpen } = useEditorPanels()
+  // The reference document beside the editor.
+  const { referenceOpen, setReferenceOpen } = useEditorPanels()
 
   // ISO 14044 goal & scope + inventory: may this case run?
   const { goalScope, setGoalScope, goalOpenSignal, openGoalScope, fuMissing, canRun } =
@@ -174,8 +168,6 @@ export default function CaseViewPage() {
           setSearchQuery('')
           setSidebarQuery('')
         }}
-        learnOpen={learnOpen}
-        onToggleLearn={() => setLearnOpen((v) => !v)}
         referenceOpen={referenceOpen}
         onToggleReference={() => setReferenceOpen((v) => !v)}
         onDuplicate={duplicate.openDuplicate}
@@ -231,23 +223,6 @@ export default function CaseViewPage() {
         onSaved={handleGoalScopeSaved}
         readOnly={readOnly}
       />
-
-      {learnOpen && !readOnly && (
-        <LessonRail
-          caseId={caseId}
-          initialState={learningState}
-          facts={{
-            functionalUnitSet: !!goalScope && !fuMissing,
-            layers: completeness?.present ?? [],
-            hasRun: hasAssessment,
-            hasComparableCase,
-            hasWriteUp,
-          }}
-          steps={lessonStepNames(components)}
-          topStep={topStep}
-          onClose={() => setLearnOpen(false)}
-        />
-      )}
 
       {/* 3-pane */}
       <div

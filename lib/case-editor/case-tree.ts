@@ -136,9 +136,3 @@ export function pickInitialComponent<T extends Pick<ComponentNode, 'id' | 'name'
   return byId ?? named ?? components.find((c) => !c.parentId) ?? components[0]
 }
 
-/** The process steps a lesson can ask about (operations and subprocesses). */
-export function lessonStepNames(components: Array<Pick<ComponentNode, 'type' | 'name'>>): string[] {
-  return components
-    .filter((c) => c.type === 'operation' || c.type === 'subprocess')
-    .map((c) => c.name)
-}

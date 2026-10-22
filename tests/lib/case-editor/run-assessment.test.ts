@@ -3,12 +3,10 @@ import {
   assessmentCompleteMessage,
   buildRunBody,
   completedRuns,
-  hasRunSibling,
   isInventoryReady,
   readRunPrefs,
   runBlockedMessage,
   runButtonTitle,
-  topClimateStep,
 } from '@/lib/case-editor/run-assessment'
 
 describe('run gate', () => {
@@ -60,23 +58,5 @@ describe('past runs', () => {
   it('counts completed runs with results only', () => {
     expect(completedRuns([run({}), run({ 'Global Warming': 1 }, [], 'failed'), run({ 'Global Warming': 1 })])).toHaveLength(1)
     expect(completedRuns(undefined)).toEqual([])
-  })
-
-  it('names the step with the most climate impact', () => {
-    const r = run({ 'Global Warming': 3 }, [
-      { component_name: 'Cut', impacts: { 'Global Warming': 1 } },
-      { component_name: 'Paint', impacts: { 'Global Warming': 2 } },
-      { component_name: 'Idle', impacts: { 'Global Warming': 0 } },
-    ])
-    expect(topClimateStep(r)).toBe('Paint')
-    expect(topClimateStep(run({ 'Climate change': 1 }, [{ component_name: 'X', impacts: {} }]))).toBeNull()
-    expect(topClimateStep(run({ Acidification: 1 }))).toBeUndefined()
-    expect(topClimateStep(undefined)).toBeUndefined()
-  })
-
-  it('sees a sibling case that has been run', () => {
-    expect(hasRunSibling([{ case_id: 10, run_count: 3 }, { case_id: 11, run_count: 0 }], '10')).toBe(false)
-    expect(hasRunSibling([{ case_id: 10, run_count: 0 }, { case_id: 11, run_count: '1' }], '10')).toBe(true)
-    expect(hasRunSibling(undefined, '10')).toBe(false)
   })
 })

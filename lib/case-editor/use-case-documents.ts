@@ -17,7 +17,7 @@ export type CaseDocumentRow = {
   char_count?: number
 }
 
-export type OpenDocument = { key: string; filename: string; content: string; source: 'case' | 'sample' }
+export type OpenDocument = { key: string; filename: string; content: string; source: 'case' }
 
 export type DocumentLine = { n: number; text: string; hit: boolean }
 

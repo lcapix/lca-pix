@@ -78,27 +78,3 @@ export function completedRuns(assessments: any[] | undefined): any[] {
   )
 }
 
-/**
- * Which step carried the most climate impact in a run (the newest one, for
- * the reveal after a prediction): its name, null when no step has any, or
- * undefined when the run has no climate category (keep the previous answer).
- */
-export function topClimateStep(run: any): string | null | undefined {
-  const climateKey = Object.keys(run?.impacts ?? {}).find((k) =>
-    /global warming|climate/i.test(k),
-  )
-  if (!run || !climateKey) return undefined
-  const ranked = (run.components ?? [])
-    .map((c: any) => ({ name: c.component_name, v: Number(c.impacts?.[climateKey] ?? 0) }))
-    .filter((c: any) => c.v > 0)
-    .sort((a: any, b: any) => b.v - a.v)
-  return ranked[0]?.name ?? null
-}
-
-/** True when a sibling case has been run: what makes lesson 5 (compare) possible. */
-export function hasRunSibling(cases: any[] | undefined, caseId: string): boolean {
-  const others = (cases ?? []).filter(
-    (c: any) => String(c.case_id) !== String(caseId) && Number(c.run_count ?? 0) > 0,
-  )
-  return others.length > 0
-}

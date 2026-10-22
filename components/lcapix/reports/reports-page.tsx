@@ -63,7 +63,6 @@ export function ReportsPage() {
       pickProject={fromUrl > 0 ? null : setProjectId}
       initialCase={Number(search?.get('case')) || null}
       me={profile?.id ?? -1}
-      teaching={profile?.useCase === 'teaching'}
     />
   )
 }
@@ -87,14 +86,12 @@ function ReportBuilder({
   pickProject,
   initialCase,
   me,
-  teaching,
 }: {
   projectId: number
   projects: Array<{ id: number; name: string }>
   pickProject: ((id: number) => void) | null
   initialCase: number | null
   me: number
-  teaching: boolean
 }) {
   const { data, error, reload } = useProjectCases(projectId)
   const [caseId, setCaseId] = useState<number | null>(null)
@@ -196,7 +193,7 @@ function ReportBuilder({
                 <select className="ds-input rp-select" value={caseId ?? ''} onChange={(e) => setCaseId(Number(e.target.value))}>
                   {ordered.map((c) => (
                     <option key={c.case_id} value={c.case_id}>
-                      {caseOption(c, showAuthor && teaching && c.created_by !== me)}
+                      {caseOption(c, showAuthor && c.created_by !== me)}
                     </option>
                   ))}
                 </select>

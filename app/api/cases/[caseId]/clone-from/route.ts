@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { caseAccessDenied, caseReadableByClass, isAuthError } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
 
@@ -53,8 +53,7 @@ export async function POST(
         { status: 400 },
       );
     }
-    // The source must be a case the caller reaches too: in a project that keeps
-    // members' cases apart, another student's case is as good as missing (B-A1).
+    // The source must be a case the caller reaches too.
     const sourceDenied = await caseAccessDenied(userId, parseId(sourceCaseId), undefined, { notFound: 'Case not found' });
     if (sourceDenied) return sourceDenied;
 
@@ -71,13 +70,11 @@ export async function POST(
 
     // All or nothing: a half-copied case used to block the retry with the
     // "not empty" guard above.
-    // Work the class cannot read stays from the class in its copy (migrate-037).
-    const keepFromClass = !(await caseReadableByClass(sourceCase));
     const copied = await transaction(async (conn) => {
       await copyCaseReferenceFields(conn, sourceCase, targetCaseId);
       // The copy link (E03 "Copy of the Base case"): the case it came from.
       await conn.query(
-        `UPDATE case_table SET parent_case_id = ?${keepFromClass ? ', hidden_from_members = 1' : ''} WHERE case_id = ?`,
+        `UPDATE case_table SET parent_case_id = ? WHERE case_id = ?`,
         [parseId(sourceCaseId), targetCaseId],
       );
       return copyCaseInventory(conn, parseId(sourceCaseId), targetCaseId);

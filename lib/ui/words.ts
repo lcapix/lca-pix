@@ -24,12 +24,11 @@ export const FLOW_STATUS_WORD: Record<FlowStatus, string> = {
 export type Access = 'editor' | 'viewer'
 export const ACCESS_WORD: Record<Access, string> = { editor: 'Can change', viewer: 'Can read' }
 
-export type FlagKind = 'soon' | 'dev' | 'beta' | 'sample'
+export type FlagKind = 'soon' | 'dev' | 'beta'
 export const FLAG_WORD: Record<FlagKind, string> = {
   soon: 'Coming soon',
   dev: 'In development',
   beta: 'Beta',
-  sample: 'Sample',
 }
 
 /** "2 need an amount", "1 needs an amount" (tab badges, the tree). */

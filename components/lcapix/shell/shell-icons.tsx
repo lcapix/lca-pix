@@ -78,14 +78,3 @@ export function PixelMark({ size = 30 }: { size?: number }) {
   )
 }
 
-/** The guide face used for Guided mode. */
-export function GuideFace({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 22 22" aria-hidden focusable="false">
-      <rect width="22" height="22" rx="6" fill="#141816" />
-      <rect x="6" y="8" width="3" height="3" rx="0.8" fill="#fff" />
-      <rect x="13" y="8" width="3" height="3" rx="0.8" fill="#fff" />
-      <rect x="8" y="14" width="6" height="1.6" rx="0.8" fill="#5DDDA1" />
-    </svg>
-  )
-}

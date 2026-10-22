@@ -8,8 +8,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Button, Flag } from '@/components/lcapix/ds'
-import { useGuidedMode } from '@/lib/shell/use-shell'
+import { Button } from '@/components/lcapix/ds'
 import { TIER_COLOURS, TIER_LABEL, TIERS, type Tier } from '@/lib/workspace/tier-layout'
 import type { WorkspaceCase } from '@/lib/workspace/use-workspace'
 
@@ -30,7 +29,6 @@ export function EmptyTree({
   error: string | null
   onAddFirst: (productName: string, tier: Tier, name: string) => void
 }) {
-  const [guided] = useGuidedMode()
   const [tier, setTier] = useState<Tier>('machine_line')
   const [name, setName] = useState('')
   const product = projectName || kase.case_name
@@ -135,13 +133,6 @@ export function EmptyTree({
             </Link>
           </p>
         )}
-        <div className="ws-start-foot">
-          <span style={{ flex: 1 }}>
-            <strong style={{ display: 'block' }}>Guided mode</strong>
-            {guided ? 'On. The guide speaks at the top of each panel.' : 'Off. Turn it on in the sidebar for a guide at each step.'}
-          </span>
-          <Flag kind="beta" />
-        </div>
       </aside>
     </div>
   )

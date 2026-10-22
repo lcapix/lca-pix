@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { COMPARE_MAX_CASES } from '@/lib/compare/comparability';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { hasFrozenResults, parseRunSnapshot } from '@/lib/run-snapshot';
 import {
   diffInventories,
@@ -77,11 +77,9 @@ export async function GET(
     const project = await queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [projectId]);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
-    // A case the caller cannot reach (B-A1) is left out like a missing id.
-    const only = await reachableCasesFilter(userId, projectId, 'case_table');
     const caseRows = await query<any>(
-      `SELECT * FROM case_table WHERE project_id = ? AND case_id IN (${ids.map(() => '?').join(',')})${only.sql}`,
-      [projectId, ...ids, ...only.params]
+      `SELECT * FROM case_table WHERE project_id = ? AND case_id IN (${ids.map(() => '?').join(',')})`,
+      [projectId, ...ids]
     );
     const cases = ids.map((id) => caseRows.find((c: any) => c.case_id === id)).filter(Boolean) as any[];
     if (!cases.length) {

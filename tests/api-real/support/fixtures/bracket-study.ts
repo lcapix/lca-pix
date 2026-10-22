@@ -1,15 +1,16 @@
 /**
- * The sample study every account gets to read first (education E02, E03, E04,
- * E14, F1.4): a painted steel bracket, 17 steps in five tiers, nine flows, its
- * costs, a base case run and a what-if ("Shorter cure cycle") run. Pure data;
- * lib/sample/build-sample.ts writes it.
+ * A test fixture, not shipped: the painted steel bracket study (the education
+ * version's sample), 17 steps in five tiers, nine flows, its costs, a base
+ * case run and a what-if ("Shorter cure cycle") run. Pure data;
+ * ./build-bracket.ts writes it. The API suites use it as a rich, fully
+ * worked case whose numbers are known.
  *
  * Honesty rule (kept from the first worked example): the QUANTITIES and the
  * time drivers are illustrative and say so; every factor and every reference
  * rate they are multiplied by is the real library or the app's dated
  * reference table, so each number traces line by line. With the TRACI 2.1 /
  * US library the base case is 1.72 kg CO2-eq per bracket and the what-if
- * 1.667 (golden totals, tests/api-real/flows/f28-sample-study.test.ts).
+ * 1.667 (golden totals, checked by tests/api-real/flows/f33-case-inventory.test.ts).
  *
  * Differences from the design pack, on purpose:
  *   - The steel flow uses the library's "Steel" (worldsteel 2022 global

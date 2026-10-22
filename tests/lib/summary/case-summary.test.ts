@@ -1,17 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PIPELINE_LABEL, headlineOf, pipelineStage } from '@/lib/summary/case-summary'
-
-describe("E07's pipeline stage", () => {
-  it('reads what exists: no run, a run, a write-up, a hand-in tick', () => {
-    expect(pipelineStage({ completedRuns: 0, hasInterpretation: false, isFinal: false })).toBe('not_run')
-    expect(pipelineStage({ completedRuns: 0, hasInterpretation: true, isFinal: false })).toBe('not_run')
-    expect(pipelineStage({ completedRuns: 2, hasInterpretation: false, isFinal: false })).toBe('run')
-    expect(pipelineStage({ completedRuns: 1, hasInterpretation: true, isFinal: false })).toBe('written')
-    // The tick locks nothing and is shown as ticked whatever else exists.
-    expect(pipelineStage({ completedRuns: 0, hasInterpretation: false, isFinal: true })).toBe('handed_in')
-    expect(PIPELINE_LABEL.handed_in).toBe('Ticked as hand-in')
-  })
-})
+import { headlineOf } from '@/lib/summary/case-summary'
 
 describe('headlineOf', () => {
   const totals = [

@@ -1,6 +1,5 @@
 /**
- * F4. Create a project (method, region, functional unit), start a case; and
- * F4b, the worked example.
+ * F4. Create a project (method, region, functional unit), start a case.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
@@ -95,27 +94,5 @@ describe('F4 create a project', () => {
     expect(await sql('SELECT project_id FROM project WHERE project_id = ?', [pid])).toEqual([]);
     expect(await sql('SELECT case_id FROM case_table WHERE case_id = ?', [caseId])).toEqual([]);
     expect(await sql('SELECT member_id FROM project_members WHERE project_id = ?', [pid])).toEqual([]);
-  });
-});
-
-describe('F4b sample study', () => {
-  // The sample replaced the worked example (education 2.9); its data and golden
-  // totals are checked in f28-sample-study.
-  it('builds the sample in the account, owned and flagged, and a repeat returns existed:true', async () => {
-    const first = await api.post('/api/example-project', { token: u.token });
-    expect(first.status, first.text).toBe(200);
-    const pid = Number(first.json.project_id);
-    const project = await sqlOne('SELECT project_name, owner_id, is_sample, lcia_method, region_code, functional_unit FROM project WHERE project_id = ?', [pid]);
-    expect(project).toMatchObject({ project_name: 'Painted steel bracket', owner_id: u.id, is_sample: 1, lcia_method: 'TRACI 2.1', region_code: 'US', functional_unit: '1 painted steel bracket' });
-    const owners = await sql(
-      `SELECT pm.user_id FROM project_members pm JOIN permissions p ON p.permission_id = pm.permission_id
-        WHERE pm.project_id = ? AND p.permission_name = 'owner'`,
-      [pid],
-    );
-    expect(owners).toEqual([{ user_id: u.id }]);
-    const again = await api.post('/api/example-project', { token: u.token });
-    expect(again.status).toBe(200);
-    expect(again.json).toMatchObject({ existed: true, project_id: pid });
-    expect((await sql('SELECT COUNT(*) AS n FROM project WHERE owner_id = ? AND is_sample = 1', [u.id]))[0].n).toBe(1);
   });
 });

@@ -3,14 +3,14 @@
 // Add a file (F2.2): what kind of file it is (chips; an equipment list is
 // locked until there is a case with steps; ITAC adds its Assessment ID; the
 // planned kinds are one Coming soon line), where it goes, the drop zone with
-// its size and type limits, a sample file and a blank template, the chosen
+// its size and type limits, a blank template, the chosen
 // file's line, how many reads are left this hour, and Check what we read.
 
 import { useRef, useState } from 'react'
 import type { DocType } from '@/lib/ingest/doc-types'
 import { DOC_TYPES, LIVE_DOC_TYPES } from '@/lib/ingest/doc-types'
 import type { PlaceableStep } from '@/lib/ingest/placement'
-import { SAMPLE_DOCS } from '@/lib/ingest/sample-docs'
+import { TEMPLATE_HEADERS } from '@/lib/import/templates'
 import type { ProjectCase } from '@/lib/import/apply-body'
 import { TIER_LABEL } from '@/lib/import/display'
 import { acceptsFile, fileSizeText } from '@/lib/import/file-rules'
@@ -36,8 +36,6 @@ export interface PickFormProps {
   onLotSizeChange: (lotSize: string) => void
   previewing: boolean
   onPreview: () => void
-  onLoadSample: (conn: string) => void
-  onViewSample: (conn: string) => void
   onDownloadTemplate: (conn: string) => void
   readsLeft?: { limit: number; remaining: number } | null
   onBack?: () => void
@@ -206,14 +204,8 @@ export function PickForm(p: PickFormProps) {
             {fileError}
           </span>
         )}
-        {SAMPLE_DOCS[p.connector] && (
+        {TEMPLATE_HEADERS[p.connector] && (
           <span style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginTop: 6 }}>
-            <button type="button" className="ds-link" style={{ fontWeight: 600 }} onClick={() => p.onLoadSample(p.connector)}>
-              Try it with a sample file
-            </button>
-            <button type="button" className="ds-link" onClick={() => p.onViewSample(p.connector)}>
-              Read the sample file
-            </button>
             <button type="button" className="ds-link" style={{ fontWeight: 600 }} onClick={() => p.onDownloadTemplate(p.connector)}>
               Download a blank template
             </button>

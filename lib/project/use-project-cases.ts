@@ -1,18 +1,17 @@
 'use client'
 
-// A project's cases with where each one is (the progress route), the project's
-// method and region, and its people (for "1 person has no case yet"). Read by
-// the Cases page (E07, E07b) and Analytics (E10).
+// A project's cases with their latest answers (the case summaries route), the
+// project's method and region, and its people. Read by the Cases list (E07),
+// New case and Reports.
 
 import { useCallback, useEffect, useState } from 'react'
 import { apiRequest } from '@/lib/api-client'
-import type { ProgressCase } from './cases-view'
+import type { CaseSummary } from './cases-view'
 
 export interface ProjectCasesData {
   project: { project_id: number; project_name: string; lcia_method: string | null; region_code: string | null; functional_unit: string | null; owner_id: number; my_role: string | null }
-  cases: Array<ProgressCase & { runs: number; steps: number; flows: number; flows_missing_amount: number; has_interpretation: boolean; is_final: boolean; copied_from: number | null; updated_at: string | null }>
+  cases: Array<CaseSummary & { runs: number; steps: number; flows: number; flows_missing_amount: number; has_interpretation: boolean; copied_from: number | null; updated_at: string | null }>
   members: Array<{ user_id: number; full_name: string | null; username: string; email: string; permission_name: string | null }>
-  membersSeeOwnCases: boolean
 }
 
 export function useProjectCases(projectId: number) {
@@ -23,7 +22,7 @@ export function useProjectCases(projectId: number) {
     try {
       const [p, g, m] = await Promise.all([
         apiRequest(`/api/projects/${projectId}`),
-        apiRequest(`/api/projects/${projectId}/progress`),
+        apiRequest(`/api/projects/${projectId}/case-summaries`),
         apiRequest(`/api/projects/${projectId}/members`),
       ])
       if (!p.ok) throw new Error(p.status === 404 ? 'This project is not here, or it is not shared with you.' : `the project answered ${p.status}`)
@@ -49,10 +48,8 @@ export function useProjectCases(projectId: number) {
           steps: Number(c.steps ?? 0),
           flows: Number(c.flows ?? 0),
           has_interpretation: !!c.has_interpretation,
-          is_final: !!c.is_final,
         })),
         members: (mj.members ?? []).map((x: any) => ({ ...x, user_id: Number(x.user_id) })),
-        membersSeeOwnCases: !!gj.members_see_own_cases,
       })
     } catch (e: any) {
       setError(e?.message ?? 'the cases did not load')

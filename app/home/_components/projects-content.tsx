@@ -16,8 +16,6 @@ export interface ProjectsContentProps {
   filtered: CoercedProject[]
   handleOpenProject: (projectId: string) => void
   onNewProject: () => void
-  onLoadExample: () => void
-  loadingExample: boolean
 }
 
 export function ProjectsContent({
@@ -29,15 +27,13 @@ export function ProjectsContent({
   filtered,
   handleOpenProject,
   onNewProject,
-  onLoadExample,
-  loadingExample,
 }: ProjectsContentProps) {
   return projectsError
     ? projectsErrorView({ projectsError, onRetry })
     : isLoadingProjects
       ? projectsSkeletonView()
       : projectCount === 0
-        ? emptyProjectsView({ onNewProject, onLoadExample, loadingExample })
+        ? emptyProjectsView({ onNewProject })
         : view === 'grid'
           ? projectGridView({ filtered, handleOpenProject })
           : projectListView({ filtered, handleOpenProject })

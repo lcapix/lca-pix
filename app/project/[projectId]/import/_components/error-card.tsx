@@ -1,8 +1,8 @@
 'use client'
 
 // A read that went wrong (F2.2b), said plainly with the ways forward that fit:
-// a scanned PDF (no text to read) offers the spreadsheet version, the sample
-// file, or starting empty; the hourly limit says how long to wait; anything
+// a scanned PDF (no text to read) offers the spreadsheet version or starting
+// empty; the hourly limit says how long to wait; anything
 // else keeps the server's words. Matching assessment IDs when the server sent
 // some (ITAC).
 
@@ -14,14 +14,12 @@ export function ErrorCard({
   idHints,
   failure,
   onChooseAnother,
-  onTrySample,
   onStartEmpty,
 }: {
   error: string
   idHints: string[]
   failure?: { kind: ReadFailure; retryAfter: number | null; fileName: string | null } | null
   onChooseAnother?: () => void
-  onTrySample?: () => void
   onStartEmpty?: () => void
 }) {
   const kind = failure?.kind ?? 'other'
@@ -47,11 +45,6 @@ export function ErrorCard({
             <Button variant="dark" onClick={onChooseAnother}>
               Upload the spreadsheet version
             </Button>
-          )}
-          {onTrySample && (
-            <button type="button" className="ds-link" style={{ fontWeight: 600 }} onClick={onTrySample}>
-              Try the sample file
-            </button>
           )}
           {onStartEmpty && (
             <button type="button" className="ds-link" style={{ fontWeight: 600 }} onClick={onStartEmpty}>

@@ -258,7 +258,6 @@ export default function ResultsPage() {
             caseId={caseId}
             initialInterpretation={writeUp.interpretation}
             initialAssumptions={writeUp.assumptions}
-            initialFinal={writeUp.isFinal}
             readOnly={readOnly}
           />
         )}

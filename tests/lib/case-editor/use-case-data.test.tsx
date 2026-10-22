@@ -62,14 +62,11 @@ describe('useCaseData', () => {
     expect(result.current.currentCase?.name).toBe('Base')
     expect(result.current.components.map((c) => c.name)).toEqual(['Bracket', 'Cut'])
     expect(result.current.currentCase?.components).toHaveLength(2)
-    expect(result.current.learningState).toEqual({ lesson: 2 })
     expect(result.current.hasWriteUp).toBe(true)
     await waitFor(() => expect(result.current.projectName).toBe('Bracket study'))
     expect(result.current.studyMethod).toBe('TRACI 2.1')
     expect(result.current.completeness?.present).toEqual(['materials'])
     expect(result.current.hasAssessment).toBe(true)
-    expect(result.current.topStep).toBe('Cut')
-    expect(result.current.hasComparableCase).toBe(true)
   })
 
   it('sends a case that is not found back to the project', async () => {

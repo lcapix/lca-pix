@@ -3,7 +3,7 @@ import { readJson } from '@/lib/http';
 import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { caseAccessDenied, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 
 // GET /api/projects/[projectId]/cases - Get all cases for a project
@@ -18,8 +18,6 @@ export async function GET(
 
     const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
     if (denied) return denied;
-    // Members of a project that keeps cases apart list only their own (B-A1).
-    const only = await reachableCasesFilter(userId, projectId);
 
     // driver_count must reflect REAL attached flows (the flows table), not the
     // legacy `drivers` JSON column — otherwise the UI showed "0 drivers" even
@@ -36,11 +34,11 @@ export async function GET(
               -- comparable case from an empty one without a request each.
               (SELECT COUNT(*) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS run_count
        FROM case_table c
-       WHERE c.project_id = ?${only.sql}
+       WHERE c.project_id = ?
        ORDER BY c.created_at DESC`,
-      [projectId, ...only.params]
+      [projectId]
     );
-    // A copy link only to a case in this list, one the caller reaches (B-A1).
+    // A copy link only to a case in this list.
     const listed = new Set((cases as any[]).map((c) => Number(c.case_id)));
     for (const c of cases as any[]) {
       if (c.parent_case_id != null && !listed.has(Number(c.parent_case_id))) c.parent_case_id = null;
@@ -90,13 +88,11 @@ export async function POST(
     if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
     // Two cases with the same name inside one project cannot be told apart in
-    // the case list or in a comparison. Only among the cases the caller
-    // reaches: a student must not learn another student's case names (B-A1).
-    const only = await reachableCasesFilter(userId, projectId, 'case_table');
+    // the case list or in a comparison.
     const clash = await queryOne<any>(
       `SELECT case_id FROM case_table
-        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
-      [projectId, case_name, ...only.params]
+        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+      [projectId, case_name]
     );
     if (clash) {
       return NextResponse.json(

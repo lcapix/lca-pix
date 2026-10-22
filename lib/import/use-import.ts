@@ -48,7 +48,7 @@ import { countUnplaced, initialEdits, parseNotes, type FlowEdit } from '@/lib/im
 import { costConflicts } from '@/lib/import/cost-conflicts'
 import { flowConflicts, type ExistingFlow } from '@/lib/import/flow-conflicts'
 import type { CostMode } from '@/lib/ingest/cost-columns'
-import { useSampleDocs } from '@/lib/import/use-sample-docs'
+import { downloadTemplate } from '@/lib/import/templates'
 import { uploadTooLargeMessage } from '@/lib/upload-limits'
 import { readFailureKind, type ReadFailure } from '@/lib/import/file-rules'
 import { withoutSteps } from '@/lib/import/steps-hours'
@@ -118,7 +118,6 @@ export function useImport(projectId: string, router: ImportRouter) {
       live = false
     }
   }, [readsTick])
-  const samples = useSampleDocs({ plantId, setFile, setPlantId, setError })
   const [idHints, setIdHints] = useState<string[]>([])
   const [applied, setApplied] = useState<any>(null)
 
@@ -627,8 +626,7 @@ export function useImport(projectId: string, router: ImportRouter) {
     file, setFile, plantId, setPlantId, connector, setConnector, firstDoc, doc, isLLM,
     lotSize, setLotSize, projectCases, targetCaseId, setTargetCaseId,
     attachComponentId, setAttachComponentId, placeSteps, projectStatus,
-    // Samples: sampleView, loadSample, viewSample, downloadSample, downloadTemplate, copySample, closeSample.
-    ...samples,
+    downloadTemplate,
     // Phase and plan.
     phase, plan, error, idHints, preview, readFailure, readsLeft, droppedSteps, toggleDropStep,
     // Review.

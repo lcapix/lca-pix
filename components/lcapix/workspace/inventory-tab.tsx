@@ -10,17 +10,15 @@
 // number". Add a flow at the foot.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Flag, FlowStatusPill, SavedLine, SourceTag } from '@/components/lcapix/ds'
+import { Button, FlowStatusPill, SavedLine, SourceTag } from '@/components/lcapix/ds'
 import { FLOW_STATUS_WORD, type FlowStatus } from '@/lib/ui/words'
 import { amount, amountBox, fixed } from '@/lib/ui/format'
 import { compatibleUnits, convertQuantity } from '@/lib/units'
-import { useGuidedMode } from '@/lib/shell/use-shell'
 import { calculatorFits, machineKwh, type InventoryRow } from '@/lib/workspace/inventory'
 import { TIER_COLOURS } from '@/lib/workspace/tier-layout'
 import type { WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
 import { AddFlowInPanel } from './add-flow-in-panel'
 import { OwnFactorForm, saveFlowAmount, saveFlowUnit, sourceText } from './flow-bits'
-import { ExerciseSlot } from './exercise-card'
 import { HeldLines } from './held-lines'
 
 type Filter = 'all' | FlowStatus
@@ -72,7 +70,6 @@ export function InventoryTab({
   readOnly: boolean
   onOpenInsights: () => void
 }) {
-  const [guided, setGuided] = useGuidedMode()
   const [filter, setFilter] = useState<Filter>('all')
   const [stepId, setStepId] = useState<number | null>(null)
   const [marked, setMarked] = useState<number | null>(null)
@@ -145,25 +142,6 @@ export function InventoryTab({
       </nav>
 
       <section className="ds-card" aria-label="Flows" style={{ overflow: 'hidden' }}>
-        <ExerciseSlot
-          fallback={
-          <div className="ws-guide">
-            <span style={{ flex: 1 }}>
-              <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-                Guided mode · Inventory
-              </span>
-              <br />
-              {inventoryGuide(rows, byId)}
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-              <Flag kind="beta" />
-              <button type="button" className="ds-link" onClick={() => setGuided(false)}>
-                Turn off
-              </button>
-            </span>
-          </div>
-          }
-        />
         <div className="ws-pills" role="group" aria-label="Show flows" style={{ padding: '14px 18px' }}>
           {FILTERS.map((f) => (
             <button key={f} type="button" className="ws-pill" aria-pressed={filter === f} onClick={() => setFilter(f)}>
@@ -255,15 +233,6 @@ export function InventoryTab({
       </section>
     </div>
   )
-}
-
-function inventoryGuide(rows: InventoryRow[], byId: Map<number, WorkspaceStep>): string {
-  const calc = rows.find((r) => r.status === 'needs_amount' && calculatorFits(r))
-  if (calc) return `${byId.get(calc.component_id)?.name ?? 'A step'} needs its electricity. Work it out with the calculator on its row.`
-  const needs = rows.filter((r) => r.status === 'needs_amount').length
-  if (needs) return `${needs === 1 ? 'One flow needs' : `${needs} flows need`} an amount before a run counts ${needs === 1 ? 'it' : 'them'}.`
-  if (rows.some((r) => r.status === 'left_out')) return "A unit can't convert. Pick the unit its factor uses on its row."
-  return 'Every flow has an amount. Run the case to see the answer.'
 }
 
 function InventoryRowView({

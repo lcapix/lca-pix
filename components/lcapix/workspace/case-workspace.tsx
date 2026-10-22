@@ -18,7 +18,7 @@ import { apiRequest } from '@/lib/api-client'
 import { insightsBreakdownOf, insightsMaterialsOf } from '@/lib/results/insights-inputs'
 import { useShellData } from '@/lib/shell/use-shell'
 import { rememberCase } from '@/lib/home/last-case'
-import { ownClimate, runClimate, subtreeSums, whatBuilds } from '@/lib/workspace/results-view'
+import { ownClimate, runClimate, subtreeSums } from '@/lib/workspace/results-view'
 import { inventoryBadge } from '@/lib/workspace/inventory'
 import { pickRun, useCaseRuns, type CompareTarget } from '@/lib/workspace/use-runs'
 import { useCaseWorkspace } from '@/lib/workspace/use-workspace'
@@ -27,7 +27,6 @@ import { InventoryTab } from './inventory-tab'
 import { ResultsPanel } from './results-panel'
 import { TreeTab, type TreeView } from './tree-tab'
 import { WriteUpPanel } from './write-up-panel'
-import { ExerciseProvider, exerciseFacts } from './exercise-card'
 import { usePhone } from '@/lib/shell/use-phone'
 
 type Tab = 'tree' | 'inventory' | 'results' | 'writeup'
@@ -58,8 +57,7 @@ export function CaseWorkspace() {
   const search = useSearchParams()
   const caseId = Number(params.caseId)
   const { kase, steps, inventory, siblings, layout, status, error, reload, readOnly } = useCaseWorkspace(caseId)
-  const { profile, projects } = useShellData()
-  const ownName = profile?.fullName?.trim() || null
+  const { projects } = useShellData()
 
   const asked = search.get('tab')
   const tab: Tab = (TABS as string[]).includes(asked ?? '') ? (asked as Tab) : 'tree'
@@ -129,19 +127,6 @@ export function CaseWorkspace() {
       setRunning(false)
     }
   }
-
-  // The exercises' checks read the case's layers (materials, energy, …) fresh after each change.
-  const [layers, setLayers] = useState<string[]>([])
-  useEffect(() => {
-    let live = true
-    apiRequest(`/api/cases/${caseId}/completeness`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => live && setLayers(d?.report?.present ?? []))
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [caseId, inventory])
 
   // The run's value per step on the tree (its own tree, frozen), for Results and Write-up.
   const runValues = useMemo(() => {
@@ -228,8 +213,6 @@ export function CaseWorkspace() {
     projectName,
   }
 
-  const latestBuild = run ? whatBuilds(run, kase.case_type)[0] : null
-  const topStep = latestBuild && latestBuild.value > 0 ? { name: latestBuild.name, share: latestBuild.share } : null
   const tabBody = (
       <div id="ws-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="ws-body">
           {tab === 'tree' && <TreeTab {...treeProps} />}
@@ -272,7 +255,6 @@ export function CaseWorkspace() {
         siblings={siblings}
         readOnly={readOnly}
         canRun={canRun}
-        ownName={ownName}
         onRun={runCase}
         running={running}
         runSeconds={seconds}
@@ -330,27 +312,7 @@ export function CaseWorkspace() {
           </span>
         }
       />
-      {readOnly ? (
-        tabBody
-      ) : (
-        <ExerciseProvider
-          caseId={kase.case_id}
-          initial={kase.learning_state}
-          facts={exerciseFacts({
-            referenceFlow: kase.reference_flow,
-            functionalUnit: kase.project_functional_unit,
-            layers,
-            hasRun: !!inventory?.latest_run,
-            otherCaseRan: siblings.some((x) => x.case_id !== kase.case_id && x.run_count > 0),
-            interpretation: kase.interpretation,
-          })}
-          operations={steps.filter((x) => x.tier === 'operation').map((x) => x.name)}
-          topStep={topStep}
-          onSaved={reload}
-        >
-          {tabBody}
-        </ExerciseProvider>
-      )}
+      {tabBody}
 
       <MagicInsightsModal
         open={insightsOpen}

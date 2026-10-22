@@ -61,13 +61,13 @@ export function theirCases(n: number, access: string | null): string {
   return access === 'viewer' ? 'None' : 'None yet'
 }
 
-/** "28 students hold the 32 student cases": members (not the owner) who made at least one case. */
-export function holdersLine(members: Person[], by: Map<number, number>, word: string): string | null {
+/** "28 members hold the 32 member cases": members (not the owner) who made at least one case. */
+export function holdersLine(members: Person[], by: Map<number, number>): string | null {
   const holders = members.filter((m) => (by.get(m.user_id) ?? 0) > 0)
   if (!holders.length) return null
   const n = holders.reduce((s, m) => s + (by.get(m.user_id) ?? 0), 0)
-  const who = holders.length === 1 ? word : `${word}s`
-  return `${holders.length} ${who} ${holders.length === 1 ? 'holds' : 'hold'} the ${n} ${word} ${n === 1 ? 'case' : 'cases'}`
+  const who = holders.length === 1 ? 'member' : 'members'
+  return `${holders.length} ${who} ${holders.length === 1 ? 'holds' : 'hold'} the ${n} member ${n === 1 ? 'case' : 'cases'}`
 }
 
 export function matchesPerson(p: { full_name?: string | null; username?: string | null; email?: string | null }, q: string): boolean {
@@ -81,7 +81,7 @@ export function matchesPerson(p: { full_name?: string | null; username?: string 
 // checks each address properly (an invalid one comes back as invalid).
 const EMAIL_TOKEN = /[^\s,;<>"'()[\]]+@[^\s,;<>"'()[\]]+/g
 
-/** The addresses in typed text or a CSV of the class, lowercased, each once, in order. */
+/** The addresses in typed text or a CSV, lowercased, each once, in order. */
 export function emailsIn(text: string): string[] {
   const seen = new Set<string>()
   const out: string[] = []
@@ -109,7 +109,7 @@ export interface AddLine {
 
 /**
  * The Last add card (E08b): what happened to each email, grouped, in the
- * order a teacher acts on it. Nothing is claimed that the route did not
+ * order a person acts on it. Nothing is claimed that the route did not
  * report for that email.
  */
 export function lastAddLines(results: AddResult[], role: Access): AddLine[] {
@@ -147,26 +147,3 @@ export function lastAddLines(results: AddResult[], role: Access): AddLine[] {
   return lines
 }
 
-/**
- * The confirm before "only their own case" goes on (E08b), with who it
- * changes things for. The rule is D2 (lib/route-guard.ts): a member who can
- * change keeps their own cases and the owner's and admins' cases (read
- * only); a member who can read keeps the owner's cases only. Admins and the
- * owner keep every case.
- */
-export function privacyConsequence(members: Person[], by: Map<number, number>, word: string): string {
-  const editors = members.filter((m) => m.permission_name === 'editor')
-  const readers = members.filter((m) => m.permission_name === 'viewer')
-  const plural = `${word}s`
-  const parts = [`${plural[0].toUpperCase()}${plural.slice(1)} will see only the cases they made, and yours read only.`]
-  const others = editors.filter((m) => (by.get(m.user_id) ?? 0) > 0).length
-  if (others > 1) parts.push(`${others} ${plural} with a case stop seeing each other's.`)
-  const noCase = editors.filter((m) => !(by.get(m.user_id) ?? 0))
-  if (noCase.length) {
-    parts.push(`${namesList(noCase.map(nameOf))} ${noCase.length === 1 ? 'has' : 'have'} no case yet and can still copy yours.`)
-  }
-  if (readers.length) {
-    parts.push(`${namesList(readers.map(nameOf))} can read only and will see only your cases.`)
-  }
-  return parts.join(' ')
-}

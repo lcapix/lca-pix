@@ -71,16 +71,8 @@ export function projectsSkeletonView() {
   )
 }
 
-/** No projects yet: the ISO 14040 rail, create / worked example, trust strip. */
-export function emptyProjectsView({
-  onNewProject,
-  onLoadExample,
-  loadingExample,
-}: {
-  onNewProject: () => void
-  onLoadExample: () => void
-  loadingExample: boolean
-}) {
+/** No projects yet: the ISO 14040 rail, create, trust strip. */
+export function emptyProjectsView({ onNewProject }: { onNewProject: () => void }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
       {/* Empty hero — no card chrome, just a quiet headline */}
@@ -88,7 +80,7 @@ export function emptyProjectsView({
         align="center"
         eyebrow="NOTHING HERE YET"
         title="Start your first assessment."
-        sub="Below is the ISO 14040 path every project follows. You can move between phases as you learn."
+        sub="Below is the ISO 14040 path every project follows. You can move between phases at any time."
         actions={undefined}
       />
       {/* ISO 14040 numbered rail */}
@@ -97,8 +89,7 @@ export function emptyProjectsView({
         orientation="horizontal"
         eyebrow="ISO 14040 · 5 PHASES"
       />
-      {/* CTA strip. An empty first screen teaches nothing, so the
-          worked example sits beside "create your own". */}
+      {/* CTA strip. */}
       <div
         style={{
           display: 'flex',
@@ -113,14 +104,6 @@ export function emptyProjectsView({
           onClick={onNewProject}
         >
           <Icon name="plus" size={14} /> Create your first project
-        </button>
-        <button
-          className="btn btn-secondary btn-lg"
-          onClick={onLoadExample}
-          disabled={loadingExample}
-          title="A three-step steel bracket you can take apart: illustrative quantities, real factors"
-        >
-          {loadingExample ? 'Building…' : 'Open the worked example'}
         </button>
       </div>
       {/* Trust strip — authority cues, calm and monochrome */}

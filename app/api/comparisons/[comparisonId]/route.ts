@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/lib/auth'
 import { execute, query, queryOne } from '@/lib/db-helpers'
 import { jsonArray, jsonColumn } from '@/lib/compare/legacy'
-import { isAuthError, projectAccessDenied, unreachableCaseIds } from '@/lib/route-guard'
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
 import { parseId } from '@/lib/ids'
 
 // One legacy saved comparison (see app/api/comparisons/route.ts).
@@ -13,12 +13,6 @@ const positiveInt = (v: unknown): number | null => {
 }
 
 const notFound = () => NextResponse.json({ error: 'Comparison not found' }, { status: 404 })
-
-/** True when the saved comparison names a case `userId` cannot reach (B-A1). */
-async function hidesCase(userId: number, comparison: any): Promise<boolean> {
-  const ids = [...jsonArray<number>(comparison.case_ids).map(Number), Number(comparison.base_case_id)]
-  return (await unreachableCaseIds(userId, comparison.project_id, ids)).length > 0
-}
 
 // GET /api/comparisons/[comparisonId]
 export async function GET(
@@ -53,8 +47,6 @@ export async function GET(
       notFound: 'Comparison not found',
     })
     if (denied) return denied
-    // One that names a case the caller cannot reach (B-A1) does not exist for them.
-    if (await hidesCase(userId, comparison)) return notFound()
 
     const results = await query<any>(
       `SELECT result_id, category_id, category_name, case_results, best_case_id, worst_case_id
@@ -133,8 +125,6 @@ export async function DELETE(
       comparison.created_by === userId ? undefined : 'admin',
       { notFound: 'Comparison not found', forbidden: 'Access denied - only creator or project admin can delete' }
     )
-    if (denied?.status === 404) return denied
-    if (await hidesCase(userId, comparison)) return notFound()
     if (denied) return denied
 
     await execute(`DELETE FROM comparison_runs WHERE comparison_id = ?`, [comparisonId])

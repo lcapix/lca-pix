@@ -1,8 +1,8 @@
 'use client'
 
-// Data loading and actions for the dashboard (/home): the guided-tour signal,
-// the onboarding gate, the project list (with Retry), the library counts, the
-// list's view/filter/search, and the worked example.
+// Data loading and actions for the dashboard (/home): the onboarding gate, the
+// project list (with Retry), the library counts, and the list's
+// view/filter/search.
 
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -28,23 +28,7 @@ export function useHome(router: Router) {
   // X-API-1: a failed /api/projects is an error state, never "no projects".
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [projectsReload, setProjectsReload] = useState(0)
-  const [tourOpen, setTourOpen] = useState(false)
 
-  // The global navbar "Tour" button signals us either via sessionStorage
-  // (when it triggered a page navigation) or via a same-page custom event.
-  // Honor both — clear the flag after consuming it so a refresh doesn't
-  // re-trigger the tour.
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem("lcapix:start-tour") === "1") {
-        sessionStorage.removeItem("lcapix:start-tour")
-        setTourOpen(true)
-      }
-    } catch {}
-    const handler = () => setTourOpen(true)
-    window.addEventListener("lcapix:start-tour", handler)
-    return () => window.removeEventListener("lcapix:start-tour", handler)
-  }, [])
   const [kpiData, setKpiData] = useState({ factors: 0, components: 0 })
   const [view, setView] = useState<ViewMode>('grid')
   const [filter, setFilter] = useState<FilterId>('all')
@@ -126,30 +110,6 @@ export function useHome(router: Router) {
 
   const filtered = useMemo(() => filterProjects(coerced, filter, search), [coerced, filter, search])
 
-  // The worked example, built in this account on demand.
-  const [loadingExample, setLoadingExample] = useState(false)
-  const handleLoadExample = async () => {
-    setLoadingExample(true)
-    try {
-      const res = await apiRequest('/api/example-project', { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.project_id) {
-        toast.error('Could not build the example', {
-          description: data?.error ?? 'Unknown error',
-        })
-        return
-      }
-      toast.success(data.existed ? 'You already have the example' : 'Example ready', {
-        description: 'Quantities in it are illustrative; the factors and their sources are real.',
-      })
-      router.push(`/project/${data.project_id}`)
-    } catch (e: any) {
-      toast.error('Could not build the example', { description: e?.message ?? 'Unknown error' })
-    } finally {
-      setLoadingExample(false)
-    }
-  }
-
   const handleNewProject = () => {
     try {
       router.push('/project/new')
@@ -173,8 +133,6 @@ export function useHome(router: Router) {
     isLoadingProjects,
     projectsError,
     retryProjects: () => setProjectsReload((n) => n + 1),
-    tourOpen,
-    setTourOpen,
     kpiData,
     view,
     setView,
@@ -182,8 +140,6 @@ export function useHome(router: Router) {
     setFilter,
     search,
     setSearch,
-    loadingExample,
-    handleLoadExample,
     handleNewProject,
     handleOpenProject,
   }

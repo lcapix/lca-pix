@@ -10,16 +10,14 @@ import { perUnit } from '@/lib/workspace/per-unit'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useShellStore } from '@/lib/shell/use-shell'
-import { Button, EmptyState, Flag, SectionLabel } from '@/components/lcapix/ds'
+import { Button, EmptyState, SectionLabel } from '@/components/lcapix/ds'
 import { SOURCE_WORD } from '@/lib/ui/words'
 import { amount, answer, caseTotal, co2Unit, fixed, money, result3 } from '@/lib/ui/format'
-import { useGuidedMode } from '@/lib/shell/use-shell'
 import { apiRequest } from '@/lib/api-client'
 import { answerSentence, compareNote, costBeside, howSure, otherCategories, runClimate, whatBuilds } from '@/lib/workspace/results-view'
 import type { WorkspaceRun } from '@/lib/workspace/use-runs'
 import type { WorkspaceCase } from '@/lib/workspace/use-workspace'
 import { FloatingPanel } from './floating-panel'
-import { ExerciseSlot } from './exercise-card'
 
 const SURE_COLOUR: Record<string, string> = {
   global: '#C99A3A',
@@ -48,7 +46,6 @@ export function ResultsPanel({
   onOpenRun: (runId: number | null) => void
   onOpenInsights: () => void
 }) {
-  const [guided] = useGuidedMode()
   const [showOther, setShowOther] = useState(false)
   const [whatIfBusy, setWhatIfBusy] = useState(false)
   const [whatIfError, setWhatIfError] = useState<string | null>(null)
@@ -127,20 +124,6 @@ export function ResultsPanel({
           </button>
         </div>
       )}
-      <ExerciseSlot
-        fallback={
-        <div className="ws-guide">
-          <span style={{ flex: 1 }}>
-            <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-              Guided mode · The answer
-            </span>
-            <br />
-            This is the climate impact of one {unit}. The bars show which step builds it.
-          </span>
-          <Flag kind="beta" />
-        </div>
-        }
-      />
 
       {climate ? (
         <div className="ws-panel-section">

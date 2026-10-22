@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { caseAccessDenied, caseReadableByClass, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, fitToColumn, lengthError } from '@/lib/field-limits';
@@ -35,8 +35,8 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    // A copy is a new case of the caller's: they must reach the source (a
-    // student reads the instructor's base case, D2) and may create cases.
+    // A copy is a new case of the caller's: they must reach the source and may
+    // create cases.
     const denied =
       (await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' })) ??
       (await projectAccessDenied(userId, Number(sourceCase.project_id), 'editor', { notFound: 'Case not found' }));
@@ -72,12 +72,10 @@ export async function POST(
     const newName: string =
       askedName || `${fitToColumn(sourceCase.case_name, { kind: 'chars', max: C.case_name.max - ' (Copy)'.length })} (Copy)`;
 
-    // Only among the cases the caller reaches (B-A1), as on create.
-    const only = await reachableCasesFilter(userId, sourceCase.project_id, 'case_table');
     const clash = await queryOne<any>(
       `SELECT case_id FROM case_table
-        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
-      [sourceCase.project_id, newName, ...only.params]
+        WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+      [sourceCase.project_id, newName]
     );
     if (clash) {
       return NextResponse.json(
@@ -89,18 +87,13 @@ export async function POST(
       ? body.case_type
       : 'comparative';
 
-    // A copy of a case the class cannot read stays from the class, whoever
-    // makes it (the instructor copying a student's work, migrate-037).
-    const hidden = (await caseReadableByClass(sourceCase)) ? 0 : 1;
-
     const result = await transaction(async (conn) => {
       const [caseIns]: any = await conn.query(
-        `INSERT INTO case_table (project_id, created_by, hidden_from_members, parent_case_id, case_name, case_type, description, region_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO case_table (project_id, created_by, parent_case_id, case_name, case_type, description, region_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           sourceCase.project_id,
           userId,
-          hidden,
           caseId, // the copy link: the case this one came from
           newName,
           newType,

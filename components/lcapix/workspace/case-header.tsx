@@ -2,12 +2,10 @@
 
 // The case header (behaviour spec "Inside a case", E03, E03c): the case name,
 // its facts line, a warning line when flows are left out, the Case switcher,
-// and the one primary: Run Assessment, or Make my own copy on the read-only
-// sample. While a run is going: "Running… N s".
+// and the one primary: Run Assessment. While a run is going: "Running… N s".
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { makeOwnCopy } from '@/lib/workspace/make-copy'
 import { Button, ErrorCard } from '@/components/lcapix/ds'
 import { ACCESS_WORD } from '@/lib/ui/words'
 import type { WorkspaceCase, WorkspaceInventory } from '@/lib/workspace/use-workspace'
@@ -26,7 +24,7 @@ export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSt
     : k.project_functional_unit?.trim() || `${fmtAmount(k.reference_flow ?? 1)} unit`
   const scope = inv ? `${inv.method} · ${inv.region}` : k.project_lcia_method ?? ''
   const run = inv?.latest_run ? `Run #${inv.latest_run.run_id}` : noSteps ? 'no steps yet' : 'not run yet'
-  return [kind, unit, scope, run, k.read_only ? 'Sample, read-only' : null].filter(Boolean).join(' · ')
+  return [kind, unit, scope, run].filter(Boolean).join(' · ')
 }
 
 /** "2 flows have no amount. They are left out of a run." / "1 flow is left out: its unit can't convert." */
@@ -54,7 +52,6 @@ export function CaseHeader({
   siblings,
   readOnly,
   canRun,
-  ownName,
   onRun,
   running,
   runSeconds,
@@ -68,8 +65,6 @@ export function CaseHeader({
   siblings: Array<{ case_id: number; case_name: string; case_type: string }>
   readOnly: boolean
   canRun: boolean
-  /** The person's name, for "Elena Rivera's case". */
-  ownName: string | null
   onRun: () => void
   running: boolean
   runSeconds: number
@@ -80,22 +75,7 @@ export function CaseHeader({
   runReason?: string
   noSteps?: boolean
 }) {
-  const router = useRouter()
   const warn = warnLine(inventory?.counts)
-  const [copying, setCopying] = useState(false)
-  const [copyError, setCopyError] = useState<string | null>(null)
-
-  const makeCopy = async () => {
-    setCopying(true)
-    setCopyError(null)
-    try {
-      const id = await makeOwnCopy(kase.case_id, ownName)
-      router.push(`/project/${kase.project_id}/case/${id}`)
-    } catch (e: any) {
-      setCopyError(e?.message ?? 'the copy failed')
-      setCopying(false)
-    }
-  }
 
   return (
     <>
@@ -114,12 +94,7 @@ export function CaseHeader({
           )}
         </div>
         <CaseSwitcher kase={kase} siblings={siblings} />
-        {/* A copy is a new case: it needs Can change, so someone who can only read is told so instead. */}
-        {kase.read_only && kase.project_role !== 'viewer' ? (
-          <Button variant="primary" onClick={makeCopy} busy={copying}>
-            Make my own copy
-          </Button>
-        ) : readOnly ? (
+        {readOnly ? (
           <span className="ds-status ds-status--no-factor">{ACCESS_WORD.viewer}</span>
         ) : running ? (
           <span className="ws-running" role="status" aria-live="polite">
@@ -142,13 +117,13 @@ export function CaseHeader({
           </Button>
         )}
       </header>
-      {(runError || copyError) && (
+      {runError && (
         <div style={{ padding: '12px 24px 0' }}>
           <ErrorCard
-            title={runError ? 'The run did not finish' : 'The copy was not made'}
-            cause={runError ?? copyError}
-            fix={runError ? 'Nothing was saved from it. Check the flows, then run again.' : undefined}
-            onRetry={runError ? onRun : makeCopy}
+            title="The run did not finish"
+            cause={runError}
+            fix="Nothing was saved from it. Check the flows, then run again."
+            onRetry={onRun}
           />
         </div>
       )}

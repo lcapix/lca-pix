@@ -1,22 +1,19 @@
 'use client'
 
-// A project's Overview. The sample study's is its read-only Overview (E02):
-// seven sections in research order. Other projects keep the classic overview:
-// no education screen designs one (open for Shreya and Kavish; Cases, E07, is
-// the project's working page).
+// A project's Overview: the classic overview for now (no new screen designs
+// one yet; Cases, E07, is the project's working page).
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { EmptyState } from '@/components/lcapix/ds'
 import ProjectOverviewPage from '@/components/lcapix/project/project-overview-page'
-import { SampleOverview } from '@/components/lcapix/home/sample-overview'
 import { useShellData } from '@/lib/shell/use-shell'
 import { EDU_SHELL } from '@/lib/ui-flags'
 
 export default function ProjectPage() {
   const params = useParams()
   const projectId = Number(params.projectId)
-  const { projects, profile, status } = useShellData()
+  const { projects, status } = useShellData()
   const here = projects.find((p) => p.project_id === projectId)
   // Which overview to show depends on the projects the shell loads, so wait
   // for them: rendering the classic overview first let its own 404 handler
@@ -46,10 +43,6 @@ export default function ProjectPage() {
         />
       </div>
     )
-  }
-  if (EDU_SHELL && here?.is_sample) {
-    const owns = projects.some((p) => !p.is_sample && p.owner_id === profile?.id)
-    return <SampleOverview projectId={projectId} ownName={profile?.fullName?.trim() || null} ownsProject={owns} />
   }
   return <ProjectOverviewPage />
 }

@@ -60,8 +60,7 @@ export function useResults(projectId: string, caseId: string, requestedRunId?: s
   const [writeUp, setWriteUp] = useState<{
     interpretation: string
     assumptions: string
-    isFinal: boolean
-  }>({ interpretation: '', assumptions: '', isFinal: false })
+  }>({ interpretation: '', assumptions: '' })
   // The study's own method and region (goal & scope), used until this case has
   // a run of its own.
   const [studyMethod, setStudyMethod] = useState<string | null>(null)
@@ -104,7 +103,6 @@ export function useResults(projectId: string, caseId: string, requestedRunId?: s
             setWriteUp({
               interpretation: caseData.case.interpretation ?? '',
               assumptions: caseData.case.assumptions ?? '',
-              isFinal: !!caseData.case.is_final,
             })
           }
         }

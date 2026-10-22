@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { query, queryOne, insert, execute } from '@/lib/db-helpers';
 import { requireAuth, checkProjectAccess } from '@/lib/auth';
-import { casesRestrictedFor, isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 import { recordAudit } from '@/lib/audit';
 import { RATE_LIMITS, enforceRateLimit } from '@/lib/rate-limit';
@@ -11,8 +11,8 @@ import { RATE_LIMITS, enforceRateLimit } from '@/lib/rate-limit';
  * Who else can see a project.
  *
  * The database has had project_members and a permission hierarchy from the
- * start, with no way to use it: an instructor could not open a student's work
- * and a student could not hand anything in. This is that interface.
+ * start, with no way to use it: nobody could open a colleague's work. This is
+ * that interface.
  *
  * An invitation is by email and the person must already have an account: we do
  * not send mail, and inviting into a void would be a promise the product does
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // The owner is listed once, as the owner. A project_members row for the
     // owner exists in older data and would otherwise show them twice, the
     // second time with a Remove button that does nothing useful.
-    const all = await query<any>(
+    const members = await query<any>(
       `SELECT pm.member_id, pm.user_id, pm.added_at, a.username, a.email, perm.permission_name,
               COALESCE(NULLIF(TRIM(a.full_name), ''), a.username) AS full_name
          FROM project_members pm
@@ -86,13 +86,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       [g.projectId],
     );
 
-    // When members see only their own cases (a class project), they also see
-    // only the teaching staff and themselves here, not every classmate's name
-    // and email. The owner and admins still see everyone.
-    const members = (await casesRestrictedFor(g.userId, g.projectId))
-      ? all.filter((m: any) => Number(m.user_id) === g.userId || ['owner', 'admin'].includes(m.permission_name))
-      : all;
-
     const canManage = g.isOwner || (await checkProjectAccess(g.userId, g.projectId, 'admin'));
     return NextResponse.json({ success: true, owner, members, canManage, canManageAdmins: g.isOwner });
   } catch (error: any) {
@@ -109,13 +102,13 @@ type AddOutcome =
   | { outcome: 'no_account' | 'owner' | 'invalid' | 'admin_only' | 'limited'; email: string }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** The most emails one request may add (a class list); each counts against the lookup budget. */
+/** The most emails one request may add (a list of people); each counts against the lookup budget. */
 const BULK_MAX = 100;
 
 /**
  * Add one person by email, or change their access when they are here already.
  * Every email looked up counts against the caller's hourly lookup budget, so a
- * class list cannot probe which emails have accounts faster than one by one.
+ * long list cannot probe which emails have accounts faster than one by one.
  */
 async function addOne(
   g: { userId: number; projectId: number; isOwner: boolean },
@@ -169,7 +162,7 @@ async function addOne(
 
 // POST /api/projects/[projectId]/members
 //   { email, role }       add one person (or change their access)
-//   { emails: [], role }  add a class list (E08): what happened to each email
+//   { emails: [], role }  add several people (E08): what happened to each email
 export async function POST(request: NextRequest, { params }: { params: Promise<{ projectId: string }> }) {
   try {
     const { projectId: p } = await params;

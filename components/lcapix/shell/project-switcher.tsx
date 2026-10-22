@@ -1,7 +1,7 @@
 'use client'
 
 // The project switcher (E19, sidebar.md "Switcher"): a combobox over the
-// caller's projects in four groups. Typing filters, the arrow keys move, Enter
+// caller's projects in three groups. Typing filters, the arrow keys move, Enter
 // opens, Esc closes and returns focus to the card that opened it.
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react'
@@ -11,7 +11,6 @@ import {
   caseCount,
   projectTint,
   relationOf,
-  showsNewProject,
   switcherGroups,
   switcherOrder,
   type NavProject,
@@ -24,7 +23,6 @@ const GROUPS: Array<{ key: keyof SwitcherGroups; label: string }> = [
   { key: 'pinned', label: 'Pinned' },
   { key: 'yours', label: 'Your projects' },
   { key: 'shared', label: 'Shared with you' },
-  { key: 'sample', label: 'Sample' },
 ]
 
 export function ProjectSwitcher({
@@ -189,13 +187,9 @@ export function ProjectSwitcher({
         })}
       </div>
       <div className="ds-popover-foot">
-        {showsNewProject(projects, userId) ? (
-          <a className="ds-link" href="/project/new">
-            <ShellIcon name="plus" size={16} /> New project
-          </a>
-        ) : (
-          <span />
-        )}
+        <a className="ds-link" href="/project/new">
+          <ShellIcon name="plus" size={16} /> New project
+        </a>
         <a className="ds-link" href="/home" style={{ color: 'var(--ds-text)', fontWeight: 500 }}>
           All projects <ShellIcon name="chevron" size={16} />
         </a>

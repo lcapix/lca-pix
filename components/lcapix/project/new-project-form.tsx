@@ -1,18 +1,17 @@
 'use client'
 
 // Start your own project (F2.1): the name, the question every case answers
-// (functional unit, boundary, method, region; the method and region default
-// to the sample study's), then how to start: from a file (read and checked
+// (functional unit, boundary, method, region), then how to start: from a file (read and checked
 // before anything is saved) or empty. Two saves: the project, then its
 // question. If the second fails the project still exists, and the page says
 // so on the page with a way on, never in a toast.
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button, ErrorCard } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
-import { useShellData, useShellStore } from '@/lib/shell/use-shell'
+import { useShellStore } from '@/lib/shell/use-shell'
 import { startEmptyCase } from '@/lib/project/start-empty'
 
 // Only the methods with factors loaded (driver_impact_factors) and the regions
@@ -34,39 +33,16 @@ type Start = 'file' | 'empty'
 
 export function NewProjectForm() {
   const router = useRouter()
-  const { projects } = useShellData()
-  const sample = projects.find((p) => p.is_sample)
   const [name, setName] = useState('')
   const [functionalUnit, setFunctionalUnit] = useState('')
   const [boundary, setBoundary] = useState<string>('cradle-to-gate')
   const [method, setMethod] = useState<string>('CML 2001')
   const [region, setRegion] = useState<string>('Global')
-  const [fromSample, setFromSample] = useState(false)
   const [start, setStart] = useState<Start>('file')
   const [busy, setBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [partial, setPartial] = useState<{ projectId: number; cause: string } | null>(null)
-
-  // The sample study's method and region, as the defaults (F2.1).
-  const sampleId = sample?.project_id
-  useEffect(() => {
-    if (!sampleId) return
-    let live = true
-    apiRequest(`/api/projects/${sampleId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        const p = d?.project
-        if (!live || !p) return
-        if ((METHODS as readonly string[]).includes(p.lcia_method)) setMethod(p.lcia_method)
-        if (REGIONS.some((r) => r.value === p.region_code)) setRegion(p.region_code)
-        setFromSample(true)
-      })
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [sampleId])
 
   const next = async (projectId: number) => {
     await useShellStore.getState().refresh()
@@ -205,7 +181,7 @@ export function NewProjectForm() {
             </label>
           </div>
           <p className="np-sub" style={{ margin: '14px 0 0' }}>
-            {fromSample ? 'Same method and region as the sample study. ' : ''}Change them here or when you run.
+            Change them here or when you run.
           </p>
         </section>
 

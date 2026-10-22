@@ -7,7 +7,6 @@ import {
   lastAddLines,
   namesList,
   peopleHeader,
-  privacyConsequence,
   theirCases,
   type Person,
 } from '@/lib/project/people-view'
@@ -37,7 +36,7 @@ describe('people view', () => {
     expect(by.get(3)).toBe(2)
     expect(theirCases(0, 'editor')).toBe('None yet')
     expect(theirCases(0, 'viewer')).toBe('None')
-    expect(holdersLine(members, by, 'student')).toBe('2 students hold the 3 student cases')
+    expect(holdersLine(members, by)).toBe('2 members hold the 3 member cases')
   })
 
   it('finds every address in typed text or a CSV, once, lowercased', () => {
@@ -73,10 +72,7 @@ describe('people view', () => {
     ])
   })
 
-  it('names who the privacy switch changes things for, by the D2 rule', () => {
-    expect(privacyConsequence(members, by, 'student')).toBe(
-      "Students will see only the cases they made, and yours read only. 2 students with a case stop seeing each other's. Noah Kim has no case yet and can still copy yours. Omar Haddad can read only and will see only your cases.",
-    )
+  it('lists names, at most three', () => {
     expect(namesList(['A', 'B', 'C', 'D', 'E'])).toBe('A, B and 3 others')
   })
 })

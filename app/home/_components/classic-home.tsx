@@ -8,8 +8,6 @@
 import { useRouter } from 'next/navigation'
 import { AuthGuard } from '@/components/auth-guard'
 import { AppTopBar, fmtNum, fmtInt } from '@/components/lcapix'
-import { GuidedTour } from '@/components/global/guided-tour'
-import { LCAPIX_TOUR_STEPS } from '@/lib/lcapix-tour-steps'
 import { useHome } from '@/lib/home/use-home'
 import { greetingName, homeKpis, initialsOf, projectTotals } from '@/lib/home/projects'
 import { HomeGreeting } from './home-greeting'
@@ -27,8 +25,6 @@ export default function ClassicHome() {
     isLoadingProjects,
     projectsError,
     retryProjects,
-    tourOpen,
-    setTourOpen,
     kpiData,
     view,
     setView,
@@ -36,8 +32,6 @@ export default function ClassicHome() {
     setFilter,
     search,
     setSearch,
-    loadingExample,
-    handleLoadExample,
     handleNewProject,
     handleOpenProject,
   } = useHome(router)
@@ -68,7 +62,6 @@ export default function ClassicHome() {
               firstName={greetingName(user?.name)}
               projectCount={coerced.length}
               isLoadingProjects={isLoadingProjects}
-              onStartTour={() => setTourOpen(true)}
               onNewProject={handleNewProject}
             />
 
@@ -95,8 +88,6 @@ export default function ClassicHome() {
               filtered={filtered}
               handleOpenProject={handleOpenProject}
               onNewProject={handleNewProject}
-              onLoadExample={handleLoadExample}
-              loadingExample={loadingExample}
             />
             {/* Unused but referenced to keep lint calm if future numeric formatting needed */}
             <span style={{ display: 'none' }}>{fmtNum(0, 0)}</span>
@@ -106,11 +97,6 @@ export default function ClassicHome() {
           <RecentActivity />
         </div>
       </div>
-      <GuidedTour
-        steps={LCAPIX_TOUR_STEPS}
-        open={tourOpen}
-        onClose={() => setTourOpen(false)}
-      />
     </AuthGuard>
   )
 }

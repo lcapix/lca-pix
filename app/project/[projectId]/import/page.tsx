@@ -34,7 +34,6 @@ import { NotesList } from './_components/notes-list'
 import { PickForm } from './_components/pick-form'
 import { ProjectStatusCard } from './_components/project-status-card'
 import { ReviewActions } from './_components/review-actions'
-import { SampleDialog } from './_components/sample-dialog'
 import { StepsHoursCard } from './_components/steps-hours-card'
 import type { StepPicker } from './_components/step-cell'
 import { UnmappedColumnsCard } from './_components/unmapped-columns-card'
@@ -43,7 +42,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   const { projectId } = use(params)
   const router = useRouter()
   const imp = useImport(projectId, router)
-  const { phase, plan, targetCaseId, projectStatus, error, applied, sampleView } = imp
+  const { phase, plan, targetCaseId, projectStatus, error, applied } = imp
   const { projects } = useShellData()
   const projectName = projects.find((p) => p.project_id === Number(projectId))?.project_name ?? null
   const targetName = targetCaseId !== null ? imp.projectCases.find((c) => c.case_id === targetCaseId)?.case_name ?? 'the case' : null
@@ -120,7 +119,6 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
             idHints={imp.idHints}
             failure={phase === 'pick' ? imp.readFailure : null}
             onChooseAnother={() => imp.setFile(null)}
-            onTrySample={() => imp.loadSample(imp.connector)}
             onStartEmpty={targetCaseId === null ? startEmpty : undefined}
           />
         )}
@@ -151,8 +149,6 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
             onLotSizeChange={imp.setLotSize}
             previewing={phase === 'previewing'}
             onPreview={imp.preview}
-            onLoadSample={imp.loadSample}
-            onViewSample={imp.viewSample}
             onDownloadTemplate={imp.downloadTemplate}
             readsLeft={imp.readsLeft}
             onBack={imp.goBack}
@@ -266,11 +262,6 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
           />
         )}
       </div>
-
-      {/* The sample document itself, so nobody has to guess what is read. */}
-      {sampleView && (
-        <SampleDialog sampleView={sampleView} onClose={imp.closeSample} onLoad={imp.loadSample} onDownload={imp.downloadSample} onCopy={imp.copySample} />
-      )}
     </AuthGuard>
   )
 }

@@ -1,18 +1,15 @@
 'use client'
 
 // People (E08, E08b): who is on the project, with their access and how many
-// cases each made; Add people by one or many emails or a CSV of the class
-// (they need an account first, no email is sent), with what happened to each
-// email; and the "only their own case" switch, which asks first before it
-// narrows what anyone sees. Only the owner and people who can share change
-// anything here; everyone else reads the list. The sample is never shared.
+// cases each made; Add people by one or many emails or a CSV of emails (they
+// need an account first, no email is sent), with what happened to each email.
+// Only the owner and people who can share change anything here; everyone else
+// reads the list.
 
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { Button, ComingSoon, ConfirmDialog, EmptyState, ErrorCard, SavedLine, Segmented, Switch } from '@/components/lcapix/ds'
+import { Button, ComingSoon, ConfirmDialog, ErrorCard, SavedLine, Segmented } from '@/components/lcapix/ds'
 import { initialsOf } from '@/lib/home/projects'
-import { LMS_NAME } from '@/lib/ui-flags'
 import { useShellData } from '@/lib/shell/use-shell'
 import { usePeople } from '@/lib/project/use-people'
 import {
@@ -24,7 +21,6 @@ import {
   matchesPerson,
   nameOf,
   peopleHeader,
-  privacyConsequence,
   theirCases,
   type Access,
   type AddLine,
@@ -32,7 +28,7 @@ import {
 } from '@/lib/project/people-view'
 
 const ROWS = 8
-/** A class list is a few kB; anything far larger is not one. */
+/** A list of emails is a few kB; anything far larger is not one. */
 const CSV_MAX_BYTES = 1_000_000
 
 export function PeoplePage() {
@@ -40,9 +36,7 @@ export function PeoplePage() {
   const projectId = Number(params.projectId)
   const { profile } = useShellData()
   const me = profile?.id ?? -1
-  const word = profile?.useCase === 'teaching' ? 'student' : 'member'
-  const Word = `${word[0].toUpperCase()}${word.slice(1)}s`
-  const { data, error, reload, addPeople, changeAccess, remove, setOwnOnly } = usePeople(projectId)
+  const { data, error, reload, addPeople, changeAccess, remove } = usePeople(projectId)
 
   const [q, setQ] = useState('')
   const [all, setAll] = useState(false)
@@ -52,9 +46,6 @@ export function PeoplePage() {
   const [removing, setRemoving] = useState<Person | null>(null)
   const [removeBusy, setRemoveBusy] = useState(false)
   const [justAdded, setJustAdded] = useState<Set<number>>(new Set())
-  const [confirmOn, setConfirmOn] = useState(false)
-  const [switchBusy, setSwitchBusy] = useState(false)
-  const [switchError, setSwitchError] = useState<string | null>(null)
 
   const by = useMemo(() => (data ? casesBy(data.cases) : new Map<number, number>()), [data])
 
@@ -78,35 +69,12 @@ export function PeoplePage() {
     <p style={{ margin: 0, fontSize: 13, color: 'var(--ds-text-2)' }}>{data.project.project_name}</p>
   )
 
-  if (data.project.is_sample) {
-    return (
-      <div className="np pc">
-        <header className="pc-head">
-          <div style={{ flex: 1 }}>
-            {head}
-            <h1 className="ds-title" style={{ margin: '2px 0 0' }}>
-              People
-            </h1>
-          </div>
-        </header>
-        <EmptyState
-          line="The sample is never shared. Start your own project to add people to it."
-          action={
-            <Link href="/project/new" className="ds-btn ds-btn--primary">
-              + New project
-            </Link>
-          }
-        />
-      </div>
-    )
-  }
-
   // The owner first, then whoever was just added (so the last add is in view), then the rest as they joined.
   const everyone: Person[] = [data.owner, ...data.members.filter((m) => justAdded.has(m.user_id)), ...data.members.filter((m) => !justAdded.has(m.user_id))]
   const found = everyone.filter((p) => matchesPerson(p, q))
   const searching = q.trim() !== ''
   const shown = searching || all ? found : found.slice(0, ROWS)
-  const holders = holdersLine(data.members, by, word)
+  const holders = holdersLine(data.members, by)
   const canEdit = (p: Person) => data.canManage && p.user_id !== data.owner.user_id && (p.permission_name !== 'admin' || data.canManageAdmins)
 
   const onAccess = async (p: Person, role: Access) => {
@@ -135,25 +103,6 @@ export function PeoplePage() {
       setRemoving(null)
     } finally {
       setRemoveBusy(false)
-    }
-  }
-
-  const switchTo = async (next: boolean) => {
-    setSwitchBusy(true)
-    setSwitchError(null)
-    try {
-      await setOwnOnly(next)
-      setConfirmOn(false)
-      setSaved(
-        next
-          ? { text: `On. ${Word} see only the cases they made, and yours.` }
-          : { text: `Off. Everyone added sees every case.`, undo: () => void switchTo(true) },
-      )
-    } catch (e: any) {
-      setSwitchError(e?.message ?? 'The switch did not change.')
-      setConfirmOn(false)
-    } finally {
-      setSwitchBusy(false)
     }
   }
 
@@ -290,42 +239,6 @@ export function PeoplePage() {
               onAdd={addPeople}
               onAdded={(ids) => setJustAdded(new Set(ids))}
             />
-            <section className="pp-card" aria-labelledby="pp-own-h">
-              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-                <span style={{ flex: 1 }}>
-                  <h2 id="pp-own-h" className="pp-card-h" style={{ fontSize: 18 }}>
-                    {Word} see only their own case
-                  </h2>
-                  <span style={{ display: 'block', marginTop: 4, fontSize: 15, color: 'var(--ds-text-2)' }}>
-                    {data.ownOnly
-                      ? `On now. Each ${word} sees the cases they made, and yours read only.`
-                      : 'Off now. Everyone added sees every case in this project.'}
-                  </span>
-                </span>
-                <Switch
-                  checked={data.ownOnly}
-                  hideLabel
-                  label={`${Word} see only their own case`}
-                  disabled={switchBusy}
-                  onChange={(next) => (next ? setConfirmOn(true) : void switchTo(false))}
-                />
-              </div>
-              {switchError && (
-                <p role="alert" className="pp-alert" style={{ marginTop: 10 }}>
-                  {switchError}
-                </p>
-              )}
-              <dl className="pp-modes">
-                <dt>OFF</dt>
-                <dd>
-                  {Word} can read your base case and each other&apos;s. Good for a lab that works in the open.
-                </dd>
-                <dt data-on>ON</dt>
-                <dd>
-                  Each {word} opens only the cases they made, plus yours, read only. You still see all of them.
-                </dd>
-              </dl>
-            </section>
             <ComingSoon>Invite by email, requests to join, comments</ComingSoon>
           </aside>
         )}
@@ -343,15 +256,6 @@ export function PeoplePage() {
         busy={removeBusy}
         onConfirm={() => void onRemove()}
         onCancel={() => setRemoving(null)}
-      />
-      <ConfirmDialog
-        open={confirmOn}
-        title={`Turn on “${Word} see only their own case”?`}
-        consequence={privacyConsequence(data.members, by, word)}
-        confirmLabel="Turn on"
-        busy={switchBusy}
-        onConfirm={() => void switchTo(true)}
-        onCancel={() => setConfirmOn(false)}
       />
     </div>
   )
@@ -436,8 +340,8 @@ function AddPeople({
     setFileNote(null)
     setError(null)
     if (!file) return
-    if (!/\.(csv|txt)$/i.test(file.name)) return setError(`${file.name} is not a CSV. Save the class list as .csv and drop it again.`)
-    if (file.size > CSV_MAX_BYTES) return setError(`${file.name} is larger than a class list (over 1 MB).`)
+    if (!/\.(csv|txt)$/i.test(file.name)) return setError(`${file.name} is not a CSV. Save the list as .csv and drop it again.`)
+    if (file.size > CSV_MAX_BYTES) return setError(`${file.name} is larger than a list of emails (over 1 MB).`)
     const found = emailsIn(await file.text())
     if (!found.length) return setError(`No email addresses in ${file.name}.`)
     setText((t) => emailsIn(`${t}\n${found.join('\n')}`).join('\n'))
@@ -509,8 +413,8 @@ function AddPeople({
           <path d="M14 3v5h5M9 13h6M9 17h6" />
         </svg>
         <span>
-          <strong style={{ display: 'block', fontSize: 15 }}>Or drop a CSV of the class</strong>
-          <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>One email per row.{LMS_NAME ? ` Export it from ${LMS_NAME}.` : ''}</span>
+          <strong style={{ display: 'block', fontSize: 15 }}>Or drop a CSV of emails</strong>
+          <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>One email per row.</span>
         </span>
       </label>
       <span className="edu-field-label" style={{ display: 'block', margin: '16px 0 6px' }} aria-hidden>

@@ -1,8 +1,8 @@
 'use client'
 
 // The case editor's toolbar: the Tree / List / Graph switch (the Graph tab
-// is labelled "Plot" for now), the canvas search, Reset, the Learn and
-// Reference panes, Duplicate and Run Assessment.
+// is labelled "Plot" for now), the canvas search, Reset, the Reference pane,
+// Duplicate and Run Assessment.
 
 import { Icon } from '@/components/lcapix'
 import type { CanvasView } from '@/components/lcapix/case'
@@ -16,8 +16,6 @@ export interface CaseToolbarProps {
   onSearchChange: (query: string) => void
   /** Clears the canvas search and the outline filter. */
   onReset: () => void
-  learnOpen: boolean
-  onToggleLearn: () => void
   referenceOpen: boolean
   onToggleReference: () => void
   onDuplicate: () => void
@@ -25,7 +23,7 @@ export interface CaseToolbarProps {
   isRunning: boolean
   canRun: boolean
   fuMissing: boolean
-  /** A "Can read" member: no Learn (it saves progress), Duplicate or Run. */
+  /** A "Can read" member: no Duplicate or Run. */
   readOnly?: boolean
 }
 
@@ -35,8 +33,6 @@ export function CaseToolbar({
   searchQuery,
   onSearchChange,
   onReset,
-  learnOpen,
-  onToggleLearn,
   referenceOpen,
   onToggleReference,
   onDuplicate,
@@ -157,17 +153,6 @@ export function CaseToolbar({
       >
         <Icon name="refresh" size={14} /> Reset
       </button>
-      {!readOnly && (
-        <button
-          className={learnOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
-          type="button"
-          title="Five short lessons that follow the ISO phases, done on this case"
-          onClick={onToggleLearn}
-          aria-pressed={learnOpen}
-        >
-          <Icon name="target" size={14} /> Learn
-        </button>
-      )}
       <button
         className={referenceOpen ? 'btn btn-primary btn-sm' : 'btn btn-toggle btn-sm'}
         type="button"

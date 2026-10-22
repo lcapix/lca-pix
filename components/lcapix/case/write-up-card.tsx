@@ -3,8 +3,8 @@
 /**
  * The two things ISO 14044's reporting clause asks of the author and no engine
  * can compute: what the result means, and what the model assumed or left out.
- * Both print in the exported report, so a student's hand-in is their reading
- * with the numbers under it rather than a printout of the numbers alone.
+ * Both print in the exported report, so the report carries the author's
+ * reading with the numbers under it rather than the numbers alone.
  */
 
 import { useEffect, useState } from 'react'
@@ -17,11 +17,9 @@ type Props = {
   caseId: string | number
   initialInterpretation?: string | null
   initialAssumptions?: string | null
-  /** Whether this case is already declared the hand-in. */
-  initialFinal?: boolean
-  /** Shown as a starting point when the student has written nothing yet. */
+  /** Shown as a starting point when nothing is written yet. */
   prompts?: { interpretation?: string; assumptions?: string }
-  /** A "Can read" member reads the write-up; there is nothing to edit or tick. */
+  /** A "Can read" member reads the write-up; there is nothing to edit. */
   readOnly?: boolean
 }
 
@@ -29,11 +27,9 @@ type Props = {
 function ReadOnlyWriteUp({
   interpretation,
   assumptions,
-  isFinal,
 }: {
   interpretation: string
   assumptions: string
-  isFinal: boolean
 }) {
   const para: React.CSSProperties = { margin: '4px 0 12px', fontSize: 13, lineHeight: 1.55, whiteSpace: 'pre-wrap', color: 'var(--text-primary)' }
   const label: React.CSSProperties = { margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }
@@ -48,7 +44,7 @@ function ReadOnlyWriteUp({
       }}
     >
       <h3 style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 650, color: 'var(--text-primary)' }}>
-        The write-up{isFinal ? ' · ticked as the hand-in' : ''}
+        The write-up
       </h3>
       <p style={label}>Interpretation</p>
       <p style={para}>{interpretation.trim() || 'Not written yet.'}</p>
@@ -62,11 +58,9 @@ export function WriteUpCard({
   caseId,
   initialInterpretation,
   initialAssumptions,
-  initialFinal = false,
   prompts,
   readOnly = false,
 }: Props) {
-  const [isFinal, setIsFinal] = useState(initialFinal)
   // Collapsed by default: on a results page the numbers come first, and two
   // empty text boxes under them read like homework nobody asked for. A case
   // that already has a write-up opens showing it.
@@ -77,37 +71,11 @@ export function WriteUpCard({
   const [saved, setSaved] = useState<null | 'ok'>(null)
 
   // The case loads after the first render, so adopt its text once it arrives,
-  // but never overwrite something the student has already typed.
+  // but never overwrite something already typed.
   useEffect(() => {
     setInterpretation((cur) => (cur ? cur : initialInterpretation ?? ''))
     setAssumptions((cur) => (cur ? cur : initialAssumptions ?? ''))
   }, [initialInterpretation, initialAssumptions])
-
-  useEffect(() => {
-    setIsFinal(initialFinal)
-  }, [initialFinal])
-
-  // Declaring the hand-in is its own action: it changes what an instructor
-  // sees, so it should not ride along with a draft save.
-  const markFinal = async (next: boolean) => {
-    setIsFinal(next)
-    try {
-      const res = await apiRequest(`/api/cases/${caseId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ is_final: next }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        setIsFinal(!next)
-        toast.error(data?.error || 'Could not change that')
-        return
-      }
-      toast.success(next ? 'Marked as your hand-in' : 'No longer marked as the hand-in')
-    } catch {
-      setIsFinal(!next)
-      toast.error('Could not change that')
-    }
-  }
 
   const dirty =
     interpretation !== (initialInterpretation ?? '') || assumptions !== (initialAssumptions ?? '')
@@ -140,7 +108,7 @@ export function WriteUpCard({
   }
 
   if (readOnly) {
-    return <ReadOnlyWriteUp interpretation={interpretation} assumptions={assumptions} isFinal={isFinal} />
+    return <ReadOnlyWriteUp interpretation={interpretation} assumptions={assumptions} />
   }
 
   const box: React.CSSProperties = {
@@ -262,23 +230,6 @@ export function WriteUpCard({
 
       </>
       )}
-
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginTop: 14,
-          paddingTop: 12,
-          borderTop: '1px solid var(--border-subtle)',
-          fontSize: 12.5,
-          color: 'var(--text-secondary)',
-        }}
-        title="Tells whoever you share the project with that this is the case to look at."
-      >
-        <input type="checkbox" checked={isFinal} onChange={(e) => markFinal(e.target.checked)} />
-        This is my hand-in
-      </label>
     </section>
   )
 }

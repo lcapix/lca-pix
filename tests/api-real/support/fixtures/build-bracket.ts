@@ -1,10 +1,9 @@
 /**
- * Builds the sample study (lib/sample/sample-study.ts) in one account, on the
- * caller's connection, so the whole study commits or none of it does: the
- * project (flagged is_sample), the read-only base case with its 17 steps,
- * nine flows and costs (each cost with its rate and source), a run, the
- * "Shorter cure cycle" what-if (a copy with one change, also read-only) and
- * its run. Needs migrations 033 to 039.
+ * Test fixture, not shipped. Builds the bracket study (./bracket-study.ts) in
+ * one account, on the caller's connection, so the whole study commits or none
+ * of it does: the project, the base case with its 17 steps, nine flows and
+ * costs (each cost with its rate and source), a run, the "Shorter cure cycle"
+ * what-if (a copy with one change) and its run. Needs migrations 033 to 039.
  */
 
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy'
@@ -20,7 +19,7 @@ import {
   SAMPLE_WHAT_IF,
   TIER_LEVEL,
   sampleCostAmount,
-} from './sample-study'
+} from './bracket-study'
 
 type Conn = { query: (sql: string, params?: unknown[]) => Promise<any> }
 
@@ -67,9 +66,9 @@ export async function buildSampleStudy(conn: Conn, userId: number): Promise<Buil
 
   const projectId = await insertId(
     conn,
-    `INSERT INTO project (project_name, description, owner_id, is_sample, lcia_method, region_code,
+    `INSERT INTO project (project_name, description, owner_id, lcia_method, region_code,
                           goal_statement, functional_unit, system_boundary, boundary_notes)
-     VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       SAMPLE_PROJECT.name,
       SAMPLE_PROJECT.description,
@@ -93,9 +92,9 @@ export async function buildSampleStudy(conn: Conn, userId: number): Promise<Buil
 
   const baseCaseId = await insertId(
     conn,
-    `INSERT INTO case_table (project_id, created_by, read_only, case_name, case_type, description, region_code,
+    `INSERT INTO case_table (project_id, created_by, case_name, case_type, description, region_code,
                              reference_flow, reference_flow_unit, modeled_output)
-     VALUES (?, ?, 1, ?, 'base', ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, 'base', ?, ?, ?, ?, ?)`,
     [
       projectId,
       userId,
@@ -182,8 +181,8 @@ export async function buildSampleStudy(conn: Conn, userId: number): Promise<Buil
   // The what-if: a copy of the base case with one change, run again.
   const whatIfCaseId = await insertId(
     conn,
-    `INSERT INTO case_table (project_id, created_by, read_only, parent_case_id, case_name, case_type, description, region_code)
-     VALUES (?, ?, 1, ?, ?, 'comparative', ?, ?)`,
+    `INSERT INTO case_table (project_id, created_by, parent_case_id, case_name, case_type, description, region_code)
+     VALUES (?, ?, ?, ?, 'comparative', ?, ?)`,
     [projectId, userId, baseCaseId, SAMPLE_WHAT_IF.name, SAMPLE_WHAT_IF.description, region],
   )
   const [baseRow] = await rows(conn, `SELECT * FROM case_table WHERE case_id = ?`, [baseCaseId])

@@ -27,7 +27,6 @@ export function NewCaseForm() {
   const projectId = Number(params.projectId)
   const { profile } = useShellData()
   const me = profile?.id ?? -1
-  const word = profile?.useCase === 'teaching' ? 'student' : 'member'
   const { data, error, reload } = useProjectCases(projectId)
   const [kind, setKind] = useState<Kind>('whatif')
   const [start, setStart] = useState<Start>('empty')
@@ -119,7 +118,7 @@ export function NewCaseForm() {
           <h1 className="ds-title" style={{ margin: '2px 0 0', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
             New case{' '}
             <span style={{ fontSize: 15, fontWeight: 400, color: 'var(--ds-text-2)' }}>
-              {casesHeader({ all: data.cases.length, mine, others: data.cases.length - mine }, word, scope)}
+              {casesHeader({ all: data.cases.length, mine, others: data.cases.length - mine }, scope)}
             </span>
           </h1>
         </div>

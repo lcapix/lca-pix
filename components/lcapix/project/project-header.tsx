@@ -113,10 +113,10 @@ export function ProjectHeader({
       <button
         type="button"
         className="btn btn-secondary btn-sm"
-        onClick={() => router.push(`/project/${projectId}/class`)}
-        title="Who can open this project, and how far each case got"
+        onClick={() => router.push(`/project/${projectId}/people`)}
+        title="Who can open this project"
       >
-        <Icon name="target" size={14} /> Class
+        <Icon name="target" size={14} /> People
       </button>
       {/* Two ways to start a case, offered as equals: read it from a
           document, or build it by hand. */}

@@ -64,32 +64,22 @@ describe('F25 copy link', () => {
     }
   });
 
-  it("with members seeing only their own cases, a student's copy of another student's case never names it", async () => {
-    // Class project: the owner's switch on; two students as editors.
+  it("in a shared project, a copy of another member's case is linked and named for every member", async () => {
     const owner = w.users.owner;
-    const pid = await createProject(owner, `Class ${w.tag}`);
+    const pid = await createProject(owner, `Shared ${w.tag}`);
     await addMember(owner, pid, w.users.editor, 'editor');
     await addMember(owner, pid, w.users.adminm, 'editor');
-    expect((await api.put(`/api/projects/${pid}`, { token: owner.token, json: { members_see_own_cases: true } })).status).toBe(200);
-    const other = await createCase(w.users.adminm, pid, `Student A ${w.tag}`);
-    // Student B cannot link to A's case: it is out of reach.
-    const refused = await api.post(`/api/projects/${pid}/cases`, {
+    const other = await createCase(w.users.adminm, pid, `Member A ${w.tag}`);
+    const made = await api.post(`/api/projects/${pid}/cases`, {
       token: w.users.editor.token,
-      json: { case_name: `Student B ${w.tag}`, case_type: 'comparative', parent_case_id: other },
+      json: { case_name: `Member B ${w.tag}`, case_type: 'comparative', parent_case_id: other },
     });
-    expect(refused.status).toBe(400);
-    // A link made earlier (an owner's own copy reassigned) is still hidden from B.
-    const mine = await createCase(w.users.editor, pid, `Student B own ${w.tag}`);
-    await sqlOne('UPDATE case_table SET parent_case_id = ? WHERE case_id = ?', [other, mine]);
+    expect(made.status, made.text).toBe(201);
+    const mine = Number(made.json.case.case_id);
     const got = await api.get(`/api/cases/${mine}`, { token: w.users.editor.token });
-    expect(got.json.case.parent_case_id).toBeNull();
-    expect(got.json.case.copied_from).toBeNull();
-    const list = await api.get(`/api/projects/${pid}/cases`, { token: w.users.editor.token });
-    expect(list.json.cases.find((c: any) => c.case_id === mine).parent_case_id).toBeNull();
-    const progress = await api.get(`/api/projects/${pid}/progress`, { token: w.users.editor.token });
-    expect(progress.json.cases.find((c: any) => c.case_id === mine).copied_from).toBeNull();
-    // The owner reaches both and sees the link.
-    expect((await api.get(`/api/cases/${mine}`, { token: owner.token })).json.case.copied_from).toEqual({ case_id: other, case_name: `Student A ${w.tag}` });
+    expect(got.json.case.copied_from).toEqual({ case_id: other, case_name: `Member A ${w.tag}` });
+    const summaries = await api.get(`/api/projects/${pid}/case-summaries`, { token: w.users.editor.token });
+    expect(summaries.json.cases.find((c: any) => c.case_id === mine).copied_from).toBe(other);
   });
 
   it('deleting the original keeps the copy, unlinked', async () => {

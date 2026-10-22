@@ -42,8 +42,8 @@ export default function StartPage() {
         if (res.status === 409) router.push(`/project/${projectId}`)
         return
       }
-      // Open the editor with the lesson rail and the reference pane ready.
-      router.push(`/project/${projectId}/case/${data.case.case_id}?learn=1`)
+      // Open the editor with the reference pane ready.
+      router.push(`/project/${projectId}/case/${data.case.case_id}?reference=1`)
     } catch (e: any) {
       toast.error(e?.message ?? 'Could not create the case')
     } finally {
@@ -82,9 +82,8 @@ export default function StartPage() {
             </h2>
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
-            Start from an empty case and add the steps and flows yourself. Five short lessons walk
-            the ISO phases with you, and the reference pane keeps a document open beside the editor
-            so you can read your quantities off it.
+            Start from an empty case and add the steps and flows yourself. The reference pane keeps
+            a document open beside the editor so you can read your quantities off it.
           </p>
           <ul
             style={{
@@ -96,7 +95,7 @@ export default function StartPage() {
             }}
           >
             <li>You decide every step and every quantity</li>
-            <li>Best for learning what each entry changes</li>
+            <li>Best when you want to see what each entry changes</li>
           </ul>
           <div style={{ flex: 1 }} />
           <button

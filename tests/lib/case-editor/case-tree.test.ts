@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   descendantIdsOf,
   filterFlatByLabel,
-  lessonStepNames,
   newComponentQuery,
   parentOptionsFor,
   pickInitialComponent,
@@ -84,8 +83,5 @@ describe('toComponentLikes / lessonStepNames', () => {
   it('passes costs and flow counts through, null when unknown', () => {
     const [like] = toComponentLikes([{ ...TREE[3], laborCost: 5, flowCount: 2 }])
     expect(like).toMatchObject({ id: '4', parentId: '3', laborCost: 5, flowCount: 2, energyCost: null, drivers: null })
-  })
-  it('lists operations and subprocesses for the lessons', () => {
-    expect(lessonStepNames(TREE)).toEqual(['Cell', 'Cut', 'Paint'])
   })
 })

@@ -11,11 +11,10 @@
 //   newer one.
 // - The project's name and LCIA method (breadcrumb, hand-added factors).
 // - Advisory reads that follow edits (refreshKey): completeness (the "what to
-//   add next" strip and the run gate), past runs (journey phase, top step) and
-//   whether a sibling case has been run (lesson 5).
+//   add next" strip and the run gate) and past runs (journey phase).
 //
-// The effects run in this order: listener, sibling runs, project,
-// completeness, runs, case + components.
+// The effects run in this order: listener, project, completeness, runs,
+// case + components.
 
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -24,7 +23,7 @@ import { apiRequest } from '@/lib/api-client'
 import { transformCaseFromDB, transformComponentFromDB } from '@/lib/data-transformers'
 import type { Case, ComponentNode } from '@/lib/store'
 import { isProjectRole, type ProjectRole } from '@/lib/project-role'
-import { completedRuns, hasRunSibling, topClimateStep } from './run-assessment'
+import { completedRuns } from './run-assessment'
 import type { CompletenessReport } from './types'
 
 type Router = { push: (href: string) => void }
@@ -43,28 +42,6 @@ export function useComponentsChangedKey() {
   }, [])
   const refresh = () => setRefreshKey((k) => k + 1)
   return { refreshKey, refresh }
-}
-
-/** A sibling case that has been run is what makes lesson 5 (compare) possible. */
-export function useHasComparableCase(projectId: string, caseId: string, refreshKey: number) {
-  const [hasComparableCase, setHasComparableCase] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const r = await apiRequest(`/api/projects/${projectId}/cases`)
-        const d = await r.json().catch(() => ({}))
-        const comparable = hasRunSibling(d?.cases, caseId)
-        if (!cancelled) setHasComparableCase(comparable)
-      } catch {
-        /* advisory only */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [projectId, caseId, refreshKey])
-  return hasComparableCase
 }
 
 /** The project's name (for the breadcrumb) and LCIA method, fetched once. */
@@ -118,12 +95,10 @@ export function useCaseCompleteness(caseId: string, refreshKey: number) {
 
 /**
  * Has this case been assessed yet (moves the journey from Inventory to
- * Interpretation), and which step carried the most climate impact in the
- * newest run. Re-checked on refreshKey.
+ * Interpretation). Re-checked on refreshKey.
  */
 export function useAssessmentSummary(caseId: string, refreshKey: number) {
   const [hasAssessment, setHasAssessment] = useState(false)
-  const [topStep, setTopStep] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -134,11 +109,6 @@ export function useAssessmentSummary(caseId: string, refreshKey: number) {
         // count as assessed.
         const runs = completedRuns(d?.assessments)
         if (!cancelled) setHasAssessment(runs.length > 0)
-
-        // Which step actually carried the most climate impact, for the reveal
-        // after a prediction. Newest run, headline category.
-        const top = topClimateStep(runs[0])
-        if (top !== undefined && !cancelled) setTopStep(top)
       } catch {
         /* advisory — panel falls back to the Inventory phase */
       }
@@ -147,7 +117,7 @@ export function useAssessmentSummary(caseId: string, refreshKey: number) {
       cancelled = true
     }
   }, [caseId, refreshKey])
-  return { hasAssessment, topStep }
+  return { hasAssessment }
 }
 
 /** The case and its components (see the file comment for the refetch rules). */
@@ -165,9 +135,6 @@ export function useCaseAndComponents({
   const [currentCase, setCurrentCase] = useState<Case | null>(null)
   const [components, setComponents] = useState<ComponentNode[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  // Lessons: progress lives on the case, so an instructor sees it next to the
-  // model the student built.
-  const [learningState, setLearningState] = useState<unknown>(null)
   const [hasWriteUp, setHasWriteUp] = useState(false)
   // The caller's role in the project, sent with the case (null until known).
   const [myRole, setMyRole] = useState<ProjectRole | null>(null)
@@ -208,7 +175,6 @@ export function useCaseAndComponents({
             ...transformedCase,
             components: list ?? prev?.components ?? [],
           }))
-          setLearningState(caseData.case.learning_state ?? null)
           setHasWriteUp(!!String(caseData.case.interpretation ?? '').trim())
           setMyRole(isProjectRole(caseData.case.my_role) ? caseData.case.my_role : null)
           loadedCaseId.current = caseId
@@ -236,7 +202,7 @@ export function useCaseAndComponents({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, projectId, router, refreshKey])
 
-  return { currentCase, components, isLoading, learningState, hasWriteUp, myRole, reloadComponents }
+  return { currentCase, components, isLoading, hasWriteUp, myRole, reloadComponents }
 }
 
 /** All of the above, wired to one refresh key. */
@@ -250,10 +216,9 @@ export function useCaseData({
   router: Router
 }) {
   const { refreshKey, refresh } = useComponentsChangedKey()
-  const hasComparableCase = useHasComparableCase(projectId, caseId, refreshKey)
   const { projectName, studyMethod } = useProjectSummary(projectId)
   const completeness = useCaseCompleteness(caseId, refreshKey)
-  const { hasAssessment, topStep } = useAssessmentSummary(caseId, refreshKey)
+  const { hasAssessment } = useAssessmentSummary(caseId, refreshKey)
   const caseState = useCaseAndComponents({ projectId, caseId, router, refreshKey })
   return {
     ...caseState,
@@ -264,7 +229,5 @@ export function useCaseData({
     studyMethod,
     completeness,
     hasAssessment,
-    topStep,
-    hasComparableCase,
   }
 }

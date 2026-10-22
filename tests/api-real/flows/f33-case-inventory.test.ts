@@ -1,5 +1,5 @@
 /**
- * F33. The case inventory the workspace reads (stage 4): on the sample, every
+ * F33. The case inventory the workspace reads (stage 4): on the bracket fixture, every
  * flow's status and its climate arithmetic equal what the sample's run froze;
  * a change marks the run out of date by the number of flows changed.
  */
@@ -7,12 +7,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
 import { snapshotOf, sqlOne } from '../support/db';
 import { createUser, type TestUser } from '../support/users';
+import { buildBracket } from '../support/fixtures';
 
 let u: TestUser;
 let sample: any;
 beforeAll(async () => {
   u = await createUser('f33inv');
-  sample = (await api.post('/api/example-project', { token: u.token })).json;
+  sample = await buildBracket(u);
 });
 
 describe('F33 case inventory', () => {

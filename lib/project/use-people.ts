@@ -1,10 +1,9 @@
 'use client'
 
-// The People page's data (E08): the project (its name, owner, whether it is
-// the sample), who is on it with their access (the members route), how many
-// cases each made (the progress route), and the privacy switch. Every change
-// goes through the same routes the class page used: add or change access is
-// POST /members, remove is DELETE /members, the switch is PUT /projects/:id.
+// The People page's data (E08): the project (its name, owner), who is on it
+// with their access (the members route), and how many cases each made (the
+// case summaries route). Add or change access is POST /members, remove is
+// DELETE /members.
 
 import { useCallback, useEffect, useState } from 'react'
 import { apiRequest } from '@/lib/api-client'
@@ -15,13 +14,12 @@ import { chunks, type Access, type AddResult, type Person } from './people-view'
 const PER_REQUEST = 100
 
 export interface PeopleData {
-  project: { project_id: number; project_name: string; is_sample: boolean }
+  project: { project_id: number; project_name: string }
   owner: Person
   members: Person[]
   canManage: boolean
   canManageAdmins: boolean
   cases: Array<{ created_by: number | null }>
-  ownOnly: boolean
 }
 
 async function errorOf(res: Response, fallback: string): Promise<string> {
@@ -40,13 +38,13 @@ export function usePeople(projectId: number) {
       const [p, m, g] = await Promise.all([
         apiRequest(`/api/projects/${projectId}`),
         apiRequest(`/api/projects/${projectId}/members`),
-        apiRequest(`/api/projects/${projectId}/progress`),
+        apiRequest(`/api/projects/${projectId}/case-summaries`),
       ])
       if (!p.ok) throw new Error(p.status === 404 ? 'This project is not here, or it is not shared with you.' : `the project answered ${p.status}`)
       if (!m.ok) throw new Error(`the people answered ${m.status}`)
       const pj = (await p.json()).project
       const mj = await m.json()
-      const gj = g.ok ? await g.json() : { cases: [], members_see_own_cases: !!pj.members_see_own_cases }
+      const gj = g.ok ? await g.json() : { cases: [] }
       const person = (x: any): Person => ({
         user_id: Number(x.user_id),
         full_name: x.full_name ?? null,
@@ -55,13 +53,12 @@ export function usePeople(projectId: number) {
         permission_name: x.permission_name ?? null,
       })
       setData({
-        project: { project_id: Number(pj.project_id), project_name: pj.project_name, is_sample: !!pj.is_sample },
+        project: { project_id: Number(pj.project_id), project_name: pj.project_name },
         owner: person({ ...(mj.owner ?? {}), permission_name: 'owner' }),
         members: (mj.members ?? []).map(person),
         canManage: !!mj.canManage,
         canManageAdmins: !!mj.canManageAdmins,
         cases: (gj.cases ?? []).map((c: any) => ({ created_by: c.created_by == null ? null : Number(c.created_by) })),
-        ownOnly: !!gj.members_see_own_cases,
       })
     } catch (e: any) {
       setError(e?.message ?? 'the people did not load')
@@ -74,7 +71,7 @@ export function usePeople(projectId: number) {
 
   /**
    * Add a list of emails (or change their access): what happened to each one.
-   * A long class list goes in parts; when a part fails, the parts before it
+   * A long list goes in parts; when a part fails, the parts before it
    * still stand and are reported, with the error and how many were not sent.
    */
   const addPeople = useCallback(
@@ -117,14 +114,5 @@ export function usePeople(projectId: number) {
     [projectId, load, refresh],
   )
 
-  const setOwnOnly = useCallback(
-    async (next: boolean) => {
-      const res = await apiRequest(`/api/projects/${projectId}`, { method: 'PUT', body: JSON.stringify({ members_see_own_cases: next }) })
-      if (!res.ok) throw new Error(await errorOf(res, 'The switch did not change'))
-      await load()
-    },
-    [projectId, load],
-  )
-
-  return { data, error, reload: load, addPeople, changeAccess, remove, setOwnOnly }
+  return { data, error, reload: load, addPeople, changeAccess, remove }
 }

@@ -7,6 +7,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
 import { createUser, type TestUser } from '../support/users';
+import { buildBracket } from '../support/fixtures';
 
 let u: TestUser;
 let outsider: TestUser;
@@ -14,7 +15,7 @@ let sample: any;
 beforeAll(async () => {
   u = await createUser('f34runs');
   outsider = await createUser('f34out');
-  sample = (await api.post('/api/example-project', { token: u.token })).json;
+  sample = await buildBracket(u);
 });
 
 describe('F34 workspace runs', () => {

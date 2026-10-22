@@ -1,7 +1,7 @@
 /**
  * F20. The audit trail and the caller's role.
- * - The privacy switch, adding, re-roling and removing a member, and deleting a
- *   case or a project each write one row to audit_log (who, what, before, after).
+ * - Adding, re-roling and removing a member, and deleting a case or a project
+ *   each write one row to audit_log (who, what, before, after).
  * - GET project and GET case carry my_role, so the screens can hide what a
  *   "Can read" member cannot do; the server still refuses it.
  */
@@ -50,17 +50,6 @@ describe('F20 the caller role on reads', () => {
 });
 
 describe('F20 the audit trail', () => {
-  it('records the privacy switch once per change, with before and after', async () => {
-    expect((await api.put(`/api/projects/${pid}`, { token: owner.token, json: { members_see_own_cases: true } })).status).toBe(200);
-    // Saving the same value again is not a change and writes nothing.
-    expect((await api.put(`/api/projects/${pid}`, { token: owner.token, json: { members_see_own_cases: true } })).status).toBe(200);
-    const rows = (await auditRows('project', pid)).filter((r) => json(r.new_values)?.members_see_own_cases !== undefined);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ user_id: owner.id, action_type: 'update' });
-    expect(json(rows[0].old_values)).toEqual({ members_see_own_cases: false });
-    expect(json(rows[0].new_values)).toEqual({ members_see_own_cases: true });
-  });
-
   it('records a role change and a removal', async () => {
     const member = await sqlOne<any>(`SELECT member_id FROM project_members WHERE project_id = ? AND user_id = ?`, [pid, reader.id]);
     expect((await api.post(`/api/projects/${pid}/members`, { token: owner.token, json: { email: reader.email, role: 'editor' } })).status).toBe(200);

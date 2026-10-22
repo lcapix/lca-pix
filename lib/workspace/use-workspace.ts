@@ -21,7 +21,6 @@ export interface WorkspaceCase {
   case_name: string
   case_type: 'base' | 'comparative'
   description: string | null
-  read_only: boolean
   my_role: ProjectRole | null
   /** The caller's role in the project (my_role is the role on this case: "Can read" on a read-only case). */
   project_role: ProjectRole | null
@@ -32,11 +31,7 @@ export interface WorkspaceCase {
   reference_flow_unit: string | null
   interpretation: string | null
   assumptions: string | null
-  is_final: boolean
-  finalized_at: string | null
   project_functional_unit: string | null
-  /** The exercises' answers and the prediction (case_table.learning_state). */
-  learning_state: unknown
   updated_at: string | null
 }
 
@@ -133,7 +128,6 @@ export function useCaseWorkspace(caseId: number) {
         case_name: cj.case_name,
         case_type: cj.case_type === 'comparative' ? 'comparative' : 'base',
         description: cj.description ?? null,
-        read_only: !!cj.read_only,
         my_role: isProjectRole(cj.my_role) ? cj.my_role : null,
         project_role: isProjectRole(cj.project_role) ? cj.project_role : null,
         copied_from: cj.copied_from ?? null,
@@ -143,10 +137,7 @@ export function useCaseWorkspace(caseId: number) {
         reference_flow_unit: cj.reference_flow_unit ?? null,
         interpretation: cj.interpretation ?? null,
         assumptions: cj.assumptions ?? null,
-        is_final: !!cj.is_final,
-        finalized_at: cj.finalized_at ?? null,
         project_functional_unit: cj.project_functional_unit ?? null,
-        learning_state: cj.learning_state ?? null,
         updated_at: cj.updated_at ?? null,
       })
       setSteps(orderSteps(list))
@@ -193,7 +184,7 @@ export function useCaseWorkspace(caseId: number) {
     [steps],
   )
   const caps = projectCapabilities(kase?.my_role ?? null)
-  const readOnly = !!kase && (kase.read_only || caps.readOnly)
+  const readOnly = !!kase && caps.readOnly
 
   return { kase, steps, inventory, siblings, layout, status, error, reload: load, readOnly, caps }
 }

@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
-import { Flag, CountPill } from '@/components/lcapix/ds'
+import { CountPill } from '@/components/lcapix/ds'
 import { usePlatformAdmin } from '@/lib/auth/use-platform-admin'
 import { signOut } from '@/lib/auth/sign-out'
 import {
@@ -18,7 +18,6 @@ import {
   projectPagesFor,
   projectTint,
   recentProjects,
-  showsNewProject,
 } from '@/lib/shell/project-nav'
 import { PAGE_LABEL, PLACE_ICON, PLACE_LABEL, placeHref, placeOf, projectHref, projectPageOf } from '@/lib/shell/routes'
 import { useRecentProjects, useShellData } from '@/lib/shell/use-shell'
@@ -130,7 +129,6 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
                 {cardProject.project_name}
               </span>
               <span className="ds-switcher-meta">
-                {cardProject.is_sample && <Flag kind="sample" />}
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{projectMeta(cardProject, userId)}</span>
               </span>
             </span>
@@ -185,7 +183,6 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
               <Link key={p.project_id} href={projectHref(p.project_id)} className="ds-nav-item" onClick={go} title={p.project_name}>
                 <span className="ds-tint-dot" style={{ background: projectTint(p, projects) }} aria-hidden />
                 <span className="ds-recent-name">{p.project_name}</span>
-                {p.is_sample && <Flag kind="sample" />}
               </Link>
             ))}
           </div>
@@ -199,14 +196,12 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
           <CountPill n={projects.length} plain label={`${projects.length} projects`} />
           <ShellIcon name="chevron" size={16} />
         </Link>
-        {showsNewProject(projects, userId) && (
-          <Link href="/project/new" className="ds-nav-item" style={{ color: 'var(--ds-green)', fontWeight: 600 }} onClick={go}>
-            <span style={{ color: 'var(--ds-green)', display: 'inline-flex' }}>
-              <ShellIcon name="plus" />
-            </span>
-            New project
-          </Link>
-        )}
+        <Link href="/project/new" className="ds-nav-item" style={{ color: 'var(--ds-green)', fontWeight: 600 }} onClick={go}>
+          <span style={{ color: 'var(--ds-green)', display: 'inline-flex' }}>
+            <ShellIcon name="plus" />
+          </span>
+          New project
+        </Link>
       </div>
 
       <div className="ds-spacer" />

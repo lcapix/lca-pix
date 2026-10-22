@@ -18,7 +18,7 @@ import { COLUMN_LIMITS, decimalMax, fitToColumn, isOutOfRangeError } from '@/lib
 import { z } from 'zod';
 import { query, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { caseAccessDenied, isAuthError, projectAccessDenied, reachableCasesFilter } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { convertQuantity } from '@/lib/units';
 import { findUsableSubstance, SUBSTANCE_ERROR } from '@/lib/flow-fields';
 import type { IngestCost, IngestNode } from '@/lib/ingest/schema';
@@ -502,8 +502,6 @@ export async function POST(request: NextRequest) {
 
     const denied = await projectAccessDenied(userId, projectId, 'editor', { notFound: 'Project not found' });
     if (denied) return denied;
-    // The name is numbered against the cases the caller reaches only (B-A1).
-    const onlyReachable = await reachableCasesFilter(userId, projectId, 'case_table');
 
     // Re-validate structure server-side — the client may have edited the plan.
     const structural = validateProcessModel({
@@ -548,8 +546,8 @@ export async function POST(request: NextRequest) {
       for (let n = 2; n < 50; n++) {
         const [[taken]]: any = await conn.query(
           `SELECT case_id FROM case_table
-            WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${onlyReachable.sql} LIMIT 1`,
-          [projectId, uniqueName, ...onlyReachable.params]
+            WHERE project_id = ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?)) LIMIT 1`,
+          [projectId, uniqueName]
         );
         if (!taken) break;
         // The number is added here, so the base is cut to leave room for it.

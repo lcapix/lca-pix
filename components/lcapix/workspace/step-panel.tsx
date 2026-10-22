@@ -1,31 +1,28 @@
 'use client'
 
 // The floating step panel (canvas.md "The step panel", E03, E03c, E14): dock
-// right or left, reset, collapse; the Out of date line; the guide line when
-// Guided mode is on; the step; each flow as amount × factor = impact with its
-// source tag (the engine's own factor, from the case inventory); the in-row
-// choice "Keep the Global average · Use my own number"; a saved line, never a
-// toast; Add a flow; under the flows, what they would cost ("Material cost
-// from these flows: $0.76 · Use it") and the ones with no price. In the Cost
-// view the panel shows the step's costs.
+// right or left, reset, collapse; the Out of date line; the step; each flow
+// as amount × factor = impact with its source tag (the engine's own factor,
+// from the case inventory); the in-row choice "Keep the Global average · Use
+// my own number"; a saved line, never a toast; Add a flow; under the flows,
+// what they would cost ("Material cost from these flows: $0.76 · Use it") and
+// the ones with no price. In the Cost view the panel shows the step's costs.
 
 import { useEffect, useMemo, useState } from 'react'
 import type { CostBasisKind } from '@/lib/costs/cost-basis'
 import { costedInLine, flowCostNotes } from '@/lib/workspace/flow-cost-text'
 import { useStepCosts } from '@/lib/workspace/use-step-costs'
-import { Button, Flag, FlowStatusPill, SavedLine, Segmented, SourceTag } from '@/components/lcapix/ds'
+import { Button, FlowStatusPill, SavedLine, Segmented, SourceTag } from '@/components/lcapix/ds'
 import { amountBox } from '@/lib/ui/format'
 import { stepCountsLine, stepKicker } from '@/lib/workspace/step-text'
 import { TIER_COLOURS, TIERS } from '@/lib/workspace/tier-layout'
 import type { InventoryRow } from '@/lib/workspace/inventory'
 import type { WorkspaceCase, WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
-import { useGuidedMode } from '@/lib/shell/use-shell'
 import { AddFlowInPanel } from './add-flow-in-panel'
 import { BackToLibrary, OwnFactorForm, rowSum, saveFlowAmount, sourceText } from './flow-bits'
 import { CostPanel } from './cost-panel'
 import { FlowCostNotes } from './flow-cost-notes'
 import { FloatingPanel } from './floating-panel'
-import { ExerciseSlot } from './exercise-card'
 import type { TreeView } from './tree-tab'
 
 export function StepPanel({
@@ -47,7 +44,6 @@ export function StepPanel({
   view: TreeView
   onView: (v: TreeView) => void
 }) {
-  const [guided, setGuided] = useGuidedMode()
   const [saved, setSaved] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   // "No price for Argon: add its cost" opens the Cost view on that kind.
@@ -85,25 +81,6 @@ export function StepPanel({
           </span>
         </div>
       )}
-      <ExerciseSlot
-        fallback={
-        <div className="ws-guide">
-          <span style={{ flex: 1 }}>
-            <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-              Guided mode · {step.name}
-            </span>
-            <br />
-            {guideLine(step, rows)}
-          </span>
-          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <Flag kind="beta" />
-            <button type="button" className="ds-link" onClick={() => setGuided(false)}>
-              Turn off
-            </button>
-          </span>
-        </div>
-        }
-      />
 
       {view !== 'cost' && (
         <>
@@ -192,16 +169,6 @@ export function StepPanel({
       )}
     </FloatingPanel>
   )
-}
-
-/** The guide's one or two sentences for the open step (scripted, not generated). */
-function guideLine(step: WorkspaceStep, rows: InventoryRow[]): string {
-  const needs = rows.filter((r) => r.status === 'needs_amount').length
-  const main = [...rows].sort((a, b) => (b.climate?.impact ?? 0) - (a.climate?.impact ?? 0))[0]
-  if (needs) return `${needs === 1 ? 'One flow here needs' : `${needs} flows here need`} an amount. Each amount is multiplied by its factor.`
-  if (main?.climate) return `${main.substance} enters at ${step.name}. Its amount times its factor is what it adds.`
-  if (rows.length) return 'These flows have no climate factor in this method, so they add nothing to the climate total.'
-  return 'This step holds no flows. Its tasks below it carry them.'
 }
 
 /** One flow in the panel: IN/OUT, the amount box, the arithmetic and its source. */

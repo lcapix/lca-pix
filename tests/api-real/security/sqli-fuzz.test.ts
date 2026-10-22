@@ -45,9 +45,7 @@ export const PAYLOADS = [
   '',
 ];
 
-// own_cases rows repeat base rows' routes with a project setting that only
-// changes which member gets 404; the handlers and ids here are the same.
-const rows = loadPermissions().rows.filter((r) => !r.own_cases);
+const { rows } = loadPermissions();
 const pathRows = rows.filter((r) => pathParams(r.path).length > 0);
 
 let w: World;

@@ -1,24 +1,7 @@
 /**
- * What a list of cases shows about each one (E07 pipeline, E07b table, E10
- * analytics, E12/E13 Home): where the case is in its work, and its latest
+ * What a list of cases shows about each one (E07 Cases, E12 Home): its latest
  * run's headline number. Pure; the routes read the rows.
  */
-
-/** E07's four columns. Nothing here grades: it says what exists. */
-export type PipelineStage = 'not_run' | 'run' | 'written' | 'handed_in'
-
-export const PIPELINE_LABEL: Record<PipelineStage, string> = {
-  not_run: 'Not run yet',
-  run: 'Run',
-  written: 'Written',
-  handed_in: 'Ticked as hand-in',
-}
-
-export function pipelineStage(c: { completedRuns: number; hasInterpretation: boolean; isFinal: boolean }): PipelineStage {
-  if (c.isFinal) return 'handed_in'
-  if (c.completedRuns === 0) return 'not_run'
-  return c.hasInterpretation ? 'written' : 'run'
-}
 
 export interface Headline {
   category: string

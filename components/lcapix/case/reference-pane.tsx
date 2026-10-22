@@ -5,12 +5,11 @@
  *
  * Building a case by hand means copying quantities from somewhere: a routing,
  * a bill of materials, an equipment list, an EPD. Until now the app read those
- * files once at import and dropped them, so the one thing a student needs open
+ * files once at import and dropped them, so the one thing a person needs open
  * while typing was the one thing the app could not show. This pane holds the
- * case's own documents, plus the bundled samples, and searches inside them.
+ * case's own documents and searches inside them.
  */
 
-import { SAMPLE_DOCS, SAMPLE_LABELS } from '@/lib/ingest/sample-docs'
 import { useCaseDocuments } from '@/lib/case-editor/use-case-documents'
 
 const DOC_TYPES = [
@@ -94,8 +93,8 @@ export function ReferencePane({
           {!loading && docs.length === 0 && (
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 10 }}>
               {readOnly
-                ? 'No document kept for this case yet. Open a sample below to see the shape of a real one.'
-                : 'No document kept for this case yet. Attach the one you are typing from, or open a sample below to see the shape of a real one.'}
+                ? 'No document kept for this case yet.'
+                : 'No document kept for this case yet. Attach the one you are typing from.'}
             </div>
           )}
           {docs.map((d) => (
@@ -194,39 +193,6 @@ export function ReferencePane({
           </div>
           )}
 
-          <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-              Sample documents
-            </div>
-            {Object.entries(SAMPLE_DOCS).map(([key, doc]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() =>
-                  setOpen({ key: `sample-${key}`, filename: doc.filename, content: doc.content, source: 'sample' })
-                }
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '8px 10px',
-                  marginBottom: 6,
-                  borderRadius: 8,
-                  border: '1px solid var(--border-subtle)',
-                  background: 'var(--surface-base)',
-                  cursor: 'pointer',
-                  color: 'var(--text-primary)',
-                  fontSize: 12.5,
-                }}
-                title={SAMPLE_LABELS[key] ?? doc.filename}
-              >
-                {doc.filename}
-                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
-                  {SAMPLE_LABELS[key] ?? 'Sample document'}
-                </div>
-              </button>
-            ))}
-          </div>
         </div>
       )}
 

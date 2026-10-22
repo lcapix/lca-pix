@@ -94,16 +94,6 @@ export function PhoneCase({
               Assumptions and limits
             </p>
             <p className="ph-text">{kase.assumptions?.trim() || 'Not written yet.'}</p>
-            <p className="st-tick" data-off={!kase.is_final || undefined}>
-              {kase.is_final ? (
-                <>
-                  <span aria-hidden>✓</span> <strong>Ticked as hand-in</strong>
-                  <span>A tick only. It locks nothing.</span>
-                </>
-              ) : (
-                'Not ticked as hand-in yet.'
-              )}
-            </p>
           </div>
         )}
       </div>

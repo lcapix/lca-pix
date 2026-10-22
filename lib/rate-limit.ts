@@ -78,9 +78,7 @@ export const RATE_LIMITS = {
   pubchemEnrich: { id: 'pubchem-enrich', limit: 5, windowMs: HOUR },
   /** Per user, shared by the BLS / EIA / Metals rate lookups (upstream quotas). */
   costRates: { id: 'cost-rates', limit: 60, windowMs: HOUR },
-  /** Per user: building the sample study writes a project and runs two cases. */
-  sampleBuild: { id: 'sample-build', limit: 5, windowMs: HOUR },
-  /** Per user, per email looked up when adding people (a class list is one request). */
+  /** Per user, per email looked up when adding people (a list of emails is one request). */
   memberLookups: { id: 'member-lookups', limit: 200, windowMs: HOUR },
 } satisfies Record<string, RateLimitPolicy>;
 
