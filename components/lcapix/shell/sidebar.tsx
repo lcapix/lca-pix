@@ -1,13 +1,13 @@
 'use client'
 
 // The sidebar on every signed-in page (sidebar.md): places, the open project's
-// switcher card and its pages, Recent, All projects, + New project, Guided
-// mode (this device), Help, and the profile with Sign out.
+// switcher card and its pages, Recent, All projects, + New project, Help, and
+// the profile with Sign out.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname, useRouter } from 'next/navigation'
-import { Flag, Switch, CountPill } from '@/components/lcapix/ds'
+import { Flag, CountPill } from '@/components/lcapix/ds'
 import { usePlatformAdmin } from '@/lib/auth/use-platform-admin'
 import { signOut } from '@/lib/auth/sign-out'
 import {
@@ -21,10 +21,9 @@ import {
   showsNewProject,
 } from '@/lib/shell/project-nav'
 import { PAGE_LABEL, PLACE_ICON, PLACE_LABEL, placeHref, placeOf, projectHref, projectPageOf } from '@/lib/shell/routes'
-import { useGuidedMode, useRecentProjects, useShellData } from '@/lib/shell/use-shell'
-import { useGuideSlot } from '@/lib/shell/guide-slot'
+import { useRecentProjects, useShellData } from '@/lib/shell/use-shell'
 import { initialsOf } from '@/lib/home/projects'
-import { GuideFace, PixelMark, ShellIcon } from './shell-icons'
+import { PixelMark, ShellIcon } from './shell-icons'
 import { ProjectSwitcher } from './project-switcher'
 
 export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () => void }) {
@@ -33,8 +32,6 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
   const router = useRouter()
   const { projects, profile, status } = useShellData()
   const isPlatformAdmin = usePlatformAdmin()
-  const [guided, setGuided] = useGuidedMode()
-  const guideCard = useGuideSlot((g) => g.card)
 
   const routeId = Number(params?.projectId)
   const openId = Number.isInteger(routeId) && routeId > 0 ? routeId : null
@@ -48,7 +45,7 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
   }, [projects, openId, recentIds])
   const openProject = openId ? cardProject : null
 
-  const places = placesFor(openProject, userId)
+  const places = placesFor()
   const place = placeOf(pathname)
   const pages = openProject ? projectPagesFor(openProject, userId) : []
   const page = openProject ? projectPageOf(pathname, openProject.project_id) : null
@@ -88,7 +85,7 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
           <span className="ds-brand-name" style={{ display: 'block' }}>
             LCAPIX
           </span>
-          <span className="ds-brand-sub">Teaching and research</span>
+          <span className="ds-brand-sub">Cost and carbon</span>
         </span>
       </Link>
 
@@ -214,14 +211,6 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
 
       <div className="ds-spacer" />
 
-      {guided && guideCard}
-      <div className="ds-nav-item" style={{ cursor: 'default' }}>
-        <GuideFace />
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, whiteSpace: 'nowrap' }}>
-          Guided mode <Flag kind="beta" />
-        </span>
-        <Switch checked={guided} onChange={setGuided} label="Guided mode" hideLabel />
-      </div>
       <Link href="/guide" className="ds-nav-item" onClick={go}>
         <ShellIcon name="help" />
         Help

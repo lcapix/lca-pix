@@ -1,22 +1,19 @@
 'use client'
 
-// The education auth layout (F1.2, F1.2b, F1.3, F1.4): a dark blueprint pane
-// with the sample taken apart (FIG. 01) or its five tiers (FIG. 02), a
-// headline and three numbered lines; the form on the light pane. Every number
-// in a figure is the sample study's own (rules.md "Facts": 1.72 kg CO₂-eq,
-// 10. Cut blank 89.4%, 30. Powder coat 8.1%, 20. Weld tab 2.4%, 17 steps).
-// Below 960px the dark pane folds away and the logo sits above the form.
+// The auth layout (F1.2, F1.2b, F1.3): a dark blueprint pane with the five
+// tiers of a study, a headline and three numbered lines; the form on the light
+// pane. The figure names tiers, not a study, and every line says what the
+// product does today. Below 960px the dark pane folds away and the logo sits
+// above the form.
 
 import type { ReactNode } from 'react'
-import { LMS_NAME } from '@/lib/ui-flags'
 
 const INK = '#C9D1CC'
 const DIM = '#6F7A75'
-const SALMON = '#F0A68A'
 const MINT = '#86D3A6'
 const MONO = 'var(--ds-mono)'
 
-function Logo({ onLight = false }: { onLight?: boolean }) {
+function Logo() {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14 }}>
       <span aria-hidden style={{ width: 40, height: 40, borderRadius: 10, background: '#1E2422', display: 'grid', placeItems: 'center' }}>
@@ -30,174 +27,71 @@ function Logo({ onLight = false }: { onLight?: boolean }) {
         </svg>
       </span>
       <span style={{ fontWeight: 700, fontSize: 20, letterSpacing: '0.04em' }}>LCAPIX</span>
-      <span style={{ color: onLight ? 'var(--ds-text-2)' : '#A9B3AE', fontSize: 15 }}>for teaching and research</span>
     </span>
   )
 }
 
-/** FIG. 01: the bracket taken apart, its three largest steps and the result. */
-function FigureBracket() {
-  const t = { fontFamily: MONO, fontSize: 11, fill: INK, letterSpacing: '0.08em' } as const
-  return (
-    <svg
-      viewBox="0 0 640 430"
-      width="100%"
-      role="img"
-      aria-label="The sample bracket taken apart: 10. Cut blank 89.4%, 30. Powder coat 8.1%, 20. Weld tab 2.4%. Result 1.72 kg CO2-eq, TRACI 2.1."
-    >
-      <rect x="1" y="1" width="638" height="428" fill="none" stroke="#3A413E" strokeWidth="2" />
-      <rect x="8" y="8" width="624" height="414" fill="none" stroke="#2C3330" />
-      {['A', 'B', 'C', 'D'].map((l, i) => (
-        <text key={l} x={120 + i * 120} y="26" style={t} textAnchor="middle" fill={DIM}>
-          {l}
-        </text>
-      ))}
-      {/* the bracket */}
-      <g fill="none" stroke={INK} strokeWidth="1.4">
-        <path d="M140 110 L260 70 L360 100 L240 140 Z" />
-        <path d="M140 110 L140 270 L240 300 L240 140" />
-        <path d="M240 300 L360 260 L360 100" />
-        <ellipse cx="180" cy="118" rx="9" ry="4" />
-        <ellipse cx="160" cy="128" rx="9" ry="4" />
-        <ellipse cx="262" cy="98" rx="9" ry="4" />
-        <ellipse cx="292" cy="90" rx="9" ry="4" />
-        <path d="M256 40 v26 M268 40 v26 M252 40 h20" />
-        <path d="M290 34 v24 M300 34 v24 M286 34 h18" />
-      </g>
-      <g stroke="#3A413E">
-        {Array.from({ length: 14 }, (_, i) => (
-          <path key={i} d={`M${244 + i * 8} ${140 + i * 2} L${244 + i * 8} ${296 - i * 2.6}`} />
-        ))}
-      </g>
-      {/* the weld tab */}
-      <g fill="none" stroke={INK} strokeWidth="1.4">
-        <path d="M400 180 L450 162 L490 175 L440 193 Z" />
-        <path d="M400 180 L400 224 L440 237 L440 193 M440 237 L490 220 L490 175" />
-      </g>
-      {/* dimensions */}
-      <g stroke={MINT} strokeWidth="1.2" fill="none">
-        <path d="M140 330 v12 M140 336 H240 M240 330 v12 M240 336 H360 M360 330 v12" />
-        <path d="M380 100 h12 M386 100 V260 M380 260 h12" />
-      </g>
-      <text x="190" y="332" style={{ ...t, fill: MINT }} textAnchor="middle">120</text>
-      <text x="300" y="332" style={{ ...t, fill: MINT }} textAnchor="middle">80</text>
-      <text x="398" y="185" style={{ ...t, fill: MINT }}>60</text>
-      {/* callouts */}
-      <g stroke={SALMON} strokeWidth="1.2" fill="none">
-        <path d="M190 206 L100 228" />
-        <path d="M300 220 L470 250" />
-        <path d="M445 210 L520 150" />
-        <circle cx="86" cy="232" r="12" />
-        <circle cx="484" cy="252" r="12" />
-        <circle cx="530" cy="140" r="12" />
-      </g>
-      <circle cx="190" cy="206" r="3" fill={SALMON} />
-      <circle cx="300" cy="220" r="3" fill={SALMON} />
-      <circle cx="445" cy="210" r="3" fill={SALMON} />
-      <text x="86" y="236" style={{ ...t, fill: SALMON }} textAnchor="middle">10</text>
-      <text x="484" y="256" style={{ ...t, fill: SALMON }} textAnchor="middle">30</text>
-      <text x="530" y="144" style={{ ...t, fill: SALMON }} textAnchor="middle">20</text>
-      <text x="58" y="260" style={t}>CUT BLANK</text>
-      <text x="456" y="282" style={t}>POWDER COAT</text>
-      <text x="510" y="170" style={t}>WELD TAB</text>
-      {/* steps and shares */}
-      <g style={t}>
-        <rect x="30" y="350" width="250" height="68" fill="none" stroke="#3A413E" />
-        <text x="40" y="366" fill={DIM}>NO.</text>
-        <text x="80" y="366" fill={DIM}>STEP</text>
-        <text x="270" y="366" fill={DIM} textAnchor="end">SHARE</text>
-        {[
-          ['10', 'CUT BLANK', '89.4%'],
-          ['30', 'POWDER COAT', '8.1%'],
-          ['20', 'WELD TAB', '2.4%'],
-        ].map(([n, s, v], i) => (
-          <g key={n}>
-            <text x="40" y={384 + i * 15} style={{ ...t, fill: SALMON }}>{n}</text>
-            <text x="80" y={384 + i * 15}>{s}</text>
-            <text x="270" y={384 + i * 15} textAnchor="end" style={{ ...t, fill: MINT }}>{v}</text>
-          </g>
-        ))}
-        <rect x="370" y="350" width="240" height="68" fill="none" stroke="#3A413E" />
-        <text x="380" y="368">PAINTED STEEL BRACKET</text>
-        <text x="380" y="388" fill={DIM}>RESULT</text>
-        <text x="600" y="388" textAnchor="end" style={{ ...t, fill: MINT }}>1.72 kg CO₂-eq</text>
-        <text x="380" y="408" fill={DIM}>SHEET 01/02</text>
-        <text x="600" y="408" textAnchor="end">TRACI 2.1</text>
-      </g>
-    </svg>
-  )
-}
-
-/** FIG. 02: the five tiers, one path through the 17 steps. */
+/** FIG. 01: the five tiers, product down to task, with cost beside impact. */
 function FigureTiers() {
   const t = { fontFamily: MONO, fontSize: 11, fill: INK, letterSpacing: '0.08em' } as const
-  const rows: Array<[string, string, string, string | null]> = [
-    ['PRODUCT', 'PAINTED STEEL BRACKET', '#A7D3B8', null],
-    ['MACHINE / LINE', 'FABRICATION LINE', '#F0A68A', '+2 MORE'],
-    ['SUBPROCESS', 'CUTTING', '#F5C971', '+3 MORE'],
-    ['OPERATION', '10. CUT BLANK', '#7BB5E8', null],
-    ['ELEMENTAL TASK', 'SHEAR BLANK', '#C8B5E8', '+4 MORE'],
+  const rows: Array<[string, string, string]> = [
+    ['PRODUCT', 'WHAT YOU MAKE', '#A7D3B8'],
+    ['MACHINE / LINE', 'WHERE IT IS MADE', '#F0A68A'],
+    ['SUBPROCESS', 'A STAGE OF THE LINE', '#F5C971'],
+    ['OPERATION', 'ONE ROUTING STEP', '#7BB5E8'],
+    ['ELEMENTAL TASK', 'ENERGY, MATERIAL, WASTE', '#C8B5E8'],
   ]
   return (
-    <svg viewBox="0 0 640 430" width="100%" role="img" aria-label="Five tiers from the product down to a task: one path through the sample's 17 steps; 10. Cut blank is 89.4% of 1.72.">
+    <svg viewBox="0 0 640 430" width="100%" role="img" aria-label="Five tiers from the product down to a task; each step carries its cost beside its impact.">
       <rect x="1" y="1" width="638" height="428" fill="none" stroke="#3A413E" strokeWidth="2" />
       <rect x="8" y="8" width="624" height="414" fill="none" stroke="#2C3330" />
-      {rows.map(([tier, name, colour, more], i) => {
+      {rows.map(([tier, name, colour], i) => {
         const y = 50 + i * 64
         return (
           <g key={tier}>
             {i > 0 && <path d={`M260 ${y - 26} V${y}`} stroke="#4B534F" />}
             <path d={`M30 ${y + 46} H600`} stroke="#252B29" strokeDasharray="3 5" />
             <text x="30" y={y + 26} style={t}>{tier}</text>
-            <rect x="160" y={y} width="200" height="38" rx="6" fill="none" stroke={colour} strokeWidth="1.6" />
+            <rect x="140" y={y} width="240" height="38" rx="6" fill="none" stroke={colour} strokeWidth="1.6" />
             <text x="260" y={y + 23} style={t} textAnchor="middle">{name}</text>
-            {more && (
-              <>
-                <path d={`M362 ${y + 19} H390`} stroke={DIM} strokeDasharray="3 3" />
-                <text x="396" y={y + 23} style={{ ...t, fill: DIM }}>{more}</text>
-              </>
-            )}
             {i === 3 && (
               <>
-                <path d={`M360 ${y + 19} H440`} stroke={MINT} />
-                <circle cx="360" cy={y + 19} r="3" fill={MINT} />
-                <rect x="440" y={y + 6} width="114" height="26" rx="13" fill="none" stroke={MINT} />
-                <text x="497" y={y + 23} style={{ ...t, fill: MINT }} textAnchor="middle">89.4% OF 1.72</text>
+                <path d={`M380 ${y + 19} H440`} stroke={MINT} />
+                <circle cx="380" cy={y + 19} r="3" fill={MINT} />
+                <rect x="440" y={y + 6} width="150" height="26" rx="13" fill="none" stroke={MINT} />
+                <text x="515" y={y + 23} style={{ ...t, fill: MINT }} textAnchor="middle">COST + IMPACT</text>
               </>
             )}
           </g>
         )
       })}
-      <text x="30" y="404" style={t}>ONE PATH THROUGH 17 STEPS</text>
+      <text x="30" y="404" style={t}>PRODUCT DOWN TO TASK</text>
       <rect x="420" y="372" width="190" height="46" fill="none" stroke="#3A413E" />
       <text x="430" y="390" style={t}>FIVE TIERS</text>
-      <text x="430" y="410" style={{ ...t, fill: DIM }}>SHEET 02/02</text>
-      <text x="600" y="410" style={t} textAnchor="end">TRACI 2.1</text>
+      <text x="430" y="410" style={{ ...t, fill: DIM }}>SHEET 01/01</text>
     </svg>
   )
 }
 
 const PANES = {
   account: {
-    figure: <FigureBracket />,
-    caption: 'FIG. 01 · THE SAMPLE YOU START ON, TAKEN APART',
-    headline: 'A research tool for your class and your lab.',
+    figure: <FigureTiers />,
+    caption: 'FIG. 01 · HOW A STUDY IS BUILT, PRODUCT DOWN TO TASK',
+    headline: 'Cost and carbon for each thing your plant makes.',
     lines: [
-      'Start on a sample tree and reach a first result in one sitting.',
-      'Guided mode, in beta, walks you through the four phases when you turn it on.',
-      LMS_NAME
-        ? `${LMS_NAME} keeps your class list and grades. LCAPIX sits beside it.`
-        : 'Your course system keeps the class list and grades. LCAPIX sits beside it.',
+      'Read your plant\'s documents into a study instead of typing it in.',
+      'Every step carries its cost beside its impact.',
+      'Compare a change against your base case before you make it.',
     ],
   },
   setup: {
     figure: <FigureTiers />,
-    caption: 'FIG. 02 · HOW A STUDY IS BUILT, PRODUCT DOWN TO TASK',
-    headline: 'One step, then a finished study to read.',
+    caption: 'FIG. 01 · HOW A STUDY IS BUILT, PRODUCT DOWN TO TASK',
+    headline: 'One step, then your first project.',
     lines: [
-      'A few answers. Change them any time in your profile.',
-      'Read it in order: the question, the tree, what goes in, the answer.',
-      'Then make your own copy and change one thing.',
+      'Your name and company. Change them any time in your profile.',
+      'Start from a file you already have, or from an empty project.',
+      'Add the people who work on it when you are ready.',
     ],
   },
 } as const
@@ -219,7 +113,7 @@ export function EduAuthShell({ pane, children }: { pane: keyof typeof PANES; chi
       </aside>
       <main className="edu-auth-light" id="main">
         <div className="edu-auth-mobile-logo">
-          <Logo onLight />
+          <Logo />
         </div>
         <div className="edu-auth-form">{children}</div>
       </main>

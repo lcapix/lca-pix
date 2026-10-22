@@ -1,26 +1,22 @@
 'use client'
 
-// Home (E02, E12, behaviour spec "Sequence" 6): nothing yet → the three ways
-// in; the sample alone → the sample study's Overview; later → Continue (the
-// case opened last on this device), Needs attention, your projects with their
-// latest result, the sample as a small row with Remove, and Recent findings as
-// Coming soon. Search finds a project or a case.
+// Home (E12, behaviour spec "Sequence" 6): nothing yet → the two ways in;
+// later → Continue (the case opened last on this device), Needs attention,
+// your projects with their latest result, and Recent findings as Coming soon.
+// Search finds a project or a case.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Button, ComingSoon, ConfirmDialog, CountPill, EmptyState, ErrorCard } from '@/components/lcapix/ds'
+import { Button, ComingSoon, CountPill, EmptyState, ErrorCard } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { useShellData, useShellStore } from '@/lib/shell/use-shell'
 import { caseTotal, co2Unit } from '@/lib/ui/format'
 import { continueNext, continueParts, countsLine, homeMode, needsAttention, projectMeta, toHomeProject, type HomeProject } from '@/lib/home/home-view'
 import { useContinueCase } from '@/lib/home/use-continue'
 import { readLastCase, whenWords } from '@/lib/home/last-case'
-import { SampleOverview } from './sample-overview'
-import { StudentHome } from './student-home'
 import { ReadOnlyBar } from '../shell/read-only-bar'
 import { usePhone } from '@/lib/shell/use-phone'
-import { isStudentHome } from '@/lib/home/student-view'
 
 export function EduHome() {
   const { projects: raw, profile, status, refresh } = useShellData()
@@ -30,7 +26,6 @@ export function EduHome() {
   }, [])
   const projects = useMemo(() => (raw as any[]).map(toHomeProject), [raw])
   const userId = profile?.id ?? -1
-  const mode = homeMode(projects)
 
   if (status === 'error' && !projects.length) {
     return (
@@ -46,68 +41,28 @@ export function EduHome() {
       </div>
     )
   }
+  if (homeMode(projects) === 'empty') return <EmptyHome />
   const ownName = profile?.fullName?.trim() || null
-  const owns = projects.some((p) => !p.is_sample && p.owner_id === userId)
-  if (mode === 'sample') {
-    const sample = projects.find((p) => p.is_sample)!
-    return <SampleOverview projectId={sample.project_id} ownName={ownName} ownsProject={owns} />
-  }
-  if (mode === 'empty') return <EmptyHome />
-  // Projects shared with them and none they run: the student's Home (E13, E15).
-  if (isStudentHome(projects, userId)) return <StudentHome projects={projects} userId={userId} fullName={ownName} />
-  return <HomeLater projects={projects} userId={userId} firstName={ownName?.split(/\s+/)[0] ?? null} teaching={profile?.useCase === 'teaching'} />
+  return <HomeLater projects={projects} userId={userId} firstName={ownName?.split(/\s+/)[0] ?? null} />
 }
 
-/** Build the sample study (POST /api/example-project; it answers with the one that exists). */
-function useAddSample() {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const build = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await apiRequest('/api/example-project', { method: 'POST' })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(d?.error ?? `error ${res.status}`)
-      await useShellStore.getState().refresh()
-    } catch (e: any) {
-      setError(e?.message ?? 'the sample was not built')
-    } finally {
-      setBusy(false)
-    }
-  }
-  return { busy, error, build }
-}
-
-/** No project yet (the sample was skipped, removed, or failed): the three ways in. */
+/** No project yet: the two ways in. */
 function EmptyHome() {
   const router = useRouter()
-  const { busy, error, build } = useAddSample()
   return (
     <div className="home">
       <header className="home-head">
         <h1 className="ds-title">Welcome to LCAPIX</h1>
-        <p className="home-sub">Start one of three ways.</p>
+        <p className="home-sub">Start one of two ways.</p>
       </header>
       <div className="home-ways">
-        <div className="so-next-card">
-          <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-            Read first
-          </span>
-          <h2>Open the sample study</h2>
-          <p>A finished study of a painted steel bracket, built for you in a few seconds: the question, the tree, what goes in, the answer.</p>
-          <Button variant="primary" onClick={build} busy={busy}>
-            Open the sample study
-          </Button>
-          {error && (
-            <ErrorCard title="We couldn't build the sample study. Nothing was lost." cause={error} onRetry={build} />
-          )}
-        </div>
         <div className="so-next-card">
           <span className="ds-section-label">From a file</span>
           <h2>Start from a file</h2>
           <p>A bill of materials, a routing or an equipment list. You check what we read before anything is saved.</p>
-          <Button onClick={() => router.push('/project/new')}>+ New project</Button>
+          <Button variant="primary" onClick={() => router.push('/project/new')}>
+            + New project
+          </Button>
         </div>
         <div className="so-next-card">
           <span className="ds-section-label">Empty</span>
@@ -120,34 +75,13 @@ function EmptyHome() {
   )
 }
 
-function HomeLater({ projects, userId, firstName, teaching }: { projects: HomeProject[]; userId: number; firstName: string | null; teaching: boolean }) {
+function HomeLater({ projects, userId, firstName }: { projects: HomeProject[]; userId: number; firstName: string | null }) {
   const router = useRouter()
   const cont = useContinueCase()
-  const items = needsAttention(projects, userId, teaching ? 'student' : 'member')
-  const own = projects.filter((p) => !p.is_sample)
-  const sample = projects.find((p) => p.is_sample) ?? null
+  const items = needsAttention(projects, userId)
   const last = readLastCase()
-  const [removeOpen, setRemoveOpen] = useState(false)
-  const [removing, setRemoving] = useState(false)
-  const [removeError, setRemoveError] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const addSample = useAddSample()
   const phone = usePhone()
-
-  const remove = async () => {
-    if (!sample) return
-    setRemoving(true)
-    setRemoveError(null)
-    const res = await apiRequest(`/api/projects/${sample.project_id}`, { method: 'DELETE' })
-    setRemoving(false)
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}))
-      setRemoveError(d?.error ?? `The sample was not removed (${res.status}).`)
-      return
-    }
-    setRemoveOpen(false)
-    await useShellStore.getState().refresh()
-  }
 
   const line = [countsLine(projects, userId), last?.project_name ? `last open: ${last.project_name}, ${whenWords(last.at)}` : null]
     .filter(Boolean)
@@ -191,19 +125,19 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
       <section aria-labelledby="yours-h" style={{ marginTop: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
           <h2 id="yours-h" className="ds-section-label" style={{ flex: 1 }}>
-            Your projects · {own.length}
+            Your projects · {projects.length}
           </h2>
           <Link href="/project/new" className="ds-link" style={{ fontWeight: 600 }}>
             + New project
           </Link>
         </div>
-        {own.length ? (
+        {projects.length ? (
           <div className="home-projects">
-            {own.map((p) => (
+            {projects.map((p) => (
               <Link key={p.project_id} href={`/project/${p.project_id}`} className="home-project ds-focusable">
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <strong style={{ display: 'block', fontSize: 19 }}>{p.project_name}</strong>
-                  <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>{projectMeta(p, userId)}</span>
+                  <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>{projectMeta(p)}</span>
                 </span>
                 <span style={{ textAlign: 'right' }}>
                   {p.base_run?.headline ? (
@@ -228,62 +162,14 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
             ))}
           </div>
         ) : (
-          <EmptyState line="No project of your own yet." action={<Button onClick={() => router.push('/project/new')}>+ New project</Button>} />
+          <EmptyState line="No project yet." action={<Button onClick={() => router.push('/project/new')}>+ New project</Button>} />
         )}
       </section>
 
-      {sample && (
-        <div className="home-sample">
-          <span className="ds-flag ds-flag--sample">Sample</span>
-          <span style={{ flex: 1, minWidth: 200, fontSize: 16 }}>
-            {sample.project_name}
-            {sample.base_run?.headline ? ` · ${caseTotal(sample.base_run.headline.value, 'base')} ${co2Unit(sample.base_run.headline.unit)}` : ''} · read any time
-          </span>
-          <Link href={`/project/${sample.project_id}`} className="ds-link" style={{ fontWeight: 600 }}>
-            Open
-          </Link>
-          {!phone && (
-            <button type="button" className="ds-link" style={{ color: 'var(--ds-text)' }} onClick={() => setRemoveOpen(true)}>
-              Remove the sample
-            </button>
-          )}
-        </div>
-      )}
-      {/* E12's promise: the sample can be added again once removed. */}
-      {!sample && !phone && (
-        <div className="home-sample">
-          <span className="ds-flag ds-flag--sample">Sample</span>
-          <span style={{ flex: 1, minWidth: 200, fontSize: 16 }}>The sample study: a finished painted steel bracket to read, run and copy.</span>
-          <Button size="small" busy={addSample.busy} onClick={() => void addSample.build()}>
-            Add the sample study
-          </Button>
-          {addSample.error && (
-            <span role="alert" className="pp-alert" style={{ flexBasis: '100%', margin: 0 }}>
-              The sample was not added: {addSample.error}
-            </span>
-          )}
-        </div>
-      )}
       <div style={{ marginTop: 16 }}>
         <ComingSoon>Recent findings</ComingSoon>
       </div>
       {phone && <ReadOnlyBar />}
-
-      <ConfirmDialog
-        open={removeOpen}
-        title="Remove the sample study?"
-        consequence="Your own projects stay. You can add the sample again from All projects."
-        confirmLabel="Remove sample"
-        busy={removing}
-        onCancel={() => setRemoveOpen(false)}
-        onConfirm={remove}
-      >
-        {removeError && (
-          <p className="ds-dialog-body" style={{ color: 'var(--ds-error)' }} role="alert">
-            {removeError}
-          </p>
-        )}
-      </ConfirmDialog>
     </div>
   )
 }

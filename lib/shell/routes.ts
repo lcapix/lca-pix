@@ -11,8 +11,6 @@ export function placeHref(place: Place, openId: number | null): string {
       return '/findings'
     case 'reports':
       return openId ? `/reports?project=${openId}` : '/reports'
-    case 'analytics':
-      return openId ? `/project/${openId}/analytics` : '/home'
   }
 }
 
@@ -45,7 +43,6 @@ export function placeOf(pathname: string): Place | null {
   if (pathname === '/home' || pathname.startsWith('/home/')) return 'home'
   if (pathname.startsWith('/findings')) return 'findings'
   if (pathname.startsWith('/reports')) return 'reports'
-  if (/^\/project\/\d+\/analytics/.test(pathname)) return 'analytics'
   return null
 }
 
@@ -53,7 +50,6 @@ export const PLACE_LABEL: Record<Place, string> = {
   home: 'Home',
   findings: 'Findings',
   reports: 'Reports',
-  analytics: 'Analytics',
 }
-export const PLACE_ICON: Record<Place, string> = { home: 'home', findings: 'pin', reports: 'report', analytics: 'analytics' }
+export const PLACE_ICON: Record<Place, string> = { home: 'home', findings: 'pin', reports: 'report' }
 export const PAGE_LABEL: Record<ProjectPage, string> = { overview: 'Overview', cases: 'Cases', compare: 'Compare', people: 'People' }

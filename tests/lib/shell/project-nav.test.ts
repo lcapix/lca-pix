@@ -74,11 +74,8 @@ describe('project nav', () => {
     expect(pushRecent(Array.from({ length: 10 }, (_, i) => i + 10), 99)).toHaveLength(10)
   })
 
-  it('places: Analytics only for the owner of the open project once people are in', () => {
-    expect(placesFor(all[0], ME)).toEqual(['home', 'findings', 'reports', 'analytics'])
-    expect(placesFor(all[1], ME)).toEqual(['home', 'findings', 'reports'])
-    expect(placesFor(all[3], ME)).toEqual(['home', 'findings', 'reports'])
-    expect(placesFor(null, ME)).toEqual(['home', 'findings', 'reports'])
+  it('places: Home, Findings and Reports for everyone, no Analytics', () => {
+    expect(placesFor()).toEqual(['home', 'findings', 'reports'])
   })
 
   it('nested pages: People for owner and admins; students get Overview, Cases, Compare', () => {

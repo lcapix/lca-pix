@@ -62,7 +62,6 @@ export function useContinueCase(): { data: ContinueCase | null; loading: boolean
           latestRunId: inv?.latest_run?.run_id ?? null,
           changedAfterRun: (inv?.latest_run?.changed_flows ?? 0) > 0,
           hasWriteUp: !!String(c.case?.interpretation ?? '').trim(),
-          isFinal: !!c.case?.is_final,
         })
       } catch {
         /* the card simply does not show */

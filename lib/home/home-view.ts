@@ -1,22 +1,20 @@
 /**
- * Home's rules (behaviour spec "Sequence", E02, E12): which Home a person
- * sees, the Continue card's four parts and its one next step, and the Needs
- * attention list. Pure, so every phrase is tested without a browser.
+ * Home's rules (behaviour spec "Sequence", E12): which Home a person sees, the
+ * Continue card's four parts and its one next step, and the Needs attention
+ * list. Pure, so every phrase is tested without a browser.
  */
 
 export interface HomeProject {
   project_id: number
   project_name: string
   owner_id: number
-  /** The owner's full name (else username), for "From Dr. Elena Rivera". */
+  /** The owner's full name (else username). */
   owner_name?: string | null
   permission_name?: string | null
-  is_sample: boolean
   case_count: number
   member_count: number
   /** The owner once plus every other member. */
   people: number
-  hand_ins: number
   held_lines: number
   held_case: { case_id: number; case_name: string | null } | null
   member_cases_without_run: number
@@ -34,11 +32,9 @@ export function toHomeProject(p: Record<string, any>): HomeProject {
     owner_id: n(p.owner_id),
     owner_name: p.owner_name ?? null,
     permission_name: p.permission_name ?? null,
-    is_sample: !!p.is_sample,
     case_count: n(p.case_count),
     member_count: n(p.member_count),
     people: Math.max(1, n(p.people)),
-    hand_ins: n(p.hand_ins),
     held_lines: n(p.held_lines),
     held_case: p.held_case ?? null,
     member_cases_without_run: n(p.member_cases_without_run),
@@ -49,23 +45,20 @@ export function toHomeProject(p: Record<string, any>): HomeProject {
 }
 
 /**
- * 'empty': nothing yet (the sample was skipped or failed): the three ways in.
- * 'sample': the sample is all there is: Home is its Overview (E02).
+ * 'empty': no project yet: the two ways in.
  * 'later': an own project or a shared one exists: Continue, Needs attention, the list (E12).
  */
-export function homeMode(projects: Pick<HomeProject, 'is_sample'>[]): 'empty' | 'sample' | 'later' {
-  if (!projects.length) return 'empty'
-  return projects.every((p) => p.is_sample) ? 'sample' : 'later'
+export function homeMode(projects: unknown[]): 'empty' | 'later' {
+  return projects.length ? 'later' : 'empty'
 }
 
-/** "2 projects of yours · 1 shared with you · the sample". */
+/** "2 projects of yours · 1 shared with you". */
 export function countsLine(projects: HomeProject[], userId: number): string {
-  const own = projects.filter((p) => !p.is_sample && Number(p.owner_id) === userId).length
-  const shared = projects.filter((p) => !p.is_sample && Number(p.owner_id) !== userId).length
+  const own = projects.filter((p) => Number(p.owner_id) === userId).length
+  const shared = projects.length - own
   const parts: string[] = []
   if (own) parts.push(`${own} ${own === 1 ? 'project' : 'projects'} of yours`)
   if (shared) parts.push(`${shared} shared with you`)
-  if (projects.some((p) => p.is_sample)) parts.push('the sample')
   return parts.join(' · ')
 }
 
@@ -85,12 +78,10 @@ export interface AttentionItem {
 /**
  * Needs attention (E12), in the order a person would act: lines held from a
  * file, a base case changed after its run, members' cases with no run.
- * Never the sample.
  */
-export function needsAttention(projects: HomeProject[], userId: number, memberWord: 'student' | 'member' = 'member'): AttentionItem[] {
+export function needsAttention(projects: HomeProject[], userId: number): AttentionItem[] {
   const out: AttentionItem[] = []
   for (const p of projects) {
-    if (p.is_sample) continue
     if (p.held_lines > 0 && p.held_case) {
       out.push({
         key: `held-${p.project_id}`,
@@ -103,7 +94,7 @@ export function needsAttention(projects: HomeProject[], userId: number, memberWo
     }
   }
   for (const p of projects) {
-    if (p.is_sample || !p.base_changed_after_run || !p.base_run || !p.base_case_id) continue
+    if (!p.base_changed_after_run || !p.base_run || !p.base_case_id) continue
     out.push({
       key: `changed-${p.project_id}`,
       kind: 'changed',
@@ -114,12 +105,12 @@ export function needsAttention(projects: HomeProject[], userId: number, memberWo
     })
   }
   for (const p of projects) {
-    if (p.is_sample || !runsProject(p, userId) || p.member_cases_without_run <= 0) continue
+    if (!runsProject(p, userId) || p.member_cases_without_run <= 0) continue
     const n = p.member_cases_without_run
     out.push({
       key: `norun-${p.project_id}`,
       kind: 'no_run',
-      title: `${n} ${memberWord} ${n === 1 ? 'case has' : 'cases have'} no run yet`,
+      title: `${n} member ${n === 1 ? 'case has' : 'cases have'} no run yet`,
       where: p.project_name,
       action: 'See cases',
       href: `/project/${p.project_id}/cases`,
@@ -128,12 +119,9 @@ export function needsAttention(projects: HomeProject[], userId: number, memberWo
   return out
 }
 
-/** "34 cases · 31 people · 5 ticked as hand-in" / "1 case · just you". */
-export function projectMeta(p: HomeProject, userId: number): string {
-  const parts = [`${p.case_count} ${p.case_count === 1 ? 'case' : 'cases'}`]
-  parts.push(p.people <= 1 ? 'just you' : `${p.people} people`)
-  if (runsProject(p, userId) && p.hand_ins > 0) parts.push(`${p.hand_ins} ticked as hand-in`)
-  return parts.join(' · ')
+/** "34 cases · 31 people" / "1 case · just you". */
+export function projectMeta(p: HomeProject): string {
+  return [`${p.case_count} ${p.case_count === 1 ? 'case' : 'cases'}`, p.people <= 1 ? 'just you' : `${p.people} people`].join(' · ')
 }
 
 export interface ContinueInput {
@@ -147,7 +135,6 @@ export interface ContinueInput {
   latestRunId: number | null
   changedAfterRun: boolean
   hasWriteUp: boolean
-  isFinal: boolean
 }
 
 export interface ContinuePart {
@@ -173,9 +160,9 @@ export function continueParts(c: ContinueInput): ContinuePart[] {
       done: !!c.latestRunId && !c.changedAfterRun,
     },
     {
-      label: c.isFinal ? 'Write-up · ticked' : c.hasWriteUp ? 'Write-up · written' : 'Write-up · not started',
-      fill: c.isFinal || c.hasWriteUp ? 1 : 0,
-      done: c.isFinal || c.hasWriteUp,
+      label: c.hasWriteUp ? 'Write-up · written' : 'Write-up · not started',
+      fill: c.hasWriteUp ? 1 : 0,
+      done: c.hasWriteUp,
     },
   ]
 }

@@ -141,16 +141,11 @@ export function pushRecent(ids: number[], id: number): number[] {
   return [id, ...ids.filter((x) => x !== id)].slice(0, 10)
 }
 
-export type Place = 'home' | 'findings' | 'reports' | 'analytics'
+export type Place = 'home' | 'findings' | 'reports'
 
-/**
- * Places (sidebar.md 2): Home, Findings, Reports for everyone; Analytics only
- * for the owner of the open project once people are in it.
- */
-export function placesFor(open: NavProject | null, userId: number | null | undefined): Place[] {
-  const base: Place[] = ['home', 'findings', 'reports']
-  if (open && relationOf(open, userId) === 'owner' && Number(open.member_count ?? 0) > 0) base.push('analytics')
-  return base
+/** Places (sidebar.md 2): Home, Findings, Reports, the same for everyone. */
+export function placesFor(): Place[] {
+  return ['home', 'findings', 'reports']
 }
 
 export type ProjectPage = 'overview' | 'cases' | 'compare' | 'people'

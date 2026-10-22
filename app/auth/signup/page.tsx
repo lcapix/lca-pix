@@ -1,7 +1,7 @@
 "use client"
 
 // Sign-up (F1.2): Continue with Google first, then name, email and password,
-// the Terms line, and that team workspaces are in development. Errors sit on
+// and the Terms line. Errors sit on
 // the line they belong to, never in a toast; the server's wording is neutral
 // (it never says whether an email has an account). Then About you.
 
@@ -79,9 +79,9 @@ export default function SignupPage() {
 
   const form = (
     <>
-      <p className="edu-eyebrow">Teaching and research</p>
+      <p className="edu-eyebrow">Get started</p>
       <h1 className="edu-h1">Create your account</h1>
-      <p className="edu-sub">For professors, instructors and researchers. Email or Google.</p>
+      <p className="edu-sub">Use your work email, or Google.</p>
 
       {/* The first Tab stop (acceptance check 10). The server route owns the OAuth handshake. */}
       <button type="button" className="edu-google" onClick={() => (window.location.href = "/api/auth/google")} disabled={isLoading}>
@@ -166,7 +166,6 @@ export default function SignupPage() {
           Log in
         </Link>
       </p>
-      <p className="edu-note">The same account works for your own studies. Team and company workspaces are in development.</p>
     </>
   )
 
