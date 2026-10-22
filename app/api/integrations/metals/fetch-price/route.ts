@@ -1,29 +1,26 @@
 // app/api/integrations/metals/fetch-price/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAuth } from '@/lib/auth';
+import { guardRateLookup, parseLookupBody } from '@/lib/integrations/rate-lookup';
 import { fetchMetalPrice, METAL_SYMBOL_TO_SUBSTANCE } from '@/lib/integrations/metals/client';
 import { getOrFetchRate } from '@/lib/integrations/cost-rates';
+import { pickMaterialRate, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates';
 import { logIntegration } from '@/lib/integrations/log';
+import { logFailure } from '@/lib/integrations/route-errors';
 
 const VALID_SYMBOLS = Object.keys(METAL_SYMBOL_TO_SUBSTANCE) as [string, ...string[]];
 
-const Body = z.object({
-  symbol: z.enum(VALID_SYMBOLS),
-});
+// Open to any signed-in user (the price comes from Metals-API, not the
+// caller); see lib/integrations/rate-lookup.ts.
+const Body = z.object({ symbol: z.enum(VALID_SYMBOLS) }).strict();
 
 export async function POST(request: NextRequest) {
-  let userId: number;
-  try { userId = await requireAuth(request); }
-  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  const guard = await guardRateLookup(request);
+  if (guard.response) return guard.response;
+  const userId = guard.userId;
 
-  const parsed = Body.safeParse(await request.json().catch(() => ({})));
-  if (!parsed.success) {
-    return NextResponse.json({
-      error: `Invalid symbol. Supported: ${VALID_SYMBOLS.join(', ')}`,
-    }, { status: 400 });
-  }
-
+  const parsed = await parseLookupBody(request, Body, `symbol must be one of ${VALID_SYMBOLS.join(', ')}`);
+  if (parsed.response) return parsed.response;
   const { symbol } = parsed.data;
 
   try {
@@ -42,6 +39,18 @@ export async function POST(request: NextRequest) {
           effectiveDate: new Date().toISOString().slice(0,10),
         };
       },
+      // When no live key / the API fails, use the curated USGS-derived reference
+      // $/kg for this metal instead of erroring — LCA costing wants a
+      // representative average anyway, and the provenance says which it is.
+      staticFallback: () => {
+        const ref = pickMaterialRate(METAL_SYMBOL_TO_SUBSTANCE[symbol] ?? symbol);
+        return {
+          rateValue: ref.rate,
+          unit: '$/kg',
+          source: `Reference ${REFERENCE_VINTAGE} (${ref.label})`,
+          effectiveDate: `${REFERENCE_VINTAGE}-01`,
+        };
+      },
     });
     await logIntegration({
       source: 'metals', action: 'fetch_price',
@@ -49,12 +58,11 @@ export async function POST(request: NextRequest) {
       details: { symbol, rate: rate.rateValue },
     });
     return NextResponse.json({ success: true, rate });
-  } catch (err: any) {
-    await logIntegration({
-      source: 'metals', action: 'fetch_price',
-      recordsAffected: 0, executedBy: userId, status: 'failed',
-      details: { symbol, error: err.message },
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    await logFailure(
+      { source: 'metals', action: 'fetch_price', executedBy: userId, details: { symbol } },
+      err, 'Metals fetch-price failed',
+    );
+    return NextResponse.json({ error: 'Could not fetch the metal price' }, { status: 500 });
   }
 }

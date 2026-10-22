@@ -8,7 +8,7 @@
 **You will need:** A browser. A calculator (optional — math is shown step by step). About 15 minutes.
 
 **App URL:** https://lca-project-v3.vercel.app
-**Test account:** `lcapix50@gmail.com` / `Lcapix@guerry123`
+**Test account:** `lcapix50@gmail.com` / `<TEST_ACCOUNT_PASSWORD>`
 *(Or create your own via /auth/signup — both flows are tested.)*
 
 ---

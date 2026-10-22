@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.vercel
+npm-debug.log*
+*.log
+.env*.local
+.DS_Store
+design
+LCAPIX.zip
+tests
+docs
+*.md
+*.sql
+*.tar.gz
+scripts
+archive-conflicting-scripts

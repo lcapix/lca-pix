@@ -104,7 +104,7 @@ function ComparisonRow({ row, index }: { row: Row; index: number }) {
           {v ? (
             <Icon name="check" size={16} style={{ margin: '0 auto' }} />
           ) : (
-            <span style={{ opacity: 0.4 }}>—</span>
+            <span style={{ opacity: 0.4 }}>–</span>
           )}
         </div>
       ))}

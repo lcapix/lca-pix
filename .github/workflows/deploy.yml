@@ -1,38 +1,414 @@
-name: Deploy to Vercel
+name: CI and production deploy
+
+# Pull requests (into main or v1-hardening) run checks only. A production deploy happens only on a push
+# to main, and only after the checks pass. Third-party actions are pinned to
+# commit SHAs (the tag is in the trailing comment); bump both together.
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, v1-hardening]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Supersede stale PR runs, but never cancel a production deploy mid-way.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  deploy:
+  check:
+    name: Typecheck, test, build
     runs-on: ubuntu-latest
-
+    timeout-minutes: 25
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-    - name: Install dependencies
-      run: npm ci
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
 
-    - name: Build application
-      run: npm run build
-      env:
-        NEXT_PUBLIC_APP_NAME: LCAPIX
-        NODE_ENV: production
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-    - name: Deploy to Vercel
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.ORG_ID }}
-        vercel-project-id: ${{ secrets.PROJECT_ID }}
-        vercel-args: '--prod'
+      - name: Typecheck (ratchet against scripts/tsc-baseline.txt)
+        run: node scripts/tsc-ratchet.mjs
+
+      - name: Unit tests
+        run: pnpm vitest run
+
+      # Dummy values only: lib/db.ts connects lazily, so the build never
+      # opens a database connection. Nothing here is a real credential.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_PORT: '5432'
+          DATABASE_USER: ci
+          DATABASE_PASSWORD: ci-dummy-not-a-secret
+          DATABASE_NAME: lcapix_ci
+          JWT_SECRET: ci-dummy-not-a-secret
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout (full history for the commit range)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_VERSION: 8.24.3
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+          # Only needed if the repo moves to a GitHub organization account.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # Optional: not a dependency of deploy. Builds a throwaway database from
+  # nothing (db/pg baseline + every db/pg migration) in a Postgres 17 service
+  # container and runs tests/db against it. See docs/testing/DATABASE_TESTS.md.
+  # Login is trusted (no password) on purpose: the container only lives for
+  # this job and is reachable only from the runner.
+  db-tests:
+    name: Database tests (Postgres 17)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Database tests
+        run: pnpm test:db
+
+  # Optional: not a dependency of deploy. The API, authorization and security
+  # suite (tests/api-real): route handlers called against a throwaway
+  # database built the same way as db-tests, with only outbound network
+  # mocked. See "API suite" in docs/testing/DATABASE_TESTS.md.
+  api-tests:
+    name: API, authz and security tests (Postgres 17)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: API, authz and security tests
+        run: pnpm test:api
+
+  # Optional: not a dependency of deploy. Browser tests (docs/testing/E2E_TESTS.md):
+  # user journeys, contract tests and the accessibility baseline, against
+  # `next dev` on a throwaway database built from nothing in a Postgres 17
+  # service container. The dev server can reach only localhost; the browser
+  # can load only localhost. Trusted local login on purpose, as in db-tests.
+  e2e:
+    name: Browser tests (Playwright)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Artifacts folder
+        # runner.temp is not available in job-level env, so set it here.
+        run: echo "E2E_ARTIFACTS_DIR=$RUNNER_TEMP/lcapix-e2e" >> "$GITHUB_ENV"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Playwright browser (the version @playwright/test pins)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Journeys and contracts
+        run: pnpm e2e
+
+      - name: Accessibility baseline
+        if: success() || failure()
+        run: pnpm e2e:a11y
+
+      - name: Upload results (traces, screenshots, axe findings)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-results
+          path: |
+            ${{ runner.temp }}/lcapix-e2e/results
+            ${{ runner.temp }}/lcapix-e2e/report
+            ${{ runner.temp }}/lcapix-e2e/a11y
+          retention-days: 7
+
+  # Optional and non-blocking. The committed screenshots are macOS
+  # (*-darwin.png); Linux rasterises text differently, so they cannot be
+  # compared here. Until a Linux set is committed this job generates one and
+  # uploads it (review it, then commit tests/e2e/__snapshots__/visual/*-linux.png
+  # from a trusted run); once it exists the job compares against it.
+  e2e-visual:
+    name: Visual baseline (Playwright, non-blocking)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Artifacts folder
+        # runner.temp is not available in job-level env, so set it here.
+        run: echo "E2E_ARTIFACTS_DIR=$RUNNER_TEMP/lcapix-e2e" >> "$GITHUB_ENV"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Compare, or generate a Linux baseline
+        run: |
+          if ls tests/e2e/__snapshots__/visual/*-linux.png >/dev/null 2>&1; then
+            pnpm e2e:visual
+          else
+            echo "No Linux baseline committed: generating one."
+            pnpm e2e:update
+          fi
+
+      - name: Upload screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-visual
+          path: |
+            tests/e2e/__snapshots__/visual/*-linux.png
+            ${{ runner.temp }}/lcapix-e2e/results
+          retention-days: 7
+
+  # Optional: not a dependency of deploy. The e2e (TesterArmy) UI suite in
+  # e2e-tester/ (docs/testing/E2E_TESTER.md): exact checks only, no model and
+  # no API key, telemetry off. Its own package (e2e, @e2e-dev/web, Playwright
+  # 1.63) so the Playwright suite above keeps its pinned 1.59.1. The runner
+  # starts the app itself: a throwaway database in the Postgres 17 service and
+  # `next dev -p 3150` that can reach only localhost; the browser loads only
+  # localhost. Known-failure repros (tag bugbash) never gate. Trusted local
+  # login on purpose, as in db-tests.
+  e2e-tester:
+    name: UI tests (e2e, exact checks)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    env:
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: ''
+      JWT_SECRET: ci-dummy-not-a-secret
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Artifacts folder
+        # runner.temp is not available in job-level env, so set it here.
+        run: echo "E2E_ARTIFACTS_DIR=$RUNNER_TEMP/lcapix-e2e-tester" >> "$GITHUB_ENV"
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            e2e-tester/pnpm-lock.yaml
+
+      - name: Install dependencies (app, then the e2e tester)
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir e2e-tester install --frozen-lockfile
+
+      - name: Playwright browser (the version e2e-tester pins)
+        run: pnpm --dir e2e-tester exec playwright install --with-deps chromium
+
+      - name: Typecheck the tests
+        run: pnpm --dir e2e-tester typecheck
+
+      - name: UI tests (e2e)
+        run: pnpm --dir e2e-tester exec e2e run --exclude-tag bugbash --reporter list,junit
+
+      - name: Upload report, app log and artifacts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-tester-report
+          path: |
+            e2e-tester/.e2e/report.json
+            e2e-tester/.e2e/junit.xml
+            e2e-tester/.e2e/logs/app.log
+            e2e-tester/.e2e/artifacts
+          if-no-files-found: warn
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Vercel (production)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, secrets]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Deploy
+        uses: amondnet/vercel-action@de09aeac2ace6599ec9b11ef87558759a496bac4 # v42.3.0
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.ORG_ID }}
+          vercel-project-id: ${{ secrets.PROJECT_ID }}
+          vercel-args: '--prod'
+          github-comment: false

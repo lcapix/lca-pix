@@ -1,7 +1,76 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, insert, queryOne, execute, transaction } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
-import { calculateCaseImpacts, formatAlgorithmSteps, type LCAResult } from '@/lib/lca-engine';
+import { internalError, newRequestId, readJson } from '@/lib/http';
+import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
+import { requireAuth } from '@/lib/auth';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { type LCAResult } from '@/lib/lca-engine';
+import { canonicalizeRegion } from '@/lib/factor-selection';
+import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+import {
+  buildGoalScope,
+  canonicalMethod,
+  hasFrozenResults,
+  LEGACY_RESULTS_SOURCE,
+  parseRunSnapshot,
+  snapshotComponentBreakdown,
+  snapshotImpacts,
+  SUPPORTED_METHODS,
+  snapshotRunSteps,
+  type GoalScope,
+  type RunSnapshot,
+} from '@/lib/run-snapshot';
+import { parseId } from '@/lib/ids';
+import { runCaseInTransaction } from '@/lib/runs/run-case';
+import { inRunOrder, newestRunIds, placeholders } from '@/lib/runs/newest-first';
+
+/** Flow-level detail of a snapshot, as the results screen reads it. */
+function snapshotFlowDetail(snapshot: RunSnapshot) {
+  return snapshot.flow_detail.map((r) => ({
+    flow_id: r.flow_id,
+    component_id: r.component_id ?? null,
+    component: r.component,
+    substance: r.substance,
+    category_name: r.category_name,
+    dir: r.dir,
+    amount: r.amount,
+    unit: r.unit,
+    factor: r.factor,
+    impact: r.impact,
+    scope: r.scope,
+    conversion: r.conversion,
+    source_tier: r.source_tier ?? null,
+    source: r.source ?? null,
+    allocation: r.allocation ?? null,
+  }));
+}
+
+/**
+ * RUN-3: the run row is written inside the run's transaction, so a failure
+ * rolls it back with everything else. Record the failed attempt afterwards, on
+ * a pool connection of its own, so the case keeps a trace of it.
+ */
+async function recordFailedRun(args: {
+  caseId: number;
+  runName: string;
+  method: string;
+  regionCode: string;
+  userId: number;
+  requestId: string;
+}): Promise<number | null> {
+  // The run row is readable by every project member (GET returns it), so it
+  // names the request, not the error: the detail is in the server log (L1).
+  const message = `Run failed. Details are in the server log under request ${args.requestId}.`;
+  try {
+    return await insert(
+      `INSERT INTO assessment_runs (case_id, run_name, calculation_method, region_code, status, error_log, executed_by)
+       VALUES (?, ?, ?, ?, 'failed', ?, ?)`,
+      [args.caseId, args.runName, args.method, args.regionCode, message, args.userId],
+    );
+  } catch (recordErr) {
+    console.error('[assessments POST] could not record the failed run:', recordErr);
+    return null;
+  }
+}
 
 // GET /api/cases/[caseId]/assessments
 export async function GET(
@@ -11,7 +80,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,
@@ -22,34 +91,81 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' });
+    if (denied) return denied;
 
-    const assessments = await query(
-      `SELECT ar.*, a.username as executed_by_username
-       FROM assessment_runs ar
-       LEFT JOIN account a ON ar.executed_by = a.id
-       WHERE ar.case_id = ?
-       ORDER BY ar.run_date DESC`,
-      [caseId]
-    );
+    // The production `assessment_runs` table's timestamp column is `run_date`
+    // (there is no `run_at` column). A prior "fix" selected/ordered by `ar.run_at`,
+    // which threw "Unknown column 'ar.run_at'" and 500'd this whole endpoint —
+    // making every case read as "Not Yet Assessed" even when completed runs with
+    // results existed. Use `run_date` (present in prod) and also expose it under
+    // the `run_at` alias so any client that still reads `run_at` keeps working.
+    // run_date has one-second precision: run_id breaks the tie, so the newest
+    // run is first even when several were made in the same second.
+    // ?latest=1: only the newest completed run (the workspace's note against
+    // the Base case reads one total, not the whole history).
+    // The ids are sorted alone and the rows read by id (lib/runs/newest-first):
+    // sorting ar.* with its snapshot fails on a large case.
+    const latestOnly = request.nextUrl.searchParams.get('latest') === '1';
+    const runIds = await newestRunIds(caseId, latestOnly ? { status: 'completed', limit: 1 } : {});
+    const assessments = runIds.length
+      ? inRunOrder(
+          runIds,
+          await query<any>(
+            `SELECT ar.*, ar.run_date AS run_at, a.username as executed_by_username
+               FROM assessment_runs ar
+               LEFT JOIN account a ON ar.executed_by = a.id
+              WHERE ar.run_id IN (${placeholders(runIds.length)})`,
+            runIds,
+          ),
+        )
+      : [];
 
-    // For each assessment, fetch the actual impact results
+    // Each run reports what it froze at run time (snapshot v3): totals, the
+    // per-step breakdown with stages, flow detail. Runs made before v3 fall back
+    // to their stored result rows joined to the live step table, and say so in
+    // results_source.
     const assessmentsWithResults = await Promise.all(
       (assessments as any[]).map(async (assessment) => {
-        // Get impact results for this run, aggregated by category
+        const snapshot = parseRunSnapshot((assessment as any).run_snapshot);
+
+        if (hasFrozenResults(snapshot)) {
+          return {
+            ...assessment,
+            run_snapshot: undefined, // raw JSON not needed client-side twice
+            impacts: snapshotImpacts(snapshot),
+            componentBreakdown: snapshotComponentBreakdown(snapshot).map((c) => ({
+              component_id: c.component_id,
+              component_name: c.component_name,
+              component_type: c.process_type ?? c.component_type,
+              parent_component_id: c.parent_component_id,
+              life_cycle_stage: c.life_cycle_stage ?? null,
+              flows_processed: c.flows_processed,
+              impacts: c.impacts,
+            })),
+            flowDetail: snapshotFlowDetail(snapshot),
+            warnings: snapshot.warnings,
+            goal_scope: snapshot.goal_scope ?? null,
+            data_quality: snapshot.data_quality ?? null,
+            // The run's own tree with each step's frozen cost (E05 "What
+            // builds this number" and "Cost beside impact").
+            run_steps: snapshotRunSteps(snapshot),
+            detail_source: 'snapshot' as const,
+            results_source: 'snapshot' as const,
+          };
+        }
+
+        // Legacy run: impact results aggregated by category from the stored rows.
         const results = await query(
           `SELECT ic.category_name, SUM(ar.impact_value) as total_value, ar.unit
            FROM assessment_results ar
            JOIN impact_categories ic ON ar.category_id = ic.category_id
            WHERE ar.run_id = ?
-           GROUP BY ic.category_id, ic.category_name, ar.unit`,
+           GROUP BY ic.category_id, ic.category_name, ar.unit
+           ORDER BY ic.category_id`,
           [assessment.run_id]
         );
 
-        // Transform to impacts object
         const impacts: Record<string, { value: number; unit: string }> = {};
         (results as any[]).forEach(r => {
           impacts[r.category_name] = {
@@ -58,49 +174,129 @@ export async function GET(
           };
         });
 
-        // Get component breakdown
-        const componentResults = await query(
+        // Component breakdown, names and stages read from the live step table
+        // (a deleted step reads as "Removed step"). A database without
+        // migrate-022 falls back below and every step reads as production.
+        const breakdownSql = (withStage: boolean) =>
           `SELECT
-            c.component_id,
-            c.component_name,
+            ar.component_id,
+            COALESCE(c.component_name, 'Removed step') AS component_name,
             c.process_type as component_type,
+            ${withStage ? 'c.life_cycle_stage,' : ''}
             COUNT(DISTINCT ar.result_id) as flows_processed,
-            JSON_ARRAYAGG(
-              JSON_OBJECT(
+            jsonb_agg(
+              jsonb_build_object(
                 'category_id', ic.category_id,
                 'category_name', ic.category_name,
                 'impact_value', ar.impact_value,
                 'unit', ar.unit
               )
+              ORDER BY ic.category_id
             ) as impacts
            FROM assessment_results ar
-           JOIN component c ON ar.component_id = c.component_id
+           LEFT JOIN component c ON ar.component_id = c.component_id
            JOIN impact_categories ic ON ar.category_id = ic.category_id
            WHERE ar.run_id = ?
-           GROUP BY c.component_id, c.component_name, c.process_type`,
-          [assessment.run_id]
-        );
+           GROUP BY ar.component_id, c.component_name, c.process_type${
+             withStage ? ', c.life_cycle_stage' : ''
+           }
+           ORDER BY ar.component_id NULLS FIRST`;
 
-        // Parse JSON impacts for each component
+        let componentResults: any[];
+        try {
+          componentResults = await query(breakdownSql(true), [assessment.run_id]);
+        } catch (stageErr: any) {
+          if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
+          componentResults = await query(breakdownSql(false), [assessment.run_id]);
+        }
+
         const componentBreakdown = (componentResults as any[]).map(comp => ({
           component_id: comp.component_id,
           component_name: comp.component_name,
           component_type: comp.component_type,
+          life_cycle_stage: comp.life_cycle_stage ?? null,
           flows_processed: comp.flows_processed,
           impacts: typeof comp.impacts === 'string' ? JSON.parse(comp.impacts) : comp.impacts
         }));
 
+        // Flow-level detail: a v1/v2 snapshot still carries it (immutable);
+        // older runs recompute it from live flows/factors, marked as such.
+        if (snapshot) {
+          return {
+            ...assessment,
+            run_snapshot: undefined,
+            impacts,
+            componentBreakdown,
+            flowDetail: snapshotFlowDetail(snapshot),
+            warnings: snapshot.warnings,
+            goal_scope: snapshot.goal_scope ?? null,
+            data_quality: snapshot.data_quality ?? null,
+            detail_source: 'snapshot' as const,
+            results_source: LEGACY_RESULTS_SOURCE,
+          };
+        }
+
+        const flowRowsRaw = await query(
+          `SELECT f.flow_id, c.component_name, c.hierarchy_level,
+                  s.substance_name, f.flow_type, f.quantity, f.unit,
+                  dif.category_id, ic.category_name,
+                  dif.factor_value AS factor, dif.geographic_scope
+           FROM flows f
+           JOIN component c ON f.component_id = c.component_id
+           JOIN substances s ON f.substance_id = s.substance_id
+           JOIN driver_impact_factors dif
+             ON f.substance_id = dif.substance_id AND dif.method_name = ?
+           JOIN impact_categories ic ON dif.category_id = ic.category_id
+           WHERE c.case_id = ?
+           ORDER BY c.hierarchy_level, f.flow_id, ic.category_id`,
+          [assessment.calculation_method, caseId]
+        );
+
+        // Dedupe to one factor per (flow, category): prefer a row whose
+        // geographic_scope matches the run region, else 'Global', else first
+        // seen — mirroring the engine's region-preference logic.
+        const region = (assessment.region_code || '').toLowerCase();
+        const picked = new Map<string, any>();
+        for (const row of flowRowsRaw as any[]) {
+          const key = `${row.flow_id}:${row.category_id}`;
+          const scope = (row.geographic_scope || '').toLowerCase();
+          const score = region && scope === region ? 2 : scope === 'global' ? 1 : 0;
+          const prev = picked.get(key);
+          if (!prev || score > prev._score) picked.set(key, { ...row, _score: score });
+        }
+        const flowDetail = Array.from(picked.values()).map((row) => {
+          const amount = parseFloat(row.quantity) || 0;
+          const factor = parseFloat(row.factor) || 0;
+          return {
+            flow_id: row.flow_id,
+            component: row.component_name,
+            substance: row.substance_name,
+            category_name: row.category_name,
+            dir: row.flow_type === 'input' ? 'IN' : 'OUT',
+            amount,
+            unit: row.unit,
+            factor,
+            impact: amount * factor,
+          };
+        });
+
         return {
           ...assessment,
           impacts,
-          componentBreakdown
+          componentBreakdown,
+          flowDetail,
+          warnings: [],
+          goal_scope: null,
+          data_quality: null,
+          detail_source: 'recomputed-legacy' as const,
+          results_source: LEGACY_RESULTS_SOURCE,
         };
       })
     );
 
     return NextResponse.json({ success: true, assessments: assessmentsWithResults });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get assessments error:', error);
@@ -117,7 +313,7 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id, case_name FROM case_table WHERE case_id = ?`,
@@ -128,114 +324,126 @@ export async function POST(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
+
+    // REC H5: a run holds a DB transaction for the whole engine pass.
+    const limited = await enforceRateLimit(RATE_LIMITS.assessments, [userId]);
+    if (limited) return limited;
+
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { run_name, calculation_method, region_code } = json.body as Record<string, unknown>;
+    for (const [field, value] of Object.entries({ run_name, calculation_method, region_code })) {
+      if (value !== undefined && value !== null && typeof value !== 'string') {
+        return NextResponse.json({ error: `${field} must be a string` }, { status: 400 });
+      }
+    }
+    // A run that names no method or region uses the study's scope: the
+    // project's LCIA method, the case's region (where the product is made),
+    // then the project's region, then CML 2001 / Global.
+    let scope: { method?: string | null; region?: string | null } = {};
+    if (!calculation_method || !region_code) {
+      try {
+        const row = await queryOne<any>(
+          `SELECT c.region_code AS case_region, p.lcia_method, p.region_code AS project_region
+             FROM case_table c JOIN project p ON p.project_id = c.project_id
+            WHERE c.case_id = ?`,
+          [caseId]
+        );
+        scope = { method: row?.lcia_method, region: row?.case_region || row?.project_region };
+      } catch {
+        try {
+          // Before migrate-018: the case's region only.
+          const row = await queryOne<any>(`SELECT region_code FROM case_table WHERE case_id = ?`, [caseId]);
+          scope = { region: row?.region_code };
+        } catch {
+          /* no region column: Global */
+        }
+      }
+    }
+    // RUN-6: only a method the factor table carries. Any other string used to
+    // produce an all-zero "completed" run.
+    const requestedMethod = (calculation_method as string) || scope.method || 'CML 2001';
+    const method = canonicalMethod(requestedMethod);
+    if (!method) {
+      return NextResponse.json(
+        {
+          error: `Unknown impact-assessment method "${String(requestedMethod).slice(0, 64)}". Use one of: ${SUPPORTED_METHODS.join(', ')}.`,
+          supported_methods: SUPPORTED_METHODS,
+        },
+        { status: 400 },
+      );
+    }
+    // Canonical zone code ('US Grid' → 'US'); stored on the run so results are
+    // attributable to the region actually used, not the UI label.
+    const regionCode = canonicalizeRegion((region_code as string) || scope.region);
+    if (regionCode.length > 20) {
+      return NextResponse.json({ error: 'region_code is too long' }, { status: 400 });
+    }
+    const runName = String(run_name || `Assessment-${Date.now()}`).slice(0, 100);
+
+    // Goal & scope in force for this run (ISO 14044 4.2), frozen into the
+    // snapshot. SELECT * reads whichever columns exist, so a database without
+    // migrate-014 still runs and the snapshot records the defaults.
+    let goalScope: GoalScope | null = null;
+    try {
+      const [projectRow, caseRow] = await Promise.all([
+        queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [caseData.project_id]),
+        queryOne<any>(`SELECT * FROM case_table WHERE case_id = ?`, [caseId]),
+      ]);
+      goalScope = buildGoalScope(projectRow, caseRow);
+    } catch (gsErr) {
+      console.warn('[assessments POST] could not read goal & scope:', gsErr);
     }
 
-    const { run_name, calculation_method, region_code } = await request.json();
-    const method = calculation_method || 'CML 2001';
-    const regionCode = region_code || undefined;
-
-    const result = await transaction(async (conn) => {
-      // Create assessment run record
-      const timestamp = Date.now();
-      const defaultName = `Assessment-${timestamp}`;
-
-      const [runResult] = await conn.query(
-        `INSERT INTO assessment_runs (case_id, run_name, calculation_method, status, executed_by)
-         VALUES (?, ?, ?, 'running', ?)`,
-        [caseId, run_name || defaultName, method, userId]
+    let result: { runId: number; lcaResult: LCAResult; snapshot: RunSnapshot };
+    try {
+      result = await transaction((conn) =>
+        runCaseInTransaction(conn, { caseId, caseName: caseData.case_name, runName, method, regionCode, userId, goalScope })
       );
-
-      const runId = (runResult as any).insertId;
-
-      try {
-        console.log(`\n${'='.repeat(80)}`);
-        console.log(`🔬 RUNNING LCA ASSESSMENT - Run ID: ${runId}`);
-        console.log(`   Case: ${caseData.case_name} (ID: ${caseId})`);
-        console.log(`   Method: ${method}`);
-        console.log(`${'='.repeat(80)}\n`);
-
-        // Run LCA calculation using the core engine
-        const lcaResult: LCAResult = await calculateCaseImpacts(caseId, conn, { method, regionCode });
-
-        // Log algorithm steps to console
-        console.log('\n📊 ALGORITHM EXECUTION STEPS:\n');
-        const formattedSteps = formatAlgorithmSteps(lcaResult.algorithm_steps);
-        formattedSteps.forEach(step => console.log(step));
-
-        console.log(`\n✅ CALCULATION SUMMARY:`);
-        console.log(`   • Total Components: ${lcaResult.summary.total_components}`);
-        console.log(`   • Components with Flows: ${lcaResult.summary.components_with_flows}`);
-        console.log(`   • Total Flows Processed: ${lcaResult.summary.total_flows_processed}`);
-        console.log(`   • Impact Categories: ${lcaResult.summary.impact_categories_calculated}`);
-
-        // Store results in database
-        for (const compResult of lcaResult.component_results) {
-          for (const impact of compResult.impacts) {
-            await conn.query(
-              `INSERT INTO assessment_results
-               (run_id, component_id, category_id, impact_value, unit)
-               VALUES (?, ?, ?, ?, ?)`,
-              [runId, compResult.component_id, impact.category_id, impact.impact_value, impact.unit]
-            );
-          }
-        }
-
-        console.log(`\n💾 Stored ${lcaResult.component_results.reduce((sum, cr) => sum + cr.impacts.length, 0)} results in database\n`);
-
-        // Mark as completed
-        await conn.query(
-          `UPDATE assessment_runs SET status = 'completed' WHERE run_id = ?`,
-          [runId]
-        );
-
-        console.log(`${'='.repeat(80)}`);
-        console.log(`✅ ASSESSMENT COMPLETED SUCCESSFULLY`);
-        console.log(`${'='.repeat(80)}\n`);
-
-        return { runId, lcaResult };
-      } catch (calcError: any) {
-        console.error(`\n❌ ASSESSMENT FAILED:`, calcError);
-
-        await conn.query(
-          `UPDATE assessment_runs SET status = 'failed', error_log = ? WHERE run_id = ?`,
-          [calcError.message, runId]
-        );
-
-        throw calcError;
-      }
-    });
+    } catch (calcError: any) {
+      const requestId = newRequestId();
+      // The transaction rolled the run row back; keep a record of the attempt.
+      const failedRunId = await recordFailedRun({
+        caseId,
+        runName,
+        method,
+        regionCode,
+        userId,
+        requestId,
+      });
+      // L1: the engine's or the database's message stays in the server log.
+      return internalError('assessments POST: run failed', 'Failed to run assessment', calcError, {
+        requestId,
+        extra: failedRunId ? { run_id: failedRunId, status: 'failed' } : {},
+      });
+    }
 
     // Fetch complete assessment data
-    const newAssessment = await queryOne(
+    const newAssessment = await queryOne<any>(
       `SELECT ar.*, a.username as executed_by_username
        FROM assessment_runs ar
        LEFT JOIN account a ON ar.executed_by = a.id
        WHERE ar.run_id = ?`,
       [result.runId]
     );
+    if (newAssessment) delete newAssessment.run_snapshot;
 
     // Fetch results
     const results = await query(
-      `SELECT ar.*, ic.category_name, c.component_name
+      `SELECT ar.*, ic.category_name, COALESCE(c.component_name, 'Removed step') AS component_name
        FROM assessment_results ar
        JOIN impact_categories ic ON ar.category_id = ic.category_id
-       JOIN component c ON ar.component_id = c.component_id
+       LEFT JOIN component c ON ar.component_id = c.component_id
        WHERE ar.run_id = ?
        ORDER BY ic.category_id, c.hierarchy_level`,
       [result.runId]
     );
 
-    // Detect "zero inventory" runs and warn the caller — otherwise the user sees
-    // an empty results page with no explanation. (Bug #7 in the E2E audit.)
-    const warnings: string[] = [];
-    if (result.lcaResult.summary.components_with_flows === 0) {
-      warnings.push(
-        'No components in this case have any input/output flows yet. The assessment ran successfully but every impact is 0. Add at least one flow on a leaf component (Elemental Task) and re-run.',
-      );
-    }
+    // The snapshot's warnings: the zero-inventory notice (RUN-6) plus the
+    // engine's data-quality warnings, the same list every later GET returns.
+    const warnings = result.snapshot.warnings;
 
     // Return comprehensive response with algorithm details
     return NextResponse.json({
@@ -247,24 +455,24 @@ export async function POST(
       ...(warnings.length ? { warnings } : {}),
       results,
       total_impacts: result.lcaResult.total_impacts,
+      goal_scope: goalScope,
+      data_quality: result.lcaResult.data_quality ?? null,
       algorithm_steps: result.lcaResult.algorithm_steps.map(step => step.step_description),
       component_breakdown: result.lcaResult.component_results.map(cr => ({
         component_id: cr.component_id,
         component_name: cr.component_name,
         component_type: cr.component_type,
+        life_cycle_stage: cr.life_cycle_stage ?? null,
         flows_processed: cr.total_flows_processed,
         impacts: cr.impacts
-      }))
+      })),
+      results_source: 'snapshot',
     }, { status: 201 });
 
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    console.error('Run assessment error:', error);
-    return NextResponse.json({
-      error: 'Failed to run assessment',
-      details: error.message
-    }, { status: 500 });
+    return internalError('assessments POST', 'Failed to run assessment', error);
   }
 }

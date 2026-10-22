@@ -3,22 +3,46 @@
 // NodeDetailsStrip — inspector strip beneath the canvas.
 // Mirrors LCAPIX/pages-app.jsx lines 819-905 (NodeDetailsStrip + MetricMini).
 
-import { HIERARCHY_TYPES, DEMO_FLOWS } from '@/lib/lcapix-demo'
+import { HIERARCHY_TYPES } from '@/lib/lcapix-demo'
 import type { FlatCaseNode } from '@/lib/case-tree-adapter-types'
+import { HelpTip } from '@/components/lcapix/help-tip'
 
 export interface NodeDetailsStripProps {
   node: FlatCaseNode | null
   totalComponents: number
+  /** Subtree totals (this node + everything below). Parents are pure sums. */
+  rolled?: { cost: number; flows: number } | null
+  /** True when the node has children — a roll-up, not a terminating node. */
+  hasChildren?: boolean
 }
 
-export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProps) {
+// Hover definitions per tier (explanations are hover, not inline text).
+const TIER_HELP: Record<string, string> = {
+  Product:
+    'The finished thing being assessed. Its totals are the sum of every line, subprocess and operation below it.',
+  Machine: 'A production line or major stage: a roll-up of the subprocesses beneath it.',
+  Subprocess: 'A group of related steps, such as a work center: a roll-up of its operations.',
+  Operation:
+    'One processing step: a unit process in ISO 14044 terms. Its inputs (materials, energy), outputs (emissions) and costs (labor, machine time) are recorded here.',
+  Task: 'An optional finer sub-step of an operation, used only when you split an operation into parts.',
+}
+
+export function NodeDetailsStrip({
+  node,
+  totalComponents,
+  rolled = null,
+  hasChildren = false,
+}: NodeDetailsStripProps) {
   const t = node ? HIERARCHY_TYPES.find((h) => h.id === node.type) : null
-  const seed = node ? String(node.id).length * 7 + node.label.length * 13 : 0
-  const drivers = node ? (seed % 5) + 1 : 0
-  const impactKg = node ? (12 + (seed % 40) + (seed % 11) / 10).toFixed(2) : '—'
-  const costUsd = node?.cost ?? 0
-  const flowsCount = node?.flows ?? 0
-  const sampleFlows = DEMO_FLOWS.slice(0, 3)
+  // Honest values only. This lightweight strip has the node's real flow count
+  // and cost; it does NOT have per-node driver counts, impact, or flow detail,
+  // so those show "—" rather than fabricated numbers. (Previously this used a
+  // seed to invent a driver count + impact, and rendered DEMO_FLOWS as if they
+  // were real substances on the node.) For a roll-up node the values are the
+  // subtree totals, since its own value is by design zero.
+  const costUsd = Math.round(rolled?.cost ?? node?.cost ?? 0)
+  const flowsCount = rolled?.flows ?? node?.flows ?? 0
+  const sigma = hasChildren ? ' Σ' : ''
 
   return (
     <div
@@ -85,22 +109,23 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
               style={{
                 fontSize: 12,
                 color: 'var(--text-secondary)',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                minWidth: 0,
               }}
             >
-              {t?.label === 'Product' &&
-                'Top-level functional unit. Inherits region and method from the case.'}
-              {t?.label === 'Machine/Line' &&
-                'Equipment line aggregating downstream subprocesses.'}
-              {t?.label === 'Subprocess' &&
-                'Named operation stage — groups related elemental tasks.'}
-              {t?.label === 'Operation' &&
-                'Discrete processing step. Drives labor + energy demand.'}
-              {t?.label === 'Elemental Task' &&
-                'Leaf node — attaches drivers and environmental flows.'}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {hasChildren
+                  ? 'Roll-up node: its numbers are the totals of everything below it.'
+                  : t?.id === 'Operation'
+                    ? 'Unit process: its materials, energy, emissions and labor live here.'
+                    : t?.id === 'Task'
+                      ? 'Sub-step of an operation: its flows and costs live here.'
+                      : 'Terminating node: flows and costs attach here.'}
+              </span>
+              {t?.id && TIER_HELP[t.id] ? (
+                <HelpTip label={`What is a ${t.label}?`}>{TIER_HELP[t.id]}</HelpTip>
+              ) : null}
             </div>
           </>
         ) : (
@@ -144,14 +169,16 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
           minWidth: 0,
         }}
       >
-        <MetricMini label="Flows" value={node ? flowsCount : '—'} />
-        <MetricMini label="Drivers" value={node ? drivers : '—'} />
-        <MetricMini label="Cost" value={node ? '$' + costUsd : '—'} />
+        {/* Two tiles showing the same number taught that flows and drivers are
+            different counts of different things. They are not: every flow on a
+            leaf is a driver flow, so the second tile is gone and the remaining
+            ones each say something the other does not. */}
+        <MetricMini label={'Flows' + sigma} value={node ? flowsCount : '–'} />
         <MetricMini
-          label="Impact"
-          value={node ? impactKg : '—'}
-          unit={node ? 'kg CO₂-eq' : ''}
+          label={'Cost' + sigma}
+          value={node ? '$' + costUsd.toLocaleString() : '–'}
         />
+        <MetricMini label="Impact" value="–" unit="" />
       </div>
 
       <div
@@ -191,65 +218,26 @@ export function NodeDetailsStrip({ node, totalComponents }: NodeDetailsStripProp
           </span>
         </div>
         {node ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
-              minHeight: 0,
-            }}
-          >
-            {sampleFlows.map((f, i) => (
-              <div
-                key={f.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '28px 1fr auto auto',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '4px 0',
-                  borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)',
-                  fontSize: 12,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 8.5,
-                    padding: '2px 5px',
-                    borderRadius: 3,
-                    textAlign: 'center',
-                    background:
-                      f.dir === 'IN'
-                        ? 'oklch(from var(--signal-info) l c h / 0.18)'
-                        : 'oklch(from var(--signal-warn) l c h / 0.18)',
-                    color: f.dir === 'IN' ? 'var(--signal-info)' : 'var(--signal-warn)',
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {f.dir}
-                </span>
-                <span
-                  style={{
-                    color: 'var(--text-primary)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {f.substance}
-                </span>
-                <span
-                  className="mono"
-                  style={{ color: 'var(--text-secondary)', fontSize: 11 }}
-                >
-                  {f.amount.toFixed(2)}
-                </span>
-                <span style={{ color: 'var(--text-tertiary)', fontSize: 10.5, minWidth: 32 }}>
-                  {f.unit}
-                </span>
-              </div>
-            ))}
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+            {hasChildren ? (
+              <>
+                <span className="mono" style={{ color: 'var(--text-primary)' }}>
+                  {flowsCount}
+                </span>{' '}
+                flow{flowsCount === 1 ? '' : 's'} across the nodes below. Select a
+                process step below to view or edit its flows.
+              </>
+            ) : flowsCount > 0 ? (
+              <>
+                <span className="mono" style={{ color: 'var(--text-primary)' }}>
+                  {flowsCount}
+                </span>{' '}
+                flow{flowsCount === 1 ? '' : 's'} attached. Open the inspector to
+                view and edit them.
+              </>
+            ) : (
+              'No flows on this node yet. Add its materials, energy or emissions in the inspector.'
+            )}
           </div>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>

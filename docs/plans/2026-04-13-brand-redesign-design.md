@@ -1,4 +1,4 @@
-> **⚠️ SUPERSEDED** — The user chose the Veridian Flow / Botanical Precision direction (stitch-generated mockups in `stitch_lcapix_design_system_prompts/`) instead of Data Cool. See `2026-04-13-veridian-flow-implementation.md` for the active implementation plan and `stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md` for the active design system reference. This doc is retained for history only.
+> **⚠️ SUPERSEDED** — The user chose the Veridian Flow / Botanical Precision direction (stitch-generated mockups in `design/legacy/stitch_lcapix_design_system_prompts/`) instead of Data Cool. See `2026-04-13-veridian-flow-implementation.md` for the active implementation plan and `design/legacy/stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md` for the active design system reference. This doc is retained for history only.
 
 # LCAPIX v3 — Brand & UI Redesign Design
 
@@ -601,7 +601,7 @@ These are intentionally deferred. Don't add any of them in this pass.
 ## 13. Dependencies (what this design doc assumes)
 
 - Phase 1 API integration is complete (✅ done as of commit `14d28e5`)
-- AWS RDS is populated with demo data (`john@lcaproject.com` / `Lcapix@guerry123`)
+- AWS RDS is populated with demo data (`john@lcaproject.com` / `<TEST_ACCOUNT_PASSWORD>`)
 - Dev server runs on port 3002 with `pnpm run dev`
 - Claude Preview tooling works for live UI verification during implementation
 

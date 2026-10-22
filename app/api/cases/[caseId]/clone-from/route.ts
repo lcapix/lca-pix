@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, insert } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { readJson } from '@/lib/http';
+import { query, queryOne, transaction } from '@/lib/db-helpers';
+import { requireAuth } from '@/lib/auth';
+import { caseAccessDenied, caseReadableByClass, isAuthError } from '@/lib/route-guard';
+import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy';
+import { parseId } from '@/lib/ids';
 
 // POST /api/cases/[caseId]/clone-from
 // Body: { sourceCaseId: number }
-// Duplicates every component from sourceCaseId into caseId, preserving the
-// parent/child hierarchy. Target case must be empty.
+// Deep-copies sourceCaseId's inventory into caseId: every step (costs, labor,
+// allocation, life-cycle stage), every flow (with its transport leg) and the
+// reference flow / data basis, in one transaction, with the same copy code as
+// Duplicate. Target case must be empty.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -13,8 +19,10 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const targetCaseId = parseInt(caseIdParam);
-    const { sourceCaseId } = await request.json();
+    const targetCaseId = parseId(caseIdParam);
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const { sourceCaseId } = json.body;
 
     if (!sourceCaseId || isNaN(targetCaseId)) {
       return NextResponse.json(
@@ -28,28 +36,27 @@ export async function POST(
       [targetCaseId],
     );
     const sourceCase = await queryOne<any>(
-      `SELECT project_id FROM case_table WHERE case_id = ?`,
+      `SELECT * FROM case_table WHERE case_id = ?`,
       [sourceCaseId],
     );
 
     if (!targetCase || !sourceCase) {
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
+    // Access before comparing projects, so a non-member learns nothing about
+    // either id (the 400 below would say both exist).
+    const denied = await caseAccessDenied(userId, targetCaseId, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
     if (targetCase.project_id !== sourceCase.project_id) {
       return NextResponse.json(
         { error: 'Cases must belong to the same project' },
         { status: 400 },
       );
     }
-
-    const hasAccess = await checkProjectAccess(
-      userId,
-      targetCase.project_id,
-      'editor',
-    );
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    // The source must be a case the caller reaches too: in a project that keeps
+    // members' cases apart, another student's case is as good as missing (B-A1).
+    const sourceDenied = await caseAccessDenied(userId, parseId(sourceCaseId), undefined, { notFound: 'Case not found' });
+    if (sourceDenied) return sourceDenied;
 
     const existing = await query<any>(
       `SELECT COUNT(*) AS n FROM component WHERE case_id = ?`,
@@ -62,105 +69,34 @@ export async function POST(
       );
     }
 
-    const source = await query<any>(
-      `SELECT * FROM component WHERE case_id = ? ORDER BY hierarchy_level, component_id`,
-      [sourceCaseId],
-    );
-
-    const idMap = new Map<number, number>();
-    for (const c of source) {
-      const newParent =
-        c.parent_component_id != null
-          ? idMap.get(c.parent_component_id) ?? null
-          : null;
-      const newId = await insert(
-        `INSERT INTO component
-         (case_id, parent_component_id, component_name, component_type, hierarchy_level, description,
-          process_type, driver_category, driver_type, drivers, quantity, unit, opex, capex)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          targetCaseId,
-          newParent,
-          c.component_name,
-          c.component_type,
-          c.hierarchy_level,
-          c.description ?? null,
-          c.process_type ?? null,
-          c.driver_category ?? null,
-          c.driver_type ?? null,
-          c.drivers ? (typeof c.drivers === 'string' ? c.drivers : JSON.stringify(c.drivers)) : null,
-          c.quantity ?? 1.0,
-          c.unit ?? 'unit',
-          c.opex ?? null,
-          c.capex ?? null,
-        ],
+    // All or nothing: a half-copied case used to block the retry with the
+    // "not empty" guard above.
+    // Work the class cannot read stays from the class in its copy (migrate-037).
+    const keepFromClass = !(await caseReadableByClass(sourceCase));
+    const copied = await transaction(async (conn) => {
+      await copyCaseReferenceFields(conn, sourceCase, targetCaseId);
+      // The copy link (E03 "Copy of the Base case"): the case it came from.
+      await conn.query(
+        `UPDATE case_table SET parent_case_id = ?${keepFromClass ? ', hidden_from_members = 1' : ''} WHERE case_id = ?`,
+        [parseId(sourceCaseId), targetCaseId],
       );
-      idMap.set(c.component_id, newId);
-    }
+      return copyCaseInventory(conn, parseId(sourceCaseId), targetCaseId);
+    });
 
-    // Also clone the latest completed assessment + its results so the comp
-    // case appears in Compare Cases / Analytics with real numbers. Scale
-    // values by 0.72 to simulate an improvement scenario (-28%).
-    const SCENARIO_SCALE = 0.72;
-    let clonedRunId: number | null = null;
-    try {
-      const latestRun = await queryOne<any>(
-        `SELECT * FROM assessment_runs
-          WHERE case_id = ? AND status = 'completed'
-          ORDER BY run_date DESC LIMIT 1`,
-        [sourceCaseId],
-      );
-      if (latestRun) {
-        clonedRunId = await insert(
-          `INSERT INTO assessment_runs
-           (case_id, run_name, calculation_method, status, executed_by, run_date)
-           VALUES (?, ?, ?, 'completed', ?, NOW())`,
-          [
-            targetCaseId,
-            `${latestRun.run_name ?? 'Cloned run'} (scenario)`,
-            latestRun.calculation_method ?? 'CML 2001',
-            userId,
-          ],
-        );
-        const srcResults = await query<any>(
-          `SELECT * FROM assessment_results WHERE run_id = ?`,
-          [latestRun.run_id],
-        );
-        for (const r of srcResults) {
-          const newComponentId =
-            r.component_id != null ? idMap.get(r.component_id) ?? null : null;
-          if (newComponentId == null) continue;
-          await insert(
-            `INSERT INTO assessment_results
-             (run_id, component_id, category_id, impact_value, unit, contribution_percentage)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [
-              clonedRunId,
-              newComponentId,
-              r.category_id,
-              Number(r.impact_value) * SCENARIO_SCALE,
-              r.unit,
-              r.contribution_percentage,
-            ],
-          );
-        }
-      }
-    } catch (e) {
-      console.warn('Assessment clone skipped:', (e as Error)?.message);
-    }
+    // A cloned case has NO results until someone runs it. This used to copy
+    // the source case's latest run and multiply every impact by 0.72 "to
+    // simulate an improvement scenario", which put numbers on screen that no
+    // calculation produced. A comparative case must earn its result from its
+    // own flows (change something, then run).
 
     return NextResponse.json({
       success: true,
-      cloned: idMap.size,
-      clonedRunId,
+      cloned: copied.components,
+      flows_copied: copied.flows,
+      clonedRunId: null,
     });
   } catch (error: any) {
-    if (
-      error.message === 'Unauthorized' ||
-      error.message === 'No authentication token provided' ||
-      error.message === 'Invalid or expired token' ||
-      error.message === 'User account not found or inactive'
-    ) {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Clone-from error:', error);

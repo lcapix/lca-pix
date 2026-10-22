@@ -20,6 +20,15 @@ export function transformProjectFromDB(dbProject: any): Project {
     updatedAt: new Date(dbProject.updated_at),
     cases: [], // Cases loaded separately when needed
     caseCount: dbProject.case_count ? Number(dbProject.case_count) : undefined, // Store count separately
+    componentCount:
+      dbProject.component_count != null ? Number(dbProject.component_count) : undefined,
+    // ISO 14044 goal & scope (migrate-014), study-level.
+    goalStatement: dbProject.goal_statement ?? null,
+    functionalUnit: dbProject.functional_unit ?? null,
+    systemBoundary: dbProject.system_boundary ?? 'cradle-to-gate',
+    boundaryNotes: dbProject.boundary_notes ?? null,
+    lciaMethod: dbProject.lcia_method ?? null,
+    regionCode: dbProject.region_code ?? null,
   };
 }
 
@@ -40,7 +49,31 @@ export function transformCaseFromDB(dbCase: any): Case {
     components: [], // Components loaded separately
     componentCount: dbCase.component_count != null ? Number(dbCase.component_count) : undefined,
     driverCount: dbCase.driver_count != null ? Number(dbCase.driver_count) : undefined,
-  } as Case;
+    // ISO 14044 reference flow of this alternative (migrate-014); defaults when
+    // the column is absent. Goal, functional unit and boundary are study-level
+    // and live on the project.
+    referenceFlow: dbCase.reference_flow != null ? Number(dbCase.reference_flow) : 1,
+    referenceFlowUnit: dbCase.reference_flow_unit ?? null,
+    modeledOutput: dbCase.modeled_output != null ? Number(dbCase.modeled_output) : 1,
+  };
+}
+
+/**
+ * The drivers column is JSON, but rows written by older paths hold plain text.
+ * One unparseable row used to throw here and send the user out of the case, so
+ * anything that is not a list of drivers reads as "no drivers".
+ */
+function parseDrivers(raw: unknown): string[] | undefined {
+  if (raw == null || raw === '') return undefined;
+  let value: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return Array.isArray(value) ? value.map(String) : undefined;
 }
 
 /**
@@ -57,19 +90,39 @@ export function transformComponentFromDB(dbComponent: any): ComponentNode {
     processType: dbComponent.process_type || dbComponent.component_type || undefined,
     driverCategory: dbComponent.driver_category || undefined,
     selectedDriver: dbComponent.driver_type || undefined,
-    drivers: dbComponent.drivers ? (typeof dbComponent.drivers === 'string' ? JSON.parse(dbComponent.drivers) : dbComponent.drivers) : undefined,
+    drivers: parseDrivers(dbComponent.drivers),
     mass: dbComponent.quantity ? parseFloat(dbComponent.quantity) : undefined,
     massUnit: dbComponent.unit || undefined,
+    // Real attached-flow count from the API (for canvas card "N flows").
+    flowCount:
+      typeof dbComponent.flow_count === 'number'
+        ? dbComponent.flow_count
+        : dbComponent.flow_count != null
+          ? Number(dbComponent.flow_count)
+          : undefined,
     operationalCostUSD: dbComponent.opex ? parseFloat(dbComponent.opex) : undefined,
     capitalCostUSD: dbComponent.capex ? parseFloat(dbComponent.capex) : undefined,
 
     // ABC Costing - Detailed cost breakdown
     laborCost: dbComponent.labor_cost ? parseFloat(dbComponent.labor_cost) : undefined,
+    // Labor multiplicands (hours × SOC rate = labor_cost), so the calculation
+    // is auditable and editable instead of only the final number.
+    laborHours: dbComponent.labor_hours != null ? parseFloat(dbComponent.labor_hours) : undefined,
+    laborOccupation: dbComponent.labor_occupation ?? undefined,
     energyCost: dbComponent.energy_cost ? parseFloat(dbComponent.energy_cost) : undefined,
     transportationCost: dbComponent.transportation_cost ? parseFloat(dbComponent.transportation_cost) : undefined,
     materialCost: dbComponent.material_cost ? parseFloat(dbComponent.material_cost) : undefined,
+    equipmentCost: dbComponent.equipment_cost ? parseFloat(dbComponent.equipment_cost) : undefined,
+    overheadCost: dbComponent.overhead_cost ? parseFloat(dbComponent.overhead_cost) : undefined,
     currency: dbComponent.currency || 'USD',
     costAllocationType: dbComponent.cost_allocation_type || undefined,
+
+    // ISO 14044 4.3.4 allocation (migrate-014).
+    lifeCycleStage: dbComponent.life_cycle_stage ?? null,
+    allocationMethod: dbComponent.allocation_method || 'none',
+    allocationFactor:
+      dbComponent.allocation_factor != null ? Number(dbComponent.allocation_factor) : 1,
+    allocationNote: dbComponent.allocation_note ?? undefined,
   };
 }
 
@@ -118,10 +171,20 @@ export function transformComponentToDB(component: Partial<ComponentNode>) {
 
     // ABC Costing - Detailed cost breakdown
     labor_cost: component.laborCost || null,
+    labor_hours: component.laborHours ?? null,
+    labor_occupation: component.laborOccupation || null,
     energy_cost: component.energyCost || null,
     transportation_cost: component.transportationCost || null,
     material_cost: component.materialCost || null,
+    equipment_cost: component.equipmentCost || null,
+    overhead_cost: component.overheadCost || null,
     currency: component.currency || 'USD',
     cost_allocation_type: component.costAllocationType || 'manual',
+
+    // ISO 14044 4.3.4 allocation
+    life_cycle_stage: component.lifeCycleStage ?? null,
+    allocation_method: component.allocationMethod ?? null,
+    allocation_factor: component.allocationFactor ?? null,
+    allocation_note: component.allocationNote ?? null,
   };
 }

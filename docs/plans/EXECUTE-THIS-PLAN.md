@@ -40,7 +40,7 @@ Point it at: /Users/kavishpandit/Desktop/lca/lca project v3/docs/plans/2026-04-1
   --target i-055b91c4baf230251 \
   --profile lca-pix \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com"],"portNumber":["3306"],"localPortNumber":["3307"]}'
+  --parameters '{"host":["<RDS_HOST>"],"portNumber":["3306"],"localPortNumber":["3307"]}'
 ```
 
 Expected output:
@@ -71,7 +71,7 @@ Expected:
 ```bash
 curl -sL -X POST http://localhost:3002/api/auth/login/ \
   -H "Content-Type: application/json" \
-  -d '{"email":"john@lcaproject.com","password":"Lcapix@guerry123"}' \
+  -d '{"email":"john@lcaproject.com","password":"<TEST_ACCOUNT_PASSWORD>"}' \
   | python3 -m json.tool
 ```
 
@@ -221,13 +221,13 @@ lsof -ti:3002 | xargs kill -9 2>/dev/null ; /opt/homebrew/bin/pnpm run dev
 
 ## Useful reference data
 
-**Login credentials:** `john@lcaproject.com` / `Lcapix@guerry123`
-**Password for all seeded accounts:** `Lcapix@guerry123`
+**Login credentials:** `john@lcaproject.com` / `<TEST_ACCOUNT_PASSWORD>`
+**Password for all seeded accounts:** `<TEST_ACCOUNT_PASSWORD>`
 
 **AWS Console:** https://117852575520.signin.aws.amazon.com/console
 **AWS Console user:** `KavishPandit`
 **AWS Profile (CLI):** `lca-pix`
-**RDS host:** `lca-dev-db-small.cmp8mswckq1j.us-east-1.rds.amazonaws.com`
+**RDS host:** `<RDS_HOST>`
 **EC2 instance:** `i-055b91c4baf230251`
 
 **Demo projects in AWS RDS:**

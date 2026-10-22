@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, insert, queryOne } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
+import { query, insert, queryOne, execute } from '@/lib/db-helpers';
+import { requireAuth } from '@/lib/auth';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { convertQuantity, compatibleUnits } from '@/lib/units';
+import {
+  parseOptionalFlowQuantity,
+  QUANTITY_ERROR,
+  findUsableSubstance,
+  SUBSTANCE_ERROR,
+} from '@/lib/flow-fields';
+import { parseId } from '@/lib/ids';
 
 // GET /api/components/[componentId]/flows - Get all flows for a component
 export async function GET(
@@ -10,10 +21,10 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     const component = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM component c
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
        WHERE c.component_id = ?`,
@@ -24,17 +35,22 @@ export async function GET(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, component.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await caseAccessDenied(userId, component.case_id, undefined, { notFound: 'Component not found' });
+    if (denied) return denied;
 
-    // NOTE: actual DB columns are `flow_type` and `quantity` (not `direction`/`amount`).
-    // The earlier session handoff aliased these for backward compatibility, but the
-    // aliases pointed at non-existent source columns — fixed here.
+    // The live `flows` table columns are `direction` and `amount` (a migration
+    // renamed them from flow_type/quantity). Querying/ordering by the old names
+    // 500'd the whole fetch. We alias `direction AS flow_type` and
+    // `amount AS quantity` so existing clients that read those keys keep working,
+    // and surface `cas_number` so the inspector can show each flow's data source.
+    // `s.unit` is intentionally omitted (absent in some environments); the flow's
+    // own `unit` column carries the unit.
+    // Prod schema: the flows table uses flow_type/quantity natively (NOT
+    // direction/amount). `f.*` returns them; we add substance fields for the
+    // inspector. `s.unit` is omitted (absent in some environments).
     const flows = await query(
       `SELECT f.*,
-              s.substance_name, s.category as substance_category, s.unit as substance_default_unit
+              s.substance_name, s.category as substance_category, s.cas_number
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.component_id = ?
@@ -42,9 +58,33 @@ export async function GET(
       [componentId]
     );
 
+    // Each flow's own factors (migrate-034), so the editor can tag them
+    // "Entered by hand". One query for the step; none on an older database.
+    try {
+      const own = await query<any>(
+        `SELECT o.flow_id, o.category_id, ic.category_name, o.factor_value, o.impact_unit,
+                o.per_unit, o.source, o.note
+           FROM flow_factor_overrides o
+           JOIN flows f ON f.flow_id = o.flow_id
+           JOIN impact_categories ic ON ic.category_id = o.category_id
+          WHERE f.component_id = ?
+          ORDER BY o.flow_id, o.category_id`,
+        [componentId]
+      );
+      const byFlow = new Map<number, any[]>();
+      for (const { flow_id, ...rest } of own) {
+        const list = byFlow.get(Number(flow_id)) ?? [];
+        list.push(rest);
+        byFlow.set(Number(flow_id), list);
+      }
+      for (const f of flows as any[]) f.own_factors = byFlow.get(Number(f.flow_id)) ?? [];
+    } catch (ownErr: any) {
+      if (ownErr?.code !== 'ER_NO_SUCH_TABLE') throw ownErr;
+    }
+
     return NextResponse.json({ success: true, flows });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get flows error:', error);
@@ -60,10 +100,10 @@ export async function POST(
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
-    const componentId = parseInt(componentIdParam);
+    const componentId = parseId(componentIdParam);
 
     const component = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM component c
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
        WHERE c.component_id = ?`,
@@ -74,17 +114,25 @@ export async function POST(
       return NextResponse.json({ error: 'Component not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, component.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await caseAccessDenied(userId, component.case_id, 'editor', { notFound: 'Component not found' });
+    if (denied) return denied;
 
-    const { substance_id, flow_type, quantity, unit, is_driver, driver_description } =
-      await request.json();
+    // Prod schema: the flows table columns are flow_type / quantity (NOT
+    // direction / amount). Accept either key from the client for resilience.
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
+    const substance_id = body.substance_id;
+    const flow_type = body.flow_type ?? body.direction;
+    const rawQuantity = body.quantity ?? body.amount;
+    const unit = body.unit;
+    const driver_description = body.driver_description ?? null;
 
-    if (!substance_id || !flow_type || quantity === undefined || !unit) {
+    // The amount may be left blank (migration 033): the flow is kept as
+    // "needs an amount", left out of a run and counted until it gets one.
+    if (!substance_id || !flow_type || !unit) {
       return NextResponse.json(
-        { error: 'Substance, flow_type, quantity, and unit are required' },
+        { error: 'Substance, flow_type and unit are required' },
         { status: 400 }
       );
     }
@@ -92,25 +140,91 @@ export async function POST(
     if (!['input', 'output'].includes(flow_type)) {
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
+    const F = COLUMN_LIMITS.flows;
+    const tooLong = firstLengthError([
+      ['Unit', unit, F.unit],
+      ['Driver description', driver_description, F.driver_description],
+      ['Transport mode', body.transport_mode, F.transport_mode],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
 
-    const flowId = await insert(
-      `INSERT INTO flows
-       (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        componentId,
-        substance_id,
-        flow_type,
-        quantity,
-        unit,
-        is_driver ? 1 : 0,
-        driver_description ?? null,
-      ]
-    );
+    // FLOW-4: words, NaN and negatives used to reach MySQL or the engine. A
+    // blank is allowed and stored as NULL ("needs an amount").
+    const parsedQuantity = parseOptionalFlowQuantity(rawQuantity);
+    if (!parsedQuantity.ok) {
+      return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
+    }
+    const quantity = parsedQuantity.value;
+
+    // L3: only a library substance or the caller's own custom one.
+    const substanceRow = await findUsableSubstance(substance_id, userId);
+    if (!substanceRow) {
+      return NextResponse.json({ error: SUBSTANCE_ERROR }, { status: 400 });
+    }
+
+    // Unit guard: the entered unit must be convertible into the substance's
+    // factor unit, or the assessment could only exclude this flow later. The
+    // flow keeps the unit AS ENTERED (provenance); the engine converts at
+    // calculation time.
+    if (substanceRow?.default_unit) {
+      const conv = convertQuantity(1, unit, substanceRow.default_unit);
+      if (!conv) {
+        return NextResponse.json(
+          {
+            error: `Unit '${unit}' cannot be converted to '${substanceRow.default_unit}', the unit ${substanceRow.substance_name}'s impact factors are stored in. Compatible units: ${compatibleUnits(substanceRow.default_unit).join(', ') || substanceRow.default_unit}.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // A transport leg's distance is DECIMAL(18,3): checked before the flow is written.
+    const legMass = Number(body.transport_mass_kg);
+    const legKm = Number(body.transport_distance_km);
+    if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > decimalMax(F.transport_distance_km)) {
+      return NextResponse.json(
+        { error: `transport_distance_km must be at most ${decimalMax(F.transport_distance_km)}` },
+        { status: 400 }
+      );
+    }
+
+    // Bug #9: default is_driver to TRUE so new flows count in assessments.
+    let flowId: number;
+    try {
+      flowId = await insert(
+        `INSERT INTO flows
+           (component_id, substance_id, flow_type, quantity, unit, is_driver, driver_description)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [componentId, Number(substance_id), flow_type, quantity, unit, body.is_driver === false ? 0 : 1, driver_description]
+      );
+    } catch (insertErr: any) {
+      // A database before migration 033 refuses a flow without an amount.
+      if (quantity === null && insertErr?.code === 'ER_BAD_NULL_ERROR') {
+        return NextResponse.json(
+          { error: 'This database needs migration 033 before a flow can be saved without an amount. Enter the amount, or ask the administrator to run the migrations.' },
+          { status: 409 }
+        );
+      }
+      throw insertErr;
+    }
+
+    // What a transport leg was computed from (migrate-022). Its own statement,
+    // so a database without the columns still records the flow itself.
+    if (isFinite(legMass) && legMass > 0 && isFinite(legKm) && legKm > 0) {
+      try {
+        await execute(
+          'UPDATE flows SET transport_mass_kg = ?, transport_distance_km = ?, transport_mode = ? WHERE flow_id = ?',
+          [legMass, legKm, body.transport_mode ?? null, flowId],
+        );
+      } catch (legErr: any) {
+        if (legErr?.code !== 'ER_BAD_FIELD_ERROR') throw legErr;
+        console.warn('[flow POST] transport columns missing (run migrate-022)');
+      }
+    }
 
     const newFlow = await queryOne(
       `SELECT f.*,
-              s.substance_name, s.category as substance_category
+              s.substance_name, s.category as substance_category, s.cas_number
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.flow_id = ?`,
@@ -119,7 +233,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, flow: newFlow }, { status: 201 });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Create flow error:', error);

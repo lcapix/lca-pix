@@ -42,7 +42,7 @@ export function ListView({ flat, selected, onSelect }: ListViewProps) {
           <div>Type</div>
           <div style={{ textAlign: 'right' }}>Flows</div>
           <div style={{ textAlign: 'right' }}>Cost</div>
-          <div style={{ textAlign: 'right' }}>Depth</div>
+          <div style={{ textAlign: 'right' }}>Tree depth</div>
         </div>
         {flat.map((n) => {
           const t = HIERARCHY_TYPES.find((h) => h.id === n.type)

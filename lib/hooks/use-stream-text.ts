@@ -32,7 +32,11 @@ export function useStreamText(text: string, wordsPerSecond = 12): { value: strin
         setDone(true)
         return
       }
-      setValue((v) => v + tokens[i])
+      // Capture the token now: the updater runs later, after i has moved on
+      // (reading tokens[i] there dropped the first word, repeated words when
+      // updates batched, and appended "undefined" at the end).
+      const token = tokens[i]
+      setValue((v) => v + token)
       i++
       const delay = tokens[i - 1].match(/[.!?]\s/) ? 200 : 1000 / wordsPerSecond
       timerRef.current = setTimeout(step, delay)

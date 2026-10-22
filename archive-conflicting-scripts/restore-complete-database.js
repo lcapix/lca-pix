@@ -1,3 +1,4 @@
+if (process.env.LCAPIX_ALLOW_LEGACY_SCRIPT !== '1') { console.error('Refusing to run: legacy script that can modify a live database. See ops/legacy-scripts/README.md (override: LCAPIX_ALLOW_LEGACY_SCRIPT=1).'); process.exit(1); }
 const mysql = require('mysql2/promise');
 require('dotenv').config({ path: '.env.local' });
 

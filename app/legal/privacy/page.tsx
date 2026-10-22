@@ -1,6 +1,6 @@
 import { LegalShell } from '../legal-layout'
 
-export const metadata = { title: 'Privacy policy — LCAPIX' }
+export const metadata = { title: 'Privacy policy: LCAPIX' }
 
 export default function PrivacyPage() {
   return (
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
       <p>
         Export, correct, or delete your data at any time from Settings →
         Account. Enterprise customers can request a full Article 15 / 17 export
-        by emailing privacy@lcapix.com — we acknowledge within 48 hours and
+        by emailing privacy@lcapix.com: we acknowledge within 48 hours and
         complete within 30 days.
       </p>
 

@@ -186,6 +186,7 @@ export const DEMO_CASES: readonly DemoCase[] = [
 ]
 
 export type HierarchyNodeType =
+  | 'Root'
   | 'Product'
   | 'Machine'
   | 'Subprocess'
@@ -415,7 +416,7 @@ export const DEMO_ACTIVITY: readonly DemoActivity[] = [
   { t: '3h ago', actor: 'Gary', action: 'created Renewable Energy Scenario', source: 'editor', status: 'info' },
   { t: '1d ago', actor: 'System', action: 'BLS occupation pull partial (rate limit)', source: 'bls', status: 'warn' },
   { t: '2d ago', actor: 'Kavish', action: 'exported PDF: EV Manufacturing Baseline', source: 'export', status: 'success' },
-  { t: '3d ago', actor: 'System', action: 'Metals-API key expired — pricing unavailable', source: 'metals', status: 'error' },
+  { t: '3d ago', actor: 'System', action: 'Metals-API key expired: pricing unavailable', source: 'metals', status: 'error' },
   { t: '5d ago', actor: 'Kavish', action: 'imported 47 components from openLCA', source: 'openlca', status: 'success' },
 ]
 
@@ -427,9 +428,13 @@ export interface HierarchyTypeDef {
 }
 
 export const HIERARCHY_TYPES: readonly HierarchyTypeDef[] = [
+  // Neutral synthetic container shown only when a case has multiple top-level
+  // nodes (so the canvas has a single entry point). It is NOT a Product — it
+  // renders gray so users don't read it as a second product.
+  { id: 'Root', label: 'Case', short: '◇', color: 'var(--text-tertiary)' },
   { id: 'Product', label: 'Product', short: 'P', color: 'var(--brand-primary)' },
   { id: 'Machine', label: 'Machine/Line', short: 'M', color: 'var(--chart-2)' },
   { id: 'Subprocess', label: 'Subprocess', short: 'S', color: 'var(--text-secondary)' },
   { id: 'Operation', label: 'Operation', short: 'O', color: 'var(--text-tertiary)' },
-  { id: 'Task', label: 'Elemental Task', short: 'T', color: 'var(--chart-5)' },
+  { id: 'Task', label: 'Task', short: 'T', color: 'var(--chart-5)' },
 ]

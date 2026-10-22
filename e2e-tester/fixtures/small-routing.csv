@@ -1,0 +1,4 @@
+Op No,Operation,Department,Work Center,Setup Hrs,Run Hrs,Base Qty,Tooling
+10,Cut tube,Fabrication,SAW-01 Cold saw,0.5,0.3,1,Miter jig
+20,Weld frame,Fabrication,WLD-01 TIG weld cell,1.0,0.8,1,Frame fixture
+30,Pack,Assembly,PCK-01 Pack station,0.2,0.3,1,Box sealer

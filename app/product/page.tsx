@@ -33,7 +33,7 @@ const CAPABILITIES: Capability[] = [
   {
     eyebrow: 'Cost × impact tradeoffs',
     title: 'ABC costing fused with environmental load',
-    body: 'Activity-Based Costing layered on every flow. The same canvas tells you what a 20% CO₂ cut costs — or what you save by switching aluminum to steel.',
+    body: 'Activity-Based Costing layered on every flow. The same canvas tells you what a 20% CO₂ cut costs, or what you save by switching aluminum to steel.',
     icon: 'dollar',
     facts: ['Labor · Energy · Material', 'Equipment · Overhead', 'Transport · Capital', 'Per-flow attribution'],
   },
@@ -47,7 +47,7 @@ const CAPABILITIES: Capability[] = [
   {
     eyebrow: 'ISO 14040/14044 reports',
     title: 'Source-attributed PDFs your auditor will accept',
-    body: 'Goal & scope, system boundaries, data quality assessment, characterization factors — every claim traced back to its source.',
+    body: 'Goal & scope, system boundaries, data quality assessment, characterization factors: every claim traced back to its source.',
     icon: 'file',
     facts: ['Goal & scope', 'Inventory analysis', 'Impact assessment', 'Interpretation'],
   },
@@ -93,7 +93,7 @@ export default function ProductPage() {
               lineHeight: 1.55,
             }}
           >
-            LCAPIX is built for the practitioner — the engineer who has to defend a
+            LCAPIX is built for the practitioner: the engineer who has to defend a
             number in front of an auditor, a buyer, or a board. Everything below is
             in production today.
           </p>

@@ -36,7 +36,9 @@ describe('fetchMedianHourlyWage', () => {
   });
 
   it('returns null if BLS returns no data rows', async () => {
-    vi.mocked(global.fetch).mockResolvedValueOnce({
+    // The client falls back across three series types (median hourly → mean
+    // hourly → annual), so every attempt must come back empty.
+    vi.mocked(global.fetch).mockResolvedValue({
       ok: true, status: 200,
       json: async () => ({ status: 'REQUEST_SUCCEEDED', Results: { series: [{ data: [] }] } }),
     } as Response);

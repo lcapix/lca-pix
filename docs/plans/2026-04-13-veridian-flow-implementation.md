@@ -9,8 +9,8 @@
 **Tech Stack:** Next.js 15 (App Router), React 19, TypeScript strict, Tailwind CSS 4 (@theme in globals.css), shadcn/ui primitives, Recharts, react-hook-form, zod, zustand, next/font, lucide-react, vitest + @testing-library/react (added in Phase 0).
 
 **Design reference:**
-- Mockups: `stitch_lcapix_design_system_prompts/` (10 folders, each with `code.html` + `screen.png`)
-- Design system: `stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md`
+- Mockups: `design/legacy/stitch_lcapix_design_system_prompts/` (10 folders, each with `code.html` + `screen.png`)
+- Design system: `design/legacy/stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md`
 - Page prompts: `docs/plans/2026-04-13-page-design-prompts.md`
 - Superseded: `docs/plans/2026-04-13-brand-redesign-design.md` (Data Cool direction — no longer followed; Veridian Flow replaces it)
 
@@ -761,7 +761,7 @@ git commit -m "chore(theme): confirm light default, remove mint body bg" --allow
 Edit line 1 of `docs/plans/2026-04-13-brand-redesign-design.md`:
 
 ```markdown
-> **SUPERSEDED** — The user chose the Veridian Flow / Botanical Precision direction (stitch-generated mockups in `stitch_lcapix_design_system_prompts/`) instead of Data Cool. See `2026-04-13-veridian-flow-implementation.md` for the active plan and `stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md` for the active design system reference.
+> **SUPERSEDED** — The user chose the Veridian Flow / Botanical Precision direction (stitch-generated mockups in `design/legacy/stitch_lcapix_design_system_prompts/`) instead of Data Cool. See `2026-04-13-veridian-flow-implementation.md` for the active plan and `design/legacy/stitch_lcapix_design_system_prompts/veridian_flow/DESIGN.md` for the active design system reference.
 
 # LCAPIX v3 — Brand & UI Redesign Design
 ```
@@ -787,11 +787,11 @@ User says "proceed" → Phase 1.
 
 ## Phase 1 — Landing Page (`/`)
 
-Port `stitch_lcapix_design_system_prompts/lcapix_landing_page_desktop_gradient_emerald/code.html` to `app/page.tsx`. Replace the current redirect-to-login behavior.
+Port `design/legacy/stitch_lcapix_design_system_prompts/lcapix_landing_page_desktop_gradient_emerald/code.html` to `app/page.tsx`. Replace the current redirect-to-login behavior.
 
 Read the stitch HTML first:
 ```bash
-cat "stitch_lcapix_design_system_prompts/lcapix_landing_page_desktop_gradient_emerald/code.html"
+cat "design/legacy/stitch_lcapix_design_system_prompts/lcapix_landing_page_desktop_gradient_emerald/code.html"
 ```
 
 Stitch structure (derived from mockup):
@@ -975,7 +975,7 @@ mkdir -p public/screenshots
 cp public/placeholder.jpg public/screenshots/landing-hero-results.png || true
 ```
 
-Visual verify. Compare side-by-side with `stitch_lcapix_design_system_prompts/lcapix_landing_page_desktop_gradient_emerald/screen.png`.
+Visual verify. Compare side-by-side with `design/legacy/stitch_lcapix_design_system_prompts/lcapix_landing_page_desktop_gradient_emerald/screen.png`.
 
 Commit:
 ```bash
@@ -1310,7 +1310,7 @@ Commit: `refactor(case): extract ComponentInspector`
 
 ### Task 5.5: Rebuild the fullscreen `<ProcessHierarchyModal>` (now with stitch mockup)
 
-**Mockup:** `stitch_lcapix_design_system_prompts/process_hierarchy_fullscreen/` (code.html + screen.png).
+**Mockup:** `design/legacy/stitch_lcapix_design_system_prompts/process_hierarchy_fullscreen/` (code.html + screen.png).
 Shows "Hierarchy Visualizer" title, left sidebar with New Assessment CTA + Process Tree/Results/Manage/Library/System nav, central grid canvas with System Root card on top, Cell Synthesis / Enzyme Activation / Thermal Monitoring nodes in a row below (colored left borders: green/blue/amber), Substrate Loading + Buffer Injection children, Tree Topology legend card bottom-left, Export SVG button bottom-right, zoom controls on the right edge.
 
 **Files:** `components/case/process-hierarchy-modal.tsx`
@@ -1415,7 +1415,7 @@ User "proceed" → Phase 7.
 
 ## Phase 7 — Component Editor Form
 
-**Mockup:** `stitch_lcapix_design_system_prompts/component_editor/` (code.html + screen.png).
+**Mockup:** `design/legacy/stitch_lcapix_design_system_prompts/component_editor/` (code.html + screen.png).
 Shows "Define Component" title with 3-step card flow: Step 01 Type & Placement (segmented control Elemental/Systemic/Integrated + 2 dropdowns), Step 02 Identity & Metrics (name, description, reference unit), then a bottom row with Structural Drivers list (left) + dark Economic Profile card (right). Sticky bottom action bar: Discard / Save as Draft / Execute Commission.
 
 ### Task 7.1: Port existing form to Veridian tokens
@@ -1505,7 +1505,7 @@ Commit after each: `feat(admin): <tab>`
 
 ## Phase 10 — About + Guide
 
-**Guide mockup:** `stitch_lcapix_design_system_prompts/platform_guide/` (code.html + screen.png).
+**Guide mockup:** `design/legacy/stitch_lcapix_design_system_prompts/platform_guide/` (code.html + screen.png).
 "Technical Ecosystem Guide" hero, left-sidebar table of contents (Getting Started / Data Model / Glossary), main content card with code snippet in dark card + "The Process Root" illustrated section + glossary entries (Botanical Precision / Veridian Flow / Digital Conservancy) as editorial rows. Apply same tokens + typography consistency to `/about`.
 
 ### Task 10.1: Token pass on `/about` and `/guide`

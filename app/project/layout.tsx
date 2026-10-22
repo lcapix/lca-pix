@@ -1,14 +1,13 @@
 import type React from "react"
-import { AuthGuard } from "@/components/auth-guard"
 import { AppTopBar } from "@/components/lcapix"
+import { GlobalTour } from "@/components/global/global-tour"
+import { SignedIn } from "@/components/lcapix/shell/signed-in"
 
 /**
- * Project layout — auth gate + LCAPIX top nav.
- *
- * Replaced the legacy Stitch-era AppShell with the LCAPIX AppTopBar
- * (the same nav shown on /home) so every authenticated route shares
- * a single visual language. Individual pages can still wrap content
- * in their own shells (e.g. case editor's 3-pane layout).
+ * Project layout: the auth gate and the education shell (sidebar) on every
+ * project route. AppTopBar steps aside inside the shell; with the shell
+ * switched off (NEXT_PUBLIC_LCAPIX_SHELL=classic) it is the nav again.
+ * Individual pages can still lay out their own panes (the case editor).
  */
 export default function ProjectLayout({
   children,
@@ -16,9 +15,12 @@ export default function ProjectLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthGuard requireAuth={true}>
+    <SignedIn>
       <AppTopBar current="home" />
       {children}
-    </AuthGuard>
+      {/* Mounts the guided tour on all project routes so the nav Tour button
+          can launch it contextually (without bouncing to /home). */}
+      <GlobalTour />
+    </SignedIn>
   )
 }

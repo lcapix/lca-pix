@@ -1,0 +1,266 @@
+{
+  "_comment": "axe-core violations per screen and rule (element counts). Written by pnpm e2e:a11y:update; tests fail only when a count rises. See tests/e2e/a11y/routes.spec.ts.",
+  "totals": {
+    "region": {
+      "impact": "moderate",
+      "count": 161,
+      "screens": 15
+    },
+    "landmark-unique": {
+      "impact": "moderate",
+      "count": 11,
+      "screens": 10
+    },
+    "landmark-one-main": {
+      "impact": "moderate",
+      "count": 9,
+      "screens": 9
+    },
+    "heading-order": {
+      "impact": "moderate",
+      "count": 3,
+      "screens": 3
+    },
+    "landmark-main-is-top-level": {
+      "impact": "moderate",
+      "count": 1,
+      "screens": 1
+    },
+    "landmark-no-duplicate-main": {
+      "impact": "moderate",
+      "count": 1,
+      "screens": 1
+    }
+  },
+  "screens": {
+    "about": {
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 18
+      }
+    },
+    "admin-integrations": {},
+    "analytics": {},
+    "case-copy": {},
+    "case-cost-labor": {},
+    "case-delete-confirm": {},
+    "case-editor": {},
+    "case-editor-five-tier": {},
+    "case-inventory": {},
+    "case-new": {},
+    "case-new-base": {},
+    "case-new-base-option": {},
+    "case-new-comparative": {},
+    "case-step-menu": {},
+    "case-step-panel": {},
+    "case-writeup": {},
+    "cases": {},
+    "changelog": {
+      "heading-order": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 28
+      }
+    },
+    "class": {
+      "landmark-main-is-top-level": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-no-duplicate-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      }
+    },
+    "compare": {},
+    "compare-add-case": {},
+    "component-edit-page": {},
+    "component-new-page": {},
+    "docs": {
+      "heading-order": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 26
+      }
+    },
+    "guide": {
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 2
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 3
+      }
+    },
+    "guide-api-reference": {
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 3
+      }
+    },
+    "guide-data-model": {
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 3
+      }
+    },
+    "guide-faq": {
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 3
+      }
+    },
+    "guide-first-assessment": {
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 3
+      }
+    },
+    "guide-glossary": {
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 3
+      }
+    },
+    "home": {},
+    "home-empty": {},
+    "import": {},
+    "landing": {},
+    "legal-privacy": {
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 5
+      }
+    },
+    "legal-security": {
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 5
+      }
+    },
+    "legal-terms": {
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-unique": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 5
+      }
+    },
+    "library-factors": {},
+    "library-substances": {},
+    "login": {},
+    "not-found": {
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 2
+      }
+    },
+    "onboarding": {},
+    "people": {},
+    "people-privacy-confirm": {},
+    "people-sample": {},
+    "pricing": {
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 25
+      }
+    },
+    "product": {
+      "heading-order": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "landmark-one-main": {
+        "impact": "moderate",
+        "count": 1
+      },
+      "region": {
+        "impact": "moderate",
+        "count": 29
+      }
+    },
+    "profile": {},
+    "project-new": {},
+    "project-not-found": {},
+    "project-start": {},
+    "project-workspace": {},
+    "project-workspace-five-tier": {},
+    "reports": {},
+    "results": {},
+    "results-magic-insights": {},
+    "signup": {}
+  }
+}

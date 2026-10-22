@@ -1,0 +1,339 @@
+{
+  "_comment": [
+    "Every screen of the app, as a route on the seeded world (tests/e2e/support/seed.ts).",
+    "One list feeds the visual and accessibility baselines, the global-setup warm-up and scripts/capture-review.mjs.",
+    "slug: snapshot + a11y baseline key. path: {placeholders} come from the seed ids (support/routes.ts idsFromSeed).",
+    "as: who is signed in (owner by default; viewer, empty, newcomer, anon). ready: text that must be visible before the page counts as loaded. brief: the §4 item.",
+    "landsOn: the path the page redirects to by itself (the check waits for it)."
+  ],
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "name": "laptop",
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "name": "phone",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "routes": [
+    {
+      "slug": "landing",
+      "path": "/",
+      "as": "anon",
+      "ready": "Know the footprint of anything you make.",
+      "brief": "1 Landing"
+    },
+    {
+      "slug": "product",
+      "path": "/product",
+      "as": "anon",
+      "ready": "Six capabilities.",
+      "brief": "2 Product"
+    },
+    {
+      "slug": "pricing",
+      "path": "/pricing",
+      "as": "anon",
+      "ready": "Free to model.",
+      "brief": "2 Pricing"
+    },
+    {
+      "slug": "changelog",
+      "path": "/changelog",
+      "as": "anon",
+      "ready": "What's new in LCAPIX.",
+      "brief": "2 Changelog"
+    },
+    {
+      "slug": "legal-privacy",
+      "path": "/legal/privacy",
+      "as": "anon",
+      "ready": "Privacy policy",
+      "brief": "2 Legal"
+    },
+    {
+      "slug": "legal-security",
+      "path": "/legal/security",
+      "as": "anon",
+      "ready": "Security",
+      "brief": "2 Legal"
+    },
+    {
+      "slug": "legal-terms",
+      "path": "/legal/terms",
+      "as": "anon",
+      "ready": "Terms of service",
+      "brief": "2 Legal"
+    },
+    {
+      "slug": "docs",
+      "path": "/docs",
+      "as": "anon",
+      "ready": "Everything you need to ship",
+      "brief": "2 Docs"
+    },
+    {
+      "slug": "login",
+      "path": "/auth/login",
+      "as": "anon",
+      "ready": "Log in",
+      "brief": "3 Login"
+    },
+    {
+      "slug": "signup",
+      "path": "/auth/signup",
+      "as": "anon",
+      "ready": "Create your account",
+      "brief": "3 Sign up"
+    },
+    {
+      "slug": "onboarding",
+      "path": "/auth/onboarding",
+      "as": "newcomer",
+      "ready": "Tell us a little about you.",
+      "brief": "3 Onboarding"
+    },
+    {
+      "slug": "home",
+      "path": "/home",
+      "ready": "Welcome back",
+      "brief": "5 Home"
+    },
+    {
+      "slug": "home-empty",
+      "path": "/home",
+      "as": "empty",
+      "ready": "Open the sample study",
+      "brief": "5 Home (empty state)"
+    },
+    {
+      "slug": "project-new",
+      "path": "/project/new",
+      "ready": "Start your own project",
+      "brief": "6 New project"
+    },
+    {
+      "slug": "project-start",
+      "path": "/project/{exampleProject}/start",
+      "ready": "How do you want to start?",
+      "brief": "7 Project start"
+    },
+    {
+      "slug": "project-workspace",
+      "path": "/project/{exampleProject}",
+      "ready": "Sample study",
+      "brief": "8 Project overview (the sample, E02)"
+    },
+    {
+      "slug": "project-workspace-five-tier",
+      "path": "/project/{fiveTierProject}",
+      "ready": "Open editor",
+      "brief": "8 Project workspace (single case)"
+    },
+    {
+      "slug": "case-new-base",
+      "path": "/project/{exampleProject}/case/base/new",
+      "ready": "Create your Base Case",
+      "brief": "9 New base case"
+    },
+    {
+      "slug": "case-new-comparative",
+      "path": "/project/{exampleProject}/case/comparative/new",
+      "ready": "Create Comparative Case",
+      "brief": "9 New comparative case"
+    },
+    {
+      "slug": "case-editor",
+      "path": "/project/{exampleProject}/case/{baseCase}",
+      "ready": "Make my own copy",
+      "phoneReady": "Read only on a phone.",
+      "brief": "10 Case (the sample, read-only, E03)"
+    },
+    {
+      "slug": "case-editor-five-tier",
+      "path": "/project/{fiveTierProject}/case/{fiveTierCase}",
+      "ready": "Run Assessment",
+      "phoneReady": "Read only on a phone.",
+      "brief": "10 Case (5 tiers, E03)"
+    },
+    {
+      "slug": "component-new-page",
+      "path": "/project/{exampleProject}/case/{baseCase}/component/new",
+      "ready": "New Component",
+      "brief": "12 Add component (full page, an old link: the classic form)"
+    },
+    {
+      "slug": "component-edit-page",
+      "path": "/project/{exampleProject}/case/{baseCase}/component/{cutBlank}/edit",
+      "ready": "Process tiers",
+      "phoneReady": "Read only on a phone.",
+      "brief": "12 Edit component (an old link: lands on the case workspace)"
+    },
+    {
+      "slug": "results",
+      "path": "/project/{exampleProject}/case/{baseCase}/results",
+      "ready": "What builds this number",
+      "brief": "13 Results (E05)"
+    },
+    {
+      "slug": "analytics",
+      "path": "/project/{exampleProject}/analytics",
+      "ready": "Analytics",
+      "brief": "15 Analytics (E10)"
+    },
+    {
+      "slug": "compare",
+      "path": "/project/{exampleProject}/comparison?cases={baseCase},{compCase}",
+      "ready": "Change by step",
+      "brief": "16 Compare (E09)"
+    },
+    {
+      "slug": "import",
+      "path": "/project/{exampleProject}/import",
+      "ready": "What kind of file is it?",
+      "brief": "17 Add a file (F2.2)"
+    },
+    {
+      "slug": "class",
+      "path": "/project/{exampleProject}/class",
+      "ready": "Progress",
+      "brief": "18 Class"
+    },
+    {
+      "slug": "library-factors",
+      "path": "/library/factors",
+      "ready": "Factor library",
+      "brief": "19 Library: factors"
+    },
+    {
+      "slug": "library-substances",
+      "path": "/library/substances",
+      "ready": "Substance catalog",
+      "brief": "19 Library: substances"
+    },
+    {
+      "slug": "admin-integrations",
+      "path": "/admin/integrations",
+      "ready": "Admins only",
+      "brief": "20 Integrations"
+    },
+    {
+      "slug": "profile",
+      "path": "/profile",
+      "ready": "Olivia Owner",
+      "brief": "21 Profile"
+    },
+    {
+      "slug": "about",
+      "path": "/about",
+      "ready": "What is LCAPIX?",
+      "brief": "21 About"
+    },
+    {
+      "slug": "guide",
+      "path": "/guide",
+      "ready": "Getting started",
+      "brief": "21 Guide"
+    },
+    {
+      "slug": "guide-data-model",
+      "path": "/guide/data-model",
+      "ready": "Data model",
+      "brief": "21 Guide: data model"
+    },
+    {
+      "slug": "guide-first-assessment",
+      "path": "/guide/first-assessment",
+      "ready": "Your first assessment",
+      "brief": "21 Guide: first assessment"
+    },
+    {
+      "slug": "guide-glossary",
+      "path": "/guide/glossary",
+      "ready": "Glossary",
+      "brief": "21 Guide: glossary"
+    },
+    {
+      "slug": "guide-faq",
+      "path": "/guide/faq",
+      "ready": "FAQ",
+      "brief": "21 Guide: FAQ"
+    },
+    {
+      "slug": "guide-api-reference",
+      "path": "/guide/api-reference",
+      "ready": "API reference",
+      "brief": "21 Guide: API reference"
+    },
+    {
+      "slug": "not-found",
+      "path": "/this-page-does-not-exist",
+      "ready": "404",
+      "brief": "4 404 page"
+    },
+    {
+      "slug": "project-not-found",
+      "path": "/project/{fiveTierProject}",
+      "as": "viewer",
+      "ready": "This project is not here.",
+      "brief": "4 Project not found (non-member): says so, with Go to Home"
+    },
+    {
+      "slug": "cases",
+      "path": "/project/{exampleProject}/cases",
+      "ready": "Your cases",
+      "brief": "22 Cases (E07)"
+    },
+    {
+      "slug": "people",
+      "path": "/project/{fiveTierProject}/people",
+      "ready": "Add people",
+      "brief": "22 People (E08)"
+    },
+    {
+      "slug": "people-sample",
+      "path": "/project/{exampleProject}/people",
+      "ready": "The sample is never shared",
+      "brief": "22 People on the sample"
+    },
+    {
+      "slug": "reports",
+      "path": "/reports?project={exampleProject}",
+      "ready": "Build a report",
+      "brief": "22 Reports (E11)"
+    },
+    {
+      "slug": "case-new",
+      "path": "/project/{fiveTierProject}/case/new",
+      "ready": "What kind of case?",
+      "brief": "22 New case (E18)"
+    },
+    {
+      "slug": "case-copy",
+      "path": "/project/{exampleProject}/case/{compCase}",
+      "ready": "Run Assessment",
+      "phoneReady": "Read only on a phone.",
+      "brief": "22 Case (a copy you can change, E03)"
+    },
+    {
+      "slug": "case-inventory",
+      "path": "/project/{exampleProject}/case/{compCase}?tab=inventory",
+      "ready": "Inventory",
+      "brief": "22 Inventory tab (E04)"
+    },
+    {
+      "slug": "case-writeup",
+      "path": "/project/{exampleProject}/case/{compCase}?tab=writeup",
+      "ready": "Interpretation",
+      "brief": "22 Write-up tab (E06)"
+    }
+  ]
+}

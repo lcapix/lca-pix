@@ -60,8 +60,8 @@ const ENDPOINTS: { method: string; path: string; desc: string }[] = [
 
 const METHOD_COLOR: Record<string, string> = {
   GET: '#2d6a4f',
-  POST: '#4f90c9',
-  PUT: '#d98568',
+  POST: '#2f6db5',
+  PUT: '#a8472b',
   DELETE: '#b91c1c',
 }
 

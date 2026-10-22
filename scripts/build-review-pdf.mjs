@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SRC = path.resolve('review-screens');
+const SRC = path.resolve('design/legacy/review-screens');
 const OUT = path.join(SRC, 'LCAPIX-Review.pdf');
 
 // Show: roughly half of the full workflow — the screens that best tell the

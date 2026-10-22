@@ -3,23 +3,37 @@ import { queryOne, execute, query } from '@/lib/db-helpers';
 import { fetchCompoundByName } from './client';
 
 export interface EnrichResult {
-  status: 'enriched' | 'not_found';
+  /** skipped_custom: a user's own substance. It is private to them, so its
+   *  name is not sent to PubChem and its fields are not overwritten. */
+  status: 'enriched' | 'not_found' | 'skipped_custom';
   cid?: number;
+}
+
+/** One batch run makes one PubChem call (plus a 200 ms pause) per substance,
+ *  so an unbounded run times out a serverless function. */
+export const ENRICH_DEFAULT_LIMIT = 50;
+export const ENRICH_MAX_LIMIT = 500;
+
+function clampLimit(limit: unknown): number {
+  const n = Number(limit);
+  if (!Number.isInteger(n) || n < 1) return ENRICH_DEFAULT_LIMIT;
+  return Math.min(n, ENRICH_MAX_LIMIT);
 }
 
 export async function enrichSubstance(substanceId: number): Promise<EnrichResult> {
   const sub = await queryOne<any>(
-    'SELECT substance_id, substance_name FROM substances WHERE substance_id = ?',
+    'SELECT substance_id, substance_name, is_custom FROM substances WHERE substance_id = ?',
     [substanceId],
   );
   if (!sub) throw new Error(`Substance ${substanceId} not found`);
+  if (Number(sub.is_custom) === 1) return { status: 'skipped_custom' };
 
   const compound = await fetchCompoundByName(sub.substance_name);
 
   if (!compound) {
     // Stamp enriched_at so we do not retry forever
     await execute(
-      'UPDATE substances SET enriched_at = NOW() WHERE substance_id = ?',
+      'UPDATE substances SET enriched_at = NOW() WHERE substance_id = ? AND is_custom = 0',
       [substanceId],
     );
     return { status: 'not_found' };
@@ -32,7 +46,7 @@ export async function enrichSubstance(substanceId: number): Promise<EnrichResult
          pubchem_cid       = ?,
          iupac_name        = ?,
          enriched_at       = NOW()
-     WHERE substance_id = ?`,
+     WHERE substance_id = ? AND is_custom = 0`,
     [
       compound.molecularFormula,
       compound.molecularWeight,
@@ -49,11 +63,15 @@ export async function enrichAllSubstances(options: {
   onlyMissing?: boolean;
   limit?: number;
 } = {}): Promise<{ enriched: number; notFound: number; failed: number; total: number }> {
-  const where = options.onlyMissing ? 'WHERE enriched_at IS NULL' : '';
-  const limit = options.limit ? `LIMIT ${options.limit}` : '';
+  const where = options.onlyMissing
+    ? 'WHERE is_custom = 0 AND enriched_at IS NULL'
+    : 'WHERE is_custom = 0';
+  // Inlined, not a placeholder: mysql2's execute() rejects a numeric LIMIT ?.
+  // clampLimit only ever returns an integer in 1..500.
+  const limit = clampLimit(options.limit);
 
   const ids = await query<any>(
-    `SELECT substance_id FROM substances ${where} ORDER BY substance_id ${limit}`,
+    `SELECT substance_id FROM substances ${where} ORDER BY substance_id LIMIT ${limit}`,
   );
 
   let enriched = 0, notFound = 0, failed = 0;

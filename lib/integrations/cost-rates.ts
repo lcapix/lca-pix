@@ -8,6 +8,20 @@ export interface CostRate {
   effectiveDate: string;
 }
 
+/**
+ * A DATE column as YYYY-MM-DD. mysql2 returns a DATE as a Date at local
+ * midnight, and String(date).slice(0, 10) gave "Thu May 01": read the local
+ * calendar fields instead. A string is kept as it is.
+ */
+export function isoDate(v: unknown): string {
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    const mm = String(v.getMonth() + 1).padStart(2, '0');
+    const dd = String(v.getDate()).padStart(2, '0');
+    return `${v.getFullYear()}-${mm}-${dd}`;
+  }
+  return String(v ?? '').slice(0, 10);
+}
+
 export type CostRateType = 'labor' | 'electricity' | 'natural_gas' | 'material' | 'transport';
 
 export interface GetOrFetchParams {
@@ -16,6 +30,13 @@ export interface GetOrFetchParams {
   region: string;
   maxAgeDays?: number;
   fetcher: () => Promise<CostRate>;
+  /**
+   * Static reference value used when the live fetcher can't run — e.g. the
+   * provider's API key isn't configured (the clients throw immediately, before
+   * any network call, so this keeps the MVP working with zero API hits). When
+   * a key IS present the live `fetcher` runs first and this is only a safety net.
+   */
+  staticFallback?: () => CostRate | Promise<CostRate>;
 }
 
 /**
@@ -41,18 +62,30 @@ export async function getOrFetchRate(params: GetOrFetchParams): Promise<CostRate
         rateValue: parseFloat(String(cached.rate_value)),
         unit: cached.rate_unit,
         source: cached.source,
-        effectiveDate: String(cached.effective_date).slice(0, 10),
+        effectiveDate: isoDate(cached.effective_date),
       };
     }
   }
 
-  const fresh = await params.fetcher();
+  // Try the live fetcher; if it can't run (no API key, network error, no data)
+  // fall back to the static reference value so cost lookups always resolve in
+  // the keyless MVP. Only if there's no fallback either do we surface the error.
+  // The fallback is returned but never cached: any signed-in user can trigger
+  // a lookup, so the shared cache holds only what an upstream API returned,
+  // and a reference value never shadows the live rate once a key is set.
+  let fresh: CostRate;
+  try {
+    fresh = await params.fetcher();
+  } catch (err) {
+    if (params.staticFallback) return await params.staticFallback();
+    throw err;
+  }
   await insert(
     `INSERT INTO cost_rates
        (rate_type, rate_key, region_code, rate_value, rate_unit, effective_date, source)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE rate_value = VALUES(rate_value),
-       rate_unit = VALUES(rate_unit), source = VALUES(source),
+     ON CONFLICT (rate_type, rate_key, region_code, effective_date) DO UPDATE SET rate_value = EXCLUDED.rate_value,
+       rate_unit = EXCLUDED.rate_unit, source = EXCLUDED.source,
        fetched_at = CURRENT_TIMESTAMP`,
     [params.type, params.key, params.region, fresh.rateValue, fresh.unit,
      fresh.effectiveDate, fresh.source],

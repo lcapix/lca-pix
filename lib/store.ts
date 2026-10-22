@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { useNotificationsStore } from "./notifications-store"
 
 export interface User {
   id: string
@@ -16,6 +17,17 @@ export interface Project {
   createdAt: Date
   updatedAt: Date
   cases: Case[]
+  /** Server-side aggregates from the projects API (cards render these). */
+  caseCount?: number
+  componentCount?: number
+  /** ISO 14044 goal & scope, study-level (shared by every case). */
+  goalStatement?: string | null
+  functionalUnit?: string | null
+  systemBoundary?: string
+  boundaryNotes?: string | null
+  /** The study's impact method and region (migrate-018); runs default to them. */
+  lciaMethod?: string | null
+  regionCode?: string | null
 }
 
 export interface Case {
@@ -27,6 +39,13 @@ export interface Case {
   createdAt: Date
   updatedAt: Date
   components: ComponentNode[]
+  componentCount?: number
+  driverCount?: number
+  /** ISO 14044 reference flow of this alternative: product needed per functional unit. */
+  referenceFlow?: number
+  referenceFlowUnit?: string | null
+  /** Amount of product the case's entered data produce (the data basis). */
+  modeledOutput?: number
 }
 
 export type NodeType = "product" | "machine" | "subprocess" | "operation" | "elemental"
@@ -46,6 +65,27 @@ export interface ComponentNode {
   massUnit?: string
   operationalCostUSD?: number
   capitalCostUSD?: number
+  /** ABC cost breakdown (component table columns). */
+  laborCost?: number
+  /** Labor multiplicands: laborCost = laborHours × the SOC wage rate. */
+  laborHours?: number
+  laborOccupation?: string
+  /** Life-cycle stage this step belongs to (migrate-022); undefined = production. */
+  lifeCycleStage?: string | null
+  /** ISO 14044 4.3.4 allocation of a multi-output unit process. */
+  allocationMethod?: 'none' | 'physical' | 'economic' | 'system_expansion'
+  /** Share (0..1] of this unit process's burden assigned to the product. */
+  allocationFactor?: number
+  allocationNote?: string
+  energyCost?: number
+  transportationCost?: number
+  materialCost?: number
+  equipmentCost?: number
+  overheadCost?: number
+  currency?: string
+  costAllocationType?: string
+  /** Real count of attached flows (from the flows table), for canvas cards. */
+  flowCount?: number
 }
 
 export interface Flow {
@@ -578,6 +618,25 @@ export const useProjectStore = create<ProjectState>()(
     },
   ),
 )
+
+/**
+ * Forget the signed-in user on this browser (AUTH-5): the auth store, the
+ * cached projects and the activity feed, in memory and in localStorage, and
+ * the token. The stores are reset before the keys are removed so their
+ * persist middleware cannot write the previous user's state back.
+ */
+export function clearClientSession(): void {
+  useAuthStore.getState().logout()
+  useProjectStore.setState({ projects: [], currentProject: null, flows: [], nodes: [] })
+  useNotificationsStore.setState({ items: [] })
+  try {
+    for (const key of ["auth_token", "user", "lcapix-projects", "lcapix-notifications"]) {
+      localStorage.removeItem(key)
+    }
+  } catch {
+    /* storage can be unavailable (private mode); the in-memory reset stands */
+  }
+}
 
 export const useThemeStore = create<ThemeState>()(
   persist(

@@ -12,6 +12,12 @@ export interface CategoryBarChartItem {
   label: string
   value: number
   unit: string
+  /**
+   * How many of the run's inputs have a factor in this category. A partial
+   * category still prints a total, so the screens say when it covers only part
+   * of the product.
+   */
+  coverage?: { covered: number; total: number; missing: string[] }
 }
 
 export interface CategoryBarChartProps {

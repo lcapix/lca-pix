@@ -3,12 +3,17 @@
 // AppTopBar — mirrored from LCAPIX/shared.jsx lines 128-173.
 // When `onNav` is not provided, falls back to Next router push using a default id→path map.
 
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
+import { InShellContext } from './shell/shell-context'
+import { usePlatformAdmin } from '@/lib/auth/use-platform-admin'
+
+export { usePlatformAdmin }
 import { useRouter } from 'next/navigation'
 import { Logo } from './logo'
 import { Icon } from './icon'
 import { useAuthStore } from '@/lib/store'
 import { useNotificationsStore, formatRelativeTime } from '@/lib/notifications-store'
+import { signOut } from '@/lib/auth/sign-out'
 
 export interface AppTopBarProps {
   current?: string
@@ -22,11 +27,12 @@ const defaultRoutes: Record<string, string> = {
   guide: '/guide',
 }
 
-const links: { id: string; label: string }[] = [
+const links: { id: string; label: string; adminOnly?: boolean }[] = [
   { id: 'home', label: 'Projects' },
-  { id: 'integrations', label: 'Integrations' },
+  { id: 'integrations', label: 'Integrations', adminOnly: true },
   { id: 'guide', label: 'Docs' },
 ]
+
 
 const menuItemStyle: React.CSSProperties = {
   display: 'flex',
@@ -46,7 +52,9 @@ const menuItemStyle: React.CSSProperties = {
 
 export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   const router = useRouter()
-  const { user, logout } = useAuthStore()
+  const inShell = useContext(InShellContext)
+  const { user } = useAuthStore()
+  const isPlatformAdmin = usePlatformAdmin()
   const [menuOpen, setMenuOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -74,13 +82,8 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
   }
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user')
-    } catch {}
-    logout()
     setMenuOpen(false)
-    router.push('/auth/login')
+    signOut((path) => router.push(path))
   }
 
   useEffect(() => {
@@ -114,6 +117,9 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
       document.removeEventListener('keydown', onKey)
     }
   }, [notifOpen])
+
+  // Inside the education shell the sidebar replaces this bar.
+  if (inShell) return null
 
   return (
     <div
@@ -223,7 +229,7 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
           alignItems: 'center',
         }}
       >
-        {links.map((l) => {
+        {links.filter((l) => !l.adminOnly || isPlatformAdmin).map((l) => {
           const active = current === l.id
           return (
             <button
@@ -239,6 +245,41 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
         })}
       </nav>
       <div style={{ flex: 1, minWidth: 8 }} />
+      {/* Walk-me-through button. Mirrors the Tour button on /home so the
+          guided tour can be triggered from any project / case / results
+          page. Signals via sessionStorage + a custom event the home page
+          listens for. */}
+      <button
+        type="button"
+        title="Walk me through LCAPIX"
+        onClick={() => {
+          // Launch the tour on the CURRENT page. On /home the page's own
+          // GuidedTour listens; on project routes the layout's <GlobalTour>
+          // listens and starts at the step matching the page. No redirect —
+          // the tour is contextual to wherever the user is.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('lcapix:start-tour'))
+          }
+        }}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 30,
+          padding: '0 12px',
+          marginRight: 8,
+          borderRadius: 6,
+          border: '1px solid color-mix(in oklab, var(--brand-primary) 30%, transparent)',
+          background: 'color-mix(in oklab, var(--brand-primary) 8%, transparent)',
+          color: 'var(--brand-primary)',
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        <Icon name="sparkle" size={13} /> Tour
+      </button>
       <div
         style={{
           display: 'flex',
@@ -510,17 +551,19 @@ export function AppTopBar({ current, onNav, userInitials }: AppTopBarProps) {
             >
               <Icon name="box" size={14} /> Projects
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuOpen(false)
-                router.push('/admin/integrations')
-              }}
-              style={menuItemStyle}
-            >
-              <Icon name="settings" size={14} /> Integrations
-            </button>
+            {isPlatformAdmin && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  router.push('/admin/integrations')
+                }}
+                style={menuItemStyle}
+              >
+                <Icon name="settings" size={14} /> Integrations
+              </button>
+            )}
             <div className="divider-tonal" />
             <button
               type="button"

@@ -48,8 +48,14 @@ export function GlobalCommandPalette() {
         setOpen((o) => !o)
       }
     }
+    // A search field elsewhere (the sample Overview's "Search… ⌘K") opens it too.
+    const onOpen = () => setOpen(true)
     document.addEventListener("keydown", onKeyDown)
-    return () => document.removeEventListener("keydown", onKeyDown)
+    window.addEventListener("lcapix:open-search", onOpen)
+    return () => {
+      document.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("lcapix:open-search", onOpen)
+    }
   }, [])
 
   if (!mounted) return null

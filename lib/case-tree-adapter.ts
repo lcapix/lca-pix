@@ -23,6 +23,8 @@ export interface ComponentLike {
   equipmentCost?: number | null
   overheadCost?: number | null
   drivers?: string[] | null
+  /** Real count of attached input/output flows (from the flows table). */
+  flowCount?: number | null
 }
 
 const TYPE_MAP: Record<string, HierarchyNodeType> = {
@@ -58,6 +60,9 @@ function costOf(c: ComponentLike): number {
 }
 
 function flowsOf(c: ComponentLike): number {
+  // Prefer the real flow count from the flows table; fall back to the legacy
+  // drivers-JSON length only when no count was provided.
+  if (typeof c.flowCount === 'number') return c.flowCount
   return Array.isArray(c.drivers) ? c.drivers.length : 0
 }
 
@@ -91,12 +96,36 @@ export function componentsToTree(components: ComponentLike[]): CaseTreeNode | nu
     }
   })
 
+  // Steps in process order: by the step number a name starts with ("10.",
+  // "20."), then creation order (ids ascend). Components made in one import
+  // share a timestamp, so the list order alone is not the routing order.
+  const stepNo = (label: string) => {
+    const m = /^\s*(\d+(?:\.\d+)?)\b/.exec(label)
+    return m ? Number(m[1]) : Number.POSITIVE_INFINITY
+  }
+  const byProcessOrder = (a: CaseTreeNode, b: CaseTreeNode) => {
+    const firstStep = (n: CaseTreeNode): number =>
+      n.children?.length ? Math.min(...n.children.map(firstStep)) : stepNo(n.label)
+    const d = firstStep(a) - firstStep(b)
+    if (d !== 0 && Number.isFinite(d)) return d
+    return (Number(a.id) || 0) - (Number(b.id) || 0)
+  }
+  const sortTree = (n: CaseTreeNode) => {
+    n.children?.forEach(sortTree)
+    n.children?.sort(byProcessOrder)
+  }
+  roots.forEach(sortTree)
+  roots.sort(byProcessOrder)
+
   if (roots.length === 1) return roots[0]
 
-  // Multi-root — wrap with synthetic Product root so views can render
+  // Multi-root — wrap with a NEUTRAL synthetic container ('Root', rendered as
+  // "Case") so the canvas has a single entry point. Previously this used
+  // type:'Product', which made a case with one Product + one floating
+  // Machine/Line show TWO green Product cards. The container is not a product.
   return {
     id: '__root__',
-    type: 'Product',
+    type: 'Root',
     label: 'Case Root',
     flows: roots.reduce((s, r) => s + r.flows, 0),
     cost: roots.reduce((s, r) => s + r.cost, 0),
@@ -104,8 +133,16 @@ export function componentsToTree(components: ComponentLike[]): CaseTreeNode | nu
   }
 }
 
+/** True for the internal multi-root layout container (never user-visible). */
+export const SYNTHETIC_ROOT_ID = '__root__'
+export function isSyntheticRoot(n: { id: string } | null | undefined): boolean {
+  return !!n && n.id === SYNTHETIC_ROOT_ID
+}
+
 /**
  * Flatten a tree depth-first for the sidebar nav and List/Graph views.
+ * The synthetic multi-root container is skipped — its children become the
+ * top-level entries so no fake "Case Root" ever shows.
  */
 export function flattenTree(root: CaseTreeNode | null): FlatCaseNode[] {
   if (!root) return []
@@ -121,6 +158,115 @@ export function flattenTree(root: CaseTreeNode | null): FlatCaseNode[] {
     })
     ;(n.children || []).forEach((c) => walk(c, depth + 1))
   }
-  walk(root, 0)
+  if (isSyntheticRoot(root)) {
+    // Forest: emit each real root at depth 0, skip the container.
+    ;(root.children || []).forEach((c) => walk(c, 0))
+  } else {
+    walk(root, 0)
+  }
   return out
+}
+
+export interface NodeRollup {
+  /** This node's own cost plus everything below it. */
+  cost: number
+  /** This node's own flow count plus everything below it. */
+  flows: number
+  /** True when the node has children — a roll-up, not a terminating node. */
+  hasChildren: boolean
+}
+
+/**
+ * Subtree totals per node id. Under the terminating-node model the values live
+ * on the unit processes (usually operations) and every parent is a pure sum,
+ * so a product / line / subprocess should show the total of what is below it
+ * rather than its own (normally $0) value.
+ */
+export function rollupTree(root: CaseTreeNode | null): Map<string, NodeRollup> {
+  const map = new Map<string, NodeRollup>()
+  if (!root) return map
+  const visit = (n: CaseTreeNode): NodeRollup => {
+    const kids = n.children || []
+    let cost = n.cost || 0
+    let flows = n.flows || 0
+    for (const c of kids) {
+      const r = visit(c)
+      cost += r.cost
+      flows += r.flows
+    }
+    const v = { cost, flows, hasChildren: kids.length > 0 }
+    map.set(n.id, v)
+    return v
+  }
+  visit(root)
+  return map
+}
+
+// ---------------------------------------------------------------------------
+// Costs of raw component rows (as the API returns them: mysql2 DECIMAL columns
+// arrive as strings, so `+` would concatenate them).
+
+type CostRow = {
+  labor_cost?: unknown
+  energy_cost?: unknown
+  material_cost?: unknown
+  transportation_cost?: unknown
+  equipment_cost?: unknown
+  overhead_cost?: unknown
+  opex?: unknown
+  capex?: unknown
+}
+
+const money = (v: unknown): number => {
+  const n = Number(v ?? 0)
+  return Number.isFinite(n) ? n : 0
+}
+
+function itemizedOf(r: CostRow) {
+  return {
+    labor: money(r.labor_cost),
+    energy: money(r.energy_cost),
+    material: money(r.material_cost),
+    other: money(r.transportation_cost) + money(r.equipment_cost) + money(r.overhead_cost),
+  }
+}
+
+/**
+ * One step's cost, by the same rule as the canvas (costOf above): the
+ * itemized activity costs when there are any, otherwise opex + capex, which
+ * migration 003 defines as the sum of the categories or a direct entry. Adding
+ * both would count the same money twice.
+ */
+export function componentCostUSD(r: CostRow): number {
+  const i = itemizedOf(r)
+  const itemized = i.labor + i.energy + i.material + i.other
+  return itemized > 0 ? itemized : money(r.opex) + money(r.capex)
+}
+
+/**
+ * The project page's per-case cost summary. Capex is a one-time investment,
+ * so it is left out; opex counts only for a step with no itemized costs.
+ * Null when the case has no cost data.
+ */
+export function summarizeCaseCosts(rows: CostRow[]): {
+  labor: number
+  energy: number
+  material: number
+  overhead: number
+  total: number
+} | null {
+  let labor = 0
+  let energy = 0
+  let material = 0
+  let overhead = 0
+  for (const r of rows || []) {
+    const i = itemizedOf(r)
+    const itemized = i.labor + i.energy + i.material + i.other
+    labor += i.labor
+    energy += i.energy
+    material += i.material
+    overhead += itemized > 0 ? i.other : money(r.opex)
+  }
+  const total = labor + energy + material + overhead
+  return total > 0 ? { labor, energy, material, overhead, total } : null
 }

@@ -60,7 +60,7 @@ export default function GettingStartedPage() {
         <span className="chip chip-active" style={{ fontSize: 11 }}>
           + New Project
         </span>
-        . Pick a type — base case or comparative study.
+        . Pick a type: base case or comparative study.
       </p>
 
       <h2 className="title" style={{ marginTop: 40, marginBottom: 12 }}>
@@ -121,7 +121,7 @@ export default function GettingStartedPage() {
       </p>
 
       <Tip>
-        Every run is archived under the case&apos;s Historical runs panel — you
+        Every run is archived under the case&apos;s Historical runs panel: you
         can diff any two runs side-by-side without re-running the assessment.
       </Tip>
     </>

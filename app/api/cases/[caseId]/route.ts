@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { readJson } from '@/lib/http';
+import { queryOne, execute, transaction } from '@/lib/db-helpers';
+import { getProjectRole, requireAuth } from '@/lib/auth';
+import { caseAccessDenied, isAuthError, reachableCasesFilter } from '@/lib/route-guard';
+import { parseId } from '@/lib/ids';
+import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
+import { recordAudit } from '@/lib/audit';
 
 // GET /api/cases/[caseId] - Get single case details
 export async function GET(
@@ -10,7 +15,7 @@ export async function GET(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne(
       `SELECT c.*
@@ -23,14 +28,58 @@ export async function GET(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id);
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const denied = await caseAccessDenied(userId, caseId, undefined, { notFound: 'Case not found' });
+    if (denied) return denied;
+
+    // The study's method and region, so a run dialog can start from them.
+    try {
+      const scope = await queryOne<any>(
+        `SELECT lcia_method, region_code FROM project WHERE project_id = ?`,
+        [caseData.project_id]
+      );
+      caseData.project_lcia_method = scope?.lcia_method ?? null;
+      caseData.project_region_code = scope?.region_code ?? null;
+    } catch {
+      /* before migrate-018 */
+    }
+    // The study's functional unit (exercise 1, "Goal and scope", checks it).
+    try {
+      const fu = await queryOne<any>(`SELECT functional_unit FROM project WHERE project_id = ?`, [caseData.project_id]);
+      caseData.project_functional_unit = fu?.functional_unit ?? null;
+    } catch {
+      caseData.project_functional_unit = null;
+    }
+
+    // The caller's role in the case's project, so the editor can hide what a
+    // "Can read" member cannot do (the write routes still check for themselves).
+    const role = await getProjectRole(userId, Number(caseData.project_id));
+    // Whoever reaches this case only to read it reads it as "Can read": an
+    // editor on an instructor's case with "members see only their own cases"
+    // on (D2), and everyone, the owner included, on the sample's read-only
+    // base case (migrate-038).
+    caseData.my_role =
+      role && role !== 'viewer' && (await caseAccessDenied(userId, caseId, 'editor')) ? 'viewer' : role;
+    // The role in the project itself: whether the caller may make cases (a
+    // copy of a read-only case needs Can change on the project).
+    caseData.project_role = role;
+    caseData.read_only = Number(caseData.read_only ?? 0) === 1;
+
+    // The copy link (E03 "Copy of the Base case"), named only when the caller
+    // reaches that case too; otherwise not even its id is sent (B-A1).
+    caseData.copied_from = null;
+    if (caseData.parent_case_id != null) {
+      const parentId = Number(caseData.parent_case_id);
+      if (await caseAccessDenied(userId, parentId)) {
+        caseData.parent_case_id = null;
+      } else {
+        const parent = await queryOne<any>(`SELECT case_id, case_name FROM case_table WHERE case_id = ?`, [parentId]);
+        caseData.copied_from = parent ? { case_id: Number(parent.case_id), case_name: parent.case_name } : null;
+      }
     }
 
     return NextResponse.json({ success: true, case: caseData });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Get case error:', error);
@@ -46,7 +95,7 @@ export async function PUT(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
       `SELECT project_id FROM case_table WHERE case_id = ?`,
@@ -57,21 +106,205 @@ export async function PUT(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const denied = await caseAccessDenied(userId, caseId, 'editor', { notFound: 'Case not found' });
+    if (denied) return denied;
+
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
+    const { case_name, description, case_type } = body;
+
+    // Keep this case from the class (migrate-037): the owner and admins only,
+    // a strict boolean, and an audit row when it changes.
+    let hiddenChange: { from: number; to: number } | null = null;
+    if (Object.prototype.hasOwnProperty.call(body, 'hidden_from_members')) {
+      const v = body.hidden_from_members;
+      if (![true, false, 0, 1].includes(v)) {
+        return NextResponse.json({ error: 'hidden_from_members must be true or false' }, { status: 400 });
+      }
+      const staffDenied = await caseAccessDenied(userId, caseId, 'admin', { notFound: 'Case not found' });
+      if (staffDenied) return staffDenied;
+      const now = await queryOne<any>(`SELECT hidden_from_members FROM case_table WHERE case_id = ?`, [caseId]);
+      const to = v === true || v === 1 ? 1 : 0;
+      if (Number(now?.hidden_from_members) !== to) hiddenChange = { from: Number(now?.hidden_from_members ?? 0), to };
     }
 
-    const { case_name, description, case_type } = await request.json();
+    // Every string must fit its column before anything is written (strict
+    // mode refuses a longer one: a 500, or the "needs migrate-014" 409 below).
+    const C = COLUMN_LIMITS.case_table;
+    const tooLong = firstLengthError([
+      ['Case name', case_name, C.case_name],
+      ['Description', description, C.description],
+      ['Reference flow unit', body.reference_flow_unit, C.reference_flow_unit],
+    ]);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
+    if (case_type != null && !['base', 'comparative'].includes(case_type)) {
+      return NextResponse.json({ error: 'Invalid case type' }, { status: 400 });
+    }
+    // reference_flow and modeled_output are DECIMAL(15,6): above 0 once
+    // stored (at least 0.000001) and at most 999,999,999.999999.
+    const num = (v: unknown): number | null =>
+      v === undefined || v === null || v === '' ? null : Number(v);
+    const refFlow = num(body.reference_flow);
+    const modeled = num(body.modeled_output);
+    const refMax = decimalMax(C.reference_flow);
+    for (const [name, v] of [
+      ['reference_flow', refFlow],
+      ['modeled_output', modeled],
+    ] as const) {
+      if (v !== null && (!Number.isFinite(v) || v < 0.000001 || v > refMax)) {
+        return NextResponse.json(
+          { error: `${name} must be a positive number (0.000001 to ${refMax})` },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (case_name !== undefined && case_name !== null) {
+      if (!String(case_name).trim()) {
+        return NextResponse.json({ error: 'Case name is required' }, { status: 400 });
+      }
+      // Only among the cases the caller reaches (B-A1), as on create.
+      const only = await reachableCasesFilter(userId, caseData.project_id, 'case_table');
+      const clash = await queryOne<any>(
+        `SELECT case_id FROM case_table
+          WHERE project_id = ? AND case_id <> ? AND LOWER(TRIM(case_name)) = LOWER(TRIM(?))${only.sql} LIMIT 1`,
+        [caseData.project_id, caseId, case_name, ...only.params]
+      );
+      if (clash) {
+        return NextResponse.json(
+          { error: `This project already has a case called "${String(case_name).trim()}". Pick another name.` },
+          { status: 409 }
+        );
+      }
+    }
 
     await execute(
-      `UPDATE case_table 
+      `UPDATE case_table
        SET case_name = COALESCE(?, case_name),
            description = COALESCE(?, description),
            case_type = COALESCE(?, case_type)
        WHERE case_id = ?`,
       [case_name ?? null, description ?? null, case_type ?? null, caseId]
     );
+
+    // ISO 14044 reference flow (4.2.3.2) of THIS alternative: how much product
+    // one functional unit needs, and how much product the entered data make.
+    // Goal, functional unit and boundary are study-level (PUT /api/projects).
+    // Separate statement so an environment without migrate-014 can still
+    // rename a case; it only runs when one of these fields was sent.
+    // The student's own reading of the result and what they assumed: ISO 14044's
+    // reporting clause expects both, and they are printed in the report. Kept in
+    // its own statement so a database without migrate-021 still saves the rest.
+    const WRITEUP_FIELDS = ['interpretation', 'assumptions', 'learning_state'] as const;
+    const writeup = WRITEUP_FIELDS.filter((k) => Object.prototype.hasOwnProperty.call(body, k));
+    if (writeup.length) {
+      const sets = writeup.map((k) => `${k} = ?`).join(', ');
+      const values = writeup.map((k) => {
+        const v = (body as any)[k];
+        if (k === 'learning_state') return v === null || v === undefined ? null : JSON.stringify(v);
+        return v === null || v === undefined ? null : String(v).slice(0, 20000);
+      });
+      try {
+        await execute(`UPDATE case_table SET ${sets} WHERE case_id = ?`, [...values, caseId]);
+      } catch (writeErr: any) {
+        if (writeErr?.code !== 'ER_BAD_FIELD_ERROR') throw writeErr;
+        // Saying "saved" when nothing was written is worse than failing: the
+        // student would lose their interpretation and never know.
+        console.warn('[case PUT] write-up columns missing (run migrate-021)');
+        return NextResponse.json(
+          {
+            error:
+              'Your write-up could not be saved: the database needs migration 021. Nothing else was changed.',
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    // The hand-in flag (migrate-022). Its own statement so a database without
+    // the column still saves everything else.
+    // One hand-in per author in a project (WRITE-1): marking this case clears
+    // the flag on the other cases the same author made in the project, in the
+    // same transaction, so a new hand-in replaces their previous one. Other
+    // authors' hand-ins stay (a class project with "members see only their own
+    // cases" holds one per student). Cases made before migrate-032 carry the
+    // owner as author (its backfill); without the column the whole project is
+    // one author. The project row is locked first, so two hand-ins marked at
+    // the same moment cannot both stay.
+    if (Object.prototype.hasOwnProperty.call(body, 'is_final')) {
+      const final = body.is_final ? 1 : 0;
+      try {
+        await transaction(async (conn) => {
+          if (final) {
+            await conn.query('SELECT project_id FROM project WHERE project_id = ? FOR UPDATE', [
+              caseData.project_id,
+            ]);
+            // SELECT * so a database without created_by still answers.
+            const [[self]]: any = await conn.query('SELECT * FROM case_table WHERE case_id = ?', [caseId]);
+            const byAuthor = self && Object.prototype.hasOwnProperty.call(self, 'created_by');
+            await conn.query(
+              `UPDATE case_table SET is_final = 0, finalized_at = NULL
+                WHERE project_id = ? AND case_id <> ? AND is_final = 1${byAuthor ? ' AND created_by IS NOT DISTINCT FROM ?' : ''}`,
+              [caseData.project_id, caseId, ...(byAuthor ? [self.created_by] : [])],
+            );
+          }
+          await conn.query(
+            'UPDATE case_table SET is_final = ?, finalized_at = ' +
+              (final ? 'CURRENT_TIMESTAMP' : 'NULL') +
+              ' WHERE case_id = ?',
+            [final, caseId],
+          );
+        });
+      } catch (finalErr: any) {
+        if (finalErr?.code !== 'ER_BAD_FIELD_ERROR') throw finalErr;
+        return NextResponse.json(
+          { error: 'Marking a hand-in needs migration 022. Nothing else was changed.' },
+          { status: 409 },
+        );
+      }
+    }
+
+    if (hiddenChange) {
+      await execute(`UPDATE case_table SET hidden_from_members = ? WHERE case_id = ?`, [hiddenChange.to, caseId]);
+      await recordAudit({
+        userId,
+        action: 'update',
+        table: 'case_table',
+        recordId: caseId,
+        before: { hidden_from_members: hiddenChange.from },
+        after: { hidden_from_members: hiddenChange.to },
+        request,
+      });
+    }
+
+    const REF_FIELDS = ['reference_flow', 'reference_flow_unit', 'modeled_output'];
+    if (REF_FIELDS.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
+      try {
+        await execute(
+          `UPDATE case_table
+           SET reference_flow = COALESCE(?, reference_flow),
+               reference_flow_unit = COALESCE(?, reference_flow_unit),
+               modeled_output = COALESCE(?, modeled_output)
+           WHERE case_id = ?`,
+          [refFlow, body.reference_flow_unit ?? null, modeled, caseId],
+        );
+        // The data basis IS the product's quantity in the tree: keep them equal.
+        if (modeled !== null) {
+          await execute(
+            `UPDATE component SET quantity = ?
+              WHERE case_id = ? AND parent_component_id IS NULL AND component_type = 'product'`,
+            [modeled, caseId],
+          );
+        }
+      } catch (isoErr) {
+        console.warn('[case PUT] reference-flow columns missing (run migrate-014):', isoErr);
+        return NextResponse.json(
+          { error: 'Reference-flow fields are not available yet: the database needs migrate-014.' },
+          { status: 409 },
+        );
+      }
+    }
 
     const updatedCase = await queryOne(
       `SELECT c.*
@@ -82,7 +315,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, case: updatedCase });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update case error:', error);
@@ -98,10 +331,10 @@ export async function DELETE(
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
-    const caseId = parseInt(caseIdParam);
+    const caseId = parseId(caseIdParam);
 
     const caseData = await queryOne<any>(
-      `SELECT project_id FROM case_table WHERE case_id = ?`,
+      `SELECT project_id, case_name, case_type, created_by FROM case_table WHERE case_id = ?`,
       [caseId]
     );
 
@@ -109,16 +342,27 @@ export async function DELETE(
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, caseData.project_id, 'admin');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await caseAccessDenied(userId, caseId, 'admin', { notFound: 'Case not found' });
+    if (denied) return denied;
 
     await execute(`DELETE FROM case_table WHERE case_id = ?`, [caseId]);
+    await recordAudit({
+      userId,
+      action: 'delete',
+      table: 'case_table',
+      recordId: caseId,
+      before: {
+        project_id: caseData.project_id,
+        case_name: caseData.case_name,
+        case_type: caseData.case_type,
+        created_by: caseData.created_by ?? null,
+      },
+      request,
+    });
 
     return NextResponse.json({ success: true, message: 'Case deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete case error:', error);

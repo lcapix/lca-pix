@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readJson } from '@/lib/http';
+import { COLUMN_LIMITS, lengthError } from '@/lib/field-limits';
 import { queryOne, execute } from '@/lib/db-helpers';
-import { requireAuth, checkProjectAccess } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
+import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { convertQuantity, compatibleUnits } from '@/lib/units';
+import {
+  QUANTITY_ERROR,
+  parseOptionalFlowQuantity,
+  findUsableSubstance,
+  SUBSTANCE_ERROR,
+} from '@/lib/flow-fields';
+import { parseId } from '@/lib/ids';
 
 // PUT /api/flows/[flowId] - Update flow
 export async function PUT(
@@ -10,10 +21,10 @@ export async function PUT(
   try {
     const userId = await requireAuth(request);
     const { flowId: flowIdParam } = await params;
-    const flowId = parseInt(flowIdParam);
+    const flowId = parseId(flowIdParam);
 
     const existing = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM flows f
        LEFT JOIN component c ON f.component_id = c.component_id
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
@@ -25,28 +36,126 @@ export async function PUT(
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, existing.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Flow not found' });
+    if (denied) return denied;
+
+    // Prod schema: flows columns are flow_type / quantity. Accept either key.
+    const json = await readJson(request);
+    if (!json.ok) return json.response;
+    const body = json.body;
+    const substance_id = body.substance_id;
+    const flow_type = body.flow_type ?? body.direction;
+    const quantityProvided =
+      Object.prototype.hasOwnProperty.call(body, 'quantity') ||
+      Object.prototype.hasOwnProperty.call(body, 'amount');
+    // A blank amount clears it (migration 033: NULL = "needs an amount");
+    // words, NaN and negatives are refused (FLOW-4).
+    const parsedQuantity = quantityProvided
+      ? parseOptionalFlowQuantity(body.quantity ?? body.amount)
+      : ({ ok: true, value: null } as const);
+    if (!parsedQuantity.ok) {
+      return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
+    }
+    const quantity = parsedQuantity.value;
+    const clearQuantity = quantityProvided && quantity === null;
+    const unit = body.unit;
+    if (flow_type != null && !['input', 'output'].includes(flow_type)) {
+      return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
+    }
+    const unitTooLong = lengthError('Unit', unit, COLUMN_LIMITS.flows.unit);
+    if (unitTooLong) return NextResponse.json({ error: unitTooLong }, { status: 400 });
+
+    // L3: a swap may only go to a library substance or the caller's own one.
+    let swappedTo: { default_unit?: string | null; substance_name?: string } | null = null;
+    if (substance_id != null) {
+      swappedTo = await findUsableSubstance(substance_id, userId);
+      if (!swappedTo) {
+        return NextResponse.json({ error: SUBSTANCE_ERROR }, { status: 400 });
+      }
     }
 
-    const { substance_id, flow_type, quantity, unit, is_driver, driver_description } =
-      await request.json();
+    // Same save-time unit guard as flow creation: whichever unit this flow
+    // ends up with must convert into the unit its substance's factors are
+    // stored in, or the engine could only exclude the flow at run time.
+    // A swap without a unit keeps the flow's current unit, which must still
+    // convert into the new substance's unit.
+    const effectiveUnit =
+      unit ||
+      (swappedTo
+        ? (await queryOne<any>(`SELECT unit FROM flows WHERE flow_id = ?`, [flowId]))?.unit
+        : null);
+    if (effectiveUnit) {
+      const effectiveSubstanceId =
+        substance_id ??
+        (await queryOne<any>(`SELECT substance_id FROM flows WHERE flow_id = ?`, [flowId]))
+          ?.substance_id;
+      if (effectiveSubstanceId) {
+        const substanceRow =
+          swappedTo ??
+          (await queryOne<any>(
+            `SELECT unit AS default_unit, substance_name FROM substances WHERE substance_id = ?`,
+            [effectiveSubstanceId]
+          ));
+        if (substanceRow?.default_unit && !convertQuantity(1, effectiveUnit, substanceRow.default_unit)) {
+          return NextResponse.json(
+            {
+              error: `Unit '${effectiveUnit}' cannot be converted to '${substanceRow.default_unit}', the unit ${substanceRow.substance_name}'s impact factors are stored in. Compatible units: ${compatibleUnits(substanceRow.default_unit).join(', ') || substanceRow.default_unit}.`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
 
-    await execute(
-      `UPDATE flows
-       SET substance_id = COALESCE(?, substance_id),
-           flow_type = COALESCE(?, flow_type),
-           quantity = COALESCE(?, quantity),
-           unit = COALESCE(?, unit),
-           is_driver = COALESCE(?, is_driver),
-           driver_description = COALESCE(?, driver_description)
-       WHERE flow_id = ?`,
-      [substance_id ?? null, flow_type ?? null, quantity ?? null, unit ?? null, is_driver !== undefined ? (is_driver ? 1 : 0) : null, driver_description ?? null, flowId]
-    );
+    try {
+      await execute(
+        `UPDATE flows
+         SET substance_id = COALESCE(?, substance_id),
+             flow_type = COALESCE(?, flow_type),
+             quantity = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, quantity) END,
+             unit = COALESCE(?, unit)
+         WHERE flow_id = ?`,
+        [
+          substance_id != null ? Number(substance_id) : null,
+          flow_type ?? null,
+          clearQuantity ? 1 : 0,
+          quantity,
+          unit ?? null,
+          flowId,
+        ]
+      );
+    } catch (updateErr: any) {
+      // A database before migration 033 refuses a flow without an amount.
+      if (clearQuantity && updateErr?.code === 'ER_BAD_NULL_ERROR') {
+        return NextResponse.json(
+          { error: 'This database needs migration 033 before an amount can be cleared. Enter an amount instead.' },
+          { status: 409 }
+        );
+      }
+      throw updateErr;
+    }
+
+    // A quantity typed by hand is no longer the mass x distance a transport
+    // leg was computed from (TKM-2): drop the leg rather than keep two
+    // numbers that disagree.
+    if (quantityProvided) {
+      try {
+        // A cleared amount drops the leg too: nothing is left for it to explain.
+        await execute(
+          `UPDATE flows SET transport_mass_kg = NULL, transport_distance_km = NULL, transport_mode = NULL
+            WHERE flow_id = ? AND transport_mass_kg IS NOT NULL
+              AND (quantity IS NULL
+                   OR ABS(transport_mass_kg / 1000 * transport_distance_km - quantity) > 0.000001 * GREATEST(1, ABS(quantity)))`,
+          [flowId],
+        );
+      } catch (legErr: any) {
+        if (legErr?.code !== 'ER_BAD_FIELD_ERROR') throw legErr; // no migrate-022
+      }
+    }
 
     const updatedFlow = await queryOne(
-      `SELECT f.*, s.substance_name, s.category as substance_category
+      `SELECT f.*,
+              s.substance_name, s.category as substance_category, s.cas_number
        FROM flows f
        LEFT JOIN substances s ON f.substance_id = s.substance_id
        WHERE f.flow_id = ?`,
@@ -55,7 +164,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, flow: updatedFlow });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Update flow error:', error);
@@ -71,10 +180,10 @@ export async function DELETE(
   try {
     const userId = await requireAuth(request);
     const { flowId: flowIdParam } = await params;
-    const flowId = parseInt(flowIdParam);
+    const flowId = parseId(flowIdParam);
 
     const existing = await queryOne<any>(
-      `SELECT ct.project_id 
+      `SELECT ct.project_id, c.case_id
        FROM flows f
        LEFT JOIN component c ON f.component_id = c.component_id
        LEFT JOIN case_table ct ON c.case_id = ct.case_id
@@ -86,16 +195,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
 
-    const hasAccess = await checkProjectAccess(userId, existing.project_id, 'editor');
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    const denied = await caseAccessDenied(userId, existing.case_id, 'editor', { notFound: 'Flow not found' });
+    if (denied) return denied;
 
     await execute(`DELETE FROM flows WHERE flow_id = ?`, [flowId]);
 
     return NextResponse.json({ success: true, message: 'Flow deleted' });
   } catch (error: any) {
-    if (error.message === 'Unauthorized' || error.message === 'No authentication token provided' || error.message === 'Invalid or expired token' || error.message === 'User account not found or inactive') {
+    if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Delete flow error:', error);

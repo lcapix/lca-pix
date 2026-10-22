@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The e2e tester (e2e-tester/) holds no classes, and its runs write reports
+   under it: unscanned, so those writes never make next dev rebuild mid-test. */
+@source not "../e2e-tester";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant high-contrast (&:is(.high-contrast *));

@@ -4,12 +4,12 @@
  */
 
 import pool from './db';
-import { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
+import type { ResultSetHeader, RowDataPacket, PoolConnection } from './db';
 
 /**
  * Execute a SELECT query and return rows
  */
-export async function query<T extends RowDataPacket>(
+export async function query<T = RowDataPacket>(
   sql: string,
   params?: any[]
 ): Promise<T[]> {
@@ -80,7 +80,7 @@ export async function transaction<T>(
 /**
  * Get a single row from query
  */
-export async function queryOne<T extends RowDataPacket>(
+export async function queryOne<T = RowDataPacket>(
   sql: string,
   params?: any[]
 ): Promise<T | null> {

@@ -19,7 +19,7 @@ describe('calculateComponentImpacts — method + region filtering', () => {
       // 2nd: flows join with factors
       [{
         flow_id: 1, substance_id: 7, substance_name: 'Electricity', cas_number: null,
-        flow_type: 'input', quantity: 10, flow_unit: 'kWh',
+        flow_type: 'input', quantity: 10, flow_unit: 'kWh', substance_default_unit: 'kWh',
         category_id: 1, category_name: 'Global Warming',
         category_unit: 'kg CO2 eq', characterization_factor: 0.283,
       }],
@@ -41,7 +41,7 @@ describe('calculateComponentImpacts — method + region filtering', () => {
     const conn = fakeConn([
       [{ component_id: 1, component_name: 'X', component_type: 'elemental_task', hierarchy_level: 5 }],
       [{ flow_id: 1, substance_id: 1, substance_name: 'CO2', cas_number: null,
-         flow_type: 'output', quantity: 5, flow_unit: 'kg',
+         flow_type: 'output', quantity: 5, flow_unit: 'kg', substance_default_unit: 'kg',
          category_id: 1, category_name: 'Global Warming',
          category_unit: 'kg CO2 eq', characterization_factor: 1.0 }],
     ]);

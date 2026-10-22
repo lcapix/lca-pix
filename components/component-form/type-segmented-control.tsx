@@ -92,7 +92,7 @@ export function TypeSegmentedControl({
             <span
               className={cn(
                 'font-mono text-[9px] uppercase tracking-[0.18em] leading-none',
-                selected ? 'text-primary/70' : 'text-outline',
+                selected ? 'text-primary/70' : 'text-on-surface-variant',
               )}
             >
               {caption}

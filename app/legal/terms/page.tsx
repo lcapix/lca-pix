@@ -1,6 +1,6 @@
 import { LegalShell } from '../legal-layout'
 
-export const metadata = { title: 'Terms of service — LCAPIX' }
+export const metadata = { title: 'Terms of service: LCAPIX' }
 
 export default function TermsPage() {
   return (
@@ -11,7 +11,7 @@ export default function TermsPage() {
     >
       <p>
         These terms govern your use of the LCAPIX platform. By signing up, you
-        agree to them. Plain English version — no surprises.
+        agree to them. Plain English version: no surprises.
       </p>
 
       <h2>1. The service</h2>
@@ -31,7 +31,7 @@ export default function TermsPage() {
       <h2>3. Billing</h2>
       <p>
         Free tier is free, indefinitely. Pro and Enterprise are billed monthly
-        or annually in advance. Cancel at any time — you keep access through
+        or annually in advance. Cancel at any time: you keep access through
         the end of the paid period. No refunds for partial periods, but no
         retroactive bills either.
       </p>
@@ -47,7 +47,7 @@ export default function TermsPage() {
       <h2>5. Liability</h2>
       <p>
         The platform is provided as-is. LCA outputs are tools, not
-        certifications — the practitioner is responsible for verifying results
+        certifications: the practitioner is responsible for verifying results
         before publishing them. Our maximum liability is the amount you paid
         in the prior 12 months.
       </p>

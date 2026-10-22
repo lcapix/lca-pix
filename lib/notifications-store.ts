@@ -24,48 +24,10 @@ interface NotificationsState {
   unreadCount: () => number
 }
 
-const SEED: Notification[] = [
-  {
-    id: 'seed-1',
-    kind: 'assessment',
-    status: 'success',
-    actor: 'You',
-    text: 'Assessment completed for Painted Metal Box (CML 2001)',
-    ts: Date.now() - 1000 * 60 * 4,
-    read: false,
-    href: '/project/1/case/1/results',
-  },
-  {
-    id: 'seed-2',
-    kind: 'edit',
-    status: 'info',
-    actor: 'You',
-    text: 'Edited Spray Painting component',
-    ts: Date.now() - 1000 * 60 * 60 * 2,
-    read: false,
-    href: '/project/1/case/1',
-  },
-  {
-    id: 'seed-3',
-    kind: 'project',
-    status: 'info',
-    actor: 'You',
-    text: 'Created comparative case "Powder Coated variant"',
-    ts: Date.now() - 1000 * 60 * 60 * 5,
-    read: true,
-    href: '/project/1',
-  },
-  {
-    id: 'seed-4',
-    kind: 'system',
-    status: 'success',
-    actor: 'System',
-    text: 'openLCA factor pack refreshed (5,234 factors)',
-    ts: Date.now() - 1000 * 60 * 60 * 26,
-    read: true,
-    href: '/admin/integrations',
-  },
-]
+// The feed shows only events the user actually caused (via push()); it starts
+// empty. Demo events that never happened erode trust in every real number on
+// the dashboard.
+const SEED: Notification[] = []
 
 export const useNotificationsStore = create<NotificationsState>()(
   persist(
@@ -84,7 +46,20 @@ export const useNotificationsStore = create<NotificationsState>()(
       clear: () => set({ items: [] }),
       unreadCount: () => get().items.filter((i) => !i.read).length,
     }),
-    { name: 'lcapix-notifications' },
+    {
+      name: 'lcapix-notifications',
+      // v1 strips the old demo seed entries out of browsers that already
+      // persisted them.
+      version: 1,
+      migrate: (persisted: any) => {
+        if (persisted?.items) {
+          persisted.items = persisted.items.filter(
+            (it: Notification) => !String(it.id).startsWith('seed-'),
+          )
+        }
+        return persisted
+      },
+    },
   ),
 )
 

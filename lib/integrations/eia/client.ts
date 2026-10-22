@@ -12,7 +12,7 @@ export interface EnergyPrice {
 
 function requireKey(): string {
   const key = process.env.EIA_API_KEY;
-  if (!key) throw new Error('EIA_API_KEY not configured — sign up at https://www.eia.gov/opendata/');
+  if (!key) throw new Error('EIA_API_KEY not configured: sign up at https://www.eia.gov/opendata/');
   return key;
 }
 
