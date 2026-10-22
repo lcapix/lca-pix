@@ -1,0 +1,424 @@
+{
+  "source": {
+    "name": "DOE Industrial Training and Assessment Centers (ITAC) database",
+    "url": "https://itac.university/download",
+    "file": "ITAC_Database_20260830.xlsx",
+    "sha256": "a7c8036d4ad0094c8d96efc800511379fdc10ffcb96cabc2644eff4d1f5369cf",
+    "extractedBy": "scripts/fixtures/wv0661-extract.mjs"
+  },
+  "plant": {
+    "id": "WV0661",
+    "fiscalYear": {
+      "value": 2024,
+      "unit": "year",
+      "cell": "ASSESS!C22871",
+      "term": "Fiscal Year"
+    },
+    "naics": {
+      "value": 332813,
+      "unit": "code",
+      "cell": "ASSESS!E22871",
+      "term": "NAICS industrial classification code"
+    },
+    "sic": {
+      "value": 3471,
+      "unit": "code",
+      "cell": "ASSESS!D22871",
+      "term": "SIC industrial classification code"
+    },
+    "state": {
+      "value": "WV",
+      "unit": "code",
+      "cell": "ASSESS!F22871",
+      "term": "US State abbreviation"
+    },
+    "products": {
+      "value": "Electroplating",
+      "unit": "text",
+      "cell": "ASSESS!J22871",
+      "term": "Types of products"
+    },
+    "salesCents": {
+      "value": 200000000,
+      "unit": "USD cents",
+      "cell": "ASSESS!G22871",
+      "term": "Total yearly sales"
+    },
+    "employees": {
+      "value": 22,
+      "unit": "people",
+      "cell": "ASSESS!H22871",
+      "term": "Total site employees"
+    },
+    "plantAreaSqFt": {
+      "value": 28000,
+      "unit": "sq ft",
+      "cell": "ASSESS!I22871",
+      "term": "Total plant square footage"
+    },
+    "productionLevel": {
+      "value": 5200,
+      "unit": "units (PRODUNITS code 1; ITAC does not say what a unit is)",
+      "cell": "ASSESS!L22871",
+      "term": "Total yearly production"
+    },
+    "productionUnitsCode": {
+      "value": 1,
+      "unit": "code",
+      "cell": "ASSESS!K22871",
+      "term": "Production level units"
+    },
+    "productionHours": {
+      "value": 2080,
+      "unit": "h",
+      "cell": "ASSESS!M22871",
+      "term": "Total yearly hours of operation"
+    },
+    "recommendationCount": {
+      "value": 11,
+      "unit": "count",
+      "cell": "ASSESS!N22871",
+      "term": null
+    }
+  },
+  "streams": [
+    {
+      "code": "EC",
+      "label": "Total yearly electricity consumption costs ($)",
+      "costCents": 4819400,
+      "costCell": "ASSESS!O22871",
+      "usage": 466871,
+      "usageUnit": "kWh",
+      "usageCell": "ASSESS!P22871"
+    },
+    {
+      "code": "ED",
+      "label": "Total yearly electricity demand charges ($)",
+      "costCents": 2127900,
+      "costCell": "ASSESS!Q22871",
+      "usage": 1953,
+      "usageUnit": "kW-month-year",
+      "usageCell": "ASSESS!R22871"
+    },
+    {
+      "code": "EF",
+      "label": "Total yearly electricity fees",
+      "costCents": 858000,
+      "costCell": "ASSESS!S22871",
+      "usage": null,
+      "usageUnit": null,
+      "usageCell": null
+    },
+    {
+      "code": "E2",
+      "label": "Total yearly natrual gas consumption costs ($)",
+      "costCents": 2309700,
+      "costCell": "ASSESS!T22871",
+      "usage": 3845,
+      "usageUnit": "MMBtu",
+      "usageCell": "ASSESS!U22871"
+    }
+  ],
+  "resourceCodes": {
+    "EC": "Total yearly electricity consumption (kWh)",
+    "ED": "Total yearly electricity demand (kW-month-year)",
+    "E2": "Total yearly natural gas consumption (MMBtu)"
+  },
+  "recommendations": [
+    {
+      "number": 1,
+      "superId": "WV066101",
+      "arc": 2.7142,
+      "implemented": false,
+      "status": "N",
+      "costCents": 1596900,
+      "capitalCents": 1204900,
+      "otherCents": 392000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "none",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 39988,
+          "sourceConserved": null,
+          "savedCents": 412700
+        },
+        {
+          "code": "ED",
+          "conserved": 228,
+          "sourceConserved": null,
+          "savedCents": 248500
+        }
+      ],
+      "row": "RECC!169606"
+    },
+    {
+      "number": 2,
+      "superId": "WV066102",
+      "arc": 2.4146,
+      "implemented": false,
+      "status": "N",
+      "costCents": 974400,
+      "capitalCents": 439400,
+      "otherCents": 535000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "MEASUR",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 32443,
+          "sourceConserved": null,
+          "savedCents": 334800
+        },
+        {
+          "code": "ED",
+          "conserved": 150,
+          "sourceConserved": null,
+          "savedCents": 163500
+        }
+      ],
+      "row": "RECC!169607"
+    },
+    {
+      "number": 3,
+      "superId": "WV066103",
+      "arc": 2.3131,
+      "implemented": false,
+      "status": "N",
+      "costCents": 970000,
+      "capitalCents": 500000,
+      "otherCents": 470000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "none",
+      "resources": [
+        {
+          "code": "ED",
+          "conserved": 434,
+          "sourceConserved": null,
+          "savedCents": 473100
+        }
+      ],
+      "row": "RECC!169608"
+    },
+    {
+      "number": 4,
+      "superId": "WV066104",
+      "arc": 2.4322,
+      "implemented": true,
+      "status": "I",
+      "costCents": 1216500,
+      "capitalCents": 1111500,
+      "otherCents": 105000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "none",
+      "resources": [
+        {
+          "code": "E2",
+          "conserved": 437,
+          "sourceConserved": null,
+          "savedCents": 262600
+        }
+      ],
+      "row": "RECC!169609"
+    },
+    {
+      "number": 5,
+      "superId": "WV066105",
+      "arc": 2.4236,
+      "implemented": true,
+      "status": "I",
+      "costCents": 47300,
+      "capitalCents": 35000,
+      "otherCents": 12300,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "AM+",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 7138,
+          "sourceConserved": null,
+          "savedCents": 73700
+        },
+        {
+          "code": "ED",
+          "conserved": 41,
+          "sourceConserved": null,
+          "savedCents": 44700
+        }
+      ],
+      "row": "RECC!169610"
+    },
+    {
+      "number": 6,
+      "superId": "WV066106",
+      "arc": 2.4224,
+      "implemented": false,
+      "status": "N",
+      "costCents": 364500,
+      "capitalCents": 86500,
+      "otherCents": 278000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "AM+",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 8836,
+          "sourceConserved": null,
+          "savedCents": 91200
+        },
+        {
+          "code": "ED",
+          "conserved": 10,
+          "sourceConserved": null,
+          "savedCents": 10900
+        }
+      ],
+      "row": "RECC!169611"
+    },
+    {
+      "number": 7,
+      "superId": "WV066107",
+      "arc": 2.4239,
+      "implemented": true,
+      "status": "I",
+      "costCents": 251700,
+      "capitalCents": 240000,
+      "otherCents": 11700,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "MEASUR",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 4608,
+          "sourceConserved": null,
+          "savedCents": 47600
+        },
+        {
+          "code": "ED",
+          "conserved": 13,
+          "sourceConserved": null,
+          "savedCents": 14200
+        }
+      ],
+      "row": "RECC!169612"
+    },
+    {
+      "number": 8,
+      "superId": "WV066108",
+      "arc": 2.4322,
+      "implemented": true,
+      "status": "I",
+      "costCents": 31400,
+      "capitalCents": 17400,
+      "otherCents": 14000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "AM+",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 3166,
+          "sourceConserved": null,
+          "savedCents": 32700
+        },
+        {
+          "code": "ED",
+          "conserved": 18,
+          "sourceConserved": null,
+          "savedCents": 19600
+        }
+      ],
+      "row": "RECC!169613"
+    },
+    {
+      "number": 9,
+      "superId": "WV066109",
+      "arc": 2.2511,
+      "implemented": true,
+      "status": "I",
+      "costCents": 35500,
+      "capitalCents": 7300,
+      "otherCents": 28200,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "SSTS",
+      "resources": [
+        {
+          "code": "E2",
+          "conserved": 61,
+          "sourceConserved": null,
+          "savedCents": 36700
+        }
+      ],
+      "row": "RECC!169614"
+    },
+    {
+      "number": 10,
+      "superId": "WV066110",
+      "arc": 2.4231,
+      "implemented": true,
+      "status": "I",
+      "costCents": 14000,
+      "capitalCents": null,
+      "otherCents": 14000,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "AM+",
+      "resources": [
+        {
+          "code": "EC",
+          "conserved": 1721,
+          "sourceConserved": null,
+          "savedCents": 17800
+        },
+        {
+          "code": "ED",
+          "conserved": 5,
+          "sourceConserved": null,
+          "savedCents": 5500
+        }
+      ],
+      "row": "RECC!169615"
+    },
+    {
+      "number": 11,
+      "superId": "WV066111",
+      "arc": 2.1233,
+      "implemented": true,
+      "status": "I",
+      "costCents": 71300,
+      "capitalCents": 69500,
+      "otherCents": 1800,
+      "rebate": "N",
+      "incremental": "N",
+      "payback": null,
+      "tool": "MEASUR",
+      "resources": [
+        {
+          "code": "E2",
+          "conserved": 36,
+          "sourceConserved": null,
+          "savedCents": 21800
+        }
+      ],
+      "row": "RECC!169616"
+    }
+  ]
+}
