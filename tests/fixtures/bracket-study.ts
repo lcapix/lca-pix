@@ -1,9 +1,10 @@
 /**
  * A test fixture, not shipped: the painted steel bracket study (the education
  * version's sample), 17 steps in five tiers, nine flows, its costs, a base
- * case run and a what-if ("Shorter cure cycle") run. Pure data;
- * ./build-bracket.ts writes it. The API suites use it as a rich, fully
- * worked case whose numbers are known.
+ * case run and a what-if ("Shorter cure cycle") run. Pure data, written by
+ * tests/api-real/support/fixtures/build-bracket.ts (straight to the database,
+ * for the API suites) and tests/e2e/support/bracket.ts (through the HTTP API,
+ * for the browser suite): a rich, fully worked case whose numbers are known.
  *
  * Honesty rule (kept from the first worked example): the QUANTITIES and the
  * time drivers are illustrative and say so; every factor and every reference
@@ -28,7 +29,7 @@ import type { CostBasisKind } from '@/lib/costs/cost-basis'
 export const SAMPLE_PROJECT = {
   name: 'Painted steel bracket',
   description:
-    'A finished study to read first. Quantities are illustrative; every factor and rate is real and named. Make your own copy to change it.',
+    'A worked study of one bracket. Quantities are illustrative; every factor and rate is real and named.',
   goal: "Find the largest contributor to the bracket's footprint, and test lower-energy curing.",
   functionalUnit: '1 painted steel bracket',
   boundary: 'cradle-to-gate' as const,

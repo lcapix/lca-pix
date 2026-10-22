@@ -1,7 +1,7 @@
 /**
  * Inside a case (the workspace, E03 to E04, E14): F6 the process tree, F7
  * flows, F8 costs. docs/flows/USER_FLOWS.md §F6–F8. Every test starts from
- * its own account's copy of the sample study, so tests never share data.
+ * its own account's copy of the bracket study, so tests never share data.
  *
  * The workspace's tree is one Tab stop (role tree) holding its steps (role
  * treeitem, named "<name>, <tier>"); a step's menu (E03c) opens with a right

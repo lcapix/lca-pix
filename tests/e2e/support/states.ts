@@ -1,8 +1,7 @@
 /**
- * Screens that only exist after an interaction, on the education screens: a
- * step's panel, the Cost view with the labour lookup, a step's menu and its
- * delete confirm, Magic Insights, the privacy confirm on People, Compare's
- * case menu and New case's base-case option. The visual and accessibility
+ * Screens that only exist after an interaction: a step's panel, the Cost view
+ * with the labour lookup, a step's menu and its delete confirm, Magic
+ * Insights, Compare's case menu and New case's base-case option. The visual and accessibility
  * baselines cover these on top of routes.json.
  */
 import { expect, type Locator, type Page } from '@playwright/test';
@@ -29,7 +28,7 @@ export type ScreenState = {
 
 const CASE_ON_PHONE = 'A case on a phone is the read-only outline (E16, E17): nothing to edit or open.';
 
-/** The seed's copy of the sample (a case the owner can change, run R2). */
+/** The seed's copy of the base case (a case the owner can change, run R2). */
 const copyPath = (s: Seed) => `/project/${s.example.projectId}/case/${s.example.compCaseId}`;
 const SLOW = { timeout: 90_000 };
 const treeStep = (page: Page, name: string) => page.getByRole('treeitem', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, `) });
@@ -120,16 +119,6 @@ export const STATES: ScreenState[] = [
         .filter({ has: page.getByRole('button', { name: 'Close', exact: true }) })
         .filter({ has: page.getByText('Computed deterministically from your assessment results.') })
         .last(),
-  },
-  {
-    slug: 'people-privacy-confirm',
-    brief: '22 People: turning on "only their own case" asks first (E08b)',
-    path: (s) => `/project/${s.fiveTier.projectId}/people`,
-    prepare: async (page) => {
-      await page.getByRole('switch', { name: /see only their own case/ }).click();
-      await expect(page.getByRole('alertdialog')).toBeVisible();
-    },
-    target: (page) => page.getByRole('alertdialog'),
   },
   {
     slug: 'compare-add-case',

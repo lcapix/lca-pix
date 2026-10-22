@@ -1,15 +1,12 @@
 /**
  * Contract tests: the hooks that scripts, the guides and the unit tests rely
- * on, on the education screens. They fail the moment one goes.
+ * on. They fail the moment one goes.
  *
  *   - The tree: one role=tree holding one role=treeitem per step, each with
  *     id "step-<component id>" and the name "<name>, <tier>".
  *   - The accessible names a guide tells people to press.
  *
- * The classic product tour (lib/lcapix-tour-steps.ts) and its data-tour
- * anchors belong to the classic pages, shown only with
- * NEXT_PUBLIC_LCAPIX_SHELL=classic; the education shell's guide is Guided
- * mode (the Docs button turns it on).
+ * The commercial version has no product tour and no guided mode.
  */
 import type { Locator, Page } from '@playwright/test';
 import { openCase } from '../support/editor';
@@ -35,7 +32,7 @@ test.describe('the tree', () => {
     const { projectId, baseCaseId, cutBlankId } = seed().example;
     await openCase(page, projectId, baseCaseId);
     await expect(page.getByRole('tree')).toHaveCount(1);
-    // The sample study: 17 steps on five tiers.
+    // The bracket study: 17 steps on five tiers.
     await expect(page.getByRole('treeitem')).toHaveCount(17);
     const cut = page.locator(`#step-${cutBlankId}`);
     await expect(cut).toHaveAttribute('role', 'treeitem');
@@ -53,11 +50,12 @@ test.describe('accessible names', () => {
     await expect(control(page, 'Hide panel')).toBeVisible();
   });
 
-  test('the sample’s read-only base case: Make my own copy, not Run Assessment', async ({ page }) => {
+  test('the base case: Run Assessment and Add step, and no Make my own copy', async ({ page }) => {
     const { projectId, baseCaseId } = seed().example;
     await openCase(page, projectId, baseCaseId);
-    await expect(page.getByRole('button', { name: 'Make my own copy' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add step', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Make my own copy' })).toHaveCount(0);
   });
 
   test('Results: Magic Insights and Try a what-if', async ({ page }) => {
@@ -81,7 +79,7 @@ test.describe('the landing', () => {
   test.use({ storageState: storagePath('anon') });
 
   test('Get started and Log in, and a skip link to the content', async ({ page }) => {
-    await open(page, '/', { ready: 'Know the footprint of anything you make.' });
+    await open(page, '/', { ready: 'Know what each thing you make costs and emits.' });
     await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
     await expect(page.getByRole('link', { name: /^Get started/ }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: 'Skip to content' })).toHaveAttribute('href', '#lp-main');

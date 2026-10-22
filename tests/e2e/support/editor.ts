@@ -5,6 +5,7 @@
  */
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { Api, ApiUser } from './api';
+import { buildBracket } from './bracket';
 import { open } from './ui';
 
 export function escapeRe(s: string): string {
@@ -12,9 +13,9 @@ export function escapeRe(s: string): string {
 }
 
 /**
- * The sample study in `user`'s account (TRACI 2.1 / US, run), and the user's
- * own copy of its base case to change and run: the sample's base case is
- * read-only (migrate-038). `caseId` is the copy; `baseCaseId` the sample's.
+ * The bracket study in `user`'s account (TRACI 2.1 / US, run; support/bracket.ts),
+ * and a copy of its base case to change and run, so the base keeps its run.
+ * `caseId` is the copy; `baseCaseId` the base case.
  */
 export async function workedExample(
   api: Api,
@@ -22,9 +23,9 @@ export async function workedExample(
   copyName = 'My bracket',
 ): Promise<{ projectId: number; caseId: number; baseCaseId: number; baseRunId: number }> {
   const as = api.as(user.token);
-  const r = await as.post<{ project_id: number; case_id: number; run_id: number }>('/api/example-project');
-  const copy = await as.post<{ case_id: number }>(`/api/cases/${r.case_id}/duplicate`, { case_name: copyName });
-  return { projectId: r.project_id, caseId: copy.case_id, baseCaseId: r.case_id, baseRunId: r.run_id };
+  const b = await buildBracket(as);
+  const copy = await as.post<{ case_id: number }>(`/api/cases/${b.baseCaseId}/duplicate`, { case_name: copyName });
+  return { projectId: b.projectId, caseId: copy.case_id, baseCaseId: b.baseCaseId, baseRunId: b.baseRunId };
 }
 
 /** A case in the workspace (E03): its tree is the one Tab stop named after the case. */

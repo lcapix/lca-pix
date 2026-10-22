@@ -28,7 +28,7 @@
       "slug": "landing",
       "path": "/",
       "as": "anon",
-      "ready": "Know the footprint of anything you make.",
+      "ready": "Know what each thing you make costs and emits.",
       "brief": "1 Landing"
     },
     {
@@ -111,7 +111,7 @@
       "slug": "home-empty",
       "path": "/home",
       "as": "empty",
-      "ready": "Open the sample study",
+      "ready": "Start one of two ways.",
       "brief": "5 Home (empty state)"
     },
     {
@@ -129,8 +129,8 @@
     {
       "slug": "project-workspace",
       "path": "/project/{exampleProject}",
-      "ready": "Sample study",
-      "brief": "8 Project overview (the sample, E02)"
+      "ready": "Open editor",
+      "brief": "8 Project overview (the bracket study)"
     },
     {
       "slug": "project-workspace-five-tier",
@@ -153,9 +153,9 @@
     {
       "slug": "case-editor",
       "path": "/project/{exampleProject}/case/{baseCase}",
-      "ready": "Make my own copy",
+      "ready": "Run Assessment",
       "phoneReady": "Read only on a phone.",
-      "brief": "10 Case (the sample, read-only, E03)"
+      "brief": "10 Case (the base case, E03)"
     },
     {
       "slug": "case-editor-five-tier",
@@ -184,12 +184,6 @@
       "brief": "13 Results (E05)"
     },
     {
-      "slug": "analytics",
-      "path": "/project/{exampleProject}/analytics",
-      "ready": "Analytics",
-      "brief": "15 Analytics (E10)"
-    },
-    {
       "slug": "compare",
       "path": "/project/{exampleProject}/comparison?cases={baseCase},{compCase}",
       "ready": "Change by step",
@@ -200,12 +194,6 @@
       "path": "/project/{exampleProject}/import",
       "ready": "What kind of file is it?",
       "brief": "17 Add a file (F2.2)"
-    },
-    {
-      "slug": "class",
-      "path": "/project/{exampleProject}/class",
-      "ready": "Progress",
-      "brief": "18 Class"
     },
     {
       "slug": "library-factors",
@@ -297,12 +285,6 @@
       "path": "/project/{fiveTierProject}/people",
       "ready": "Add people",
       "brief": "22 People (E08)"
-    },
-    {
-      "slug": "people-sample",
-      "path": "/project/{exampleProject}/people",
-      "ready": "The sample is never shared",
-      "brief": "22 People on the sample"
     },
     {
       "slug": "reports",

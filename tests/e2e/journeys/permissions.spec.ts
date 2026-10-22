@@ -1,15 +1,30 @@
 /**
- * F14 roles in the UI: a viewer member and a non-member.
- * docs/flows/USER_FLOWS.md §F14 and docs/flows-updates/permissions-404.md.
- * Seeded: Victor Viewer is a viewer on the worked example (P1) and not a
+ * F14 roles in the UI: a member who can change, a viewer member and a
+ * non-member. docs/flows/USER_FLOWS.md §F14 and docs/flows-updates/permissions-404.md.
+ * Seeded: Victor Viewer is a viewer on the bracket study (P1) and not a
  * member of the five-tier project (P2).
  */
 import { ApiError } from '../support/api';
-import { openCase } from '../support/editor';
+import { openCase, workedExample } from '../support/editor';
 import { expect, storagePath, test } from '../support/fixtures';
 import { open, settle } from '../support/ui';
 
 const NAV = { timeout: 90_000 };
+
+test.describe('member who can change', () => {
+  test("reaches the owner's base case with Run Assessment and Add step", async ({ api, newUser, signIn }) => {
+    const owner = await newUser('canchange-owner');
+    const member = await newUser('canchange-member');
+    const { projectId, baseCaseId } = await workedExample(api, owner);
+    await api.as(owner.token).post(`/api/projects/${projectId}/members`, { email: member.email, role: 'editor' });
+
+    const { page } = await signIn(member);
+    await openCase(page, projectId, baseCaseId);
+    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toBeVisible(NAV);
+    await expect(page.getByRole('button', { name: 'Add step', exact: true })).toBeVisible();
+    await expect(page.getByText('Can read', { exact: true })).toHaveCount(0);
+  });
+});
 
 test.describe('viewer member', () => {
   test.use({ storageState: storagePath('viewer') });
@@ -26,11 +41,11 @@ test.describe('viewer member', () => {
     await expect(page.locator('.ws-answer-num')).toHaveText('1.72');
   });
 
-  test('sees no edit controls: no run, no copy, no Add step; says Can read', async ({ page, seed }) => {
+  test('sees no edit controls: no run, no Add step; says Can read', async ({ page, seed }) => {
     const { projectId, baseCaseId } = seed.example;
     await openCase(page, projectId, baseCaseId);
     await expect(page.getByText('Can read', { exact: true }).first()).toBeVisible();
-    for (const name of ['Run Assessment', 'Make my own copy', 'Add step']) {
+    for (const name of ['Run Assessment', 'Add step']) {
       await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
   });

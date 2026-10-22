@@ -1,19 +1,19 @@
 /**
- * F1 sign up → About you → the sample study built → Home opens on it; F2 log
- * in (wrong password, right password) and log out. docs/flows/USER_FLOWS.md
- * §F1–F2, on the education screens (F1.2, F1.2b, F1.3, E02).
+ * F1 sign up → About you (name and company) → an empty Home with two ways in;
+ * F2 log in (wrong password, right password) and log out.
+ * docs/flows/USER_FLOWS.md §F1–F2, on the commercial screens (F1.2, F1.2b, F1.3).
  */
 import { newPassword, uniqueEmail } from '../support/api';
 import { expect, storagePath, test } from '../support/fixtures';
 import { open } from '../support/ui';
 
-// Building the sample and compiling Home can pass the 20 s default under parallel load.
+// Compiling Home can pass the 20 s default under parallel load.
 const NAV = { timeout: 90_000 };
 
 test.describe('F1 sign up', () => {
   test.use({ storageState: storagePath('anon') });
 
-  test('sign up → About you → the sample study is built and Home opens on it', async ({ page }) => {
+  test('sign up → About you → Home opens empty, with two ways in and nothing built', async ({ page }) => {
     await open(page, '/auth/signup', { ready: 'Create your account' });
     await page.getByLabel('Your name').fill('Sam Signup');
     await page.getByLabel('Email').fill(uniqueEmail('signup'));
@@ -24,15 +24,22 @@ test.describe('F1 sign up', () => {
     await expect(page.getByRole('heading', { name: 'Tell us a little about you.' })).toBeVisible();
     await expect(page.getByLabel('Full name')).toHaveValue('Sam Signup'); // kept from sign-up
 
-    const built = page.waitForResponse((r) => r.url().includes('/api/example-project') && r.request().method() === 'POST', NAV);
-    await page.getByRole('button', { name: 'Open the sample study' }).click();
-    expect((await built).status()).toBe(200);
+    // No use case, no guided mode: name and an optional company.
+    await expect(page.getByText('What will you use LCAPIX for?')).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Guided mode' })).toHaveCount(0);
+    await page.getByLabel(/^Company/).fill('Ridge Plating Co');
+
+    const requests: string[] = [];
+    page.on('request', (r) => requests.push(new URL(r.url()).pathname));
+    const saved = page.waitForResponse((r) => r.url().includes('/api/auth/profile') && r.request().method() === 'PUT', NAV);
+    await page.getByRole('button', { name: 'Continue' }).click();
+    expect((await saved).status()).toBe(200);
 
     await expect(page).toHaveURL(/\/home$/, NAV);
-    await expect(page.getByText('Sample study', { exact: true })).toBeVisible(NAV);
-    await expect(page.getByText('Read-only · made for you when you signed up')).toBeVisible();
-    // The page's one primary, in its header (What next offers it again).
-    await expect(page.locator('header').getByRole('button', { name: 'Make my own copy' })).toBeVisible();
+    await expect(page.getByText('Start one of two ways.')).toBeVisible(NAV);
+    await expect(page.getByRole('heading', { name: 'Start from a file' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Start empty' })).toBeVisible();
+    expect(requests.filter((p) => p.includes('example-project'))).toEqual([]);
   });
 
   test('About you needs a name, and keeps you on the form without one', async ({ newUser, signIn }) => {
@@ -40,7 +47,7 @@ test.describe('F1 sign up', () => {
     const { page } = await signIn(user);
     await open(page, '/auth/onboarding', { ready: 'Tell us a little about you.' });
     await page.getByLabel('Full name').fill('');
-    await page.getByRole('button', { name: 'Open the sample study' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByText('Enter your name. It is how people in your projects see you.')).toBeVisible();
     await expect(page).toHaveURL(/\/auth\/onboarding$/);
   });
@@ -70,7 +77,7 @@ test.describe('F2 log in and out', () => {
     await page.getByRole('button', { name: 'Log in', exact: true }).click();
 
     await expect(page).toHaveURL(/\/home$/, NAV);
-    // No project yet: the three ways in (E01b).
+    // No project yet: the two ways in (E01b).
     await expect(page.getByRole('heading', { name: 'Welcome to LCAPIX' })).toBeVisible(NAV);
     expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeTruthy();
   });

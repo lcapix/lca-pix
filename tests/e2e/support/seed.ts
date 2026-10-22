@@ -5,9 +5,9 @@
  * ids and names come out the same on every run.
  *
  *   owner    Olivia Owner, onboarded
- *     P1  the sample study (POST /api/example-project, TRACI 2.1 / US): built with
- *         its run and its what-if; its base case is read-only (migrate-038)
- *         C1  base "Base case"                                 run R1 (the sample's own)
+ *     P1  the bracket study (support/bracket.ts, TRACI 2.1 / US): 17 steps,
+ *         their flows and costs, built through the API
+ *         C1  base "Base case"                                 run R1
  *         C2  comparative "Painted steel bracket (lighter blank)" — duplicate of C1 with
  *             the Steel input cut from 0.8 to 0.6 kg              run R2
  *     P2  "Five-tier bicycle frame" (CML 2001 / Global)
@@ -18,6 +18,7 @@
  */
 import type { APIRequestContext } from '@playwright/test';
 import { Api, type ApiUser } from './api';
+import { buildBracket } from './bracket';
 
 export type Seed = {
   baseURL: string;
@@ -74,9 +75,9 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
   const newcomer = await anon.createUser({ email: 'newcomer@e2e.lcapix.test', fullName: 'Nico Newcomer', onboard: false });
   const api = anon.as(owner.token);
 
-  // ── P1: the worked example, with its functional unit set and a run ─────────
-  // The sample arrives run (its base case is read-only, so it is never run here).
-  const ex = await api.post<{ project_id: number; case_id: number; run_id: number }>('/api/example-project');
+  // ── P1: the bracket study, run ─────────────────────────────────────────────
+  const bracket = await buildBracket(api);
+  const ex = { project_id: bracket.projectId, case_id: bracket.baseCaseId, run_id: bracket.baseRunId };
   const run1 = { run_id: ex.run_id, ...(await api.get<{ total_impacts: unknown }>(`/api/assessments/${ex.run_id}`)) };
   const exProject = (await api.get<{ project: { project_name: string } }>(`/api/projects/${ex.project_id}`)).project;
 

@@ -8,8 +8,8 @@
     },
     "landmark-unique": {
       "impact": "moderate",
-      "count": 11,
-      "screens": 10
+      "count": 10,
+      "screens": 9
     },
     "landmark-one-main": {
       "impact": "moderate",
@@ -20,16 +20,6 @@
       "impact": "moderate",
       "count": 3,
       "screens": 3
-    },
-    "landmark-main-is-top-level": {
-      "impact": "moderate",
-      "count": 1,
-      "screens": 1
-    },
-    "landmark-no-duplicate-main": {
-      "impact": "moderate",
-      "count": 1,
-      "screens": 1
     }
   },
   "screens": {
@@ -44,7 +34,6 @@
       }
     },
     "admin-integrations": {},
-    "analytics": {},
     "case-copy": {},
     "case-cost-labor": {},
     "case-delete-confirm": {},
@@ -71,20 +60,6 @@
       "region": {
         "impact": "moderate",
         "count": 28
-      }
-    },
-    "class": {
-      "landmark-main-is-top-level": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-no-duplicate-main": {
-        "impact": "moderate",
-        "count": 1
-      },
-      "landmark-unique": {
-        "impact": "moderate",
-        "count": 1
       }
     },
     "compare": {},
@@ -226,8 +201,6 @@
     },
     "onboarding": {},
     "people": {},
-    "people-privacy-confirm": {},
-    "people-sample": {},
     "pricing": {
       "landmark-one-main": {
         "impact": "moderate",

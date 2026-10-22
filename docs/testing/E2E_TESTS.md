@@ -55,12 +55,12 @@ Built in a fixed order on an empty database, so ids and names are the same every
 
 | Who | What |
 |---|---|
-| **Olivia Owner** (`owner@e2e.lcapix.test`) | **P1** "Example: painted steel bracket" (worked example, TRACI 2.1 / US): base case **C1** with run R1 (1.72 kg CO2 eq), comparative **C2** "Painted steel bracket (lighter blank)" (duplicate, steel 0.8 → 0.6 kg) with run R2. **P2** "Five-tier bicycle frame" (CML 2001 / Global): case **C5** Product → Machine/Line → Subprocess → Operation → Elemental task. |
+| **Olivia Owner** (`owner@e2e.lcapix.test`) | **P1** "Painted steel bracket" (the bracket study built through the API by `support/bracket.ts`, TRACI 2.1 / US): base case **C1** with run R1 (1.72 kg CO2 eq), comparative **C2** "Painted steel bracket (lighter blank)" (duplicate, steel 0.8 → 0.6 kg) with run R2. **P2** "Five-tier bicycle frame" (CML 2001 / Global): case **C5** Product → Machine/Line → Subprocess → Operation → Elemental task. |
 | **Victor Viewer** | viewer on P1, not a member of P2 |
 | **Emma Empty** | onboarded, no projects (the empty dashboard) |
 | **Nico Newcomer** | signed up, not onboarded (the onboarding page) |
 
-Passwords are random per run and exist only in the run's state directory. Journeys that change data never use this world: each signs up its own account through the API (`newUser()`), loads its own worked example, and signs in with `signIn()`.
+Passwords are random per run and exist only in the run's state directory. Journeys that change data never use this world: each signs up its own account through the API (`newUser()`), builds its own bracket study (`workedExample()`), and signs in with `signIn()`.
 
 ### Fast loop while writing a test
 
@@ -79,13 +79,12 @@ Other switches: `E2E_SERVER_LOG=1` (show the dev server's stdout), `E2E_KEEP_DB=
 
 | File | Protects |
 |---|---|
-| `auth.spec.ts` | F1 sign up → onboarding → home; onboarding validation; F2 wrong password shows the "Login failed" toast; log in; log out clears the session |
-| `worked-example.spec.ts` | F4b: the worked example runs from the empty dashboard to "1.72 kg CO2 eq" (PROJ-1) |
+| `auth.spec.ts` | F1 sign up → onboarding (name and company) → an empty Home with two ways in, and nothing built; onboarding validation; F2 a wrong password is said under the field; log in; log out clears the session |
 | `case-editor.spec.ts` | F6 Add Component dialog, product quantity through the scale dialog, a step's life-cycle stage (EDIT-2), delete subtree / keep children / cancel (EDIT-1); F7 a flow and a transport leg (382.5 tkm); F8 a cost of 0 stays 0, a cleared cost goes empty (FLOW-3) |
 | `results.spec.ts` | F9 run → total, thousands in the stage panel (RES-1), 3.5e-7 never shown as 0 (RUN-2); F10 PDF / PPTX / CSV downloads |
 | `compare.spec.ts` | F12 "Duplicate and change one thing" → compare shows the unrun copy as "Incomplete — not ranked" |
 | `import.spec.ts` | F13 routing CSV → preview → apply → the created case opens |
-| `permissions.spec.ts` | a viewer reads; a viewer's save gets 403 and changes nothing; a non-member gets "Project not found" and is sent home |
+| `permissions.spec.ts` | a member who can change gets Run Assessment and Add step on the owner's case; a viewer reads; a viewer's save gets 403 and changes nothing; a non-member gets "Project not found" |
 
 Selectors are roles and accessible names (`getByRole`, `getByLabel`), so a journey also checks that its controls are reachable by name. Where an input has no accessible name the fallback (usually a placeholder) is named once in `support/editor.ts` or the test, with the reason; those inputs also show up in the a11y baseline under `label` / `select-name`.
 
@@ -96,7 +95,7 @@ Selectors are roles and accessible names (`getByRole`, `getByLabel`), so a journ
 
 ### Contracts (`contracts/`) — do the hooks survive the redesign?
 
-`hooks.spec.ts` pins the hooks any redesign must keep: `data-testid="tree-canvas-viewport"` / `"tree-canvas-stage"` (and `data-node-id` on nodes), the accessible names scripts and the guide use, every `data-tour` anchor in `lib/lcapix-tour-steps.ts`, and the landing walkthrough anchors. Names match case-insensitively with an optional leading "+" and trailing "→"; a spelling that differs only in case is recorded as an annotation.
+`hooks.spec.ts` pins the hooks any redesign must keep: the tree (one `role=tree`, a `treeitem` per step with id `step-<component id>` and the name "<name>, <tier>"), the accessible names scripts and the guide use, and the landing's Get started, Log in and skip link. Names match case-insensitively with an optional leading "+" and trailing "→"; a spelling that differs only in case is recorded as an annotation.
 
 Known gaps, kept visible rather than hidden:
 

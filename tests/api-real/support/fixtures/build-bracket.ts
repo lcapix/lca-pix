@@ -1,5 +1,5 @@
 /**
- * Test fixture, not shipped. Builds the bracket study (./bracket-study.ts) in
+ * Test fixture, not shipped. Builds the bracket study (tests/fixtures/bracket-study.ts) in
  * one account, on the caller's connection, so the whole study commits or none
  * of it does: the project, the base case with its 17 steps, nine flows and
  * costs (each cost with its rate and source), a run, the "Shorter cure cycle"
@@ -19,7 +19,7 @@ import {
   SAMPLE_WHAT_IF,
   TIER_LEVEL,
   sampleCostAmount,
-} from './bracket-study'
+} from '../../../fixtures/bracket-study'
 
 type Conn = { query: (sql: string, params?: unknown[]) => Promise<any> }
 
