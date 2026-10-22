@@ -24,7 +24,7 @@ const COST_FIELDS: Array<[keyof InspectorEditFormData, string]> = [
 ]
 
 // Hover definitions for the cost fields (activity-based costing): what belongs
-// in each bucket, so a student can fill them without a textbook.
+// in each bucket, so a person can fill them without a textbook.
 const COST_HELP: Record<string, string> = {
   laborCost:
     'Wages for the people doing this step: hours × hourly rate. The calculator above works it out from hours and a BLS wage.',

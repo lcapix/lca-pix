@@ -1,6 +1,6 @@
 'use client'
 
-// HelpTip — hover-to-read explanation. Every definition / teaching string in
+// HelpTip — hover-to-read explanation. Every definition / explanation string in
 // the app goes through this, so the screen stays clean and the understanding
 // is one hover away. Rule (Shreya, 2026-09-15): explanations are hover;
 // visible text is reserved for status and actions.

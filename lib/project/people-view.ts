@@ -1,5 +1,5 @@
 // What the People page (E08, E08b) says, from the members route and the
-// progress route. Pure, so every sentence a teacher acts on is tested.
+// case summaries route. Pure, so every sentence a person acts on is tested.
 
 export type Access = 'editor' | 'viewer' | 'admin'
 

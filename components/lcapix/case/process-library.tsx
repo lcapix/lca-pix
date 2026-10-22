@@ -5,7 +5,7 @@
  *
  * Pick the kind of process this step is, say how much of its driver it runs
  * (12 minutes of cutting, 0.4 m² coated), and the library lists what such a
- * process consumes. The amount per driver comes from the student's own machine;
+ * process consumes. The amount per driver comes from the plant's own machine;
  * the arithmetic driver quantity × amount per driver is shown as it is typed
  * and written onto the flow, so a number in the inventory can always be read
  * back as the two numbers behind it.

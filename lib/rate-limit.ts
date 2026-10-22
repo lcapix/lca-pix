@@ -59,8 +59,8 @@ const HOUR = 60 * MINUTE;
  * The limits the app applies, each enforced by one route (or the helper it
  * calls): login and signup (app/api/auth), insights, ingest preview,
  * assessment runs (POST /api/cases/:id/assessments), PubChem enrichment, the
- * BLS / EIA / Metals cost lookups (lib/integrations/rate-lookup.ts), building
- * the sample study, and the emails looked up when adding people.
+ * BLS / EIA / Metals cost lookups (lib/integrations/rate-lookup.ts), and the
+ * emails looked up when adding people.
  * tests/lib/rate-limit-wiring.test.ts fails if a policy here is not enforced.
  */
 export const RATE_LIMITS = {

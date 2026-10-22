@@ -272,8 +272,7 @@ export function TreeTab({
               ]}
             />
           )}
-          {/* canvas.md: "Students get no Add step" (a student is a member who can change, not the owner). */}
-          {!readOnly && kase.my_role !== 'editor' && (
+          {!readOnly && (
             <button type="button" className="ws-add-step" onClick={() => actions.addBelow(selected ?? layout.steps[0]?.id ?? null)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />

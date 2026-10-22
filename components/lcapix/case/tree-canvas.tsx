@@ -30,9 +30,9 @@ export interface TreeCanvasProps {
   highlightQuery?: string
 }
 
-// Classroom legend: what each of the 5 hierarchy tiers means, top to bottom,
-// and where impacts vs costs attach. Teaches the process diagram in-context so
-// a student reading the tree knows what they are looking at.
+// Tier legend: what each of the 5 hierarchy tiers means, top to bottom, and
+// where impacts vs costs attach, so a person reading the tree knows what they
+// are looking at.
 const TIER_GUIDE: Array<{ id: HierarchyNodeType; blurb: string }> = [
   { id: 'Product', blurb: 'The finished thing you are assessing.' },
   { id: 'Machine', blurb: 'A production line or major stage.' },

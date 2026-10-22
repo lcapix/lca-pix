@@ -260,7 +260,7 @@ export async function GET(
 
     // 7a0. Row-level CSV: the inventory as the engine computed it, one line per
     // flow x category, with the factor, its source and the arithmetic. This is
-    // what a student pastes into a write-up or checks in a spreadsheet, and
+    // what a person pastes into a write-up or checks in a spreadsheet, and
     // what a reviewer asks for when they doubt a number.
     if (format === 'csv') {
       // Stage per step id (STAGE-2): from the frozen steps for a v3 run, from

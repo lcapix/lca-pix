@@ -1,8 +1,8 @@
 /**
  * Life-cycle stages.
  *
- * Until now every case was manufacturing only, so the first question a design
- * course asks — "what about the use phase?" — had no answer in the model. A
+ * Until now every case was manufacturing only, so the first question a
+ * reviewer asks — "what about the use phase?" — had no answer in the model. A
  * stage is a label on a process step, not a second tree: the engine groups
  * results by it, the report prints the split, and the boundary declared in
  * goal & scope says which stages a reader should expect to see.
@@ -15,7 +15,7 @@ export type StageId = 'materials' | 'production' | 'distribution' | 'use' | 'end
 export type Stage = {
   id: StageId;
   label: string;
-  /** What belongs here, said the way a student would check it. */
+  /** What belongs here, said the way a person would check it. */
   hint: string;
 };
 

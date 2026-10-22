@@ -3,11 +3,10 @@
 /**
  * Two ways into a new project, offered as equals.
  *
- * Landing straight on Import taught that an LCA starts with a file, which is
- * wrong for a course: a student has to be able to build the model by hand, one
- * step and one flow at a time, and see for themselves what each entry does.
- * The other path reads a real document and fills the same model, and the
- * teaching moment we own is doing both for one product and comparing them.
+ * Landing straight on Import said that an LCA starts with a file, which is
+ * not always so: a person has to be able to build the model by hand, one step
+ * and one flow at a time, and see what each entry does. The other path reads
+ * a real document and fills the same model.
  */
 
 import { useState } from 'react'

@@ -1,6 +1,6 @@
 // substance-source — derive the *source database* label for a substance/flow.
 //
-// The professor's recurring question on the demo call was "what database is
+// A recurring question on the demo call was "what database is
 // that coming from?" — and the inspector never answered it. This helper maps
 // the real fields we already have on every substance (its `category` and, when
 // present, its `cas_number`) to the reference database that data is drawn from.

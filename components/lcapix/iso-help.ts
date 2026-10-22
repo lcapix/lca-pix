@@ -1,6 +1,6 @@
 /**
  * Hover explanations for ISO 14040/14044 concepts, shared by every screen that
- * asks for or shows them, so a student reads the same definition everywhere.
+ * asks for or shows them, so a person reads the same definition everywhere.
  * Plain language first, the clause number for whoever wants the standard.
  */
 export const ISO_HELP = {

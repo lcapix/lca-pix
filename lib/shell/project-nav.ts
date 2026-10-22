@@ -33,7 +33,7 @@ export function projectTint(p: NavProject, all: NavProject[]): string {
   return PROJECT_TINTS[(i < 0 ? 0 : i) % PROJECT_TINTS.length]
 }
 
-/** "Steel bracket · LCA 301" → "SB"; one word → its first two letters. */
+/** "Plated housing · Line 2" → "PH"; one word → its first two letters. */
 export function projectInitials(name: string): string {
   const words = String(name ?? '')
     .replace(/[·|/,:;()\-–]+/g, ' ')

@@ -29,7 +29,7 @@ export default function SignupPage() {
   const validate = () => {
     const next: typeof errors = {}
     if (!email) next.email = "Enter your email."
-    else if (!EMAIL_RE.test(email)) next.email = "Enter an email like you@university.edu."
+    else if (!EMAIL_RE.test(email)) next.email = "Enter an email like you@company.com."
     if (!password) next.password = "Enter a password."
     else if (password.length < 8) next.password = "Use at least 8 characters."
     else if (!/\d/.test(password)) next.password = "Add at least one number."
@@ -102,7 +102,7 @@ export default function SignupPage() {
             className="edu-input"
             type="email"
             autoComplete="email"
-            placeholder="you@university.edu"
+            placeholder="you@company.com"
             value={email}
             aria-invalid={!!(errors.email || errors.duplicate) || undefined}
             aria-describedby={errors.email ? "email-error" : errors.duplicate ? "duplicate-error" : undefined}

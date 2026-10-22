@@ -16,7 +16,7 @@ import { parseId } from '@/lib/ids';
 /**
  * The documents a case was built from, kept so a person can read from them
  * while they model. The importer used to read a file in memory and drop it,
- * which left a student typing from a document the app could no longer show.
+ * which left a person typing from a document the app could no longer show.
  *
  * Text only. A stored document is a reference to read, not an attachment to
  * download: it exists so a flow can be checked against the line it came from.

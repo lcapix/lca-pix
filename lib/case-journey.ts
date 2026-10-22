@@ -16,7 +16,7 @@ export type PhaseState = 'done' | 'partial' | 'todo'
 export interface JourneyPhase {
   label: 'Goal & scope' | 'Inventory' | 'Impact' | 'Interpretation' | 'Report'
   state: PhaseState
-  /** The first phase that is not done: where the student should work next. */
+  /** The first phase that is not done: where to work next. */
   current: boolean
   /** Plain-language status for the hover. */
   detail: string

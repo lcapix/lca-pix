@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/substances — add a substance by hand, with the one factor that
-// makes it usable. No library has everything: a student modelling cork, hemp
+// makes it usable. No library has everything: someone modelling cork, hemp
 // or a supplier-specific alloy must be able to enter it rather than pick
 // something "close enough" and quietly model the wrong material.
 //

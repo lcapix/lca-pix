@@ -97,7 +97,7 @@ export default function LoginPage() {
   const validate = () => {
     const next: typeof errors = {}
     if (!email) next.email = "Enter your email."
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Enter an email like you@university.edu."
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) next.email = "Enter an email like you@company.com."
     if (!password) next.password = "Enter your password."
     setErrors(next)
     return Object.keys(next).length === 0

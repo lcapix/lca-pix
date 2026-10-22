@@ -21,10 +21,10 @@ export function splitCases<C extends CaseSummary>(cases: C[], userId: number): {
   return { mine: cases.filter((c) => c.created_by === userId), others: cases.filter((c) => c.created_by !== userId) }
 }
 
-/** "34 cases · 2 yours, 32 from members · TRACI 2.1 · US". */
+/** "34 cases · 2 yours, 32 from others · TRACI 2.1 · US". */
 export function casesHeader(n: { all: number; mine: number; others: number }, scope: string | null): string {
   const parts = [`${n.all} ${n.all === 1 ? 'case' : 'cases'}`]
-  if (n.others) parts.push(`${n.mine} yours, ${n.others} from members`)
+  if (n.others) parts.push(`${n.mine} yours, ${n.others} from others`)
   if (scope) parts.push(scope)
   return parts.join(' · ')
 }

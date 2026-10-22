@@ -12,7 +12,7 @@ describe('Cases (E07)', () => {
     const { mine, others } = splitCases([base, whatIf, ana, sam], 9)
     expect(mine.map((c) => c.case_id)).toEqual([1, 2])
     expect(others.map((c) => c.case_id)).toEqual([ana.case_id, sam.case_id])
-    expect(casesHeader({ all: 34, mine: 2, others: 32 }, 'TRACI 2.1 · US')).toBe('34 cases · 2 yours, 32 from members · TRACI 2.1 · US')
+    expect(casesHeader({ all: 34, mine: 2, others: 32 }, 'TRACI 2.1 · US')).toBe('34 cases · 2 yours, 32 from others · TRACI 2.1 · US')
     expect(casesHeader({ all: 1, mine: 1, others: 0 }, null)).toBe('1 case')
     expect(answerOf(base)).toBe('1.72')
     expect(answerOf(ana)).toBe('1.682')

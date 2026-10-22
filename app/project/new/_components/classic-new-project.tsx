@@ -115,8 +115,8 @@ export default function ClassicNewProject() {
           })
         }
         // Two ways in, offered as equals: build the model by hand, or read it
-        // from a document. Landing straight on Import taught that an LCA starts
-        // with a file, which is not what a student needs to learn first.
+        // from a document. Landing straight on Import said that an LCA starts
+        // with a file, which is not always so.
         router.push(`/project/${projectId}/start`)
       } else {
         // A name clash (409) belongs next to the name field, not only in a toast.

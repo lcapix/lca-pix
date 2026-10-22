@@ -2,7 +2,7 @@
 // given THIS case's own result. It names levers, never numbers. Every item is
 // triggered by something in the data (a material's share, the step that draws
 // the electricity, a factor that is only an industry average) and says which
-// flow or step it acts on, so a student can go and change exactly that.
+// flow or step it acts on, so a person can go and change exactly that.
 //
 // The moves are established practice, stated qualitatively (recycled
 // aluminum needs far less energy than primary; electric-arc steel from scrap

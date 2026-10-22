@@ -13,7 +13,7 @@ import { isAuthError } from '@/lib/route-guard';
  * had nothing of.
  *
  * Amounts are mostly NULL by design: the library names what to look for, the
- * student supplies the number from their own machine, and the note on each line
+ * person supplies the number from their own machine, and the note on each line
  * says where that number usually lives.
  */
 export async function GET(request: NextRequest) {

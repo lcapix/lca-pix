@@ -1,7 +1,7 @@
 'use client'
 
 // Project header card: name, comparison chip, description and the project
-// actions (Analytics, Compare Cases, Class, Import Data, Add Case, Delete).
+// actions (Compare Cases, People, Import Data, Add Case, Delete).
 
 import { Trash2 } from 'lucide-react'
 import { Icon } from '@/components/lcapix'

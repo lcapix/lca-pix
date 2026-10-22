@@ -1,7 +1,7 @@
 'use client'
 
-// Home: the education Home (the sample study's Overview first, then Continue,
-// Needs attention and your projects), or, with NEXT_PUBLIC_LCAPIX_SHELL=classic,
+// Home: Continue, Needs attention and your projects, or, with
+// NEXT_PUBLIC_LCAPIX_SHELL=classic,
 // the earlier dashboard. The dashboard loads only on that rollback. The layout
 // (SignedIn) already guards the page.
 

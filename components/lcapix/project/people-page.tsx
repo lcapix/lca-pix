@@ -389,7 +389,7 @@ function AddPeople({
           className="ds-input pp-emails"
           rows={2}
           value={text}
-          placeholder="name@university.edu, one or many"
+          placeholder="name@company.com, one or many"
           onChange={(e) => setText(e.target.value)}
         />
       </label>

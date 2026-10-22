@@ -42,7 +42,7 @@ export async function GET(
     } catch {
       /* before migrate-018 */
     }
-    // The study's functional unit (exercise 1, "Goal and scope", checks it).
+    // The study's functional unit.
     try {
       const fu = await queryOne<any>(`SELECT functional_unit FROM project WHERE project_id = ?`, [caseData.project_id]);
       caseData.project_functional_unit = fu?.functional_unit ?? null;
@@ -185,7 +185,7 @@ export async function PUT(
       } catch (writeErr: any) {
         if (writeErr?.code !== 'ER_BAD_FIELD_ERROR') throw writeErr;
         // Saying "saved" when nothing was written is worse than failing: the
-        // student would lose their interpretation and never know.
+        // author would lose their interpretation and never know.
         console.warn('[case PUT] write-up columns missing (run migrate-021)');
         return NextResponse.json(
           {

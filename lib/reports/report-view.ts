@@ -34,7 +34,7 @@ export function formatNote(format: ReportFormat, runId: number): string {
   return `Prints Run #${runId} as it was when it ran. The write-up prints as it is now.`
 }
 
-/** "Steel bracket · LCA 301 · TRACI 2.1 · US · per 1 bracket". */
+/** "Plated housing · TRACI 2.1 · US · per 1 housing". */
 export function scopeLine(parts: { project?: string | null; method?: string | null; region?: string | null; fu?: string | null }): string {
   return [parts.project, parts.method, parts.region, parts.fu ? `per ${parts.fu}` : null].filter(Boolean).join(' · ')
 }

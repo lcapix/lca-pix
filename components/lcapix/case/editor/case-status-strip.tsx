@@ -1,7 +1,7 @@
 'use client'
 
 // Status panel — the "where am I / what's blocking me / what's next"
-// orientation for a classroom user. Journey phase stepper + a plain headline
+// orientation. Journey phase stepper + a plain headline
 // (blocked / ready / assessed) + the single next action + the missing-layer
 // checklist. Run is still gated on canRun.
 
