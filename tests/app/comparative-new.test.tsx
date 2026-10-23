@@ -21,9 +21,10 @@ import { toast } from 'sonner'
 const json = (body: unknown, status = 200) =>
   ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) }) as any
 
-function routeApi(opts: { cloneStatus?: number } = {}) {
+function routeApi(opts: { cloneStatus?: number; casesStatus?: number } = {}) {
   vi.mocked(apiRequest).mockImplementation(async (url: string, init?: any) => {
     if (url === '/api/projects/7/cases' && (!init || !init.method)) {
+      if (opts.casesStatus && opts.casesStatus >= 400) return json({ error: 'Database unavailable' }, opts.casesStatus)
       return json({
         success: true,
         cases: [{ case_id: 5, project_id: 7, case_name: 'Base', case_type: 'base' }],
@@ -76,5 +77,21 @@ describe('Create comparative case (CMP-2)', () => {
     await fillAndSubmit()
     await waitFor(() => expect(push).toHaveBeenCalledWith('/project/7/case/9'))
     expect(vi.mocked(toast.error)).toHaveBeenCalled()
+  })
+})
+
+describe('Create comparative case when the base cases cannot be read (Phase 1)', () => {
+  it('says so and does not create a case linked to nothing', async () => {
+    routeApi({ casesStatus: 500 })
+    render(<CreateComparativeCasePage />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Could not load this project's base cases (Database unavailable)",
+    )
+    expect(screen.queryByRole('option', { name: 'No base cases found for this project' })).toBeNull()
+    fireEvent.change(screen.getByPlaceholderText(/Bio-Based Polymer/i), { target: { value: 'Recycled steel' } })
+    expect(screen.getByRole('button', { name: /Create Comparative Case/i })).toBeDisabled()
+    fireEvent.submit(screen.getByRole('button', { name: /Create Comparative Case/i }).closest('form')!)
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled())
+    expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
   })
 })

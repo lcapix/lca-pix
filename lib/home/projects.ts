@@ -133,6 +133,8 @@ export function libraryCounts(status: any): { factors: number; components: numbe
 export interface HomeKpi {
   label: string
   numeric: number
+  /** Shown instead of the number when there is none to show (not read yet, or the read failed). */
+  display?: string
   sub: string
   icon: 'box' | 'activity' | 'database' | 'layers'
   href?: string
@@ -141,17 +143,21 @@ export interface HomeKpi {
 
 /**
  * The KPI tiles. Enfos discipline: no per-tile accent colours, no sparklines;
- * the library tiles link to the factor and substance browsers.
+ * the library tiles link to the factor and substance browsers. A library
+ * count that is null (not read yet, or the read failed) shows a dash, never 0.
  */
 export function homeKpis(args: {
   projectCount: number
   totalCases: number
   totalComponents: number
-  factors: number
-  substances: number
+  factors: number | null
+  substances: number | null
+  /** Why the library counts could not be read. */
+  libraryError?: string | null
   fmtInt: (n: number) => string
 }): HomeKpi[] {
-  const { projectCount, totalCases, totalComponents, factors, substances, fmtInt } = args
+  const { projectCount, totalCases, totalComponents, factors, substances, libraryError = null, fmtInt } = args
+  const unread = libraryError ? 'Could not read the library' : 'Loading…'
   return [
     {
       label: 'PROJECTS',
@@ -168,16 +174,18 @@ export function homeKpis(args: {
     },
     {
       label: 'FACTORS',
-      numeric: factors,
-      sub: factors > 0 ? 'In factor library' : 'Awaiting sync',
+      numeric: factors ?? 0,
+      ...(factors == null ? { display: '–' } : {}),
+      sub: factors == null ? unread : factors > 0 ? 'In factor library' : 'Awaiting sync',
       icon: 'database' as const,
       href: '/library/factors',
       hrefHint: 'Browse factor library',
     },
     {
       label: 'SUBSTANCES',
-      numeric: substances,
-      sub: 'In substance catalog',
+      numeric: substances ?? 0,
+      ...(substances == null ? { display: '–' } : {}),
+      sub: substances == null ? unread : 'In substance catalog',
       icon: 'layers' as const,
       href: '/library/substances',
       hrefHint: 'Browse substance catalog',

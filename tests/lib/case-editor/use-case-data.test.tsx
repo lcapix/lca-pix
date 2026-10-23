@@ -118,6 +118,27 @@ describe('useCaseData', () => {
     expect(router.push).not.toHaveBeenCalled()
   })
 
+  it('a failed steps read on first load says so and leaves, instead of opening an empty case (Phase 1)', async () => {
+    componentsHandler = async () => json({ error: 'Database unavailable' }, 500)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    render()
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith('/project/7'))
+    expect(toast.error).toHaveBeenCalledWith('Failed to load case details')
+  })
+
+  it('a failed steps read on refresh keeps the steps on screen (Phase 1)', async () => {
+    const { result } = render()
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    componentsHandler = async () => json({ error: 'Database unavailable' }, 500)
+    act(() => result.current.refresh())
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Could not refresh the case. What you see may be out of date.'),
+    )
+    expect(result.current.components).toHaveLength(2)
+    expect(router.push).not.toHaveBeenCalled()
+  })
+
   it('an older, slower components response never overwrites a newer one', async () => {
     const { result } = render()
     await waitFor(() => expect(result.current.isLoading).toBe(false))

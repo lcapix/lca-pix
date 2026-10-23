@@ -7,9 +7,12 @@ import { MiniBar, fmtNum } from '@/components/lcapix'
 export function TopContributorsCard({
   contributors,
   cases,
+  loadError = null,
 }: {
   contributors: Array<{ name: string; value: number; pct: number }>
   cases: any[]
+  /** Why the latest run could not be read; null when it was. */
+  loadError?: string | null
 }) {
   return (
     <div className="card" style={{ padding: 20 }}>
@@ -18,7 +21,11 @@ export function TopContributorsCard({
       >
         Top contributors
       </div>
-      {contributors.length === 0 ? (
+      {contributors.length === 0 && loadError ? (
+        <div style={{ fontSize: 13, color: 'var(--signal-error)', lineHeight: 1.5 }}>
+          Could not load the contributors: {loadError}.
+        </div>
+      ) : contributors.length === 0 ? (
         <div
           style={{
             fontSize: 13,

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readJson } from '@/lib/http';
+import { internalError, readJson } from '@/lib/http';
 import { query, queryOne, execute } from '@/lib/db-helpers';
 import { getProjectRole, requireAuth } from '@/lib/auth';
 import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { isSchemaGap } from '@/lib/db-errors';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
@@ -50,10 +51,9 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Get project members. Isolated in its own try/catch so the collaborators
-    // sub-query can never 500 the whole project fetch — core project data must
-    // always load even if the members/permissions schema is unavailable or
-    // drifts. Falls back to an empty members list.
+    // Get project members. A database without the members tables reads as no
+    // members; any other failure is an error, never an empty list (an empty
+    // list says nobody else can see the project).
     let members: unknown[] = [];
     try {
       members = await query(
@@ -67,7 +67,7 @@ export async function GET(
         [projectId]
       );
     } catch (memberErr) {
-      console.warn('[project GET] members sub-query failed, returning empty list:', memberErr);
+      if (!isSchemaGap(memberErr)) throw memberErr;
       members = [];
     }
 
@@ -89,6 +89,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
+  // What this save has written so far, statement by statement: a later
+  // statement that fails says exactly what was already saved, never
+  // "nothing else was changed" after part of the edit went through.
+  const saved: string[] = [];
   try {
     const userId = await requireAuth(request);
     const { projectId: projectIdParam } = await params;
@@ -150,6 +154,13 @@ export async function PUT(
        WHERE project_id = ?`,
       [project_name ?? null, description ?? null, projectId]
     );
+    if (project_name != null) saved.push('the name');
+    if (description != null) saved.push('the description');
+    const partial = (failed: string) =>
+      NextResponse.json(
+        { error: `${failed} ${saved.length ? `Saved: ${saved.join(', ')}.` : 'Nothing else was changed.'}`, saved },
+        { status: 409 },
+      );
 
     // ISO 14044 goal & scope (4.2) is study-level: every case in the project is
     // an alternative measured against the same functional unit and boundary.
@@ -173,12 +184,11 @@ export async function PUT(
             projectId,
           ]
         );
+        saved.push('the goal and scope');
       } catch (isoErr) {
+        if (!isSchemaGap(isoErr)) throw isoErr;
         console.warn('[project PUT] goal & scope columns missing (run migrate-014):', isoErr);
-        return NextResponse.json(
-          { error: 'Goal & scope fields are not available yet: the database needs migrate-014.' },
-          { status: 409 }
-        );
+        return partial('Goal & scope fields are not available yet: the database needs migrate-014.');
       }
     }
 
@@ -193,22 +203,18 @@ export async function PUT(
            WHERE project_id = ?`,
           [body.lcia_method ?? null, body.region_code ? canonicalizeRegion(body.region_code) : null, projectId]
         );
+        saved.push('the method and region');
       } catch (scopeErr) {
+        if (!isSchemaGap(scopeErr)) throw scopeErr;
         console.warn('[project PUT] method/region columns missing (run migrate-018):', scopeErr);
-        return NextResponse.json(
-          { error: 'Method and region are not available yet: the database needs migrate-018.' },
-          { status: 409 }
-        );
+        return partial('Method and region are not available yet: the database needs migrate-018.');
       }
     }
 
     if (aiEnabled !== undefined) {
       const before = await queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [projectId]);
       if (before && !Object.prototype.hasOwnProperty.call(before, 'ai_enabled')) {
-        return NextResponse.json(
-          { error: 'The AI switch needs migration 042 on this database. Nothing else was changed by it.' },
-          { status: 409 },
-        );
+        return partial('The AI switch needs migration 042 on this database.');
       }
       const was = Number(before?.ai_enabled ?? 1) === 1;
       if (was !== (aiEnabled === 1)) {
@@ -237,6 +243,11 @@ export async function PUT(
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (saved.length) {
+      return internalError('project PUT', `Failed to update project. Saved: ${saved.join(', ')}; try again to save the rest.`, error, {
+        extra: { saved },
+      });
     }
     console.error('Update project error:', error);
     return NextResponse.json({ error: 'Failed to update project' }, { status: 500 });

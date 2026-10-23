@@ -22,7 +22,8 @@ export function InlineSuggestStrip({
   flows: InspectorFlow[]
   /** Hours worked on this step: the only way labor gets costed. */
   laborHours?: number
-  onApply: (s: SuggestedCosts) => void
+  /** Applies and saves; true only once the save succeeded. */
+  onApply: (s: SuggestedCosts) => Promise<boolean> | boolean
 }) {
   const { result, applied, suggest, apply, dismiss } = useCostSuggestion({
     flows,

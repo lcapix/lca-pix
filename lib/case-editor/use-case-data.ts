@@ -142,16 +142,20 @@ export function useCaseAndComponents({
   const loadedCaseId = useRef<string | null>(null)
   const componentsSeq = useRef(0)
 
-  /** Fetch the case's components; returns them, or null if a newer fetch won. */
+  /**
+   * Fetch the case's components; returns them, or null if a newer fetch won.
+   * A failed read throws and leaves the steps on screen as they were: an empty
+   * list would blank the canvas as if the case had no steps.
+   */
   const reloadComponents = async (signal?: AbortSignal): Promise<ComponentNode[] | null> => {
     const seq = ++componentsSeq.current
     const r = await apiRequest(`/api/cases/${caseId}/components`, signal ? { signal } : undefined)
-    const data = await r.json()
+    const data = await r.json().catch(() => null)
     if (seq !== componentsSeq.current || signal?.aborted) return null
-    const list: ComponentNode[] =
-      data?.success && Array.isArray(data.components)
-        ? data.components.map((dbComp: any) => transformComponentFromDB(dbComp))
-        : []
+    if (!r.ok || !data?.success || !Array.isArray(data.components)) {
+      throw new Error(data?.error || `The steps could not be reloaded (${r.status}).`)
+    }
+    const list: ComponentNode[] = data.components.map((dbComp: any) => transformComponentFromDB(dbComp))
     setComponents(list)
     return list
   }

@@ -29,7 +29,10 @@ export function useHome(router: Router) {
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [projectsReload, setProjectsReload] = useState(0)
 
-  const [kpiData, setKpiData] = useState({ factors: 0, components: 0 })
+  // The library counts; null until read. A failed read is libraryError, never
+  // a library of 0 factors.
+  const [kpiData, setKpiData] = useState<{ factors: number; components: number } | null>(null)
+  const [libraryError, setLibraryError] = useState<string | null>(null)
   const [view, setView] = useState<ViewMode>('grid')
   const [filter, setFilter] = useState<FilterId>('all')
   const [search, setSearch] = useState('')
@@ -90,17 +93,26 @@ export function useHome(router: Router) {
     }
   }, [user, setProjects, projectsReload])
 
-  // Preserved: pull live integration KPIs
+  // The factor and substance library counts for the KPI tiles.
   useEffect(() => {
     if (!user) return
-    Promise.all([
-      apiRequest('/api/integrations/status')
-        .then((r) => r.json())
-        .catch(() => null),
-    ]).then(([status]) => {
-      const counts = libraryCounts(status)
-      if (counts) setKpiData(counts)
-    })
+    let cancelled = false
+    apiRequest('/api/integrations/status')
+      .then(async (r) => {
+        const status = await r.json().catch(() => null)
+        const counts = r.ok ? libraryCounts(status) : null
+        if (!counts) throw new Error(status?.error || `the server answered ${r.status}`)
+        if (!cancelled) {
+          setKpiData(counts)
+          setLibraryError(null)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setLibraryError(error instanceof Error ? error.message : 'the request failed')
+      })
+    return () => {
+      cancelled = true
+    }
   }, [user])
 
   const coerced: CoercedProject[] = useMemo(
@@ -134,6 +146,7 @@ export function useHome(router: Router) {
     projectsError,
     retryProjects: () => setProjectsReload((n) => n + 1),
     kpiData,
+    libraryError,
     view,
     setView,
     filter,

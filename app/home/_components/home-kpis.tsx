@@ -21,6 +21,7 @@ export function HomeKpis({ kpis }: { kpis: HomeKpi[] }) {
         <MetricBlock
           label={k.label}
           value={k.numeric}
+          display={k.display}
           sub={k.sub}
           icon={k.icon}
           delayMs={i * 80}

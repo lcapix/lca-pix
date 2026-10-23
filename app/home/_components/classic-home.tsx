@@ -26,6 +26,7 @@ export default function ClassicHome() {
     projectsError,
     retryProjects,
     kpiData,
+    libraryError,
     view,
     setView,
     filter,
@@ -45,8 +46,9 @@ export default function ClassicHome() {
     projectCount: coerced.length,
     totalCases,
     totalComponents,
-    factors: kpiData.factors,
-    substances: kpiData.components,
+    factors: kpiData?.factors ?? null,
+    substances: kpiData?.components ?? null,
+    libraryError,
     fmtInt,
   })
 

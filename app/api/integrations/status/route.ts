@@ -2,19 +2,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { query, queryOne } from '@/lib/db-helpers';
+import { isSchemaGap } from '@/lib/db-errors';
+import { internalError } from '@/lib/http';
+import { isAuthError } from '@/lib/route-guard';
 
+// An older schema (a column or table not there yet) reads as nothing; any
+// other failure is an error, never a dashboard of zeros that says "idle".
 async function safeQueryOne<T = any>(sql: string, params?: any[]): Promise<T | null> {
-  try { return await queryOne<T>(sql, params); } catch { return null; }
+  try { return await queryOne<T>(sql, params); } catch (err) { if (isSchemaGap(err)) return null; throw err; }
 }
 
 async function safeQuery<T = any>(sql: string, params?: any[]): Promise<T[]> {
-  try { return await query<T>(sql, params); } catch { return []; }
+  try { return await query<T>(sql, params); } catch (err) { if (isSchemaGap(err)) return []; throw err; }
 }
 
 export async function GET(request: NextRequest) {
-  try { await requireAuth(request); }
-  catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  try {
+    await requireAuth(request);
+    return await readStatus();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return internalError('integrations status', 'Could not read the integrations status', err);
+  }
+}
 
+async function readStatus(): Promise<NextResponse> {
   // Substances table may not have enriched_at column in older schemas
   let substances = await safeQueryOne<any>(`
     SELECT COUNT(*) AS total,

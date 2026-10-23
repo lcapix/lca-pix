@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readJson } from '@/lib/http';
+import { internalError, readJson } from '@/lib/http';
 import { queryOne, execute } from '@/lib/db-helpers';
 import { getProjectRole, requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { isSchemaGap } from '@/lib/db-errors';
 import { parseId } from '@/lib/ids';
 import { COLUMN_LIMITS, decimalMax, firstLengthError } from '@/lib/field-limits';
 import { recordAudit } from '@/lib/audit';
@@ -39,14 +40,17 @@ export async function GET(
       );
       caseData.project_lcia_method = scope?.lcia_method ?? null;
       caseData.project_region_code = scope?.region_code ?? null;
-    } catch {
-      /* before migrate-018 */
+    } catch (scopeErr) {
+      // Before migrate-018 only. Any other failure must not quietly turn a
+      // TRACI or ReCiPe study into a CML run (the run dialog starts from this).
+      if (!isSchemaGap(scopeErr)) throw scopeErr;
     }
     // The study's functional unit.
     try {
       const fu = await queryOne<any>(`SELECT functional_unit FROM project WHERE project_id = ?`, [caseData.project_id]);
       caseData.project_functional_unit = fu?.functional_unit ?? null;
-    } catch {
+    } catch (fuErr) {
+      if (!isSchemaGap(fuErr)) throw fuErr;
       caseData.project_functional_unit = null;
     }
 
@@ -85,6 +89,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
 ) {
+  // What this save has written so far, statement by statement: a later
+  // statement that fails says exactly what was already saved, never
+  // "nothing else was changed" after part of the edit went through.
+  const saved: string[] = [];
   try {
     const userId = await requireAuth(request);
     const { caseId: caseIdParam } = await params;
@@ -163,6 +171,15 @@ export async function PUT(
        WHERE case_id = ?`,
       [case_name ?? null, description ?? null, case_type ?? null, caseId]
     );
+    const named = { case_name: 'the name', description: 'the description', case_type: 'the case type' } as const;
+    for (const [k, words] of Object.entries(named)) {
+      if (Object.prototype.hasOwnProperty.call(body, k) && (body as any)[k] != null) saved.push(words);
+    }
+    const partial = (failed: string) =>
+      NextResponse.json(
+        { error: `${failed} ${saved.length ? `Saved: ${saved.join(', ')}.` : 'Nothing else was changed.'}`, saved },
+        { status: 409 },
+      );
 
     // ISO 14044 reference flow (4.2.3.2) of THIS alternative: how much product
     // one functional unit needs, and how much product the entered data make.
@@ -182,18 +199,13 @@ export async function PUT(
       });
       try {
         await execute(`UPDATE case_table SET ${sets} WHERE case_id = ?`, [...values, caseId]);
+        saved.push('the write-up');
       } catch (writeErr: any) {
         if (writeErr?.code !== 'ER_BAD_FIELD_ERROR') throw writeErr;
         // Saying "saved" when nothing was written is worse than failing: the
         // author would lose their interpretation and never know.
         console.warn('[case PUT] write-up columns missing (run migrate-021)');
-        return NextResponse.json(
-          {
-            error:
-              'Your write-up could not be saved: the database needs migration 021. Nothing else was changed.',
-          },
-          { status: 409 },
-        );
+        return partial('Your write-up could not be saved: the database needs migration 021.');
       }
     }
 
@@ -217,11 +229,10 @@ export async function PUT(
           );
         }
       } catch (isoErr) {
+        // Only a missing column is "not available yet"; any other failure is an error.
+        if (!isSchemaGap(isoErr)) throw isoErr;
         console.warn('[case PUT] reference-flow columns missing (run migrate-014):', isoErr);
-        return NextResponse.json(
-          { error: 'Reference-flow fields are not available yet: the database needs migrate-014.' },
-          { status: 409 },
-        );
+        return partial('Reference-flow fields are not available yet: the database needs migrate-014.');
       }
     }
 
@@ -236,6 +247,11 @@ export async function PUT(
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (saved.length) {
+      return internalError('case PUT', `Failed to update case. Saved: ${saved.join(', ')}; try again to save the rest.`, error, {
+        extra: { saved },
+      });
     }
     console.error('Update case error:', error);
     return NextResponse.json({ error: 'Failed to update case' }, { status: 500 });

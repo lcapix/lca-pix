@@ -63,6 +63,17 @@ export function goalScopeFromApi(p: any, c: any): GoalScopeForm | null {
   }
 }
 
+/** True when the study-level part (goal, functional unit, boundary) differs from what is saved. */
+export function studyPartChanged(saved: GoalScopeForm | null, next: GoalScopeForm): boolean {
+  if (!saved) return true
+  return (
+    saved.goalStatement !== next.goalStatement ||
+    saved.functionalUnit !== next.functionalUnit ||
+    saved.systemBoundary !== next.systemBoundary ||
+    saved.boundaryNotes !== next.boundaryNotes
+  )
+}
+
 /**
  * What Save sends (PUT project, PUT case) and what the card then holds, or
  * an error when the reference flow or data basis is not a number above 0.

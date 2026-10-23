@@ -12,6 +12,8 @@ export interface ResultsHeaderProps {
   currentCase: { name?: string }
   mostRecentAssessment: AssessmentResult | null
   assessmentsError: string | null
+  /** Why the study's method and region could not be read; null when they were. */
+  studyError?: string | null
   method: string
   region: string
   setPickedMethod: (method: string) => void
@@ -33,6 +35,7 @@ export function ResultsHeader({
   currentCase,
   mostRecentAssessment,
   assessmentsError,
+  studyError = null,
   method,
   region,
   setPickedMethod,
@@ -105,6 +108,14 @@ export function ResultsHeader({
             'No assessments yet: run one to see results.'
           )}
         </div>
+        {/* Before a first run the pickers start from the study's method and
+            region; when those could not be read, say so instead of quietly
+            starting from defaults. */}
+        {studyError && !mostRecentAssessment && (
+          <div role="alert" style={{ fontSize: 12, color: 'var(--signal-warn, #b45309)', marginTop: 4 }}>
+            Could not read the study&apos;s method and region ({studyError}). Check both before you run.
+          </div>
+        )}
       </div>
 
       {/* Method selector */}
