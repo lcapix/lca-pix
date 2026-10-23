@@ -5,10 +5,16 @@
 
 import type { IngestCost, IngestFlow, IngestNode, ProcessModel, Provenance } from './schema';
 
-// ITAC ASSESS energy/waste stream codes:
-// (code, human name, substance as stated, unit as stated, direction)
-export const ITAC_STREAMS: Array<[string, string, string, string, 'input' | 'output']> = [
+// Every ITAC ASSESS stream the Terms sheet defines (checked against
+// ITAC_Database_20260830.xlsx): (code, human name, substance as stated, unit
+// as stated, direction). The substance is null for a charge with no physical
+// flow: electricity demand (kW-months, a capacity charge) and fees. Each
+// stream is its own step, so electricity reads as three lines (energy, demand,
+// fees) and only the kWh carry carbon.
+export const ITAC_STREAMS: Array<[string, string, string | null, string | null, 'input' | 'output']> = [
   ['EC', 'Electricity consumption', 'Electricity', 'kWh', 'input'],
+  ['ED', 'Electricity demand', null, 'kW-months', 'input'],
+  ['EF', 'Electricity fees', null, null, 'input'],
   ['E2', 'Natural gas', 'Natural Gas', 'MMBtu', 'input'],
   ['E3', 'LPG', 'LPG', 'MMBtu', 'input'],
   ['E4', '#1 Fuel oil', 'Fuel Oil', 'MMBtu', 'input'],
@@ -17,11 +23,16 @@ export const ITAC_STREAMS: Array<[string, string, string, string, 'input' | 'out
   ['E7', '#6 Fuel oil', 'Fuel Oil', 'MMBtu', 'input'],
   ['E8', 'Coal', 'Coal', 'MMBtu', 'input'],
   ['E9', 'Wood', 'Wood', 'MMBtu', 'input'],
+  ['E10', 'Paper', 'Paper', 'MMBtu', 'input'],
+  ['E11', 'Other gas', 'Other Gas', 'MMBtu', 'input'],
+  ['E12', 'Other energy', 'Other Energy', 'MMBtu', 'input'],
   ['W0', 'Water consumption', 'Water', 'Tgal', 'input'],
   ['W1', 'Water disposal', 'Wastewater', 'gal', 'output'],
   ['W2', 'Other liquid disposal (non-haz)', 'Wastewater', 'gal', 'output'],
+  ['W3', 'Other liquid disposal (haz)', 'Hazardous Liquid Waste', 'gal', 'output'],
   ['W4', 'Solid waste disposal (non-haz)', 'Solid Waste', 'lbs', 'output'],
   ['W5', 'Solid waste disposal (haz)', 'Solid Waste', 'lbs', 'output'],
+  ['W6', 'Gaseous waste disposal', 'Gaseous Waste', 'lbs', 'output'],
 ];
 
 // A numeric cell that pandas would have seen as NaN arrives from SheetJS as
@@ -74,48 +85,60 @@ export function structureItac(
 
   // One operation per assessed stream, directly under the facility: the
   // assessment states annual facility totals, nothing finer, so no finer level
-  // is invented.
+  // is invented. A stream with a usage or a cost gets its step; every dollar
+  // the row states is kept, and a cost with no usage stays a cost.
   const streamName = (human: string) => (fy ? `${human} FY${fy}` : `${human} (annual)`);
+  const costOnly: string[] = [];
   for (const [code, human, substance, unit, direction] of ITAC_STREAMS) {
     const usage = num(r[`${code}_plant_usage`]);
     const cost = num(r[`${code}_plant_cost`]);
-    if (usage === null || usage === 0) continue;
+    const used = usage !== null && usage !== 0;
+    const paid = cost !== null && cost !== 0;
+    if (!used && !paid) continue;
     const op = streamName(human);
     const prov: Provenance = {
       doc: docName,
       locator: loc,
-      snippet: `${code}_plant_usage=${usage}, ${code}_plant_cost=${cost}`,
+      snippet: [usage !== null ? `${code}_plant_usage=${usage}` : null, cost !== null ? `${code}_plant_cost=${cost}` : null]
+        .filter(Boolean)
+        .join(', '),
     };
-    if (nodes.some((n) => n.name === op)) {
-      // Several fuel-oil grades share one stream name: add to the existing step.
-      flows.push({ node: op, substance_text: substance, direction, quantity: usage, unit, provenance: prov });
-    } else {
-      nodes.push({ name: op, tier: 'operation', parent: line, quantity: 1, unit: 'year', provenance: prov });
-      flows.push({ node: op, substance_text: substance, direction, quantity: usage, unit, provenance: prov });
+    if (!nodes.some((n) => n.name === op)) {
+      nodes.push({
+        name: op,
+        tier: 'operation',
+        parent: line,
+        quantity: 1,
+        unit: 'year',
+        // A charge's own measure (demand in kW-months) is stated, not made a flow.
+        ...(substance === null && used ? { description: `${usage} ${unit} a year (${code}_plant_usage), a charge with no carbon.` } : {}),
+        provenance: prov,
+      });
     }
-    if (cost !== null && cost !== 0) {
+    if (used && substance !== null) {
+      flows.push({ node: op, substance_text: substance, direction, quantity: usage, unit: unit!, provenance: prov });
+    }
+    if (paid) {
       costs.push({
         node: op,
         category: code.startsWith('E') ? 'energy' : 'opex',
         amount: cost,
-        basis: 'annual, from ITAC assessed totals',
+        basis: `annual ${human.toLowerCase()}, from ITAC assessed totals (${code}_plant_cost)`,
         provenance: prov,
       });
+      if (substance !== null && !used) costOnly.push(`${human} (${code})`);
     }
   }
 
-  // Demand charges are cost-only (no physical flow): attach to the electricity
-  // step, or to the facility when no electricity use was assessed.
-  const edCost = num(r['ED_plant_cost']);
-  if (edCost !== null && edCost !== 0) {
-    const elec = streamName('Electricity consumption');
-    costs.push({
-      node: nodes.some((n) => n.name === elec) ? elec : line,
-      category: 'energy',
-      amount: edCost,
-      basis: 'annual electricity demand charges',
-      provenance: { doc: docName, locator: loc, snippet: `ED_plant_cost=${edCost}` },
-    });
+  const notes = [
+    'Labor and material costs are NOT in the ITAC assessment and were deliberately ' +
+      'not estimated. Pair with payroll/BOM documents to fill them.',
+  ];
+  if (costOnly.length) {
+    notes.push(
+      `ITAC gives a cost but no amount for: ${costOnly.join(', ')}. Those steps carry the cost only; ` +
+        'their impact is not counted until an amount is entered.',
+    );
   }
 
   return {
@@ -125,10 +148,7 @@ export function structureItac(
     flows,
     costs,
     source_docs: [docName],
-    notes: [
-      'Labor and material costs are NOT in the ITAC assessment and were deliberately ' +
-        'not estimated. Pair with payroll/BOM documents to fill them.',
-    ],
+    notes,
   };
 }
 
