@@ -3,6 +3,7 @@ import { internalError, newRequestId, readJson } from '@/lib/http';
 import { query, insert, queryOne, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { isSchemaGap } from '@/lib/db-errors';
 import { type LCAResult } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { enforceRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
@@ -352,12 +353,14 @@ export async function POST(
           [caseId]
         );
         scope = { method: row?.lcia_method, region: row?.case_region || row?.project_region };
-      } catch {
+      } catch (scopeErr) {
+        if (!isSchemaGap(scopeErr)) throw scopeErr;
         try {
           // Before migrate-018: the case's region only.
           const row = await queryOne<any>(`SELECT region_code FROM case_table WHERE case_id = ?`, [caseId]);
           scope = { region: row?.region_code };
-        } catch {
+        } catch (regionErr) {
+          if (!isSchemaGap(regionErr)) throw regionErr;
           /* no region column: Global */
         }
       }
@@ -385,17 +388,14 @@ export async function POST(
 
     // Goal & scope in force for this run (ISO 14044 4.2), frozen into the
     // snapshot. SELECT * reads whichever columns exist, so a database without
-    // migrate-014 still runs and the snapshot records the defaults.
-    let goalScope: GoalScope | null = null;
-    try {
-      const [projectRow, caseRow] = await Promise.all([
-        queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [caseData.project_id]),
-        queryOne<any>(`SELECT * FROM case_table WHERE case_id = ?`, [caseId]),
-      ]);
-      goalScope = buildGoalScope(projectRow, caseRow);
-    } catch (gsErr) {
-      console.warn('[assessments POST] could not read goal & scope:', gsErr);
-    }
+    // migrate-014 still runs and the snapshot records the defaults. A failed
+    // read stops the run: a run frozen without its goal and scope cannot be
+    // scaled per functional unit or reported, and a snapshot is never redone.
+    const [projectRow, caseRow] = await Promise.all([
+      queryOne<any>(`SELECT * FROM project WHERE project_id = ?`, [caseData.project_id]),
+      queryOne<any>(`SELECT * FROM case_table WHERE case_id = ?`, [caseId]),
+    ]);
+    const goalScope: GoalScope | null = buildGoalScope(projectRow, caseRow);
 
     let result: { runId: number; lcaResult: LCAResult; snapshot: RunSnapshot };
     try {

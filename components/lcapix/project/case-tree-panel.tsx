@@ -18,6 +18,8 @@ export interface CaseTreePanelProps {
   selectedTreeNode: DemoTreeNode | null
   setSelectedTreeNode: (node: DemoTreeNode | null) => void
   isLoadingCaseTree: boolean
+  /** Why the case's steps could not be read; null when they were. */
+  caseTreeError?: string | null
   caseImpact: CaseImpact | null
   router: { push: (href: string) => void }
   openTreeModal: (caseId: string) => void
@@ -32,6 +34,7 @@ export function CaseTreePanel({
   selectedTreeNode,
   setSelectedTreeNode,
   isLoadingCaseTree,
+  caseTreeError = null,
   caseImpact,
   router,
   openTreeModal,
@@ -162,6 +165,30 @@ export function CaseTreePanel({
               }}
             >
               Loading case…
+            </div>
+          ) : caseTreeError ? (
+            <div
+              role="alert"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                padding: 24,
+                textAlign: 'center',
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--signal-error)' }}>
+                Could not load this case's steps
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                {caseTreeError}. Nothing was changed; reload the page to try again.
+              </span>
             </div>
           ) : (
             <EmptyCaseOverlay

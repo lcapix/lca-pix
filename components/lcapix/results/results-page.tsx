@@ -75,6 +75,7 @@ export default function ResultsPage() {
     writeUp,
     studyMethod,
     studyRegion,
+    studyError,
     mostRecentAssessment,
     insightsBreakdown,
     insightsMaterials,
@@ -182,6 +183,7 @@ export default function ResultsPage() {
           currentCase={currentCase}
           mostRecentAssessment={mostRecentAssessment}
           assessmentsError={assessmentsError}
+          studyError={studyError}
           method={method}
           region={region}
           setPickedMethod={setPickedMethod}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readJson } from '@/lib/http';
+import { internalError, readJson } from '@/lib/http';
 import { queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
@@ -72,6 +72,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ componentId: string }> }
 ) {
+  // What this save has written so far, statement by statement: a later
+  // statement that fails says exactly what was already saved, never
+  // "nothing else was changed" after part of the edit went through.
+  const saved: string[] = [];
   try {
     const userId = await requireAuth(request);
     const { componentId: componentIdParam } = await params;
@@ -229,6 +233,7 @@ export async function PUT(
         ]);
       }
     });
+    saved.push("the step's name, type, place and quantity");
 
     if (stageValue !== undefined) {
       try {
@@ -236,6 +241,7 @@ export async function PUT(
           stageValue,
           componentId,
         ]);
+        saved.push('the life-cycle stage');
       } catch (stageErr: any) {
         if (stageErr?.code !== 'ER_BAD_FIELD_ERROR') throw stageErr;
         console.warn('[component PUT] life_cycle_stage missing (run migrate-022)');
@@ -251,6 +257,7 @@ export async function PUT(
       ? await queryOne<any>(`SELECT * FROM component WHERE component_id = ?`, [componentId])
       : null;
     await updateExistingColumns(componentId, costValues, 'component PUT');
+    if (costValues.length) saved.push('the costs');
     const unexplained = changedCostKinds(costsBefore, costValues);
     if (unexplained.length) {
       try {
@@ -289,6 +296,7 @@ export async function PUT(
       allocValues.push(['allocation_note', typeof note === 'string' && note.trim() ? note.slice(0, 500) : null]);
     }
     await updateExistingColumns(componentId, allocValues, 'component PUT');
+    if (allocValues.length) saved.push('the allocation');
 
     const updatedComponent = await queryOne(
       `SELECT c.*, parent.component_name as parent_component_name
@@ -303,6 +311,14 @@ export async function PUT(
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (saved.length) {
+      return internalError(
+        'component PUT',
+        `Failed to update component. Saved: ${saved.join(', ')}; try again to save the rest.`,
+        error,
+        { extra: { saved } },
+      );
     }
     console.error('Update component error:', error);
     return NextResponse.json({ error: 'Failed to update component' }, { status: 500 });

@@ -382,10 +382,19 @@ export function toProcessModel(
     return product;
   };
 
+  // A quantity or amount that is not a number is left out, never guessed, and
+  // named for the reviewer to add by hand.
+  const leftOut: string[] = [];
+  const shown = (v: unknown) => (v === null || v === undefined || v === '' ? 'none given' : `'${clean(v, 40)}'`);
+
   const flows: ProcessModel['flows'] = [];
   for (const f of Array.isArray(json.flows) ? json.flows : []) {
-    const q = num(f?.quantity);
-    if (!f?.substance_text || q === null) continue;
+    if (!f?.substance_text) continue;
+    const q = num(f.quantity);
+    if (q === null) {
+      leftOut.push(`the flow '${clean(f.substance_text, 60)}' (quantity ${shown(f.quantity)})`);
+      continue;
+    }
     flows.push({
       node: homeFor(f.node, `the flow '${clean(f.substance_text, 60)}'`),
       substance_text: String(f.substance_text).slice(0, 200),
@@ -396,12 +405,16 @@ export function toProcessModel(
     });
   }
   for (const { step, qty } of salvaged) {
+    if (qty === null) {
+      leftOut.push(`the item '${clean(step.name, 60)}' (quantity ${shown(step.raw.quantity)})`);
+      continue;
+    }
     const home = step.parentRef ? resolve(step.parentRef) ?? product : product;
     flows.push({
       node: home,
       substance_text: step.name.slice(0, 200),
       direction: 'input',
-      quantity: qty ?? 0,
+      quantity: qty,
       unit: String(step.raw.unit ?? '%').slice(0, 20),
       provenance: prov,
     });
@@ -411,7 +424,12 @@ export function toProcessModel(
   const costs: ProcessModel['costs'] = [];
   for (const c of Array.isArray(json.costs) ? json.costs : []) {
     const amt = num(c?.amount);
-    if (amt === null || amt === 0) continue;
+    if (amt === null) {
+      const cat = clean(c?.category, 20);
+      leftOut.push(`${cat ? `the ${cat} cost` : 'a cost'}${c?.node ? ` on '${clean(c.node, 60)}'` : ''} (amount ${shown(c?.amount)})`);
+      continue;
+    }
+    if (amt === 0) continue;
     costs.push({
       node: homeFor(c.node, `a ${clean(c.category, 20) || 'cost'} cost`),
       category: COST_CATEGORIES.has(c?.category) ? c.category : 'opex',
@@ -465,6 +483,9 @@ export function toProcessModel(
     );
   }
   if (repairs.length) notes.push(`Structure repaired: ${repairs.join('; ')}.`);
+  if (leftOut.length) {
+    notes.push(`Left out because the number could not be read: ${leftOut.join('; ')}. Add them by hand.`);
+  }
 
   const pm: ProcessModel = {
     product_name: product,

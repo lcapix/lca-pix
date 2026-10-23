@@ -39,7 +39,7 @@ export interface InspectorPanelProps {
   /** Candidate parents for re-parenting (excludes self + descendants). */
   parentOptions?: ParentOption[]
   /** Apply suggested costs AND persist them in one action. */
-  onApplyCosts?: (patch: Partial<InspectorEditFormData>) => void
+  onApplyCosts?: (patch: Partial<InspectorEditFormData>) => Promise<boolean>
   /** True when the node has children: it is a roll-up (pure sum), so it has
    * no flows or costs of its own and editing them there is not offered. */
   hasChildren?: boolean

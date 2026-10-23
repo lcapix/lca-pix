@@ -1,5 +1,6 @@
 // lib/integrations/cost-rates.ts — thin cache for BLS/EIA/Metals API rate lookups.
 import { queryOne, insert } from '@/lib/db-helpers';
+import { log } from '@/lib/observability/log';
 
 export interface CostRate {
   rateValue: number;
@@ -77,7 +78,18 @@ export async function getOrFetchRate(params: GetOrFetchParams): Promise<CostRate
   try {
     fresh = await params.fetcher();
   } catch (err) {
-    if (params.staticFallback) return await params.staticFallback();
+    if (params.staticFallback) {
+      // The reference value is labelled as such where it is shown; the reason
+      // the live lookup failed (no key, a bad key, an outage) is logged, so a
+      // broken key is found rather than silently priced at the reference.
+      log('warn', 'cost_rate.live_failed', {
+        rate_type: params.type,
+        rate_key: params.key,
+        region: params.region,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+      return await params.staticFallback();
+    }
     throw err;
   }
   await insert(

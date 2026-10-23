@@ -95,6 +95,35 @@ describe('handleSaveComponent', () => {
     expect(toast.error).toHaveBeenCalledWith('Name too long')
   })
 
+  it('says whether it saved: true once saved, false when refused (Phase 1)', async () => {
+    const { result } = setup('2')
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.actions.handleSaveComponent()
+    })
+    expect(ok).toBe(true)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(apiRequest).mockImplementation(async () => json({ success: false, error: 'Name too long' }))
+    await act(async () => {
+      ok = await result.current.actions.handleSaveComponent()
+    })
+    expect(ok).toBe(false)
+  })
+
+  it('a reload that fails after the save says the save went through (Phase 1)', async () => {
+    const { result, reloadComponents } = setup('2')
+    reloadComponents.mockRejectedValue(new Error('Failed to fetch components'))
+    let ok: boolean | undefined
+    await act(async () => {
+      ok = await result.current.actions.handleSaveComponent()
+    })
+    expect(ok).toBe(true)
+    expect(toast.error).toHaveBeenCalledWith('Saved, but the steps could not be reloaded. Refresh to see the latest.', {
+      description: 'Failed to fetch components',
+    })
+    expect(toast.success).toHaveBeenCalledWith('Component updated successfully')
+  })
+
   it('an override is saved without waiting for the form (Apply & save)', async () => {
     const { result } = setup('2')
     await act(async () => result.current.actions.handleApplyCosts({ energyCost: 4.5 }))

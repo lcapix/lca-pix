@@ -32,6 +32,9 @@ export function useResults(projectId: string, caseId: string, requestedRunId?: s
   // a 404 (or a body without the case); 'error' for anything else.
   const [caseLoadError, setCaseLoadError] = useState<null | 'notfound' | 'error'>(null)
   const [assessmentsError, setAssessmentsError] = useState<string | null>(null)
+  // The project could not be read: a first run would start from defaults
+  // instead of the study's method and region, so the header says so.
+  const [studyError, setStudyError] = useState<string | null>(null)
   // The case's own region (where the product is made), for a first run.
   const [caseRegion, setCaseRegion] = useState<string | null>(null)
 
@@ -83,22 +86,24 @@ export function useResults(projectId: string, caseId: string, requestedRunId?: s
           setCaseLoadError(caseResponse.status === 404 ? 'notfound' : 'error')
         } else {
           const caseData = await caseResponse.json()
-          const componentsData = await componentsResponse.json().catch(() => ({}))
+          // The steps give the step count, the case cost and Magic Insights'
+          // costs: a failed read is a failed page, not a case with no steps.
+          const componentsData = componentsResponse.ok
+            ? await componentsResponse.json().catch(() => null)
+            : null
+          const componentsRead = !!componentsData?.success && Array.isArray(componentsData.components)
 
           if (!(caseData.success && caseData.case)) setCaseLoadError('notfound')
-          if (caseData.success && caseData.case) {
+          else if (!componentsRead) setCaseLoadError('error')
+          if (caseData.success && caseData.case && componentsRead) {
             setCaseRegion(caseData.case.region_code ?? null)
             setMyRole(isProjectRole(caseData.case.my_role) ? caseData.case.my_role : null)
             const transformedCase = transformCaseFromDB(caseData.case)
 
-            if (componentsData.success && componentsData.components) {
-              const { transformComponentFromDB } = await import(
-                '@/lib/data-transformers'
-              )
-              transformedCase.components = componentsData.components.map((c: any) =>
-                transformComponentFromDB(c),
-              )
-            }
+            const { transformComponentFromDB } = await import('@/lib/data-transformers')
+            transformedCase.components = componentsData.components.map((c: any) =>
+              transformComponentFromDB(c),
+            )
 
             setCurrentCase(transformedCase)
             setWriteUp({
@@ -108,16 +113,21 @@ export function useResults(projectId: string, caseId: string, requestedRunId?: s
             })
           }
         }
-        // Also fetch the parent project to populate the breadcrumb correctly
+        // The parent project: the breadcrumb, and the study's method and region
+        // a first run starts from.
         try {
           const projRes = await apiRequest(`/api/projects/${projectId}`)
-          const projData = await projRes.json()
-          if (projData?.success && projData?.project) {
-            if (projData.project.project_name) setProjectName(projData.project.project_name)
-            if (projData.project.lcia_method) setStudyMethod(projData.project.lcia_method)
-            if (projData.project.region_code) setStudyRegion(projData.project.region_code)
+          const projData = await projRes.json().catch(() => null)
+          if (!projRes.ok || !projData?.success || !projData.project) {
+            throw new Error(projData?.error || `the server answered ${projRes.status}`)
           }
-        } catch {}
+          if (projData.project.project_name) setProjectName(projData.project.project_name)
+          if (projData.project.lcia_method) setStudyMethod(projData.project.lcia_method)
+          if (projData.project.region_code) setStudyRegion(projData.project.region_code)
+          setStudyError(null)
+        } catch (error: any) {
+          setStudyError(String(error?.message || 'the request failed').replace(/\.\s*$/, ''))
+        }
       } catch (error) {
         console.error('Failed to fetch case:', error)
         setCaseLoadError('error')
@@ -264,6 +274,7 @@ export function useResults(projectId: string, caseId: string, requestedRunId?: s
     isLoadingCase,
     caseLoadError,
     assessmentsError,
+    studyError,
     caseRegion,
     isRunningAssessment,
     assessmentResults,

@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { internalError } from '@/lib/http';
+import { isAuthError } from '@/lib/route-guard';
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Auth me error:', error);
-    return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
+    if (isAuthError(error)) return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
+    return internalError('auth me', 'Could not read your account. You are still signed in; try again.', error);
   }
 }

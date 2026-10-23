@@ -60,6 +60,27 @@ describe('getOrFetchRate', () => {
     expect(insertSpy).not.toHaveBeenCalled();
   });
 
+  it('logs why the live lookup failed when it falls back to the reference (Phase 1)', async () => {
+    vi.mocked(db.queryOne).mockResolvedValueOnce(null);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = await getOrFetchRate({
+      type: 'electricity', key: 'grid', region: 'WV',
+      fetcher: vi.fn().mockRejectedValue(new Error('EIA answered 403: API key invalid')),
+      staticFallback: () => ({ rateValue: 0.1, unit: '$/kWh', source: 'Reference 2024', effectiveDate: '2024-01' }),
+    });
+    expect(r.source).toBe('Reference 2024');
+    const line = JSON.parse(String(warn.mock.calls[0]?.[0]));
+    expect(line).toMatchObject({
+      level: 'warn',
+      event: 'cost_rate.live_failed',
+      rate_type: 'electricity',
+      rate_key: 'grid',
+      region: 'WV',
+      reason: 'EIA answered 403: API key invalid',
+    });
+    warn.mockRestore();
+  });
+
   it('still throws when the fetcher fails and there is no fallback', async () => {
     vi.mocked(db.queryOne).mockResolvedValueOnce(null);
     await expect(

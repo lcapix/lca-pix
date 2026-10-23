@@ -124,6 +124,18 @@ describe('homeKpis', () => {
       ['SUBSTANCES', 0, 'In substance catalog'],
     ])
   })
+  it('shows a dash, not 0, for a library count that was not read (Phase 1)', () => {
+    const failed = homeKpis({ projectCount: 1, totalCases: 1, totalComponents: 0, factors: null, substances: null, libraryError: 'boom', fmtInt })
+    expect(failed.slice(2).map((t) => [t.display, t.sub])).toEqual([
+      ['–', 'Could not read the library'],
+      ['–', 'Could not read the library'],
+    ])
+    const loading = homeKpis({ projectCount: 1, totalCases: 1, totalComponents: 0, factors: null, substances: null, fmtInt })
+    expect(loading[2]).toMatchObject({ display: '–', sub: 'Loading…' })
+    // A read count of 0 is a real 0.
+    const zero = homeKpis({ projectCount: 0, totalCases: 0, totalComponents: 0, factors: 0, substances: 0, fmtInt })
+    expect(zero[2].display).toBeUndefined()
+  })
   it('links the library tiles and formats step counts', () => {
     const k = homeKpis({ projectCount: 2, totalCases: 3, totalComponents: 1200, factors: 5, substances: 9, fmtInt })
     expect(k[0].sub).toBe('2 total')

@@ -11,6 +11,7 @@ import { apiRequest } from '@/lib/api-client'
 import {
   goalScopeFromApi,
   goalScopeSave,
+  studyPartChanged,
   toGoalScopeSummary,
   type GoalScopeForm,
   type GoalScopeSummary,
@@ -106,18 +107,29 @@ export function useGoalScope({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         })
-      const [pr, cr] = await Promise.all([
-        put(`/api/projects/${projectId}`, plan.project),
-        put(`/api/cases/${caseId}`, plan.case),
-      ])
-      if (pr.status === 403) {
-        throw new Error('Only the project owner can change the study goal & scope.')
+      const reason = async (r: Response, fallback: string) => {
+        const j = await r.json().catch(() => ({}))
+        return j?.error || fallback
       }
-      for (const r of [pr, cr]) {
-        if (!r.ok) {
-          const j = await r.json().catch(() => ({}))
-          throw new Error(j?.error || 'Could not save goal & scope.')
+      // The study part first, and only when it changed: a member who may not
+      // change the study can still save this case's reference flow and data
+      // basis. If the study part is refused, nothing is saved.
+      const studySent = studyPartChanged(saved, plan.next)
+      if (studySent) {
+        const pr = await put(`/api/projects/${projectId}`, plan.project)
+        if (pr.status === 403) throw new Error('Only the project owner can change the study goal & scope. Nothing was saved.')
+        if (!pr.ok) throw new Error(`${await reason(pr, 'Could not save the study goal & scope.')} Nothing was saved.`)
+      }
+      const cr = await put(`/api/cases/${caseId}`, plan.case)
+      if (!cr.ok) {
+        const why = await reason(cr, 'the case refused the change')
+        if (!studySent) throw new Error(`The reference flow and data basis were not saved: ${why}`)
+        // The study part is saved: keep it as saved, and say exactly what was not.
+        if (saved) {
+          setSaved({ ...plan.next, referenceFlow: saved.referenceFlow, referenceFlowUnit: saved.referenceFlowUnit, modeledOutput: saved.modeledOutput })
         }
+        onSaved?.()
+        throw new Error(`The study goal & scope was saved; this case's reference flow and data basis were not: ${why}`)
       }
       setSaved(plan.next)
       setForm(plan.next)

@@ -253,8 +253,8 @@ describe('useMachineEnergy', () => {
 })
 
 describe('useCostSuggestion', () => {
-  it('suggests, applies once and remembers it was applied', () => {
-    const onApply = vi.fn()
+  it('suggests, applies once and remembers it was applied', async () => {
+    const onApply = vi.fn(async () => true)
     const { result } = renderHook(() =>
       useCostSuggestion({
         flows: [{ id: '1', substance: 'Electricity', dir: 'IN', amount: 10, unit: 'kWh' }],
@@ -265,7 +265,9 @@ describe('useCostSuggestion', () => {
     )
     act(() => result.current.suggest())
     expect(result.current.result?.payload.energy).toBeGreaterThan(0)
-    act(() => result.current.apply())
+    await act(async () => {
+      await result.current.apply()
+    })
     expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ energy: expect.any(Number) }))
     expect(result.current.result).toBeNull()
     expect(result.current.applied).toBe(true)
@@ -273,5 +275,24 @@ describe('useCostSuggestion', () => {
     expect(result.current.applied).toBe(false)
     act(() => result.current.dismiss())
     expect(result.current.result).toBeNull()
+  })
+
+  it('does not say "applied" when the save failed, and keeps the suggestion to try again (Phase 1)', async () => {
+    const onApply = vi.fn(async () => false)
+    const { result } = renderHook(() =>
+      useCostSuggestion({
+        flows: [{ id: '1', substance: 'Electricity', dir: 'IN', amount: 10, unit: 'kWh' }],
+        componentType: 'Operation',
+        nodeName: 'Paint',
+        onApply,
+      }),
+    )
+    act(() => result.current.suggest())
+    await act(async () => {
+      await result.current.apply()
+    })
+    expect(onApply).toHaveBeenCalled()
+    expect(result.current.applied).toBe(false)
+    expect(result.current.result?.payload.energy).toBeGreaterThan(0)
   })
 })

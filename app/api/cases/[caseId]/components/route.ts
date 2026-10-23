@@ -4,6 +4,7 @@ import { COLUMN_LIMITS, firstLengthError } from '@/lib/field-limits';
 import { query, insert, queryOne, execute } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { isSchemaGap } from '@/lib/db-errors';
 import { planPlacement } from '@/lib/component-tree';
 import {
   BadRequest,
@@ -52,8 +53,8 @@ export async function GET(
 
     // Attach a real flow_count per component (from the flows table) so the
     // canvas cards can show the true number of attached flows instead of 0.
-    // Isolated/best-effort: if the flows table is unavailable, components still
-    // return with flow_count 0 rather than failing the whole request.
+    // An older schema without the flows table gives flow_count 0; any other
+    // failure fails the request.
     try {
       const counts = await query<any>(
         `SELECT f.component_id, COUNT(*) AS flow_count
@@ -70,7 +71,9 @@ export async function GET(
         comp.flow_count = byId.get(Number(comp.component_id)) ?? 0;
       }
     } catch (countErr) {
-      console.warn('[components GET] flow_count join skipped:', countErr);
+      // A failed count must not show every step with 0 flows: that invites
+      // re-entering them and double counting. Only a schema gap is tolerated.
+      if (!isSchemaGap(countErr)) throw countErr;
       for (const comp of components as any[]) comp.flow_count = comp.flow_count ?? 0;
     }
 

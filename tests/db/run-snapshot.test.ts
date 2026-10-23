@@ -28,6 +28,7 @@ let accountId: number;
 let projectId: number;
 let caseId: number;
 let runId: number;
+let firstResult: Awaited<ReturnType<typeof calculateCaseImpacts>>;
 const step: Record<string, number> = {};
 
 async function insert(sql: string, params: unknown[]) {
@@ -142,13 +143,23 @@ beforeAll(async () => {
     step.filling,
     gas,
   ]);
-  runId = (await runAssessment('CML 2001', 'US')).id;
+  const first = await runAssessment('CML 2001', 'US');
+  runId = first.id;
+  firstResult = first.lcaResult;
 });
 
 afterAll(async () => {
   if (projectId) await conn.query('DELETE FROM project WHERE project_id = ?', [projectId]);
   if (accountId) await conn.query('DELETE FROM account WHERE id = ?', [accountId]);
   await conn?.end();
+});
+
+describe('the engine result names each step\'s life-cycle stage (Phase 1)', () => {
+  it('what POST /assessments sends back carries the stage, not null', () => {
+    const stageOf = new Map(firstResult.component_results.map((r) => [Number(r.component_id), r.life_cycle_stage]));
+    expect(stageOf.get(step.cleaning)).toBe('use');
+    expect(stageOf.get(step.filling)).toBe('production');
+  });
 });
 
 describe('a frozen run survives deleting a step', () => {

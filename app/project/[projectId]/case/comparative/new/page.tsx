@@ -41,6 +41,9 @@ export default function CreateComparativeCasePage() {
     Array<{ id: string; name: string }>
   >([])
   const [isLoadingCases, setIsLoadingCases] = useState(true)
+  // The base cases could not be read: creating now would make a comparative
+  // case linked to nothing, so the form says so and holds the submit.
+  const [casesError, setCasesError] = useState<string | null>(null)
 
   const project = projects.find((p) => p.id === projectId)
 
@@ -51,22 +54,23 @@ export default function CreateComparativeCasePage() {
     ;(async () => {
       try {
         setIsLoadingCases(true)
+        setCasesError(null)
         const res = await apiRequest(`/api/projects/${projectId}/cases`)
-        const data = await res.json()
-        if (cancelled) return
-        if (data?.success && Array.isArray(data.cases)) {
-          const transformed = data.cases
-            .map(transformCaseFromDB)
-            .filter((c: any) => c.type === "base")
-            .map((c: any) => ({ id: c.id, name: c.name }))
-          setBaseCases(transformed)
-          if (transformed.length > 0) {
-            setFormData((f) => ({ ...f, baseCaseId: transformed[0].id }))
-          }
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.success || !Array.isArray(data.cases)) {
+          throw new Error(data?.error || `the server answered ${res.status}`)
         }
-      } catch (err) {
-        // Silent failure: Zustand-only mode still lets users save.
-        console.warn("Could not load base cases from API:", err)
+        if (cancelled) return
+        const transformed = data.cases
+          .map(transformCaseFromDB)
+          .filter((c: any) => c.type === "base")
+          .map((c: any) => ({ id: c.id, name: c.name }))
+        setBaseCases(transformed)
+        if (transformed.length > 0) {
+          setFormData((f) => ({ ...f, baseCaseId: transformed[0].id }))
+        }
+      } catch (err: any) {
+        if (!cancelled) setCasesError(String(err?.message || "the request failed").replace(/\.\s*$/, ""))
       } finally {
         if (!cancelled) setIsLoadingCases(false)
       }
@@ -76,12 +80,12 @@ export default function CreateComparativeCasePage() {
     }
   }, [projectId])
 
-  const isFormValid = formData.name.trim().length > 0
+  const isFormValid = formData.name.trim().length > 0 && !casesError
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isFormValid) {
-      toast.error("Please enter a case name")
+      toast.error(casesError ? "The reference cases could not be loaded; reload the page first" : "Please enter a case name")
       return
     }
     setIsSubmitting(true)
@@ -331,7 +335,10 @@ export default function CreateComparativeCasePage() {
               disabled={isLoadingCases}
             >
               {isLoadingCases && <option value="">Loading base cases…</option>}
-              {!isLoadingCases && baseCases.length === 0 && (
+              {!isLoadingCases && casesError && (
+                <option value="">Could not load the base cases</option>
+              )}
+              {!isLoadingCases && !casesError && baseCases.length === 0 && (
                 <option value="">No base cases found for this project</option>
               )}
               {!isLoadingCases &&
@@ -341,6 +348,12 @@ export default function CreateComparativeCasePage() {
                   </option>
                 ))}
             </select>
+            {casesError && (
+              <p role="alert" className="body" style={{ marginTop: 10, fontSize: 13, color: "var(--signal-error)" }}>
+                Could not load this project&apos;s base cases ({casesError}). Reload the page before you
+                create the case; without them it would not be linked to a reference case.
+              </p>
+            )}
             <label
               htmlFor="copyFromBase"
               className="body"

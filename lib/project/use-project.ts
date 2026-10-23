@@ -24,6 +24,19 @@ import { defaultActiveCaseId } from './workspace'
 type Router = { push: (href: string) => void }
 
 /**
+ * A GET whose failure is an error, never an empty answer: a non-2xx answer or
+ * a body without `success` throws with the route's own message.
+ */
+async function getOk(path: string): Promise<any> {
+  const r = await apiRequest(path)
+  const body = await r.json().catch(() => null)
+  if (!r.ok || !body?.success) throw new Error(body?.error || `the server answered ${r.status}`)
+  return body
+}
+
+const reasonOf = (err: unknown) => ((err instanceof Error && err.message) || 'the request failed').replace(/\.\s*$/, '')
+
+/**
  * Loads the project and its cases, and keeps the active case selected (the
  * base case, else the first, until the user picks another). An unknown
  * project or a failed load goes back to /home with a toast.
@@ -92,6 +105,9 @@ export function useCaseTree(activeCaseId: string | null, project: any) {
   const [isLoadingCaseTree, setIsLoadingCaseTree] = useState(false)
   const [baseTree, setBaseTree] = useState<DemoTreeNode | null>(null)
   const [isSyncedFromBase, setIsSyncedFromBase] = useState(false)
+  // Why the tree could not be read: the panel says so instead of offering to
+  // build a case that already has steps.
+  const [caseTreeError, setCaseTreeError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!activeCaseId) {
@@ -103,19 +119,20 @@ export function useCaseTree(activeCaseId: string | null, project: any) {
       // came from DEMO_TREE leaking through. Now we show a true empty
       // state until the user creates a case.
       setSelectedTreeNode(null)
+      setCaseTreeError(null)
       return
     }
     let cancelled = false
     setIsLoadingCaseTree(true)
     setIsSyncedFromBase(false)
+    setCaseTreeError(null)
 
     const activeCaseObj = project?.cases?.find((c: any) => c.id === activeCaseId)
     const isComp = activeCaseObj?.type === 'comparative'
     const baseCase = project?.cases?.find((c: any) => c.type === 'base')
 
-    apiRequest(`/api/cases/${activeCaseId}/components`)
-      .then(async (r) => {
-        const data = await r.json()
+    getOk(`/api/cases/${activeCaseId}/components`)
+      .then(async (data) => {
         if (cancelled) return
         const tree = buildCaseTree(data)
         if (tree) {
@@ -142,8 +159,11 @@ export function useCaseTree(activeCaseId: string | null, project: any) {
           setSelectedTreeNode(null)
         }
       })
-      .catch(() => {
-        if (!cancelled) setCaseTree(null)
+      .catch((err) => {
+        if (cancelled) return
+        setCaseTree(null)
+        setSelectedTreeNode(null)
+        setCaseTreeError(reasonOf(err))
       })
       .finally(() => {
         if (!cancelled) setIsLoadingCaseTree(false)
@@ -153,23 +173,26 @@ export function useCaseTree(activeCaseId: string | null, project: any) {
     }
   }, [activeCaseId, project])
 
-  return { caseTree, selectedTreeNode, setSelectedTreeNode, isLoadingCaseTree, baseTree, isSyncedFromBase }
+  return { caseTree, selectedTreeNode, setSelectedTreeNode, isLoadingCaseTree, caseTreeError, baseTree, isSyncedFromBase }
 }
 
 /**
  * The active case's latest completed run (focal category, top contributors)
  * and its cost columns, for the right rail. Cleared on every case switch, so
- * the previous case's numbers never show under the new one (PROJ-5).
+ * the previous case's numbers never show under the new one (PROJ-5). A read
+ * that fails is reported (impactError, costsError), never shown as "not yet
+ * assessed" or "no cost data".
  */
 export function useCaseImpact(activeCaseId: string | null) {
   const [caseImpact, setCaseImpact] = useState<CaseImpact | null>(null)
+  const [impactError, setImpactError] = useState<string | null>(null)
+  const [costsError, setCostsError] = useState<string | null>(null)
 
-  // Fetch real assessment results for the active case so the right rail
-  // (Impact Overview / Top contributors / Cost summary) shows actual numbers
-  // per-case instead of the hardcoded 126.82 demo value.
   useEffect(() => {
     // The previous case's numbers must never show under the new one (PROJ-5).
     setCaseImpact(null)
+    setImpactError(null)
+    setCostsError(null)
     if (!activeCaseId) return
     let cancelled = false
     // Cost summary from REAL component cost columns, never synthesized (the old
@@ -177,68 +200,47 @@ export function useCaseImpact(activeCaseId: string | null) {
     // product: capex is a one-time investment, so it is not added in. No cost
     // data → null, and the panel shows an honest empty state.
     const loadCosts = async (): Promise<CaseCosts | null> => {
-      try {
-        const cr = await apiRequest(`/api/cases/${activeCaseId}/components`)
-        const cd = await cr.json()
-        const comps: any[] = cd?.components || cd?.data || []
-        // DECIMAL strings summed as numbers; opex only where nothing is
-        // itemized (PROJ-4).
-        return summarizeCaseCosts(comps)
-      } catch {
-        return null
-      }
+      const cd = await getOk(`/api/cases/${activeCaseId}/components`)
+      // DECIMAL strings summed as numbers; opex only where nothing is
+      // itemized (PROJ-4).
+      return summarizeCaseCosts(cd.components || cd.data || [])
+    }
+    // The latest completed run, or null when the case has none yet.
+    const loadRun = async () => {
+      const ad = await getOk(`/api/cases/${activeCaseId}/assessments`)
+      const runs = completedAssessments<any>(ad.assessments || [])
+      if (!runs.length) return null
+      const latest = runs[0]
+      const dd = await getOk(`/api/assessments/${latest.run_id}`)
+      return { summary: summarizeRunResults(dd.results || []), method: latest.calculation_method ?? null }
     }
     ;(async () => {
-      try {
-        const ar = await apiRequest(`/api/cases/${activeCaseId}/assessments`)
-        const ad = await ar.json()
-        const runs = completedAssessments<any>(ad?.assessments || [])
-        if (!runs.length) {
-          // No run yet, but the case's cost columns are real data: show them.
-          const costs = await loadCosts()
-          if (!cancelled)
-            setCaseImpact({
-              totalImpact: null,
-              unit: DEFAULT_IMPACT_UNIT,
-              contributors: [],
-              impactByComponent: {},
-              costs,
-            })
-          return
-        }
-        const latest = runs[0]
-        const dr = await apiRequest(`/api/assessments/${latest.run_id}`)
-        const dd = await dr.json()
-        if (cancelled || !dd?.success) return
-        const summary = summarizeRunResults(dd.results || [])
-        const costs = await loadCosts()
-        if (!cancelled) {
-          setCaseImpact({
-            totalImpact: summary.total,
-            unit: summary.unit,
-            contributors: summary.contributors,
-            impactByComponent: summary.impactByComponent,
-            costs,
-            method: latest.calculation_method ?? null,
-            categoryCount: summary.categoryCount,
-          })
-        }
-      } catch {
-        if (!cancelled) setCaseImpact(null)
-      }
+      const [run, costs] = await Promise.allSettled([loadRun(), loadCosts()])
+      if (cancelled) return
+      if (run.status === 'rejected') setImpactError(reasonOf(run.reason))
+      if (costs.status === 'rejected') setCostsError(reasonOf(costs.reason))
+      const r = run.status === 'fulfilled' ? run.value : null
+      setCaseImpact({
+        totalImpact: r ? r.summary.total : null,
+        unit: r ? r.summary.unit : DEFAULT_IMPACT_UNIT,
+        contributors: r ? r.summary.contributors : [],
+        impactByComponent: r ? r.summary.impactByComponent : {},
+        costs: costs.status === 'fulfilled' ? costs.value : null,
+        ...(r ? { method: r.method, categoryCount: r.summary.categoryCount } : {}),
+      })
     })()
     return () => {
       cancelled = true
     }
   }, [activeCaseId])
 
-  return caseImpact
+  return { caseImpact, impactError, costsError }
 }
 
 /** Everything the project workspace loads, in the order the page always loaded it. */
 export function useProject(projectId: string, router: Router) {
   const data = useProjectData(projectId, router)
   const tree = useCaseTree(data.activeCaseId, data.project)
-  const caseImpact = useCaseImpact(data.activeCaseId)
-  return { ...data, ...tree, caseImpact }
+  const impact = useCaseImpact(data.activeCaseId)
+  return { ...data, ...tree, ...impact }
 }

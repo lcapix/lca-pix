@@ -100,12 +100,14 @@ export function useComponentActions({
   // Accepts an optional override merged over the current form state, so callers
   // (e.g. the cost "Apply" affordance) can apply-and-save in one action without
   // waiting for a separate Save click or a React state flush.
-  const handleSaveComponent = async (override?: Partial<EditFormData>) => {
+  // Resolves true once the step is saved; false when it was not (invalid,
+  // waiting on the rescale question, or the server refused).
+  const handleSaveComponent = async (override?: Partial<EditFormData>): Promise<boolean> => {
     const fd = { ...editFormData, ...(override || {}) }
     const invalid = validateComponentSave(fd)
     if (invalid) {
       toast.error(invalid)
-      return
+      return false
     }
 
     // Changing the product's quantity rescales the case: ask first.
@@ -114,7 +116,7 @@ export function useComponentActions({
       const change = pendingRescale(current, fd)
       if (change) {
         setPendingScale({ ...change, fd })
-        return
+        return false
       }
     }
     skipScaleCheck.current = false
@@ -131,7 +133,13 @@ export function useComponentActions({
         const result = await response.json()
         if (!result.success) throw new Error(result.error || 'Failed to update component')
 
-        const transformed = await reloadComponents()
+        // Saved. A failed reload after it is said as such, not as a failed save.
+        const transformed = await reloadComponents().catch((e: any) => {
+          toast.error('Saved, but the steps could not be reloaded. Refresh to see the latest.', {
+            description: e?.message,
+          })
+          return null
+        })
         if (transformed) {
           // Re-fill the panel from what was just saved. It used to be cleared
           // (setEditFormData({}) below), so every field went blank after Save
@@ -140,17 +148,20 @@ export function useComponentActions({
           if (saved) loadFormFor(saved)
         }
         toast.success('Component updated successfully')
+        return true
       }
+      return false
     } catch (error: any) {
       console.error('Error saving component:', error)
       toast.error(error.message || 'Failed to save component')
+      return false
     }
   }
 
   /** The inspector's "Apply & save" on suggested costs: merge, then save with the patch (avoids stale state). */
-  const handleApplyCosts = (patch: Partial<EditFormData>) => {
+  const handleApplyCosts = (patch: Partial<EditFormData>): Promise<boolean> => {
     setEditFormData((f) => ({ ...f, ...patch }))
-    handleSaveComponent(patch as any)
+    return handleSaveComponent(patch as any)
   }
 
   // ---------- Delete ----------

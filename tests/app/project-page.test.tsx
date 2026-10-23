@@ -25,6 +25,8 @@ const json = (body: unknown, status = 200) =>
   ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) }) as any
 
 let runStatus = 200
+// GETs planted to fail with a 500, so a failed read can be told from an empty case.
+let failing = new Set<string>()
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,8 +42,10 @@ beforeEach(() => {
     dispatchEvent: () => false,
   })) as any
   runStatus = 200
+  failing = new Set()
   vi.mocked(apiRequest).mockImplementation(async (url: string, init?: any) => {
     const method = init?.method ?? 'GET'
+    if (method === 'GET' && failing.has(url)) return json({ error: 'Database unavailable' }, 500)
     if (url === '/api/projects/7') {
       return json({ success: true, project: { project_id: 7, project_name: 'Bikes', owner_id: 1, lcia_method: 'ReCiPe Midpoint (H)' } })
     }
@@ -119,5 +123,36 @@ describe('Project page cost summary (PROJ-4)', () => {
       const total = [...summary.querySelectorAll('div')].find((d) => d.textContent === 'Total')
       expect(total?.nextElementSibling?.textContent).toBe('$12.75')
     })
+  })
+})
+
+describe('Project page failed reads (Phase 1 silent failures)', () => {
+  it('a failed steps read says so, and does not offer to build an empty case', async () => {
+    failing.add('/api/cases/5/components')
+    render(<ProjectPage />)
+    expect(await screen.findByText("Could not load this case's steps")).toBeInTheDocument()
+    expect(screen.getByText(/Database unavailable\. Nothing was changed/)).toBeInTheDocument()
+    expect(screen.queryByText('No components in this case yet')).toBeNull()
+    // The same read feeds the cost summary: an error there too, not "no cost data".
+    expect(await screen.findByText("Could not load this case's costs: Database unavailable.")).toBeInTheDocument()
+    expect(screen.queryByText('No cost data recorded for this case yet.')).toBeNull()
+  })
+
+  it('a failed run read says so, not "Not yet assessed"', async () => {
+    failing.add('/api/assessments/90')
+    render(<ProjectPage />)
+    expect(await screen.findByText('Could not load the latest results: Database unavailable.')).toBeInTheDocument()
+    expect(screen.getByText('Could not load the contributors: Database unavailable.')).toBeInTheDocument()
+    expect(screen.queryByText('Not yet assessed')).toBeNull()
+    // The costs were read fine and still show.
+    const summary = (await screen.findByText('Cost summary')).parentElement as HTMLElement
+    await waitFor(() => expect(summary.textContent).toContain('$12.75'))
+  })
+
+  it('a failed run list says so too', async () => {
+    failing.add('/api/cases/5/assessments')
+    render(<ProjectPage />)
+    expect(await screen.findByText('Could not load the latest results: Database unavailable.')).toBeInTheDocument()
+    expect(screen.queryByText('Not yet assessed')).toBeNull()
   })
 })

@@ -99,6 +99,33 @@ describe('results page: errors are not empty states (RES-5)', () => {
     expect(screen.queryByText('Case not found')).not.toBeInTheDocument()
   })
 
+  it("says the case could not be loaded when its steps could not be read (Phase 1)", async () => {
+    serve({
+      '/api/cases/3': caseOk(),
+      '/api/cases/3/components': () => json(500, { error: 'Database unavailable' }),
+      '/api/projects/1': projectOk(),
+      '/api/cases/3/assessments': () => json(200, { success: true, assessments: [run(1, 'TRACI 2.1', 'US', gw(5))] }),
+    })
+    render(<ResultsPage />)
+    // Not a page with "0 steps" and no costs: the step count, the case cost and
+    // Magic Insights' costs all come from this read.
+    expect(await screen.findByText('Could not load this case')).toBeInTheDocument()
+    expect(screen.queryByText('Touring bike')).not.toBeInTheDocument()
+  })
+
+  it("says the study's method and region could not be read before a first run (Phase 1)", async () => {
+    serve({
+      '/api/cases/3': caseOk(),
+      '/api/cases/3/components': componentsOk,
+      '/api/projects/1': () => json(500, { error: 'Database unavailable' }),
+      '/api/cases/3/assessments': () => json(200, { success: true, assessments: [] }),
+    })
+    render(<ResultsPage />)
+    expect(
+      await screen.findByText(/Could not read the study's method and region \(Database unavailable\)/),
+    ).toBeInTheDocument()
+  })
+
   it('still says "Case not found" for a 404', async () => {
     serve({
       '/api/cases/3': () => json(404, { error: 'Case not found' }),

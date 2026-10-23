@@ -1,12 +1,19 @@
 'use client'
 
-// Cost summary from the active case's real component cost columns, or an
-// honest empty state.
+// Cost summary from the active case's real component cost columns, an honest
+// empty state, or why the costs could not be read.
 
 import { fmtInt } from '@/components/lcapix'
 import type { CaseImpact } from '@/lib/project/case-impact'
 
-export function CostSummaryCard({ caseImpact }: { caseImpact: CaseImpact | null }) {
+export function CostSummaryCard({
+  caseImpact,
+  loadError = null,
+}: {
+  caseImpact: CaseImpact | null
+  /** Why the case's costs could not be read; null when they were. */
+  loadError?: string | null
+}) {
   return (
     <div className="card" style={{ padding: 20 }}>
       <div
@@ -68,6 +75,10 @@ export function CostSummaryCard({ caseImpact }: { caseImpact: CaseImpact | null 
           >
             ${fmtInt(caseImpact.costs.total)}
           </div>
+        </div>
+      ) : loadError ? (
+        <div role="alert" style={{ fontSize: 13, color: 'var(--signal-error)', lineHeight: 1.5 }}>
+          Could not load this case's costs: {loadError}.
         </div>
       ) : (
         <div
