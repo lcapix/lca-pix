@@ -47,7 +47,10 @@ export default function ProjectOverviewPage() {
     selectedTreeNode,
     setSelectedTreeNode,
     isLoadingCaseTree,
+    caseTreeError,
     caseImpact,
+    impactError,
+    costsError,
   } = useProject(projectId, router)
   const actions = useProjectActions({ projectId, router, project, setProject, activeCaseId, setActiveCaseId })
   // Same run gate as the case editor (functional unit + at least one input or
@@ -164,6 +167,7 @@ export default function ProjectOverviewPage() {
             selectedTreeNode={selectedTreeNode}
             setSelectedTreeNode={setSelectedTreeNode}
             isLoadingCaseTree={isLoadingCaseTree}
+            caseTreeError={caseTreeError}
             caseImpact={caseImpact}
             router={router}
             openTreeModal={hierarchy.openTreeModal}
@@ -180,11 +184,12 @@ export default function ProjectOverviewPage() {
               impactUnit={impactUnit}
               componentCount={componentCount}
               driverCount={driverCount}
+              loadError={impactError}
             />
 
-            <TopContributorsCard contributors={contributors} cases={cases} />
+            <TopContributorsCard contributors={contributors} cases={cases} loadError={impactError} />
 
-            <CostSummaryCard caseImpact={caseImpact} />
+            <CostSummaryCard caseImpact={caseImpact} loadError={costsError} />
 
             {/* Where this case is in the ISO journey + what it already has */}
             {activeCase && (

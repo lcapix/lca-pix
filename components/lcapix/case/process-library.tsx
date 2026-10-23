@@ -60,15 +60,19 @@ export function ProcessLibrary({
   const [driverQty, setDriverQty] = useState('')
   const [amounts, setAmounts] = useState<Record<number, string>>({})
   const [saving, setSaving] = useState(false)
+  // Why the library could not be read. A database without it answers an empty
+  // list; any other failure is said as such, not as an empty library.
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     ;(async () => {
       try {
         const r = await apiRequest('/api/process-templates')
-        const d = await r.json().catch(() => ({}))
-        setTemplates(Array.isArray(d?.templates) ? d.templates : [])
-      } catch {
-        setTemplates([])
+        const d = await r.json().catch(() => null)
+        if (!r.ok || !Array.isArray(d?.templates)) throw new Error(d?.error || `the server answered ${r.status}`)
+        setTemplates(d.templates)
+      } catch (err: any) {
+        setLoadError(String(err?.message || 'the request failed').replace(/\.\s*$/, ''))
       } finally {
         setLoading(false)
       }
@@ -108,23 +112,33 @@ export function ProcessLibrary({
       for (const line of ready) {
         const per = Number(amounts[line.template_flow_id] ?? line.amount_per_driver)
         const value = total(line)!
-        const res = await apiRequest(`/api/components/${componentId}/flows`, {
-          method: 'POST',
-          body: JSON.stringify({
-            substance_id: line.substance_id,
-            flow_type: line.flow_type === 'output' ? 'output' : 'input',
-            quantity: value,
-            unit: line.unit,
-            // The arithmetic, kept on the flow: a reader can check the number.
-            driver_description:
-              `${picked.template_name}: ${per} ${line.unit}/${picked.driver_unit} × ` +
-              `${qty} ${picked.driver_unit}`,
-          }),
-        })
+        const name = line.substance_name ?? line.substance_hint
+        // A dropped connection on one line is that line's failure, named below;
+        // the lines already added are still reported and shown, so a retry
+        // does not add them twice.
+        let res: Response
+        try {
+          res = await apiRequest(`/api/components/${componentId}/flows`, {
+            method: 'POST',
+            body: JSON.stringify({
+              substance_id: line.substance_id,
+              flow_type: line.flow_type === 'output' ? 'output' : 'input',
+              quantity: value,
+              unit: line.unit,
+              // The arithmetic, kept on the flow: a reader can check the number.
+              driver_description:
+                `${picked.template_name}: ${per} ${line.unit}/${picked.driver_unit} × ` +
+                `${qty} ${picked.driver_unit}`,
+            }),
+          })
+        } catch (err: any) {
+          failed.push(`${name}: not sent (${err?.message ?? 'the connection failed'})`)
+          continue
+        }
         if (res.ok) added += 1
         else {
           const body = await res.json().catch(() => null)
-          failed.push(`${line.substance_name ?? line.substance_hint}: ${body?.error ?? res.status}`)
+          failed.push(`${name}: ${body?.error ?? res.status}`)
         }
       }
     } finally {
@@ -170,7 +184,13 @@ export function ProcessLibrary({
 
       {loading && <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Loading…</div>}
 
-      {!loading && templates.length === 0 && (
+      {!loading && loadError && (
+        <div role="alert" style={{ fontSize: 12, color: 'var(--signal-error)', lineHeight: 1.5 }}>
+          Could not load the process library: {loadError}. Close it and try again.
+        </div>
+      )}
+
+      {!loading && !loadError && templates.length === 0 && (
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
           The library is empty: the database needs migrations 022 and 023.
         </div>

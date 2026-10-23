@@ -56,7 +56,7 @@ export function CostsSection({
   rolled: { cost: number; flows: number } | null
   editFormData?: InspectorEditFormData
   onChange?: (patch: Partial<InspectorEditFormData>) => void
-  onApplyCosts?: (patch: Partial<InspectorEditFormData>) => void
+  onApplyCosts?: (patch: Partial<InspectorEditFormData>) => Promise<boolean>
   /** The step's flows as the flows editor last loaded them. */
   suggestFlows: InspectorFlow[]
   drafts: NumberDrafts
@@ -104,7 +104,7 @@ export function CostsSection({
           nodeName={(node?.label as string) ?? ''}
           flows={suggestFlows}
           laborHours={editFormData!.laborHours}
-          onApply={(s) => {
+          onApply={async (s) => {
             const patch = {
               laborCost: s.labor ?? editFormData!.laborCost,
               energyCost: s.energy ?? editFormData!.energyCost,
@@ -113,8 +113,8 @@ export function CostsSection({
             }
             onChange!(patch)
             // Persist immediately so applied costs are saved without hunting
-            // for the Save button.
-            onApplyCosts?.(patch)
+            // for the Save button. Saved only when the save says so.
+            return (await onApplyCosts?.(patch)) ?? false
           }}
         />
       )}

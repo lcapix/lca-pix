@@ -792,6 +792,11 @@ export async function calculateCaseImpacts(
   const componentResults: ComponentImpactResult[] = [];
   let totalFlowsProcessed = 0;
   let totalDriverFlows = 0;
+  // Each step's life-cycle stage, from the hierarchy rows: the flow-count rows
+  // carry only id, name and count.
+  const stageOf = new Map(
+    (components as RowDataPacket[]).map((c) => [Number(c.component_id), (c.life_cycle_stage as string | null) ?? null]),
+  );
 
   for (const comp of componentsWithFlows) {
     algorithmSteps.push({
@@ -808,7 +813,7 @@ export async function calculateCaseImpacts(
     // carries only its allocated share into this product's result.
     const share = allocation.get(comp.component_id) ?? 1;
     if (share < 1) applyAllocation(result, share);
-    componentResults.push({ ...result, life_cycle_stage: (comp as any).life_cycle_stage ?? null });
+    componentResults.push({ ...result, life_cycle_stage: stageOf.get(Number(comp.component_id)) ?? null });
 
     totalFlowsProcessed += result.total_flows_processed;
     totalDriverFlows += result.driver_flows_count;

@@ -240,7 +240,10 @@ export async function getCurrentUser(request: Request): Promise<User | null> {
     );
     return user;
   } catch (error) {
-    return null;
+    // Not signed in is null. A database failure is not "not signed in": the
+    // client signs people out on a 401, so it must surface as an error.
+    if (error instanceof AuthError) return null;
+    throw error;
   }
 }
 

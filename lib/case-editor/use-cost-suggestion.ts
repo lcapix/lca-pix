@@ -64,7 +64,8 @@ export function useCostSuggestion({
   componentType: string
   nodeName?: string
   laborHours?: number
-  onApply: (s: SuggestedCosts) => void
+  /** Applies the costs and saves them; true only once the save succeeded. */
+  onApply: (s: SuggestedCosts) => Promise<boolean> | boolean
 }) {
   const [result, setResult] = useState<CostSuggestion | null>(null)
   const [applied, setApplied] = useState(false)
@@ -74,10 +75,15 @@ export function useCostSuggestion({
     setResult(suggestCosts(flows, { nodeName, nodeType: componentType, laborHours }))
   }
 
-  /** Apply & save the shown suggestion. */
-  function apply() {
+  /**
+   * Apply & save the shown suggestion. "Applied & saved" shows only once the
+   * save succeeded; on a failure the suggestion stays up to try again (the
+   * save path has already said why).
+   */
+  async function apply() {
     if (!result) return
-    onApply(result.payload)
+    const ok = await onApply(result.payload)
+    if (!ok) return
     setApplied(true)
     setResult(null)
   }

@@ -1,7 +1,7 @@
 'use client'
 
 // Impact Overview: the active case's global-warming result from its latest
-// run, or "Not yet assessed".
+// run, "Not yet assessed", or why the results could not be read.
 
 import { Icon } from '@/components/lcapix'
 import { AnimatedNumber } from '@/components/lcapix/animated-number'
@@ -15,6 +15,8 @@ export interface ImpactOverviewCardProps {
   impactUnit: string
   componentCount: number
   driverCount: number
+  /** Why the latest run could not be read; null when it was. */
+  loadError?: string | null
 }
 
 export function ImpactOverviewCard({
@@ -25,6 +27,7 @@ export function ImpactOverviewCard({
   impactUnit,
   componentCount,
   driverCount,
+  loadError = null,
 }: ImpactOverviewCardProps) {
   return (
     <div className="card" style={{ padding: 20 }}>
@@ -85,6 +88,10 @@ export function ImpactOverviewCard({
               {impactUnit}
             </div>
           </>
+        ) : loadError ? (
+          <div role="alert" style={{ fontSize: 13, color: 'var(--signal-error)', lineHeight: 1.5 }}>
+            Could not load the latest results: {loadError}.
+          </div>
         ) : (
           <div
             style={{

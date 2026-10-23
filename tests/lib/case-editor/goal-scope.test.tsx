@@ -60,7 +60,7 @@ describe('useGoalScope', () => {
     })
   })
 
-  it('loads, reports the summary, and saves both records', async () => {
+  it('loads, reports the summary, and saves only the case when only the case part changed', async () => {
     const onChange = vi.fn()
     const onSaved = vi.fn()
     const { result } = renderHook(() => useGoalScope({ projectId: '7', caseId: '10', onChange, onSaved }))
@@ -71,11 +71,42 @@ describe('useGoalScope', () => {
     act(() => result.current.set({ modeledOutput: '4' }))
     await act(async () => result.current.save())
     const puts = vi.mocked(apiRequest).mock.calls.filter(([, i]) => (i as any)?.method === 'PUT').map(([u]) => u)
-    expect(puts).toEqual(['/api/projects/7', '/api/cases/10'])
+    // The study part did not change: a member who may not change the study
+    // can still save this case's data basis (Phase 1).
+    expect(puts).toEqual(['/api/cases/10'])
     expect(result.current.open).toBe(false)
     expect(result.current.saved?.modeledOutput).toBe('4')
     expect(onSaved).toHaveBeenCalled()
     expect(toast.success).toHaveBeenCalledWith('Goal & scope saved')
+  })
+
+  it('sends the study first, then the case, when the study part changed', async () => {
+    const { result } = renderHook(() => useGoalScope({ projectId: '7', caseId: '10' }))
+    await waitFor(() => expect(result.current.saved).not.toBeNull())
+    act(() => result.current.set({ functionalUnit: '1 bracket, painted', modeledOutput: '4' }))
+    await act(async () => result.current.save())
+    const puts = vi.mocked(apiRequest).mock.calls.filter(([, i]) => (i as any)?.method === 'PUT').map(([u]) => u)
+    expect(puts).toEqual(['/api/projects/7', '/api/cases/10'])
+    expect(toast.success).toHaveBeenCalledWith('Goal & scope saved')
+  })
+
+  it('says the study was saved and the case was not, when only the case save failed (Phase 1)', async () => {
+    vi.mocked(apiRequest).mockImplementation(async (url: string, init?: any) => {
+      if (init?.method === 'PUT') return url === '/api/cases/10' ? json({ error: 'Database unavailable' }, 500) : json({ success: true })
+      if (url === '/api/projects/7') return json({ project: PROJECT })
+      return json({ case: CASE })
+    })
+    const onSaved = vi.fn()
+    const { result } = renderHook(() => useGoalScope({ projectId: '7', caseId: '10', onSaved }))
+    await waitFor(() => expect(result.current.saved).not.toBeNull())
+    act(() => result.current.set({ functionalUnit: '1 bracket, painted', modeledOutput: '4' }))
+    await act(async () => result.current.save())
+    expect(toast.error).toHaveBeenCalledWith(
+      "The study goal & scope was saved; this case's reference flow and data basis were not: Database unavailable",
+    )
+    expect(result.current.saved?.functionalUnit).toBe('1 bracket, painted')
+    expect(result.current.saved?.modeledOutput).toBe('1')
+    expect(onSaved).toHaveBeenCalled()
   })
 
   it('a viewer is told only the owner can change it; Cancel drops edits', async () => {
@@ -88,7 +119,9 @@ describe('useGoalScope', () => {
     await waitFor(() => expect(result.current.saved).not.toBeNull())
     act(() => result.current.set({ functionalUnit: 'x' }))
     await act(async () => result.current.save())
-    expect(toast.error).toHaveBeenCalledWith('Only the project owner can change the study goal & scope.')
+    expect(toast.error).toHaveBeenCalledWith('Only the project owner can change the study goal & scope. Nothing was saved.')
+    // Refused at the study part, so the case was never sent.
+    expect(vi.mocked(apiRequest).mock.calls.some(([u, i]) => u === '/api/cases/10' && (i as any)?.method === 'PUT')).toBe(false)
     act(() => result.current.cancel())
     expect(result.current.form?.functionalUnit).toBe('1 bracket')
   })

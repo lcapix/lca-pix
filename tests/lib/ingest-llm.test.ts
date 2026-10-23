@@ -27,6 +27,48 @@ describe('buildStructurePrompt', () => {
 })
 
 describe('toProcessModel', () => {
+  it('names every flow and cost it leaves out for a number it cannot read (Phase 1)', () => {
+    const json = {
+      product_name: 'Bracket',
+      nodes: [
+        { name: 'Bracket', tier: 'product', parent: null },
+        { name: '10. Cut', tier: 'operation', parent: 'Bracket' },
+      ],
+      flows: [
+        { node: '10. Cut', substance_text: 'Steel sheet', direction: 'input', quantity: '2.5', unit: 'kg' },
+        { node: '10. Cut', substance_text: 'Cutting fluid', direction: 'input', quantity: 'approx. a litre', unit: 'L' },
+        { node: '10. Cut', substance_text: 'Offcuts', direction: 'output' },
+      ],
+      costs: [
+        { node: '10. Cut', category: 'labor', amount: '$40', basis: '1 h' },
+        { node: '10. Cut', category: 'energy', amount: 'TBD', basis: '' },
+        { node: '10. Cut', category: 'opex', amount: 0, basis: 'none' },
+      ],
+    }
+    const pm = toProcessModel(json, 'traveler.pdf')
+    expect(pm.flows.map((f) => [f.substance_text, f.quantity])).toEqual([['Steel sheet', 2.5]])
+    expect(pm.costs.map((c) => [c.category, c.amount])).toEqual([['labor', 40]])
+    const note = pm.notes.find((n) => n.startsWith('Left out because the number could not be read'))
+    expect(note).toBe(
+      "Left out because the number could not be read: the flow 'Cutting fluid' (quantity 'approx. a litre'); " +
+        "the flow 'Offcuts' (quantity none given); the energy cost on '10. Cut' (amount 'TBD'). Add them by hand.",
+    )
+  })
+
+  it('does not invent a zero for a recovered item with no quantity (Phase 1)', () => {
+    const json = {
+      product_name: 'Bracket',
+      nodes: [
+        { name: 'Bracket', tier: 'product', parent: null },
+        { name: 'Steel', tier: 'elemental_task', parent: 'Bracket', quantity: 3, unit: 'kg' },
+        { name: 'Paint', tier: 'elemental_task', parent: 'Bracket', unit: 'L' },
+      ],
+    }
+    const pm = toProcessModel(json, 'bom.pdf')
+    expect(pm.flows.map((f) => [f.substance_text, f.quantity])).toEqual([['Steel', 3]])
+    expect(pm.notes.some((n) => n.includes("the item 'Paint' (quantity none given)"))).toBe(true)
+  })
+
   it("keeps every operation the model found, in order, with each cost on its own step", () => {
     const json = {
       product_name: 'CEB press',

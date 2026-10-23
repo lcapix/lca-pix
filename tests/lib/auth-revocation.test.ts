@@ -15,6 +15,7 @@ import * as db from '@/lib/db-helpers';
 import {
   AuthError,
   createToken,
+  getCurrentUser,
   OAUTH_ONLY_PASSWORD_HASH,
   passwordFingerprint,
   requireAuth,
@@ -134,5 +135,18 @@ describe('every requireAuth failure is an AuthError (401), never a plain Error',
     expect(e).toBeInstanceOf(AuthError);
     expect(e.status).toBe(401);
     expect(e.message).toBe('User account not found or inactive');
+  });
+});
+
+describe('getCurrentUser: not signed in is null, a database failure is an error (Phase 1)', () => {
+  it('reads a bad token as null', async () => {
+    expect(await getCurrentUser(withToken('not-a-jwt'))).toBeNull();
+    expect(await getCurrentUser(new Request('http://t/api/auth/me'))).toBeNull();
+  });
+
+  it('throws when the account cannot be read, instead of signing the user out', async () => {
+    vi.mocked(db.queryOne).mockRejectedValue(new Error('connect ETIMEDOUT'));
+    const token = createToken({ id: 7, username: 'ada', email: 'ada@example.com', accountType: 'user' } as any, HASH_A);
+    await expect(getCurrentUser(withToken(token))).rejects.toThrow('connect ETIMEDOUT');
   });
 });

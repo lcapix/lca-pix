@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { isSchemaGap } from '@/lib/db-errors';
 import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
 import { generateAssessmentPPTX } from '@/lib/pptx-generator';
 import {
@@ -182,7 +183,9 @@ export async function GET(
             AND dif.factor_value <> 0`,
         [runId, regionCode],
       );
-    } catch {
+    } catch (srcErr) {
+      // A report must not print "no sources" because the read failed.
+      if (!isSchemaGap(srcErr)) throw srcErr;
       factorSources = [];
     }
 
@@ -193,7 +196,8 @@ export async function GET(
            WHERE region_code IN (?, 'Global') ORDER BY source`,
         [regionCode],
       );
-    } catch {
+    } catch (srcErr) {
+      if (!isSchemaGap(srcErr)) throw srcErr;
       costSources = [];
     }
 
