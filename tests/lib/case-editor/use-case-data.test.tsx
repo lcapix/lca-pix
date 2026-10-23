@@ -31,7 +31,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   components = [comp(1, 'Bracket'), comp(2, 'Cut', 1)]
   caseHandler = async () =>
-    json({ success: true, case: { case_id: 10, project_id: 7, case_name: 'Base', case_type: 'base', interpretation: 'Steel wins', learning_state: { lesson: 2 } } })
+    json({ success: true, case: { case_id: 10, project_id: 7, case_name: 'Base', case_type: 'base', interpretation: 'Steel wins' } })
   componentsHandler = null
   vi.mocked(apiRequest).mockImplementation(async (url: string, init?: any) => {
     if (url === '/api/cases/10') return caseHandler()

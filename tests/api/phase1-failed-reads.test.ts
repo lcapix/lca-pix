@@ -27,7 +27,7 @@ const gap = (code: 'ER_BAD_FIELD_ERROR' | 'ER_NO_SUCH_TABLE' = 'ER_BAD_FIELD_ERR
 
 /** The guard row lib/route-guard reads for a case (the caller made it); matched on the
  * columns every version of that query starts with. */
-const GUARD = { case_id: 3, project_id: 5, created_by: 1, members_see_own_cases: 0, hidden_from_members: 0, read_only: 0 };
+const GUARD = { case_id: 3, project_id: 5, created_by: 1 };
 
 type Rule = [RegExp, () => unknown];
 /** queryOne / query answer by SQL; the first matching rule wins, else null / []. */

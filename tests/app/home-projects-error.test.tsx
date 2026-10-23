@@ -11,7 +11,6 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 vi.mock('@/components/auth-guard', () => ({ AuthGuard: ({ children }: any) => <>{children}</> }))
-vi.mock('@/components/global/guided-tour', () => ({ GuidedTour: () => null }))
 vi.mock('@/components/lcapix', () => ({
   AppTopBar: () => null,
   Icon: () => null,
