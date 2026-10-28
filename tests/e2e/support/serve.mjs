@@ -106,7 +106,7 @@ Object.assign(env, {
   RATE_LIMIT_STORE: 'memory',
   // A bigger heap: next dev restarts itself ("approaching the used memory
   // threshold") after a few hundred page compiles, and requests hang meanwhile.
-  NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192 --require ${path.join(REPO_ROOT, 'tests/e2e/support/block-outbound.cjs')}`.trim(),
+  NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192 --require "${path.join(REPO_ROOT, 'tests/e2e/support/block-outbound.cjs')}"`.trim(),
 });
 
 const nextBin = path.join(REPO_ROOT, 'node_modules', 'next', 'dist', 'bin', 'next');
