@@ -69,7 +69,7 @@ test.describe('F10 export', () => {
       },
     ],
   ] as const) {
-    test(`Reports: Export ${format} downloads a ${ext} file of the run`, async ({ page, seed }) => {
+    test(`R13 P120 Reports: Export ${format} downloads a ${ext} file of the run`, async ({ page, seed }) => {
       await open(page, `/reports?project=${seed.example.projectId}&case=${seed.example.baseCaseId}`, { ready: 'Build a report' });
       await expect(page.locator('.rp-paper-top')).toContainText(`Run #${seed.example.baseRunId}`, NAV);
       await page.getByRole('radio', { name: format, exact: true }).click();

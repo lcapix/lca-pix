@@ -3,7 +3,7 @@
  * contract tests that pin test ids, accessible names and tour anchors.
  * See docs/testing/E2E_TESTS.md.
  *
- *   pnpm e2e            journeys + contracts
+ *   pnpm e2e            journeys + contracts + parity
  *   pnpm e2e:visual     screenshot baseline
  *   pnpm e2e:a11y       axe baseline (fails only on new violations)
  *   pnpm e2e:update     rewrite the screenshot baseline
@@ -74,6 +74,7 @@ export default defineConfig({
     { name: 'journeys-webkit', testMatch: 'journeys/**/*.spec.ts', use: { browserName: 'webkit', launchOptions: { args: [] } } },
     { name: 'journeys-firefox', testMatch: 'journeys/**/*.spec.ts', use: { browserName: 'firefox', launchOptions: { args: [] } } },
     { name: 'contracts', testMatch: 'contracts/**/*.spec.ts' },
+    { name: 'parity', testMatch: 'parity/**/*.spec.ts' },
     { name: 'visual', testMatch: 'visual/**/*.spec.ts', fullyParallel: true },
     { name: 'a11y', testMatch: 'a11y/**/*.spec.ts', fullyParallel: true },
   ],

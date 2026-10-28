@@ -121,7 +121,7 @@ test.describe('F6 process tree', () => {
 });
 
 test.describe('F7 flows', () => {
-  test('add a flow, and a transport leg worked out from mass × distance', async ({ api, newUser, signIn }) => {
+  test('E17 E18 add a flow, and a transport leg worked out from mass × distance', async ({ api, newUser, signIn }) => {
     const user = await newUser('flows');
     const { projectId, caseId } = await workedExample(api, user);
     const { page } = await signIn(user);
@@ -167,7 +167,7 @@ test.describe('F7 flows', () => {
 });
 
 test.describe('F8 costs', () => {
-  test('a cost of 0 is stored as 0, and Clear this cost puts it back to not set', async ({ api, newUser, signIn }) => {
+  test('E15 a cost of 0 is stored as 0, and Clear this cost puts it back to not set', async ({ api, newUser, signIn }) => {
     const user = await newUser('costs');
     const { projectId, caseId } = await workedExample(api, user);
     const cutId = async () => (await components(api, user, caseId)).find((c) => c.component_name === '10. Cut blank')!.component_id;

@@ -15,6 +15,7 @@
  *   viewer   Victor Viewer, onboarded, viewer on P1, not a member of P2
  *   empty    Emma Empty, onboarded, no projects (the empty dashboard)
  *   newcomer Nico Newcomer, signed up but not onboarded (the onboarding page)
+ *   admin    Ada Admin, onboarded, account_type admin on this throwaway database only
  */
 import type { APIRequestContext } from '@playwright/test';
 import { Api, type ApiUser } from './api';
@@ -23,7 +24,7 @@ export type Seed = {
   baseURL: string;
   /** When seeding finished. The visual suite pins the browser clock here, so "Updated just now" never changes. */
   seededAt: string;
-  users: { owner: ApiUser; viewer: ApiUser; empty: ApiUser; newcomer: ApiUser };
+  users: { owner: ApiUser; viewer: ApiUser; empty: ApiUser; newcomer: ApiUser; admin: ApiUser };
   example: {
     projectId: number;
     projectName: string;
@@ -72,6 +73,9 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
   const viewer = await anon.createUser({ email: 'viewer@e2e.lcapix.test', fullName: 'Victor Viewer' });
   const empty = await anon.createUser({ email: 'empty@e2e.lcapix.test', fullName: 'Emma Empty' });
   const newcomer = await anon.createUser({ email: 'newcomer@e2e.lcapix.test', fullName: 'Nico Newcomer', onboard: false });
+  // Platform admin is not a role any route will set. global-setup promotes this
+  // account on the throwaway database after the seed is written.
+  const admin = await anon.createUser({ email: 'admin@e2e.lcapix.test', fullName: 'Ada Admin' });
   const api = anon.as(owner.token);
 
   // ── P1: the worked example, with its functional unit set and a run ─────────
@@ -135,7 +139,7 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
   return {
     baseURL,
     seededAt: new Date().toISOString(),
-    users: { owner, viewer, empty, newcomer },
+    users: { owner, viewer, empty, newcomer, admin },
     example: {
       projectId: ex.project_id,
       projectName: exProject.project_name,

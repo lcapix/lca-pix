@@ -13,7 +13,7 @@ const NAV = { timeout: 90_000 };
 test.describe('F1 sign up', () => {
   test.use({ storageState: storagePath('anon') });
 
-  test('sign up → About you → the sample study is built and Home opens on it', async ({ page }) => {
+  test('G92 G97 G99 sign up → About you → the sample study is built and Home opens on it', async ({ page }) => {
     await open(page, '/auth/signup', { ready: 'Create your account' });
     await page.getByLabel('Your name').fill('Sam Signup');
     await page.getByLabel('Email').fill(uniqueEmail('signup'));
@@ -35,7 +35,7 @@ test.describe('F1 sign up', () => {
     await expect(page.locator('header').getByRole('button', { name: 'Make my own copy' })).toBeVisible();
   });
 
-  test('About you needs a name, and keeps you on the form without one', async ({ newUser, signIn }) => {
+  test('G101 G107 About you needs a name, and keeps you on the form without one', async ({ newUser, signIn }) => {
     const user = await newUser('onboard', { onboard: false });
     const { page } = await signIn(user);
     await open(page, '/auth/onboarding', { ready: 'Tell us a little about you.' });
@@ -49,7 +49,7 @@ test.describe('F1 sign up', () => {
 test.describe('F2 log in and out', () => {
   test.use({ storageState: storagePath('anon') });
 
-  test('a wrong password is said under the field, and nothing is signed in', async ({ page, newUser }) => {
+  test('G85 a wrong password is said under the field, and nothing is signed in', async ({ page, newUser }) => {
     const user = await newUser('wrongpw');
     await open(page, '/auth/login', { ready: 'Log in' });
     await page.getByLabel('Email').fill(user.email);
@@ -62,7 +62,7 @@ test.describe('F2 log in and out', () => {
     expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
   });
 
-  test('the right password lands on Home', async ({ page, newUser }) => {
+  test('G82 G89 the right password lands on Home', async ({ page, newUser }) => {
     const user = await newUser('login');
     await open(page, '/auth/login', { ready: 'Log in' });
     await page.getByLabel('Email').fill(user.email);
@@ -75,7 +75,7 @@ test.describe('F2 log in and out', () => {
     expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeTruthy();
   });
 
-  test('log out clears the session and protected pages send you to log in', async ({ newUser, signIn }) => {
+  test('G72 G120 log out clears the session and protected pages send you to log in', async ({ newUser, signIn }) => {
     const user = await newUser('logout');
     const { page } = await signIn(user);
     await open(page, '/home', { ready: 'Welcome to LCAPIX' });

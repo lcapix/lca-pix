@@ -18,7 +18,7 @@ other pages were rewritten in place, so their classic version is read with `git 
 - **dropped**: removed on purpose, with Shreya's decision named.
 
 **Tests.** Every row gets a browser test whose title starts with its ID ("E13 delete a flow"), so
-`grep -rn "E13 " tests/e2e e2e-tester` finds it. A kept row's test gates CI. A missing, hidden or partial row's
+`grep -rn "E13 " tests/e2e/parity tests/e2e` finds it. A kept row's test gates CI. A missing, hidden or partial row's
 test is a known-failure repro until H2 fixes it; then it gates, so a later redesign cannot drop it silently.
 
 Path keys: `WS/` = `components/lcapix/workspace/`, `CL/` = `components/lcapix/case/`,

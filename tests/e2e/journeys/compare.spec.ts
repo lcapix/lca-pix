@@ -10,7 +10,7 @@ import { open } from '../support/ui';
 
 const NAV = { timeout: 90_000 };
 
-test('F12 Try a what-if from Results → Compare: "no run" fails a check until the copy is run', async ({ api, newUser, signIn }) => {
+test('R15 P64 F12 Try a what-if from Results → Compare: "no run" fails a check until the copy is run', async ({ api, newUser, signIn }) => {
   const user = await newUser('compare');
   const { projectId, caseId } = await workedExample(api, user, 'My bracket');
   await api.as(user.token).post(`/api/cases/${caseId}/assessments`, { run_name: 'Assessment' });

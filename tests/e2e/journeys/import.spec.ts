@@ -12,7 +12,7 @@ const CSV = path.join(E2E_DIR, 'fixtures', 'import', 'small-routing.csv');
 const NAV = { timeout: 90_000 };
 const OPS = ['10. Cut tube', '20. Weld frame', '30. Pack'];
 
-test('F13 add a routing → check what we read → save 3 steps → open the tree', async ({ api, newUser, signIn }) => {
+test('P92 P94 P95 P96 F13 add a routing → check what we read → save 3 steps → open the tree', async ({ api, newUser, signIn }) => {
   const user = await newUser('import');
   const as = api.as(user.token);
   const projectId = (await as.post<{ project: { project_id: number } }>('/api/projects', { project_name: 'Tube frame study', description: 'Import check' }))
@@ -42,6 +42,8 @@ test('F13 add a routing → check what we read → save 3 steps → open the tre
   expect(created).toBeGreaterThanOrEqual(4); // the product + three operations
 
   await expect(page.getByText(/^Saved\./)).toBeVisible(NAV);
+  await expect(page.getByRole('heading', { name: 'Where this case stands' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start another case' })).toBeVisible();
   await page.getByRole('button', { name: 'Open the tree' }).click();
   await expect(page).toHaveURL(new RegExp(`/project/${projectId}/case/${caseId}`), NAV);
   await expect(page.getByRole('tree')).toBeVisible(NAV);

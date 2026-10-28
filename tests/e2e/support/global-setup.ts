@@ -14,6 +14,7 @@ import path from 'node:path';
 import { chromium, request } from '@playwright/test';
 import { storageStateFor } from './api';
 import { installNetGuard } from './net';
+import { promotePlatformAdmin } from './promote-admin';
 import { buildSeed } from './seed';
 import { ARTIFACTS_DIR, BASE_URL, SEED_STATE, SERVER_STATE, STATE_DIR } from './paths';
 import { ROUTES, idsFromSeed, resolvePath } from './routes';
@@ -44,6 +45,7 @@ export default async function globalSetup() {
 
   const ctx = await request.newContext({ baseURL: BASE_URL });
   const seed = await buildSeed(ctx, BASE_URL).finally(() => ctx.dispose());
+  await promotePlatformAdmin(database, seed.users.admin.id);
   writeFileSync(SEED_STATE, JSON.stringify({ ...seed, database }, null, 2));
   for (const [actor, user] of Object.entries(seed.users)) {
     writeFileSync(storageFile(actor), JSON.stringify(storageStateFor(user, BASE_URL), null, 2));

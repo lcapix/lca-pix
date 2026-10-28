@@ -50,4 +50,4 @@ These came out of a UX audit of the screens (WCAG 2.2 AA, the ui-ux-pro-max rule
 - **Students** get lighter screens: no Add step, no Analytics, no People, no View menu. Hand-in is a tick that locks nothing. Grades stay in Canvas. Adding a person needs an existing account and sends no email.
 
 ## Testing
-Every screen built from this folder gets an e2e test before it merges, in the e2e suite already on this branch (`e2e-tester/`, run with `pnpm test:e2e` there; tests live in `e2e-tester/tests/*.e2e.ts`). Start with exact checks (`screen`, `expect`), which need no model. Keep telemetry off (`E2E_TELEMETRY_DISABLED=1`, already set in the scripts).
+Every screen built from this folder gets a browser test before it merges, in `tests/e2e/` (journeys and `tests/e2e/parity/`, which follows `docs/testing/PARITY_LEDGER.md`).

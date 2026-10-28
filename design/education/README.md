@@ -118,4 +118,4 @@ Before anyone builds, the backend developer checks whether these screens can be 
 5. **Landing (F1.1). Kavish decides before these lines ship.** Some lines promise things with no code behind them: in "For teaching", assignments from templates, hand-in and feedback, free for students; in "For teams", a shared organisation library, review and approval, a portfolio across products; "Book a demo" has no action; "viewers never see edit controls" (today they do); "every page carries the run number" (only the first sections of the PDF do).
 
 ## Testing
-Every screen built from this folder gets an e2e test in `e2e-tester/` before it merges. See `specs/rules.md`, "Testing".
+Every screen built from this folder gets a browser test in `tests/e2e/` before it merges. See `specs/rules.md`, "Testing".

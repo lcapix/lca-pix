@@ -2,7 +2,7 @@
 
 `tests/e2e` drives the real app in Chromium: user journeys, contract tests for the hooks the redesign must keep, a screenshot baseline of every screen, and an accessibility baseline. Every run builds its own database from nothing and drops it afterwards, so it needs no dump and never touches the database `.env.local` names.
 
-The core journeys also run under the e2e (TesterArmy) runner, in `e2e-tester/` with its own Playwright: see [E2E_TESTER.md](E2E_TESTER.md) (`pnpm e2e:tester`).
+Parity checks live in `tests/e2e/parity/` and follow the ledger in `docs/testing/PARITY_LEDGER.md`.
 
 ```
 playwright.config.ts
@@ -27,7 +27,7 @@ npx playwright install chromium   # the browser that matches @playwright/test
 
 | Command | What it runs |
 |---|---|
-| `pnpm e2e` | journeys + contracts |
+| `pnpm e2e` | journeys + contracts + parity |
 | `pnpm e2e:visual` | the screenshot baseline, compared pixel for pixel |
 | `pnpm e2e:update` | rewrites the screenshot baseline |
 | `pnpm e2e:a11y` | axe on every screen, compared with `a11y/baseline.json` |

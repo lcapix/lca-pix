@@ -20,7 +20,7 @@ import type { Seed } from './seed';
 
 export { expect };
 
-export function storagePath(actor: 'owner' | 'viewer' | 'empty' | 'newcomer' | 'anon'): string {
+export function storagePath(actor: 'owner' | 'viewer' | 'empty' | 'newcomer' | 'anon' | 'admin'): string {
   return path.join(STATE_DIR, `${actor}.storage.json`);
 }
 

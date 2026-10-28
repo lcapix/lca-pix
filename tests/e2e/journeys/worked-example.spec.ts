@@ -11,7 +11,7 @@ import { open } from '../support/ui';
 // for 60 s), which under parallel load takes longer than the 20 s default.
 const NAV = { timeout: 90_000 };
 
-test('F4 the sample study → Make my own copy → Run Assessment → Results shows the answer', async ({ newUser, signIn }) => {
+test('G29 P129 F4 the sample study → Make my own copy → Run Assessment → Results shows the answer', async ({ newUser, signIn }) => {
   const user = await newUser('example');
   const { page } = await signIn(user);
   await open(page, '/home', { ready: 'Open the sample study' });
