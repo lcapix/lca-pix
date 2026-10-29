@@ -26,6 +26,8 @@ export function projectHref(projectId: number, page: ProjectPage = 'overview'): 
       return `/project/${projectId}/comparison`
     case 'people':
       return `/project/${projectId}/people`
+    case 'assignments':
+      return `/project/${projectId}/assignments`
   }
 }
 
@@ -38,6 +40,7 @@ export function projectPageOf(pathname: string, projectId: number): ProjectPage 
   if (/^\/(cases|case\/|import|start)/.test(rest)) return 'cases'
   if (/^\/(comparison|comparisons)/.test(rest)) return 'compare'
   if (/^\/(people|class)/.test(rest)) return 'people'
+  if (/^\/assignments/.test(rest)) return 'assignments'
   return null
 }
 
@@ -56,4 +59,4 @@ export const PLACE_LABEL: Record<Place, string> = {
   analytics: 'Analytics',
 }
 export const PLACE_ICON: Record<Place, string> = { home: 'home', findings: 'pin', reports: 'report', analytics: 'analytics' }
-export const PAGE_LABEL: Record<ProjectPage, string> = { overview: 'Overview', cases: 'Cases', compare: 'Compare', people: 'People' }
+export const PAGE_LABEL: Record<ProjectPage, string> = { overview: 'Overview', cases: 'Cases', compare: 'Compare', people: 'People', assignments: 'Assignments' }

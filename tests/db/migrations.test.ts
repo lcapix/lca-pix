@@ -109,3 +109,21 @@ describe('the baseline and the runner on a fresh database', () => {
     }
   });
 });
+
+describe('migrate-043 assignments', () => {
+  it('creates assignment and submission on a fresh database', async () => {
+    const name = createDb();
+    const c = await connect(name);
+    try {
+      const [row] = await rows<{ a: string | null; s: string | null }>(
+        c,
+        `SELECT to_regclass('public.assignment') AS a, to_regclass('public.submission') AS s`,
+      );
+      expect(row.a).toBe('assignment');
+      expect(row.s).toBe('submission');
+    } finally {
+      await c.end();
+      dropDb(name);
+    }
+  });
+});

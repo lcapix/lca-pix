@@ -81,10 +81,10 @@ describe('project nav', () => {
     expect(placesFor(null, ME)).toEqual(['home', 'findings', 'reports'])
   })
 
-  it('nested pages: People for owner and admins; students get Overview, Cases, Compare', () => {
-    expect(projectPagesFor(all[0], ME)).toEqual(['overview', 'cases', 'compare', 'people'])
-    expect(projectPagesFor(all[5], ME)).toEqual(['overview', 'cases', 'compare', 'people'])
-    expect(projectPagesFor(all[3], ME)).toEqual(['overview', 'cases', 'compare'])
+  it('nested pages: People and Assignments for every member', () => {
+    expect(projectPagesFor(all[0], ME)).toEqual(['overview', 'cases', 'compare', 'people', 'assignments'])
+    expect(projectPagesFor(all[5], ME)).toEqual(['overview', 'cases', 'compare', 'people', 'assignments'])
+    expect(projectPagesFor(all[3], ME)).toEqual(['overview', 'cases', 'compare', 'people', 'assignments'])
   })
 
   it('+ New project: shown unless every project is a shared one (a student)', () => {

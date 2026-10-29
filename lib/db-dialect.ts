@@ -22,6 +22,7 @@
 /** Identity column of each table (db/pg/000-schema.sql): what MySQL's insertId reported. */
 export const IDENTITY: Readonly<Record<string, string>> = {
   account: 'id',
+  assignment: 'assignment_id',
   assessment_results: 'result_id',
   assessment_runs: 'run_id',
   audit_log: 'log_id',
@@ -43,6 +44,7 @@ export const IDENTITY: Readonly<Record<string, string>> = {
   process_templates: 'template_id',
   project: 'project_id',
   project_members: 'member_id',
+  submission: 'submission_id',
   substances: 'substance_id',
 };
 

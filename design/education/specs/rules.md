@@ -47,7 +47,7 @@ These came out of a UX audit of the screens (WCAG 2.2 AA, the ui-ux-pro-max rule
 - **Coming soon**: anything the backend does not do yet carries the COMING SOON pill and one line, at most once per screen. Never draw it as working.
 - **Enterprise** shows only as IN DEVELOPMENT. Education and individual accounts get the same experience for now.
 - **Guided mode** is a beta extra, off by default. Its control lives in two places only: the "Turn off" link in the guide line when it is on, and the "Guided mode" switch row in the sidebar foot above Help on every app screen. Today it can only be kept per device; saving it to the account needs a per-account beta field (backend). That is said once, as the single Coming soon line on `F1.3-about-you.png`.
-- **Students** can add a step. They get lighter screens otherwise: no Analytics, no People, no View menu. Hand-in is a tick that locks nothing. Grades stay in Canvas. Adding a person needs an existing account and sends no email.
+- **Students** can add a step. They get lighter screens otherwise: no Analytics, no View menu. People is visible to every member. An assignment hand-in freezes a copy of the student's case. A hand-in tick on a case that is not an assignment still locks nothing. Grades stay in Canvas. Adding a person needs an existing account and sends no email.
 
 ## Testing
 Every screen built from this folder gets a browser test before it merges, in `tests/e2e/` (journeys and `tests/e2e/parity/`, which follows `docs/testing/PARITY_LEDGER.md`).

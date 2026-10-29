@@ -153,12 +153,11 @@ export function placesFor(open: NavProject | null, userId: number | null | undef
   return base
 }
 
-export type ProjectPage = 'overview' | 'cases' | 'compare' | 'people'
+export type ProjectPage = 'overview' | 'cases' | 'compare' | 'people' | 'assignments'
 
-/** The open project's nested pages: People for the owner and admins only. */
-export function projectPagesFor(open: NavProject, userId: number | null | undefined): ProjectPage[] {
-  const rel = relationOf(open, userId)
-  return rel === 'owner' || rel === 'admin' ? ['overview', 'cases', 'compare', 'people'] : ['overview', 'cases', 'compare']
+/** The open project's nested pages. People and Assignments are there for every member. */
+export function projectPagesFor(_open: NavProject, _userId: number | null | undefined): ProjectPage[] {
+  return ['overview', 'cases', 'compare', 'people', 'assignments']
 }
 
 /** A student sees no "+ New project" at the top level (sidebar.md, Students). */
