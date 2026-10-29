@@ -110,13 +110,18 @@ describe('rateLimit / enforceRateLimit', () => {
 
   it('ships the documented policies', () => {
     expect(RATE_LIMITS.login).toMatchObject({ limit: 5, windowMs: 60_000 });
-    expect(RATE_LIMITS.signup).toMatchObject({ limit: 3, windowMs: 3_600_000 });
+    expect(RATE_LIMITS.signup).toMatchObject({ limit: 60, windowMs: 3_600_000 });
     expect(RATE_LIMITS.insights).toMatchObject({ limit: 20, windowMs: 3_600_000 });
     expect(RATE_LIMITS.ingestPreview).toMatchObject({ limit: 10, windowMs: 3_600_000 });
     expect(RATE_LIMITS.assessments).toMatchObject({ limit: 30, windowMs: 3_600_000 });
     expect(RATE_LIMITS.pubchemEnrich).toMatchObject({ limit: 5, windowMs: 3_600_000 });
     // BLS / EIA / Metals lookups, one budget per user across the three.
     expect(RATE_LIMITS.costRates).toMatchObject({ id: 'cost-rates', limit: 60, windowMs: 3_600_000 });
+  });
+
+  it('lets 30 sign-ups from one address through in a minute', async () => {
+    setRateLimitStore(new MemoryRateLimitStore());
+    for (let i = 0; i < 30; i++) expect(await enforceRateLimit(RATE_LIMITS.signup, ['10.1.1.1'])).toBeNull();
   });
 });
 

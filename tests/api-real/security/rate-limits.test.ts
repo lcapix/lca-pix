@@ -43,15 +43,11 @@ describe('rate limits', () => {
     expect((await api.post('/api/auth/login', { json: { email: u.email.toUpperCase(), password: u.password }, ip })).status).toBe(429);
   });
 
-  it('signup: 3 per hour per IP; the 4th is 429 and creates nothing', async () => {
+  it('signup: 60 per hour per address, so a class on one network can sign up', async () => {
     const ip = freshIp();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       expect((await api.post('/api/auth/signup', { json: { email: uniqueEmail('rlsign'), password: newPassword() }, ip })).status).toBe(201);
     }
-    const email = uniqueEmail('rlsign4');
-    expect429(await api.post('/api/auth/signup', { json: { email, password: newPassword() }, ip }), 3);
-    expect(await sqlOne('SELECT id FROM account WHERE email = ?', [email])).toBeUndefined();
-    expect((await api.post('/api/auth/signup', { json: { email, password: newPassword() }, ip: freshIp() })).status).toBe(201);
   });
 
   it('insights: 20 per hour per user (with a model key)', async () => {
