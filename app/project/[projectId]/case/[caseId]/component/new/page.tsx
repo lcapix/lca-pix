@@ -1,26 +1,11 @@
-"use client";
+import { redirect } from 'next/navigation'
 
-import { useParams, useSearchParams } from "next/navigation";
-import { ComponentFormModal } from "@/components/component-form/component-form-modal";
-import { componentFormFromQuery } from "@/lib/case-editor/component-form-query";
-
-export default function NewComponentPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-
-  const projectId = params.projectId as string;
-  const caseId = params.caseId as string;
-
-  const { mode, initial, suggestedParentId, suggestedType } = componentFormFromQuery(searchParams);
-
-  return (
-    <ComponentFormModal
-      projectId={projectId}
-      caseId={caseId}
-      mode={mode}
-      initial={initial}
-      suggestedParentId={suggestedParentId}
-      suggestedType={suggestedType}
-    />
-  );
+/** The old "new component" page opens the case with the Add step form. */
+export default async function NewComponentPage({
+  params,
+}: {
+  params: Promise<{ projectId: string; caseId: string }>
+}) {
+  const { projectId, caseId } = await params
+  redirect(`/project/${encodeURIComponent(projectId)}/case/${encodeURIComponent(caseId)}?add=step`)
 }

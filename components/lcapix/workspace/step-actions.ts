@@ -102,7 +102,33 @@ export function useStepActions({
     )
   }
 
-  const remove = (id: number) => run(() => apiRequest(`/api/components/${id}`, { method: 'DELETE' }))
+  const remove = (id: number, children: 'delete' | 'reparent' = 'delete') =>
+    run(() => apiRequest(`/api/components/${id}?children=${children}`, { method: 'DELETE' }))
 
-  return { busy, error, rename, move, addBelow, addFirst, remove }
+  const setStage = (id: number, stage: string) =>
+    run(() => apiRequest(`/api/components/${id}`, { method: 'PUT', body: JSON.stringify({ life_cycle_stage: stage }) }))
+
+  const addStep = (parentId: number | null, tier: string, name: string) =>
+    run(
+      () =>
+        apiRequest(`/api/cases/${kase.case_id}/components`, {
+          method: 'POST',
+          body: JSON.stringify({ component_name: name, component_type: tier, parent_component_id: parentId }),
+        }),
+      async (res) => {
+        const d = await res.clone().json().catch(() => ({}))
+        const id = Number(d?.component?.component_id ?? d?.component_id)
+        if (id) onSelect(id)
+      },
+    )
+
+  const scaleProduct = (from: number, to: number) =>
+    run(() =>
+      apiRequest(`/api/cases/${kase.case_id}/scale`, {
+        method: 'POST',
+        body: JSON.stringify({ from, to, mode: 'scale-inputs' }),
+      }),
+    )
+
+  return { busy, error, rename, move, addBelow, addFirst, addStep, remove, setStage, scaleProduct }
 }

@@ -2,8 +2,11 @@
 // material right under it), the versions of the one selected, the catalog
 // suggestions for a step, and what an existing flow can be swapped to.
 
+import { americanize } from '@/lib/substances/spelling'
 import { compatibleUnits } from '@/lib/units'
 import type { FlowRow, Substance } from './flow-types'
+
+const named = (s: Substance) => americanize((s.substance_name ?? '').toLowerCase())
 
 /**
  * Up to 10 matches for the search box. Versions of a matched material
@@ -11,9 +14,16 @@ import type { FlowRow, Substance } from './flow-types'
  * "switch to recycled" is something you can see rather than something you
  * have to know exists.
  */
+/** Every match in the library. No cut-off. Spelling is read on both sides. */
+export function searchSubstances(search: string, substances: Substance[]): Substance[] {
+  const q = americanize(search.trim().toLowerCase())
+  if (!q) return substances
+  return substances.filter((s) => named(s).includes(q))
+}
+
 export function matchSubstances(search: string, substances: Substance[]): Substance[] {
-  const q = search.trim().toLowerCase()
-  const base = q ? substances.filter((s) => s.substance_name?.toLowerCase().includes(q)) : substances
+  const q = americanize(search.trim().toLowerCase())
+  const base = q ? substances.filter((s) => named(s).includes(q)) : substances
   const byId = new Map(substances.map((x) => [x.substance_id, x]))
   const out: typeof base = []
   const seen = new Set<number>()

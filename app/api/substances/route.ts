@@ -12,6 +12,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
+    const method = searchParams.get('method');
+    const region = searchParams.get('region') ?? '';
 
     // Per-method factor coverage rides along so pickers can say, before
     // selection, whether a substance will actually contribute anything under
@@ -43,6 +45,31 @@ export async function GET(request: NextRequest) {
         GROUP BY substance_id
       ) fc ON fc.substance_id = s.substance_id`;
     const params: any[] = [];
+    if (method) {
+      sql = sql.replace(
+        'SELECT s.*,',
+        'SELECT s.*, clim.factor_value AS climate_factor, clim.factor_unit AS climate_unit,',
+      );
+      sql += `
+      LEFT JOIN LATERAL (
+        SELECT dif.factor_value, dif.unit AS factor_unit
+        FROM driver_impact_factors dif
+        JOIN impact_categories ic ON ic.category_id = dif.category_id
+        WHERE dif.substance_id = s.substance_id
+          AND dif.method_name = ?
+          AND dif.factor_value <> 0
+          AND (
+            lower(ic.category_name COLLATE "C") LIKE '%global warming%'
+            OR lower(ic.category_name COLLATE "C") LIKE '%climate%'
+          )
+        ORDER BY CASE
+          WHEN lower(coalesce(dif.geographic_scope, '') COLLATE "C") = lower(? COLLATE "C") THEN 0
+          WHEN lower(coalesce(dif.geographic_scope, '') COLLATE "C") IN ('global', 'glo', '') THEN 1
+          ELSE 2 END
+        LIMIT 1
+      ) clim ON true`;
+      params.push(method, region);
+    }
 
     if (category) {
       sql += ` WHERE s.category = ?`;

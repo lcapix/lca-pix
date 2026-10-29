@@ -14,7 +14,7 @@ import { AddFlowForm } from '@/components/lcapix/case/flows/add-flow-form'
 export function AddFlowInPanel({ componentId, studyMethod, onDone }: { componentId: number; studyMethod?: string; onDone: () => void }) {
   const id = String(componentId)
   const { loadFlows } = useFlows(id)
-  const { substances, addToCatalog } = useSubstanceCatalog()
+  const { substances, addToCatalog } = useSubstanceCatalog(studyMethod)
   const form = useAddFlowForm({ componentId: id, substances, loadFlows })
   const substanceForm = useAddSubstance({
     studyMethod,

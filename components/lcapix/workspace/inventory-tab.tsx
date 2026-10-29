@@ -10,7 +10,7 @@
 // number". Add a flow at the foot.
 
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Flag, FlowStatusPill, SavedLine, SourceTag } from '@/components/lcapix/ds'
+import { Button, Flag, FlowStatusPill, SavedLine, SourceTag, ConfirmDialog } from '@/components/lcapix/ds'
 import { FLOW_STATUS_WORD, type FlowStatus } from '@/lib/ui/words'
 import { amount, amountBox, fixed } from '@/lib/ui/format'
 import { compatibleUnits, convertQuantity } from '@/lib/units'
@@ -19,7 +19,7 @@ import { calculatorFits, machineKwh, type InventoryRow } from '@/lib/workspace/i
 import { TIER_COLOURS } from '@/lib/workspace/tier-layout'
 import type { WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
 import { AddFlowInPanel } from './add-flow-in-panel'
-import { OwnFactorForm, saveFlowAmount, saveFlowUnit, sourceText } from './flow-bits'
+import { OwnFactorForm, deleteFlow, saveFlowAmount, saveFlowFields, saveFlowUnit, sourceText } from './flow-bits'
 import { ExerciseSlot } from './exercise-card'
 import { HeldLines } from './held-lines'
 
@@ -287,6 +287,7 @@ function InventoryRowView({
   const [error, setError] = useState<string | null>(null)
   const [kept, setKept] = useState(false)
   const [own, setOwn] = useState(false)
+  const [drop, setDrop] = useState(false)
   useEffect(() => setValue(amountBox(row.amount)), [row.amount])
   const warn = row.status === 'needs_amount' || row.status === 'left_out'
   const units = useMemo(() => {
@@ -324,7 +325,24 @@ function InventoryRowView({
             {row.substance}
           </label>
           <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
-            {stepName} · {row.direction === 'input' ? 'IN' : 'OUT'}
+            {stepName} ·{' '}
+            {readOnly ? (
+              row.direction === 'input' ? 'IN' : 'OUT'
+            ) : (
+              <select
+                className="ds-input"
+                aria-label={`Direction for ${row.substance}`}
+                value={row.direction}
+                onChange={async (e) => {
+                  const err = await saveFlowFields(row.flow_id, { flow_type: e.target.value })
+                  if (err) setError(err)
+                  else onSaved(`Saved · ${row.substance} is ${e.target.value === 'input' ? 'in' : 'out'} on ${stepName}`)
+                }}
+              >
+                <option value="input">In</option>
+                <option value="output">Out</option>
+              </select>
+            )}
           </span>
         </td>
         <td style={{ textAlign: 'right' }}>
@@ -360,6 +378,26 @@ function InventoryRowView({
               </option>
             ))}
           </select>
+          {!readOnly && (
+            <>
+              <button type="button" className="ds-link" onClick={() => setDrop(true)}>
+                Delete flow
+              </button>
+              <ConfirmDialog
+                open={drop}
+                title="Delete this flow?"
+                consequence={`${row.substance} is removed from ${stepName}. Cancel deletes nothing.`}
+                confirmLabel="Delete flow"
+                onCancel={() => setDrop(false)}
+                onConfirm={async () => {
+                  const err = await deleteFlow(row.flow_id)
+                  if (err) setError(err)
+                  else onSaved(`Deleted · ${row.substance} on ${stepName}`)
+                  setDrop(false)
+                }}
+              />
+            </>
+          )}
           {row.status === 'left_out' && (
             <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-warn)', fontWeight: 600, marginTop: 4 }}>
               Pick {row.substance_unit === 'kg' ? 'kg or g' : row.substance_unit ?? 'a unit'}

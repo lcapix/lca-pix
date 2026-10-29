@@ -83,6 +83,7 @@ export function ConfirmDialog({
   danger = true,
   role = 'alertdialog',
   children,
+  secondary,
 }: {
   open: boolean
   title: string
@@ -96,6 +97,8 @@ export function ConfirmDialog({
   role?: 'alertdialog' | 'dialog'
   /** Extra content (a typed-name field, D4). */
   children?: ReactNode
+  /** A second action, between Cancel and the confirm. Cancel stays the first button. */
+  secondary?: { label: string; onClick: () => void }
 }) {
   const ref = useRef<HTMLDivElement>(null)
   // The latest onCancel, so the effect runs once per opening (an inline
@@ -154,6 +157,11 @@ export function ConfirmDialog({
         {children}
         <div className="ds-dialog-actions">
           <Button onClick={onCancel}>Cancel</Button>
+          {secondary && (
+            <Button onClick={secondary.onClick} busy={busy}>
+              {secondary.label}
+            </Button>
+          )}
           <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} busy={busy}>
             {confirmLabel}
           </Button>

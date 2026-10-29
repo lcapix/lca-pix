@@ -55,6 +55,7 @@ export interface WorkspaceStep {
   costs: Record<'labor' | 'energy' | 'material' | 'transportation' | 'equipment' | 'overhead', number | null>
   /** Labour hours per unit on the step (from a routing, or a rate used before). */
   laborHours: number | null
+  lifeCycleStage: string | null
   updated_at: string | null
 }
 
@@ -91,6 +92,7 @@ export function toStep(c: any): WorkspaceStep {
       overhead: num(c.overhead_cost),
     },
     laborHours: num(c.labor_hours),
+    lifeCycleStage: c.life_cycle_stage ?? null,
     updated_at: c.updated_at ?? null,
   }
 }

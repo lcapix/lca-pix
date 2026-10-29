@@ -9,6 +9,57 @@ import { note, row } from '../support/parity';
 const step = (page: import('@playwright/test').Page, name: string) =>
   page.getByRole('treeitem', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, `) });
 
+test('E01 E02 E03 E04 E06 E07 E16 E19 the add-step form and the step panel', async ({ api, newUser, signIn }) => {
+  const user = await newUser('parity-add');
+  const { projectId, caseId } = await workedExample(api, user);
+  const { page } = await signIn(user);
+  await openCase(page, projectId, caseId);
+  await step(page, 'Painted steel bracket').click();
+  await row(page.getByRole('button', { name: 'Add step', exact: true }), 'E01', 'Add a step, choosing tier and parent');
+  await page.getByRole('button', { name: 'Add step', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Add a step' });
+  await expect.soft(form.getByLabel('Parent'), note('E01', 'Parent')).toBeVisible();
+  await expect.soft(form.getByRole('radio', { name: 'Machine / line' }), note('E01', 'Tier')).toBeVisible();
+  await expect.soft(form.getByLabel('Name'), note('E01', 'Name')).toBeVisible();
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await row(page.getByLabel('Step name'), 'E03', 'Rename a step');
+  await row(page.getByLabel('Life-cycle stage'), 'E19', 'Set a life-cycle stage');
+  await row(page.getByLabel('Quantity'), 'E16', 'Scale the product');
+  await step(page, '10. Cut blank').click();
+  await row(page.getByLabel('Move under'), 'E04', 'Move a step under another parent');
+  await row(page.getByRole('button', { name: 'Delete step' }), 'E06', 'Delete a step and its children');
+  await page.getByRole('button', { name: 'Delete step' }).click();
+  await row(page.getByRole('button', { name: 'Delete it, keep its steps' }), 'E07', 'Delete a step but keep its children');
+});
+
+test('G127 G128 old step pages open the case', async ({ api, newUser, signIn }) => {
+  const user = await newUser('parity-redirect');
+  const { projectId, caseId } = await workedExample(api, user);
+  const comps = (await api.as(user.token).get<{ components: Array<{ component_id: number; component_name: string }> }>(`/api/cases/${caseId}/components`)).components;
+  const cut = comps.find((c) => c.component_name === '10. Cut blank')!;
+  const { page } = await signIn(user);
+  await page.goto(`/project/${projectId}/case/${caseId}/component/new`);
+  await expect.soft(page.getByRole('dialog', { name: 'Add a step' }), note('G127', 'Add step form')).toBeVisible();
+  await page.goto(`/project/${projectId}/case/${caseId}/component/${cut.component_id}/edit`);
+  await expect.soft(page.getByLabel('Step name'), note('G128', 'The step is selected')).toHaveValue('10. Cut blank');
+});
+
+test('E08 E09 E11 E12 E13 a flow can change, and a parent step warns first', async ({ api, newUser, signIn }) => {
+  const user = await newUser('parity-flow');
+  const { projectId, caseId } = await workedExample(api, user);
+  const { page } = await signIn(user);
+  await openCase(page, projectId, caseId);
+  await step(page, 'Painted steel bracket').click();
+  await expect.soft(page.getByText(/Flows usually go on the lowest step/), note('E08', 'Warn before a flow on a step that has steps under it')).toBeVisible();
+
+  await step(page, '10. Cut blank').click();
+  const flow = page.locator('.ws-flow').first();
+  await row(flow.getByRole('button', { name: 'Change substance' }), 'E09', "Swap a flow's substance");
+  await row(flow.getByLabel(/Unit for /), 'E11', "Change a flow's unit");
+  await row(flow.getByLabel(/Direction for /), 'E12', "Change a flow's direction");
+  await row(flow.getByRole('button', { name: 'Delete flow' }), 'E13', 'Delete a flow');
+});
+
 test('E10 E14 change a flow amount, and use your own factor when the region fell back', async ({ api, newUser, signIn }) => {
   const user = await newUser('parity-edit');
   const { projectId, caseId } = await workedExample(api, user);

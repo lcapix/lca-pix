@@ -22,6 +22,10 @@ export interface Substance {
   unit?: string
   category?: string
   cas_number?: string
+  data_source?: string | null
+  /** Climate factor for the method the catalog was asked for, when one exists. */
+  climate_factor?: number | string | null
+  climate_unit?: string | null
   /** '|'-joined method names that have non-zero factors for this substance. */
   methods_with_factors?: string
   factor_count?: number

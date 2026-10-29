@@ -45,6 +45,27 @@ export async function saveFlowUnit(row: Pick<InventoryRow, 'flow_id'>, unit: str
   return d?.error ?? `The unit was not saved (${res.status}).`
 }
 
+/** Save other fields on a flow (substance, direction). */
+export async function saveFlowFields(flowId: number, body: Record<string, unknown>): Promise<string | null> {
+  const res = await apiRequest(`/api/flows/${flowId}`, { method: 'PUT', body: JSON.stringify(body) })
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}))
+    return d?.error ?? `The flow was not saved (${res.status}).`
+  }
+  announceComponentsChanged()
+  return null
+}
+
+export async function deleteFlow(flowId: number): Promise<string | null> {
+  const res = await apiRequest(`/api/flows/${flowId}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}))
+    return d?.error ?? `The flow was not deleted (${res.status}).`
+  }
+  announceComponentsChanged()
+  return null
+}
+
 /** "0.80 × 1.900 = 1.520 kg CO₂-eq"; no factor: "0.02 × – = 0 kg CO₂-eq". */
 export function rowSum(row: InventoryRow): string {
   if (row.status === 'needs_amount') return 'Needs an amount'

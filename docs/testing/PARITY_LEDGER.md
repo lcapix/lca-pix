@@ -90,25 +90,25 @@ such as assignments (C06, C07).
 
 | ID | Capability | Classic | Now (main) | API | Status |
 |---|---|---|---|---|---|
-| E01 | Add a step, choosing tier and parent | `components/component-form/type-placement-section.tsx:36-44, 82-97`; default = child tier of the selected step, can skip levels (`LCE/case-tree.ts:100-123`) | One click; tier = selected step's tier + 1, named "New step" (`WS/step-actions.ts:84-90`, `WS/tree-tab.tsx:277`). Tier choice only on an empty case (`WS/empty-tree.tsx:82-89`) | POST `cases/[caseId]/components` accepts any tier under any parent | missing |
-| E02 | Add a step as a student ("Can change") | Yes | Button hidden for role editor (`WS/tree-tab.tsx:275-276`, a design decision); menu only | same | missing (D1: students can add steps) |
-| E03 | Rename a step | Inspector Name + Save (`CL/inspector/properties-section.tsx:69-74`) | Step menu only, opened by right-click or the M key (`WS/tree-tab.tsx:356, 176, 580-583`) | PUT `components/[componentId]` | hidden |
-| E04 | Move a step under another parent | Any higher-tier step (`CL/inspector/placement-section.tsx:34-49`) | Only to steps of the current parent's tier, only when more than one target (`WS/tree-tab.tsx:541, 584`) | PUT `parent_component_id` | partial |
+| E01 | Add a step, choosing tier and parent | One click made a machine/line named "New step" | `components/lcapix/workspace/add-step-form.tsx` | POST `cases/[caseId]/components` accepts any tier under any parent | kept |
+| E02 | Add a step as a student ("Can change") | The button was hidden for an editor | `components/lcapix/workspace/tree-tab.tsx` | same | kept |
+| E03 | Rename a step | Step menu only | `components/lcapix/workspace/step-panel.tsx` | PUT `components/[componentId]` | kept |
+| E04 | Move a step under another parent | Any higher-tier step, in the step panel and the step menu | `components/lcapix/workspace/step-panel.tsx` | PUT `parent_component_id` | kept |
 | E05 | Change a step's tier | No | No | PUT accepts `component_type` | missing in both |
-| E06 | Delete a step and its children | Inspector Delete (`CL/inspector/inspector-footer.tsx:32-39`) | Step menu only (`WS/tree-tab.tsx:589-597`) | DELETE `components/[componentId]?children=delete` | hidden |
-| E07 | Delete a step but keep its children | Second question (`LCE/use-component-actions.ts:163-221`) | Always deletes the children (`WS/step-actions.ts:105`) | `?children=reparent` | missing |
-| E08 | Add a flow | Steps with no children only (`CL/inspector/flows-section.tsx:45-75`) | Any step, including product and lines (`WS/step-panel.tsx:175-183`); new steps are auto-selected, so flows land on the machine/line | POST `components/[componentId]/flows` (no children check) | partial |
-| E09 | Swap a flow's substance | `CL/flows/flow-row.tsx:121, 231-279` | Plain text (`WS/step-panel.tsx:244-246`, `WS/inventory-tab.tsx:322-325`) | PUT `flows/[flowId]` `substance_id`, unit re-checked server side | missing |
+| E06 | Delete a step and its children | Step panel and step menu. Confirm: "Delete it and its N steps" | `components/lcapix/workspace/tree-tab.tsx` | DELETE `components/[componentId]?children=delete` | kept |
+| E07 | Delete a step but keep its children | The same confirm: "Delete it, keep its steps" | `components/lcapix/workspace/tree-tab.tsx` | `?children=reparent` | kept |
+| E08 | Add a flow | A warning when the step has steps under it: "Flows usually go on the lowest step." | `components/lcapix/workspace/step-panel.tsx` | POST `components/[componentId]/flows` | kept |
+| E09 | Swap a flow's substance | Change substance, in the step panel and Inventory | `components/lcapix/workspace/step-panel.tsx` | PUT `flows/[flowId]` `substance_id`, unit re-checked server side | kept |
 | E10 | Change a flow's quantity | `CL/flows/flow-row.tsx:122-139` | `WS/step-panel.tsx:250-267`, `WS/inventory-tab.tsx:331-347` | PUT | kept |
-| E11 | Change a flow's unit | `CL/flows/flow-row.tsx:140-151` | Inventory tab only (`WS/inventory-tab.tsx:350-362`) | PUT `unit` | partial |
-| E12 | Change a flow's direction (in/out) | Only when adding | Only when adding | PUT `flow_type` | missing in both |
-| E13 | Delete a flow | `CL/flows/flow-row.tsx:206-220` | Nothing in `WS/` calls DELETE `/api/flows/[id]` | DELETE `flows/[flowId]` | missing |
+| E11 | Change a flow's unit | Step panel and Inventory | `components/lcapix/workspace/step-panel.tsx` | PUT `unit` | kept |
+| E12 | Change a flow's direction (in/out) | Direction select, In or Out, in the step panel and Inventory | `components/lcapix/workspace/step-panel.tsx` | PUT `flow_type` | kept |
+| E13 | Delete a flow | Delete flow, with a confirm | `components/lcapix/workspace/step-panel.tsx` | DELETE `flows/[flowId]` | kept |
 | E14 | Override a factor | No | Only when a regional factor fell back to Global (`WS/step-panel.tsx:291-307`) | PUT/DELETE `flows/[flowId]/factor` | kept (new) |
 | E15 | Cost lines (six kinds) | `CL/inspector/costs-section.tsx` | `WS/cost-panel.tsx:245-262, 302, 338, 604` | PUT/DELETE `components/[componentId]/costs` | kept |
-| E16 | Scale the product (quantity) | ScaleDialog (`CL/inspector/properties-section.tsx:37-52`) | No quantity or scale control in `WS/` | POST `cases/[caseId]/scale` | missing |
+| E16 | Scale the product (quantity) | Quantity and Apply, on the product step | `components/lcapix/workspace/step-panel.tsx` | POST `cases/[caseId]/scale` | kept |
 | E17 | Process library when adding a flow | `CL/environmental-flows-editor.tsx:104-119` | Shared add-flow form (`CL/flows/substance-picker.tsx:149-175`) | GET `process-templates` | kept |
 | E18 | Transport leg from mass × distance | Add-flow form | Shared add-flow form (inferred: same component; covered by the ported test) | POST flows | kept (to confirm by test) |
-| E19 | Set a step's life-cycle stage (production, use, end of life) | Inspector section (`CL/inspector/life-cycle-section.tsx`) | Nothing in `WS/` or `lib/workspace/` reads or writes `life_cycle_stage` | PUT `components/[componentId]` | missing |
+| E19 | Set a step's life-cycle stage (production, use, end of life) | Life-cycle stage select on the step panel | `components/lcapix/workspace/step-panel.tsx` | PUT `components/[componentId]` | kept |
 | E20 | Undo | No | No | None | missing in both |
 
 ## R. Results
@@ -584,8 +584,8 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G124 | Page /library/substances | linked via G09 | no clickable link | - | hidden | |
 | G125 | Page /project/[id]/start | app/project/new/page.tsx:120 | only app/project/new/_components/classic-new-project.tsx:120 (flag) | - | hidden | the same choice is now in components/lcapix/project/new-project-form.tsx:217-235 |
 | G126 | Saved comparisons /project/[id]/comparisons and /comparisons/[id] | list on app/project/[projectId]/comparison/page.tsx:85-160 | both redirect to /comparison?tab=saved (comparisons/page.tsx:12; [comparisonId]/page.tsx:11), but compare-page.tsx has no saved list ("saved" not found) | GET /api/comparisons | missing | |
-| G127 | Page .../case/[caseId]/component/new | lib/case-editor/use-component-actions.ts:58,66 (classic editor) | classic editor only (flag) | - | hidden | |
-| G128 | Page .../component/[componentId]/edit | no href found | no href found | - | hidden | inferred orphan in classic too |
+| G127 | Page .../case/[caseId]/component/new | Redirects to the case with the Add step form open (`?add=step`) | `app/project/[projectId]/case/[caseId]/component/new/page.tsx` | - | kept | |
+| G128 | Page .../component/[componentId]/edit | Redirects to the case with that step selected (`?componentId=`) | `app/project/[projectId]/case/[caseId]/component/[componentId]/edit/page.tsx` | - | kept | |
 | G129 | Case-by-case analytics (radar, normalised view, log scale, PDF export) | app/project/[projectId]/analytics/page.tsx | flag only (analytics/page.tsx:13); the route now shows class progress | - | hidden | sidebar Analytics shows only for an owner with members (project-nav.ts:150-154); project-header.tsx:93 links to the new page |
 | G130 | /project/[id]/case/[caseId]/results | page | redirects to ?tab=results (results/page.tsx:16-20) | - | moved | |
 

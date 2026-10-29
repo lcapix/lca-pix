@@ -167,8 +167,9 @@
     {
       "slug": "component-new-page",
       "path": "/project/{exampleProject}/case/{baseCase}/component/new",
-      "ready": "New Component",
-      "brief": "12 Add component (full page, an old link: the classic form)"
+      "ready": "Make my own copy",
+      "phoneReady": "Read only on a phone.",
+      "brief": "12 Add component (an old link: the sample case, where the next step is Make my own copy)"
     },
     {
       "slug": "component-edit-page",

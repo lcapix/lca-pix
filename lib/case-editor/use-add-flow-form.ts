@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { Substance } from './flow-types'
-import { matchSubstances, versionsOf, type FlowSuggestion } from './substance-search'
+import { searchSubstances, versionsOf, type FlowSuggestion } from './substance-search'
 import { isTransportSubstance, legPayload, legState, tkmOf } from './transport-leg'
 import { announceComponentsChanged, authHeaders } from './use-flows'
 
@@ -35,7 +35,7 @@ export function useAddFlowForm({
   const [legMassT, setLegMassT] = useState('')
   const [legKm, setLegKm] = useState('')
 
-  const matches = useMemo(() => matchSubstances(search, substances), [search, substances])
+  const matches = useMemo(() => searchSubstances(search, substances), [search, substances])
   /** Versions of whatever is selected, for the one-line switcher under the picker. */
   const versionsOfSelected = useMemo(() => versionsOf(substances, substanceId), [substances, substanceId])
 

@@ -102,7 +102,7 @@ export function SubstancePicker({
                   <span style={{ color: 'var(--text-tertiary)', fontSize: 10 }}> · {s.category}</span>
                 ) : null}
                 <span
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -113,6 +113,10 @@ export function SubstancePicker({
                   }}
                 >
                   <Icon name="database" size={9} />
+                  {s.climate_factor != null ? `${s.climate_factor} ${s.climate_unit ?? ''}`.trim() : 'no climate factor'}
+                  {' · '}
+                  {s.unit ?? 'unit not set'}
+                  {' · '}
                   {substanceSource(s).label}
                 </span>
               </button>

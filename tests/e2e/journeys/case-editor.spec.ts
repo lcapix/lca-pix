@@ -42,26 +42,31 @@ test.describe('F6 process tree', () => {
     await openCase(page, projectId, caseId);
 
     await step(page, 'Painted steel bracket').click();
-    const created = page.waitForResponse((r) => r.url().includes(`/api/cases/${caseId}/components`) && r.request().method() === 'POST');
     await page.getByRole('button', { name: 'Add step', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add a step' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('Parent')).toHaveValue(/.+/);
+    await dialog.getByRole('radio', { name: 'Machine / line' }).check();
+    await dialog.getByLabel('Name').fill('Inspection line');
+    const created = page.waitForResponse((r) => r.url().includes(`/api/cases/${caseId}/components`) && r.request().method() === 'POST');
+    await dialog.getByRole('button', { name: 'Add the step' }).click();
     expect((await created).status()).toBe(201);
-    // One tier below the product, named so it can be found and renamed.
-    await expect(step(page, 'New step')).toBeVisible();
-    await expect(page.getByRole('treeitem', { name: 'New step, Machine / line' })).toBeVisible();
+    await expect(step(page, 'Inspection line')).toBeVisible();
+    await expect(page.getByRole('treeitem', { name: 'Inspection line, Machine / line' })).toBeVisible();
 
     // The new step is selected: M opens its menu from the keyboard (E03c).
     await page.getByRole('tree').focus();
     await page.keyboard.press('m');
-    const menu = page.getByRole('menu', { name: 'New step menu' });
+    const menu = page.getByRole('menu', { name: 'Inspection line menu' });
     await expect(menu).toBeVisible();
     await menu.getByRole('menuitem', { name: 'Rename' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Rename step' });
-    await dialog.getByLabel('Name').fill('Inspection line');
-    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(step(page, 'Inspection line')).toBeVisible();
+    const rename = page.getByRole('dialog', { name: 'Rename step' });
+    await rename.getByLabel('Name').fill('Checked line');
+    await rename.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(rename).toBeHidden();
+    await expect(step(page, 'Checked line')).toBeVisible();
 
-    const saved = (await components(api, user, caseId)).find((c) => c.component_name === 'Inspection line');
+    const saved = (await components(api, user, caseId)).find((c) => c.component_name === 'Checked line');
     expect(saved?.parent_component_id).not.toBeNull();
     expect(saved?.component_type).toBe('machine_line');
   });
@@ -84,22 +89,25 @@ test.describe('F6 process tree', () => {
       const { page } = await signIn(user);
       await openCase(page, projectId, caseId);
 
+      const hide = page.getByRole('button', { name: 'Hide panel' });
+      if (await hide.isVisible()) await hide.click();
+      await step(page, 'Finishing').click();
+      await page.getByRole('button', { name: 'Show panel' }).click();
       const deletes: string[] = [];
       page.on('request', (r) => {
         if (r.method() === 'DELETE') deletes.push(r.url());
       });
-      await (await menuOf(page, 'Finishing')).getByRole('menuitem', { name: 'Delete step' }).click();
-      const confirm = page.getByRole('alertdialog', { name: 'Delete this step?' }).or(page.getByRole('dialog', { name: 'Delete this step?' }));
-      await expect(confirm).toContainText('Finishing, its flows and every step below it are deleted.');
-      // Cancel is the safe default and has focus.
+      await page.getByRole('button', { name: 'Delete step' }).click();
+      const confirm = page.getByRole('alertdialog', { name: 'Delete this step?' });
+      await expect(confirm).toContainText('Cancel deletes nothing.');
       await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
       await confirm.getByRole('button', { name: 'Cancel' }).click();
       await expect(step(page, 'Finishing')).toBeVisible();
       expect(deletes).toEqual([]);
 
-      await (await menuOf(page, 'Finishing')).getByRole('menuitem', { name: 'Delete step' }).click();
+      await page.getByRole('button', { name: 'Delete step' }).click();
       const del = page.waitForResponse((r) => r.request().method() === 'DELETE' && /\/api\/components\/\d+/.test(r.url()));
-      await confirm.getByRole('button', { name: 'Delete step' }).click();
+      await confirm.getByRole('button', { name: /Delete it and its \d+ steps/ }).click();
       expect((await del).status()).toBe(200);
       await expect(step(page, 'Finishing')).toHaveCount(0);
       await expect(step(page, 'Degrease')).toHaveCount(0);

@@ -226,6 +226,8 @@ export function CaseWorkspace() {
     onView: setView,
     onOpenInsights: () => setInsightsOpen(true),
     projectName,
+    initialStepId: Number(search.get('componentId')) || null,
+    startAdd: search.get('add') === 'step',
   }
 
   const latestBuild = run ? whatBuilds(run, kase.case_type)[0] : null

@@ -1,26 +1,11 @@
-"use client";
+import { redirect } from 'next/navigation'
 
-import { useParams, useSearchParams } from "next/navigation";
-import { ComponentFormModal } from "@/components/component-form/component-form-modal";
-import { componentFormFromQuery } from "@/lib/case-editor/component-form-query";
-
-export default function NewComponentInterceptedModal() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-
-  const projectId = params.projectId as string;
-  const caseId = params.caseId as string;
-
-  const { mode, initial, suggestedParentId, suggestedType } = componentFormFromQuery(searchParams);
-
-  return (
-    <ComponentFormModal
-      projectId={projectId}
-      caseId={caseId}
-      mode={mode}
-      initial={initial}
-      suggestedParentId={suggestedParentId}
-      suggestedType={suggestedType}
-    />
-  );
+/** The intercepted new-component route opens the same Add step form. */
+export default async function NewComponentInterceptedModal({
+  params,
+}: {
+  params: Promise<{ projectId: string; caseId: string }>
+}) {
+  const { projectId, caseId } = await params
+  redirect(`/project/${encodeURIComponent(projectId)}/case/${encodeURIComponent(caseId)}?add=step`)
 }

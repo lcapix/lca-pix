@@ -13,15 +13,20 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CostBasisKind } from '@/lib/costs/cost-basis'
 import { costedInLine, flowCostNotes } from '@/lib/workspace/flow-cost-text'
 import { useStepCosts } from '@/lib/workspace/use-step-costs'
-import { Button, Flag, FlowStatusPill, SavedLine, Segmented, SourceTag } from '@/components/lcapix/ds'
+import { Button, Flag, FlowStatusPill, SavedLine, Segmented, SourceTag, ConfirmDialog } from '@/components/lcapix/ds'
 import { amountBox } from '@/lib/ui/format'
 import { stepCountsLine, stepKicker } from '@/lib/workspace/step-text'
 import { TIER_COLOURS, TIERS } from '@/lib/workspace/tier-layout'
+import { STAGES } from '@/lib/life-cycle'
+import { compatibleUnits } from '@/lib/units'
+import { searchSubstances } from '@/lib/case-editor/substance-search'
+import { useSubstanceCatalog } from '@/lib/case-editor/use-flows'
+import { substanceSource } from '@/lib/substance-source'
 import type { InventoryRow } from '@/lib/workspace/inventory'
 import type { WorkspaceCase, WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
 import { useGuidedMode } from '@/lib/shell/use-shell'
 import { AddFlowInPanel } from './add-flow-in-panel'
-import { BackToLibrary, OwnFactorForm, rowSum, saveFlowAmount, sourceText } from './flow-bits'
+import { BackToLibrary, OwnFactorForm, deleteFlow, rowSum, saveFlowAmount, saveFlowFields, saveFlowUnit, sourceText } from './flow-bits'
 import { CostPanel } from './cost-panel'
 import { FlowCostNotes } from './flow-cost-notes'
 import { FloatingPanel } from './floating-panel'
@@ -37,6 +42,8 @@ export function StepPanel({
   readOnly,
   view,
   onView,
+  actions,
+  onDelete,
 }: {
   kase: WorkspaceCase
   step: WorkspaceStep
@@ -46,10 +53,22 @@ export function StepPanel({
   readOnly: boolean
   view: TreeView
   onView: (v: TreeView) => void
+  actions: {
+    busy: boolean
+    rename: (id: number, name: string) => Promise<boolean>
+    move: (id: number, parentId: number) => Promise<boolean>
+    setStage: (id: number, stage: string) => Promise<boolean>
+    scaleProduct: (from: number, to: number) => Promise<boolean>
+  }
+  onDelete: () => void
 }) {
   const [guided, setGuided] = useGuidedMode()
   const [saved, setSaved] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
+  const [flowAnyway, setFlowAnyway] = useState(false)
+  const [name, setName] = useState(step.name)
+  const [scaleTo, setScaleTo] = useState(step.quantity != null ? String(step.quantity) : '1')
+  useEffect(() => setName(step.name), [step.id, step.name])
   // "No price for Argon: add its cost" opens the Cost view on that kind.
   const [costOpen, setCostOpen] = useState<CostBasisKind | null>(null)
   useEffect(() => {
@@ -121,6 +140,9 @@ export function StepPanel({
             {step.description ? ` · ${step.description}` : ''}
             {step.source && <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-3)', marginTop: 2 }}>From {step.source}</span>}
           </div>
+          {!readOnly && (
+            <StepTools step={step} steps={steps} name={name} setName={setName} scaleTo={scaleTo} setScaleTo={setScaleTo} actions={actions} onDelete={onDelete} onSaved={setSaved} />
+          )}
         </>
       )}
       {view === 'cost' ? (
@@ -174,7 +196,14 @@ export function StepPanel({
           )}
           {!readOnly && (
             <div className="ws-panel-section">
-              {adding ? (
+              {children.length > 0 && !flowAnyway && !adding ? (
+                <div>
+                  <p>Flows usually go on the lowest step. This step has {children.length} steps under it.</p>
+                  <button type="button" className="ds-link" onClick={() => setFlowAnyway(true)}>
+                    Add a flow anyway
+                  </button>
+                </div>
+              ) : adding ? (
                 <AddFlowInPanel componentId={step.id} studyMethod={inventory?.method} onDone={() => setAdding(false)} />
               ) : (
                 <button type="button" className="ds-link" onClick={() => setAdding(true)}>
@@ -191,6 +220,129 @@ export function StepPanel({
         </>
       )}
     </FloatingPanel>
+  )
+}
+
+function higherTargets(step: WorkspaceStep, steps: WorkspaceStep[]): WorkspaceStep[] {
+  const rank = TIERS.indexOf(step.tier)
+  const below = new Set<number>()
+  const mark = (id: number) => {
+    below.add(id)
+    for (const s of steps) if (s.parentId === id) mark(s.id)
+  }
+  mark(step.id)
+  return steps.filter((s) => TIERS.indexOf(s.tier) < rank && !below.has(s.id))
+}
+
+function StepTools({
+  step,
+  steps,
+  name,
+  setName,
+  scaleTo,
+  setScaleTo,
+  actions,
+  onDelete,
+  onSaved,
+}: {
+  step: WorkspaceStep
+  steps: WorkspaceStep[]
+  name: string
+  setName: (v: string) => void
+  scaleTo: string
+  setScaleTo: (v: string) => void
+  actions: {
+    busy: boolean
+    rename: (id: number, name: string) => Promise<boolean>
+    move: (id: number, parentId: number) => Promise<boolean>
+    setStage: (id: number, stage: string) => Promise<boolean>
+    scaleProduct: (from: number, to: number) => Promise<boolean>
+  }
+  onDelete: () => void
+  onSaved: (line: string) => void
+}) {
+  const targets = higherTargets(step, steps)
+  return (
+    <div className="ws-panel-section" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <label>
+        <span className="ds-section-label">Step name</span>
+        <span style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <input className="ds-input" aria-label="Step name" value={name} onChange={(e) => setName(e.target.value)} />
+          <Button
+            onClick={async () => {
+              if (name.trim() && (await actions.rename(step.id, name.trim()))) onSaved(`Saved · ${name.trim()}`)
+            }}
+            busy={actions.busy}
+          >
+            Save
+          </Button>
+        </span>
+      </label>
+      {targets.length > 0 && (
+        <label>
+          <span className="ds-section-label">Move under</span>
+          <select
+            className="ds-input"
+            aria-label="Move under"
+            value=""
+            onChange={async (e) => {
+              const id = Number(e.target.value)
+              if (id && (await actions.move(step.id, id))) onSaved(`Moved · ${step.name}`)
+            }}
+            style={{ width: '100%', marginTop: 6 }}
+          >
+            <option value="">Choose a step</option>
+            {targets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label>
+        <span className="ds-section-label">Life-cycle stage</span>
+        <select
+          className="ds-input"
+          aria-label="Life-cycle stage"
+          value={step.lifeCycleStage ?? ''}
+          onChange={async (e) => {
+            if (e.target.value && (await actions.setStage(step.id, e.target.value))) onSaved(`Saved · ${step.name}`)
+          }}
+          style={{ width: '100%', marginTop: 6 }}
+        >
+          <option value="">Not set</option>
+          {STAGES.map((st) => (
+            <option key={st.id} value={st.id}>
+              {st.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {step.tier === 'product' && (
+        <label>
+          <span className="ds-section-label">Quantity</span>
+          <span style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            <input className="ds-input" aria-label="Quantity" inputMode="decimal" value={scaleTo} onChange={(e) => setScaleTo(e.target.value)} />
+            <Button
+              onClick={async () => {
+                const to = Number(scaleTo)
+                const from = step.quantity && step.quantity > 0 ? step.quantity : 1
+                if (Number.isFinite(to) && to > 0 && (await actions.scaleProduct(from, to))) onSaved(`Scaled · ${step.name}`)
+              }}
+              busy={actions.busy}
+            >
+              Apply
+            </Button>
+          </span>
+        </label>
+      )}
+      {step.parentId != null && (
+        <Button variant="danger-quiet" onClick={onDelete}>
+          Delete step
+        </Button>
+      )}
+    </div>
   )
 }
 
@@ -224,6 +376,11 @@ function FlowRowWs({
   const [error, setError] = useState<string | null>(null)
   const [own, setOwn] = useState(false)
   const [kept, setKept] = useState(false)
+  const [swap, setSwap] = useState(false)
+  const [query, setQuery] = useState('')
+  const [drop, setDrop] = useState(false)
+  const { substances } = useSubstanceCatalog(method)
+  const found = useMemo(() => (swap ? searchSubstances(query, substances) : []), [swap, query, substances])
   useEffect(() => setValue(amountBox(row.amount)), [row.amount])
 
   // Saves what is in the box now: on Enter right after a change (a fast
@@ -244,8 +401,24 @@ function FlowRowWs({
         <label htmlFor={id} className="ws-flow-name">
           {row.substance}
         </label>
-        <span className="ws-dir" aria-label={row.direction === 'input' ? 'In' : 'Out'}>
-          {row.direction === 'input' ? 'IN' : 'OUT'}
+        <span className="ws-dir">
+          {readOnly ? (
+            <span aria-label={row.direction === 'input' ? 'In' : 'Out'}>{row.direction === 'input' ? 'IN' : 'OUT'}</span>
+          ) : (
+            <select
+              className="ds-input"
+              aria-label={`Direction for ${row.substance}`}
+              value={row.direction}
+              onChange={async (e) => {
+                const err = await saveFlowFields(row.flow_id, { flow_type: e.target.value })
+                if (err) setError(err)
+                else onSaved(`Saved · ${row.substance} is ${e.target.value === 'input' ? 'in' : 'out'} on ${step.name}`)
+              }}
+            >
+              <option value="input">In</option>
+              <option value="output">Out</option>
+            </select>
+          )}
         </span>
         <input
           id={id}
@@ -266,7 +439,26 @@ function FlowRowWs({
           }}
         />
         <span className="ds-mono" style={{ fontSize: 13, minWidth: 36 }}>
-          {row.unit}
+          {readOnly ? (
+            row.unit
+          ) : (
+            <select
+              className="ds-input"
+              aria-label={`Unit for ${row.substance}`}
+              value={row.unit}
+              onChange={async (e) => {
+                const err = await saveFlowUnit(row, e.target.value)
+                if (err) setError(err)
+                else onSaved(`Saved · ${row.substance} in ${e.target.value} on ${step.name}`)
+              }}
+            >
+              {(compatibleUnits(row.substance_unit).includes(row.unit) ? compatibleUnits(row.substance_unit) : [row.unit, ...compatibleUnits(row.substance_unit)]).map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          )}
         </span>
       </div>
       {error && (
@@ -305,6 +497,60 @@ function FlowRowWs({
         </div>
       )}
       {row.climate?.tag === 'hand' && !readOnly && <BackToLibrary row={row} onSaved={onSaved} />}
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '0 0 8px' }}>
+          <button type="button" className="ds-link" onClick={() => setSwap((v) => !v)}>
+            Change substance
+          </button>
+          <button type="button" className="ds-link" onClick={() => setDrop(true)}>
+            Delete flow
+          </button>
+        </div>
+      )}
+      {swap && !readOnly && (
+        <div>
+          <input className="ds-input" aria-label={`Find a substance for ${row.substance}`} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the library" />
+          <div role="listbox" aria-label="Substances">
+            {found.map((s) => (
+              <button
+                key={s.substance_id}
+                type="button"
+                role="option"
+                className="ds-link"
+                onClick={async () => {
+                  const err = await saveFlowFields(row.flow_id, { substance_id: s.substance_id })
+                  if (err) setError(err)
+                  else {
+                    setSwap(false)
+                    onSaved(`Saved · ${s.substance_name} on ${step.name}`)
+                  }
+                }}
+              >
+                {s.substance_name}
+                {' · '}
+                {s.climate_factor != null ? `${s.climate_factor} ${s.climate_unit ?? ''}`.trim() : 'no climate factor'}
+                {' · '}
+                {s.unit ?? 'unit not set'}
+                {' · '}
+                {substanceSource(s).label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={drop}
+        title="Delete this flow?"
+        consequence={`${row.substance} is removed from ${step.name}. Cancel deletes nothing.`}
+        confirmLabel="Delete flow"
+        onCancel={() => setDrop(false)}
+        onConfirm={async () => {
+          const err = await deleteFlow(row.flow_id)
+          if (err) setError(err)
+          else onSaved(`Deleted · ${row.substance} on ${step.name}`)
+          setDrop(false)
+        }}
+      />
     </div>
   )
 }

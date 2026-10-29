@@ -16,6 +16,7 @@ import type { TierLayout } from '@/lib/workspace/tier-layout'
 import { StepPanel } from './step-panel'
 import { useStepActions } from './step-actions'
 import { EmptyTree } from './empty-tree'
+import { AddStepForm } from './add-step-form'
 
 export type TreeView = 'impact' | 'cost'
 
@@ -85,6 +86,8 @@ export function TreeTab({
   runValues = null,
   resultsPanel,
   projectName = null,
+  initialStepId = null,
+  startAdd = false,
 }: {
   kase: WorkspaceCase
   steps: WorkspaceStep[]
@@ -101,6 +104,10 @@ export function TreeTab({
   resultsPanel?: ReactNode
   /** The project's name: an empty case's product is named after it (F2.5). */
   projectName?: string | null
+  /** ?componentId= on the case URL. */
+  initialStepId?: number | null
+  /** ?add=step opens the Add a step form. */
+  startAdd?: boolean
 }) {
   const results = resultsPanel !== undefined
   const byId = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps])
@@ -110,13 +117,19 @@ export function TreeTab({
   const [zoom, setZoom] = useState(1)
   const [announce, setAnnounce] = useState('')
   const [menuFor, setMenuFor] = useState<number | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
 
   // Select the product (or the first step) once the tree is there.
   useEffect(() => {
-    if (selected == null && layout.steps.length) setSelected(layout.steps[0].id)
-  }, [layout.steps, selected])
+    if (selected != null || !layout.steps.length) return
+    const asked = initialStepId != null && byId.has(initialStepId) ? initialStepId : layout.steps[0].id
+    setSelected(asked)
+  }, [layout.steps, selected, initialStepId, byId])
+  useEffect(() => {
+    if (startAdd && !readOnly) setAddOpen(true)
+  }, [startAdd, readOnly])
 
   const costs = useMemo(() => costRollups(steps), [steps])
   const impacts = useMemo(() => impactRollups(steps, inventory), [steps, inventory])
@@ -272,9 +285,8 @@ export function TreeTab({
               ]}
             />
           )}
-          {/* canvas.md: "Students get no Add step" (a student is a member who can change, not the owner). */}
-          {!readOnly && kase.my_role !== 'editor' && (
-            <button type="button" className="ws-add-step" onClick={() => actions.addBelow(selected ?? layout.steps[0]?.id ?? null)}>
+          {!readOnly && (
+            <button type="button" className="ws-add-step" onClick={() => setAddOpen(true)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden>
                 <path d="M12 5v14M5 12h14" strokeLinecap="round" />
               </svg>
@@ -396,7 +408,10 @@ export function TreeTab({
           }}
           onRename={() => setRenameFor(menuFor)}
           onMove={(parentId) => actions.move(menuFor, parentId)}
-          onAddTask={() => actions.addBelow(menuFor)}
+          onAddTask={() => {
+            if (menuFor != null) setSelected(menuFor)
+            setAddOpen(true)
+          }}
           onDelete={() => setDeleteFor(menuFor)}
         />
       )}
@@ -441,6 +456,8 @@ export function TreeTab({
           readOnly={readOnly}
           view={view}
           onView={onView}
+          actions={actions}
+          onDelete={() => setDeleteFor(selected)}
         />
       )}
 
@@ -461,14 +478,27 @@ export function TreeTab({
         title="Delete this step?"
         consequence={
           deleteFor != null
-            ? `${byId.get(deleteFor)?.name ?? 'This step'}, its flows and every step below it are deleted.`
+            ? `${byId.get(deleteFor)?.name ?? 'This step'} has ${childCount(steps, deleteFor)} steps under it. Cancel deletes nothing.`
             : ''
         }
-        confirmLabel="Delete step"
+        confirmLabel={deleteFor != null ? `Delete it and its ${childCount(steps, deleteFor)} steps` : 'Delete it'}
+        secondary={
+          deleteFor != null
+            ? {
+                label: 'Delete it, keep its steps',
+                onClick: async () => {
+                  if (await actions.remove(deleteFor, 'reparent')) {
+                    setDeleteFor(null)
+                    setSelected(null)
+                  }
+                },
+              }
+            : undefined
+        }
         busy={actions.busy}
         onCancel={() => setDeleteFor(null)}
         onConfirm={async () => {
-          if (deleteFor != null && (await actions.remove(deleteFor))) {
+          if (deleteFor != null && (await actions.remove(deleteFor, 'delete'))) {
             setDeleteFor(null)
             setSelected(null)
           }
@@ -476,8 +506,24 @@ export function TreeTab({
       >
         {actions.error && <p className="ds-dialog-body" style={{ color: 'var(--ds-error)' }}>{actions.error}</p>}
       </ConfirmDialog>
+      <AddStepForm
+        open={addOpen}
+        steps={steps}
+        defaultParentId={selected ?? layout.steps[0]?.id ?? null}
+        busy={actions.busy}
+        error={actions.error}
+        onCancel={() => setAddOpen(false)}
+        onAdd={async ({ parentId, tier, name }) => {
+          if (await actions.addStep(parentId, tier, name)) setAddOpen(false)
+        }}
+      />
     </div>
   )
+}
+
+function childCount(steps: WorkspaceStep[], id: number): number {
+  const kids = steps.filter((s) => s.parentId === id)
+  return kids.reduce((n, k) => n + 1 + childCount(steps, k.id), 0)
 }
 
 function Legend() {
@@ -538,7 +584,8 @@ function StepMenu({
     for (const s of steps) if (s.parentId === id) mark(s.id)
   }
   mark(step.id)
-  const targets = parent ? steps.filter((s) => s.tier === parent.tier && !below.has(s.id)) : []
+  const rank = TIERS.indexOf(step.tier)
+  const targets = steps.filter((s) => TIERS.indexOf(s.tier) < rank && !below.has(s.id))
 
   useEffect(() => {
     ref.current?.querySelector<HTMLElement>('[role=menuitem],[role=menuitemradio]')?.focus()
@@ -581,7 +628,7 @@ function StepMenu({
             onClose()
             onRename()
           })}
-          {parent && targets.length > 1 && item('Move to…', () => setMoving(true), { sub: true })}
+          {targets.length > 0 && item('Move to…', () => setMoving(true), { sub: true })}
           {item('Add a task below', () => {
             onClose()
             onAddTask()

@@ -108,13 +108,14 @@ export function useFlows(componentId: string, onFlowsChange?: (flows: FlowRow[])
 }
 
 /** The substance catalog for the picker, loaded once. Empty when it cannot load. */
-export function useSubstanceCatalog() {
+export function useSubstanceCatalog(method?: string | null) {
   const [substances, setSubstances] = useState<Substance[]>([])
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        const r = await fetch('/api/substances?limit=500', { headers: authHeaders() })
+        const q = method ? `?method=${encodeURIComponent(method)}` : '?limit=500'
+        const r = await fetch(`/api/substances${q}`, { headers: authHeaders() })
         const d = await r.json().catch(() => ({}))
         if (!cancelled) setSubstances(d?.substances ?? d?.data ?? [])
       } catch {
@@ -124,7 +125,7 @@ export function useSubstanceCatalog() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [method])
   /** A substance just added by hand joins the list. */
   const addToCatalog = (s: Substance) => setSubstances((list) => [...list, s])
   return { substances, addToCatalog }
