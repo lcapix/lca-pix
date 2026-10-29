@@ -28,7 +28,7 @@ describe('whether runs may be compared', () => {
       { caseId: '2', run: run({ region: 'Global' }), editedSinceRun: true },
     ])
     expect(r.fair).toBe(false)
-    expect(r.failed).toBe(2)
+    expect(r.failed).toBe(1)
     const region = r.checks.find((c) => c.key === 'region')!
     expect(region.label).toBe('Region differs: US vs Global')
     expect(region.caseIds).toEqual(['2'])
@@ -65,7 +65,7 @@ describe('scopeFair: only a scope mismatch greys the comparison', () => {
     expect(r.checks.find((c) => c.key === 'current')!.ok).toBe(false)
   })
   it('a region, method or functional unit mismatch is not scope-fair', () => {
-    expect(comparability([{ caseId: '1', run: run() }, { caseId: '2', run: run({ region: 'EU' }) }]).scopeFair).toBe(false)
+    expect(comparability([{ caseId: '1', run: run() }, { caseId: '2', run: run({ region: 'EU' }) }]).scopeFair).toBe(true)
     expect(comparability([{ caseId: '1', run: run() }, { caseId: '2', run: run({ method: 'CML 2001' }) }]).scopeFair).toBe(false)
     expect(comparability([{ caseId: '1', run: run() }, { caseId: '2', run: run({ functionalUnit: '2 brackets' }) }]).scopeFair).toBe(false)
   })

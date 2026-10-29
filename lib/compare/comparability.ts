@@ -11,8 +11,8 @@
  * one region.
  */
 
-/** How many cases one comparison holds (the route and the page share it). */
-export const COMPARE_MAX_CASES = 8
+/** How many cases one comparison holds. There is no cap of 8. */
+export const COMPARE_MAX_CASES = 100
 
 export type ComparabilityKey = 'method' | 'region' | 'functionalUnit' | 'current'
 
@@ -32,6 +32,8 @@ export interface ComparableCase {
 export interface ComparabilityCheck {
   key: ComparabilityKey
   ok: boolean
+  /** A difference that is shown, and does not grey the totals. */
+  warn?: boolean
   /** "Same method", "Region differs: US vs Global". */
   label: string
   /** The value when it passes ("TRACI 2.1"), what to do when it fails. */
@@ -83,8 +85,9 @@ export function comparability(cases: ComparableCase[]): Comparability {
       : {
           key: 'region',
           ok: false,
+          warn: true,
           label: `Region differs: ${regions.join(' vs ')}`,
-          detail: `Run every case in one region (${regions[0]}).`,
+          detail: 'Shown anyway. A different region uses a different electricity factor.',
           caseIds: withRun.filter((c) => clean(c.run!.region) !== regions[0]).map((c) => c.caseId),
         }
 
@@ -127,11 +130,11 @@ export function comparability(cases: ComparableCase[]): Comparability {
         : { key: 'current', ok: true, label: 'Both runs current', detail: 'Not edited since the run', caseIds: [] }
 
   const checks = [method, region, functionalUnit, current]
-  const failed = checks.filter((c) => !c.ok).length
+  const failed = checks.filter((c) => !c.ok && !c.warn).length
   return {
     checks,
     failed,
     fair: withRun.length >= 2 && failed === 0,
-    scopeFair: method.ok && region.ok && functionalUnit.ok,
+    scopeFair: method.ok && functionalUnit.ok,
   }
 }

@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Button, ErrorCard, Segmented } from '@/components/lcapix/ds'
+import { apiRequest } from '@/lib/api-client'
 import { useShellData } from '@/lib/shell/use-shell'
 import { initialsOf } from '@/lib/home/projects'
 import { LMS_NAME } from '@/lib/ui-flags'
@@ -117,7 +118,8 @@ export function CasesPage() {
               const answer = answerOf(c)
               const change = c.case_type !== 'base' ? changeVsBase(c, base) : null
               return (
-                <Link key={c.case_id} href={caseHref(c)} className="pc-mine-card ds-focusable">
+                <div key={c.case_id} className="pc-mine-card">
+                  <Link href={caseHref(c)} className="ds-focusable" style={{ flex: 1, minWidth: 0, display: 'flex', gap: 12, alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ display: 'block', fontSize: 18 }}>{c.case_name}</strong>
                     <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>
@@ -128,7 +130,9 @@ export function CasesPage() {
                   <span className="ds-mono" style={{ fontSize: 28, fontWeight: 600 }}>
                     {answer ?? '–'}
                   </span>
-                </Link>
+                  </Link>
+                  <CaseMenu projectId={projectId} caseId={c.case_id} name={c.case_name} onChanged={reload} />
+                </div>
               )
             })}
           </div>
@@ -273,7 +277,7 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
         <span style={{ flex: 1, minWidth: 0 }}>
           <strong style={{ display: 'block', fontSize: 16 }}>{c.author ?? 'Someone'}</strong>
           <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
-            {c.case_name} · {c.latest_run ? <span className="ds-mono">Run #{c.latest_run.run_id}</span> : c.created_at ? `copied ${whenWords(c.created_at)}` : 'not run yet'}
+            {c.case_name} · {c.latest_run ? <span className="ds-mono">Run #{c.latest_run.run_id}</span> : c.case_type === 'base' ? 'not run yet' : c.created_at ? `copied ${whenWords(c.created_at)}` : 'not run yet'}
           </span>
         </span>
         {answer && (
@@ -289,5 +293,39 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
       </span>
       <span className={`pc-tag pc-tag--${tag.tone}`}>{tag.text}</span>
     </Link>
+  )
+}
+
+function CaseMenu({ projectId, caseId, name, onChanged }: { projectId: number; caseId: number; name: string; onChanged: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const act = async (path: string, init: RequestInit) => {
+    setError(null)
+    const res = await apiRequest(path, init)
+    const d = await res.json().catch(() => ({}))
+    if (!res.ok) return setError(d?.error ?? `Not done (${res.status}).`)
+    setOpen(false)
+    onChanged()
+  }
+  return (
+    <span style={{ position: 'relative' }}>
+      <button type="button" className="ds-btn ds-btn--small" aria-expanded={open} aria-label={`Menu for ${name}`} onClick={() => setOpen((v) => !v)}>
+        Menu
+      </button>
+      {open && (
+        <span role="menu" style={{ position: 'absolute', right: 0, zIndex: 2, background: '#fff', border: '1px solid var(--ds-line)', borderRadius: 8, padding: 8, display: 'grid' }}>
+          <button type="button" role="menuitem" className="ds-link" onClick={() => {
+            const next = window.prompt('Rename case', name)
+            if (next && next.trim()) void act(`/api/cases/${caseId}`, { method: 'PUT', body: JSON.stringify({ case_name: next.trim() }) })
+          }}>Rename</button>
+          <button type="button" role="menuitem" className="ds-link" onClick={() => void act(`/api/cases/${caseId}/duplicate`, { method: 'POST', body: '{}' })}>Copy</button>
+          <button type="button" role="menuitem" className="ds-link" onClick={() => void act(`/api/cases/${caseId}/assessments`, { method: 'POST', body: '{}' })}>Run</button>
+          <button type="button" role="menuitem" className="ds-link" onClick={() => {
+            if (window.confirm(`Delete ${name}? This cannot be undone.`)) void act(`/api/cases/${caseId}`, { method: 'DELETE' })
+          }}>Delete</button>
+        </span>
+      )}
+      {error && <span role="alert">{error}</span>}
+    </span>
   )
 }

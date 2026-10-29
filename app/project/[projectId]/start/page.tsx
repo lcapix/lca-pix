@@ -10,18 +10,23 @@
  * teaching moment we own is doing both for one product and comparing them.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
 import { Icon } from '@/components/lcapix'
+import { EDU_SHELL } from '@/lib/ui-flags'
 
 export default function StartPage() {
   const router = useRouter()
   const params = useParams()
   const projectId = String(params.projectId)
   const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    if (EDU_SHELL) router.replace(`/project/${projectId}/case/new?kind=hand`)
+  }, [projectId, router])
 
   const buildByHand = async () => {
     setCreating(true)

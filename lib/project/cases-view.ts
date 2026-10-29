@@ -63,8 +63,8 @@ export function changeVsBase(c: ProgressCase, base: ProgressCase | undefined): s
 /** Members who can make a case (not the owner, not readers) and have none yet. */
 export function noCaseYet(members: Array<{ user_id: number; permission_name?: string | null }>, cases: ProgressCase[]): number {
   const authors = new Set(cases.map((c) => c.created_by))
-  // Someone who can only read cannot make a case, so they are not waiting on one.
-  return members.filter((m) => m.permission_name !== 'viewer' && !authors.has(Number(m.user_id))).length
+  // Someone who can only read, or who owns the project, is not waiting on a case of their own.
+  return members.filter((m) => m.permission_name !== 'viewer' && m.permission_name !== 'owner' && !authors.has(Number(m.user_id))).length
 }
 
 /** Find a student or case: by the person's name or the case's. */

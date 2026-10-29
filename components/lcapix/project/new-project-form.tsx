@@ -37,6 +37,7 @@ export function NewProjectForm() {
   const { projects } = useShellData()
   const sample = projects.find((p) => p.is_sample)
   const [name, setName] = useState('')
+  const [goal, setGoal] = useState('')
   const [functionalUnit, setFunctionalUnit] = useState('')
   const [boundary, setBoundary] = useState<string>('cradle-to-gate')
   const [method, setMethod] = useState<string>('CML 2001')
@@ -109,6 +110,7 @@ export function NewProjectForm() {
           method: 'PUT',
           body: JSON.stringify({
             ...(functionalUnit.trim() ? { functional_unit: functionalUnit.trim(), system_boundary: boundary } : {}),
+            goal_statement: goal.trim(),
             lcia_method: method,
             region_code: region,
           }),
@@ -170,6 +172,10 @@ export function NewProjectForm() {
             The question
           </h2>
           <p className="np-sub">Every case in this project answers it for the same one unit.</p>
+          <label className="np-field" style={{ display: 'block', marginBottom: 12 }}>
+            <span className="edu-field-label">Goal of the study</span>
+            <textarea className="edu-input" value={goal} maxLength={2000} rows={3} aria-label="Goal of the study" onChange={(e) => setGoal(e.target.value)} />
+          </label>
           <div className="np-grid">
             <label className="np-field">
               <span className="edu-field-label">Functional unit</span>

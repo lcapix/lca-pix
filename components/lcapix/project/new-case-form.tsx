@@ -45,6 +45,11 @@ export function NewCaseForm() {
     return [...data.cases].sort((a, b) => rank(a) - rank(b) || a.case_id - b.case_id)
   }, [data, me])
   useEffect(() => {
+    const asked = search?.get('kind')
+    if (asked === 'base' || asked === 'hand') setKind('base')
+    if (asked === 'whatif' || asked === 'comparative') setKind('whatif')
+  }, [search])
+  useEffect(() => {
     if (sourceId != null || !sources.length) return
     const asked = Number(search?.get('from'))
     setSourceId((sources.find((c) => c.case_id === asked) ?? sources[0]).case_id)
@@ -80,7 +85,7 @@ export function NewCaseForm() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (toFile) return router.push(`/project/${projectId}/import`)
+    if (toFile) return router.push(`/project/${projectId}/import?first=1`)
     const caseName = name.trim()
     if (!caseName) return setNameError('Name the case first.')
     setBusy(true)
@@ -89,6 +94,7 @@ export function NewCaseForm() {
     try {
       const body: Record<string, string> = { case_name: caseName }
       if (change.trim()) body.description = change.trim()
+      else if (search?.get('kind') === 'hand') body.description = 'Built by hand'
       const res =
         kind === 'whatif'
           ? await apiRequest(`/api/cases/${sourceId}/duplicate`, { method: 'POST', body: JSON.stringify(body) })
@@ -99,7 +105,8 @@ export function NewCaseForm() {
       if (!res.ok) return setFormError(d?.error ?? `The case was not made (${res.status}).`)
       const id = Number(d.case_id ?? d.case?.case_id)
       void useShellStore.getState().refresh()
-      router.push(`/project/${projectId}/case/${id}`)
+      const learn = search?.get('kind') === 'hand' ? '?learn=1' : ''
+      router.push(`/project/${projectId}/case/${id}${learn}`)
     } catch (err: any) {
       setFormError(err?.message ?? 'The case was not made.')
     } finally {

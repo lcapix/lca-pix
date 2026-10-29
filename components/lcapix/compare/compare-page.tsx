@@ -47,7 +47,7 @@ export function ComparePage() {
   const params = useParams()
   const projectId = Number(params.projectId)
   const { profile } = useShellData()
-  const { cases, byId, selected, toggle, data, error, loading, runAgain, reload } = useCompare(projectId, profile?.id ?? -1)
+  const { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload } = useCompare(projectId, profile?.id ?? -1)
   const [category, setCategory] = useState(CLIMATE)
   const [vs, setVs] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
@@ -60,6 +60,14 @@ export function ComparePage() {
     const base = all.find((c) => c.caseId === data?.baseCaseId)
     return base ? [base, ...all.filter((c) => c !== base)] : all
   }, [data])
+  const togglePair = (index: number, id: string) => {
+    setSelected((cur) => {
+      const next = [...cur]
+      if (!id) next.splice(index, 1)
+      else next[index] = id
+      return next.filter(Boolean)
+    })
+  }
   const base = compared[0]
   const checks = useMemo(
     () =>
@@ -149,6 +157,24 @@ export function ComparePage() {
             </span>
           </span>
         ))}
+        <label>
+          A
+          <select aria-label="Case A" value={selected[0] ?? ''} onChange={(e) => togglePair(0, e.target.value)}>
+            <option value="">None</option>
+            {(cases ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          B
+          <select aria-label="Case B" value={selected[1] ?? ''} onChange={(e) => togglePair(1, e.target.value)}>
+            <option value="">None</option>
+            {(cases ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
         <AddCaseMenu cases={cases} selected={selected} baseId={base?.caseId ?? null} onToggle={toggle} />
         <span style={{ flex: 1 }} />
         {categories.length > 0 && (
@@ -199,11 +225,11 @@ export function ComparePage() {
               return (
                 <div key={k.key} className="cmp-check" data-fail={!k.ok || undefined}>
                   <span className="cmp-check-icon" aria-hidden>
-                    {k.ok ? '✓' : '✕'}
+                    {k.warn ? '!' : k.ok ? '✓' : '✕'}
                   </span>
                   <span style={{ minWidth: 0 }}>
                     <strong>
-                      <span className="ds-sr-only">{k.ok ? 'Passes: ' : 'Fails: '}</span>
+                      <span className="ds-sr-only">{k.warn ? 'Warning: ' : k.ok ? 'Passes: ' : 'Fails: '}</span>
                       {checkLabel(k, compared.length)}
                     </strong>
                     {k.ok ? (

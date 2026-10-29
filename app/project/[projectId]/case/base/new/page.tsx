@@ -16,7 +16,7 @@
  *   - Router push to the case editor on success
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type React from "react"
 
 import { useRouter, useParams } from "next/navigation"
@@ -25,6 +25,7 @@ import { useProjectStore } from "@/lib/store"
 import { toast } from "sonner"
 import { apiRequest } from "@/lib/api-client"
 import { Breadcrumb, Icon } from "@/components/lcapix"
+import { EDU_SHELL } from "@/lib/ui-flags"
 
 export default function CreateBaseCasePage() {
   const router = useRouter()
@@ -39,6 +40,10 @@ export default function CreateBaseCasePage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const project = projects.find((p) => p.id === projectId)
+
+  useEffect(() => {
+    if (EDU_SHELL) router.replace(`/project/${projectId}/case/new?kind=base`)
+  }, [projectId, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -18,13 +18,11 @@ export interface CaseOption {
   runs: number
 }
 
-/** The base case and the copy this person most likely means: their latest copy with a run, else any latest copy. */
-export function defaultPick(cases: CaseOption[], me: number): string[] {
+/** The base case plus every copy. The base can be turned off later. */
+export function defaultPick(cases: CaseOption[], _me: number): string[] {
   const base = cases.find((c) => c.type === 'base')
-  const copies = cases.filter((c) => c.type === 'comparative').sort((a, b) => Number(b.id) - Number(a.id))
-  const mine = copies.filter((c) => c.createdBy === me)
-  const pick = mine.find((c) => c.runs > 0) ?? mine[0] ?? copies.find((c) => c.runs > 0) ?? copies[0]
-  return [base?.id, pick?.id].filter((x): x is string => !!x)
+  const copies = cases.filter((c) => c.type === 'comparative')
+  return [base?.id, ...copies.map((c) => c.id)].filter((x): x is string => !!x)
 }
 
 export function useCompare(projectId: number, me: number) {
@@ -134,5 +132,5 @@ export function useCompare(projectId: number, me: number) {
 
   const reload = useCallback(() => setTick((t) => t + 1), [])
   const byId = useMemo(() => new Map((cases ?? []).map((c) => [c.id, c])), [cases])
-  return { cases, byId, selected, toggle, data, error, loading, runAgain, reload }
+  return { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload }
 }

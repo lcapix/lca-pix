@@ -64,9 +64,8 @@ such as assignments (C06, C07).
 
 | ID | What a user meets |
 |---|---|
-| P13 | Overview banner shows a hard-coded "−28.0% CO2 · +$240" for any project with a comparison case (`comparison-banner.tsx:42-51`) |
+| P13 | The new overview names the two cases it is comparing and does not invent a percent or a dollar change (`WS/project-hub.tsx`) |
 | E01, E08 | Add step always makes a machine/line, auto-selected, so the next flow lands on it |
-| E09, E13 | No way to change a flow's substance or delete a flow |
 | E09, E13 | No way to change a flow's substance or delete a flow |
 | R01, R02, R07 | No full results page, no method choice, no data-quality statement on desktop |
 | G64 | A user who skipped "Institution" at sign-up can never save a profile edit (`app/profile/page.tsx:172`) |

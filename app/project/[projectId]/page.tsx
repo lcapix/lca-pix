@@ -1,14 +1,12 @@
 'use client'
 
-// A project's Overview. The sample study's is its read-only Overview (E02):
-// seven sections in research order. Other projects keep the classic overview:
-// no education screen designs one (open for Shreya and Kavish; Cases, E07, is
-// the project's working page).
+// A project's Overview. The sample study keeps its read-only education
+// overview. Every other project uses the design-system hub.
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { EmptyState } from '@/components/lcapix/ds'
-import ProjectOverviewPage from '@/components/lcapix/project/project-overview-page'
+import { ProjectHub } from '@/components/lcapix/workspace/project-hub'
 import { SampleOverview } from '@/components/lcapix/home/sample-overview'
 import { useShellData } from '@/lib/shell/use-shell'
 import { EDU_SHELL } from '@/lib/ui-flags'
@@ -51,5 +49,5 @@ export default function ProjectPage() {
     const owns = projects.some((p) => !p.is_sample && p.owner_id === profile?.id)
     return <SampleOverview projectId={projectId} ownName={profile?.fullName?.trim() || null} ownsProject={owns} />
   }
-  return <ProjectOverviewPage />
+  return <ProjectHub />
 }

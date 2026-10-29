@@ -7,14 +7,21 @@ export function ImportHeader({
   projectName,
   targetName,
   title,
+  onBack,
 }: {
   projectName: string | null
   /** The case the file goes into; null for a new case. */
   targetName: string | null
   title: string
+  onBack?: () => void
 }) {
   return (
     <header className="np-head">
+      {onBack && (
+        <button type="button" className="ds-link" onClick={onBack}>
+          Back
+        </button>
+      )}
       <p style={{ margin: 0, fontSize: 13, color: 'var(--ds-text-2)' }}>
         {projectName ? `${projectName} · ` : ''}
         {targetName ? `into ${targetName}` : 'into a new case'}

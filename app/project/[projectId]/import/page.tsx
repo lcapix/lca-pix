@@ -102,6 +102,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
               projectName={projectName}
               targetName={phase === 'done' && applied ? applied.case_name ?? targetName : targetName}
               title={title}
+              onBack={imp.goBack}
             />
             {reviewing && imp.file && (
               <p style={{ margin: '-10px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>

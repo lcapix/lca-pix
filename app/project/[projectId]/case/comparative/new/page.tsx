@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import { apiRequest } from "@/lib/api-client"
 import { transformCaseFromDB } from "@/lib/data-transformers"
 import { Breadcrumb, Icon } from "@/components/lcapix"
+import { EDU_SHELL } from "@/lib/ui-flags"
 
 export default function CreateComparativeCasePage() {
   const router = useRouter()
@@ -46,6 +47,10 @@ export default function CreateComparativeCasePage() {
   const [casesError, setCasesError] = useState<string | null>(null)
 
   const project = projects.find((p) => p.id === projectId)
+
+  useEffect(() => {
+    if (EDU_SHELL) router.replace(`/project/${projectId}/case/new?kind=whatif`)
+  }, [projectId, router])
 
   // Fetch existing base cases from the real API so the user can
   // pick a concrete reference for the comparison.
