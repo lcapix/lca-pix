@@ -79,7 +79,7 @@ export function ProvenanceLine({
     <div style={{ marginTop: 12, fontSize: 10.5, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
       {usingAI ? (
         <>
-          Narrated by <span className="mono">{aiModel || 'an open model'}</span> via Hugging
+          Narrated by <span className="ds-mono">{aiModel || 'an open model'}</span> via Hugging
           Face, grounded on your computed figures: the model phrases the analysis, the
           numbers come from the engine.
         </>

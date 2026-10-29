@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { EmptyState, ErrorCard } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { LMS_NAME } from '@/lib/ui-flags'
@@ -30,7 +30,12 @@ import {
 
 export function AnalyticsPage() {
   const params = useParams()
+  const router = useRouter()
+  const askedCase = useSearchParams().get('caseId')
   const projectId = Number(params.projectId)
+  useEffect(() => {
+    if (askedCase && /^\d+$/.test(askedCase)) router.replace(`/project/${projectId}/case/${askedCase}/results`)
+  }, [askedCase, projectId, router])
   const { profile } = useShellData()
   const me = profile?.id ?? -1
   const word = profile?.useCase === 'teaching' ? 'student' : 'member'
@@ -54,9 +59,10 @@ export function AnalyticsPage() {
     if (!data) return null
     const staff = new Set([data.project.owner_id, ...data.members.filter((m) => m.permission_name === 'admin').map((m) => m.user_id)])
     const students = studentCases(data.cases, staff)
+    const shown = students.length > 0 ? students : data.cases.filter((c) => c.created_by != null && staff.has(c.created_by))
     const base = data.cases.find((c) => c.case_type === 'base' && c.created_by != null && staff.has(c.created_by)) ?? data.cases.find((c) => c.case_type === 'base')
     const scope = { method: base?.latest_run?.method ?? data.project.lcia_method, region: base?.latest_run?.region ?? data.project.region_code }
-    return { students, counts: classCounts(students), base, scope, ...landed(students, scope) }
+    return { students: shown, counts: classCounts(shown), base, scope, ...landed(shown, scope) }
   }, [data])
 
   if (error) {

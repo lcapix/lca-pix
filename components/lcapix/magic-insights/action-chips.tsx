@@ -29,7 +29,7 @@ export function InsightActionChips({ chips, activeChip, reducePct, onSelect }: I
             key={c.id}
             type="button"
             onClick={() => onSelect(c.id)}
-            className="press-active"
+            className="ds-btn ds-btn--small"
             style={{
               display: 'inline-flex',
               alignItems: 'center',

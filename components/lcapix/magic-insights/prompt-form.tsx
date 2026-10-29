@@ -44,7 +44,7 @@ export function CustomPromptForm({ prompt, onPromptChange, onSubmit, exampleQs }
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button
           type="submit"
-          className="btn btn-primary btn-sm"
+          className="ds-btn ds-btn--primary ds-btn--small"
           disabled={!prompt.trim()}
         >
           Ask

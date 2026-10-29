@@ -7,7 +7,7 @@ export function ConsultantList({ items }: { items: ConsultantItem[] }) {
   return (
     <div style={{ padding: '4px 24px 6px' }}>
       <div
-        className="eyebrow"
+        className="ds-section-label"
         style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 10, marginBottom: 8 }}
       >
         What a sustainability consultant would look at

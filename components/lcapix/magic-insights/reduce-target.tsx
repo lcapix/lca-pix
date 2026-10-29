@@ -52,7 +52,7 @@ export function ReduceTargetRow({ reducePctInput, onInputChange, reducePct, onPr
             key={preset}
             type="button"
             onClick={() => onPreset(preset)}
-            className="press-active"
+            className="ds-btn ds-btn--small"
             style={{
               fontSize: 11,
               padding: '3px 8px',

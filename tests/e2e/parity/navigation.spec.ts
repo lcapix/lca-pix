@@ -3,7 +3,7 @@
  * is exercised by the auth journey. The admin Integrations item (G114) is
  * checked with the admin screen.
  */
-import { storagePath, test } from '../support/fixtures';
+import { expect, storagePath, test } from '../support/fixtures';
 import { row } from '../support/parity';
 import { open } from '../support/ui';
 
@@ -24,10 +24,10 @@ test.describe('shell', () => {
     await row(page.getByRole('menuitem', { name: 'Log out' }), 'P136', 'Docs, profile, Integrations, logout');
   });
 
-  test('G130 /results opens the Results tab', async ({ page, seed }) => {
+  test('G130 /results is the full results page', async ({ page, seed }) => {
     await page.goto(`/project/${seed.example.projectId}/case/${seed.example.baseCaseId}/results`);
-    await page.waitForURL(/tab=results/, { timeout: 90_000 });
-    await row(page.getByRole('tab', { name: /^Results/ }), 'G130', '/project/[id]/case/[caseId]/results');
+    await expect(page.getByRole('link', { name: 'Open full page' }).or(page.getByRole('main'))).toBeVisible();
+    await row(page.getByRole('main'), 'G130', '/project/[id]/case/[caseId]/results');
   });
 
   test('G76 G131 G132 G133 G134 G135 G136 the command palette', async ({ page }) => {

@@ -38,10 +38,10 @@ export function MagicInsightsFooter({
         {source}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <Link href={`/project/${projectId}/case/${caseId}`} className="btn btn-secondary btn-sm">
+        <Link href={`/project/${projectId}/case/${caseId}`} className="ds-btn ds-btn--small">
           Open editor
         </Link>
-        <button type="button" onClick={onClose} className="btn btn-primary btn-sm">
+        <button type="button" onClick={onClose} className="ds-btn ds-btn--primary ds-btn--small">
           Got it
         </button>
       </div>

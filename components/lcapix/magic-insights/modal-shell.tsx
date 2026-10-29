@@ -27,7 +27,7 @@ export function MagicInsightsShell({ onClose, children }: MagicInsightsShellProp
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="card bloom-in"
+        className="ds-card"
         style={{
           width: 680,
           maxWidth: '92vw',

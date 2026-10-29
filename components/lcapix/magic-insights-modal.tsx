@@ -37,6 +37,8 @@ interface MagicInsightsModalProps {
   caseId: string
   /** The run being read (AI narration needs it: access and the project's AI switch). */
   runId?: number | null
+  /** A base case has nothing to compare itself with. */
+  caseType?: 'base' | 'comparative' | string
 }
 
 export function MagicInsightsModal({
@@ -53,6 +55,7 @@ export function MagicInsightsModal({
   projectId,
   caseId,
   runId,
+  caseType,
 }: MagicInsightsModalProps) {
   const ins = useMagicInsights({
     open,
@@ -85,7 +88,7 @@ export function MagicInsightsModal({
 
       {/* Action chips */}
       <InsightActionChips
-        chips={ins.chips}
+        chips={caseType === 'base' ? ins.chips.filter((c) => c.id !== 'base') : ins.chips}
         activeChip={ins.activeChip}
         reducePct={ins.reducePct}
         onSelect={ins.setActiveChip}

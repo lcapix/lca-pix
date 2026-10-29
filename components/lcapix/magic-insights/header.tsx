@@ -54,7 +54,7 @@ export function MagicInsightsHeader({
             Magic Insights
           </div>
           <div
-            className="mono"
+            className="ds-mono"
             style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}
           >
             {caseName} · {method}
@@ -67,7 +67,7 @@ export function MagicInsightsHeader({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="press-active"
+          className="ds-btn ds-btn--small"
           style={{
             background: 'transparent',
             border: 'none',
@@ -162,7 +162,7 @@ export function CategorySelect({
       }}
     >
       <span
-        className="eyebrow"
+        className="ds-section-label"
         style={{ fontSize: 10, color: 'var(--text-tertiary)' }}
       >
         Impact category

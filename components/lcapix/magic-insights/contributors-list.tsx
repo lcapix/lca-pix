@@ -15,7 +15,7 @@ export function ContributorsList({ activeLabel, contributors }: { activeLabel: s
       }}
     >
       <div
-        className="eyebrow"
+        className="ds-section-label"
         style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 14, marginBottom: 8 }}
       >
         Source data: top contributors for {activeLabel}
@@ -35,13 +35,13 @@ export function ContributorsList({ activeLabel, contributors }: { activeLabel: s
         >
           <span style={{ flex: 1, color: 'var(--text-primary)' }}>{c.name}</span>
           <span
-            className="mono"
+            className="ds-mono"
             style={{ color: 'var(--text-tertiary)', fontSize: 11 }}
           >
             {fmtSig(c.value)}
           </span>
           <span
-            className="mono"
+            className="ds-mono"
             style={{
               color: 'var(--brand-primary)',
               fontWeight: 600,

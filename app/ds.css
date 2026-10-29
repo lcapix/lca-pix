@@ -1278,3 +1278,9 @@
   .lp-figs, .lp-cards, .lp-methods, .lp-foot { grid-template-columns: minmax(0, 1fr); }
 }
 .pp-wrap:focus-visible { outline: 2px solid var(--ds-green); outline-offset: 2px; }
+
+@media print {
+  body * { visibility: hidden; }
+  .ws-full-results, .ws-full-results * { visibility: visible; }
+  .ws-full-results { position: absolute; left: 0; top: 0; width: 100%; }
+}

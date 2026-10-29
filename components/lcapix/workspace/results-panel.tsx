@@ -8,6 +8,7 @@
 
 import { perUnit } from '@/lib/workspace/per-unit'
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useShellStore } from '@/lib/shell/use-shell'
 import { Button, EmptyState, Flag, SectionLabel } from '@/components/lcapix/ds'
@@ -114,6 +115,9 @@ export function ResultsPanel({
         <>
           <span style={{ color: 'var(--ds-text-3)' }}>Results · </span>
           <strong>Run #{run.run_id}</strong>
+          <Link className="ds-link" href={`/project/${kase.project_id}/case/${kase.case_id}/results?run=${run.run_id}`} style={{ marginLeft: 12 }}>
+            Open full page
+          </Link>
         </>
       }
     >

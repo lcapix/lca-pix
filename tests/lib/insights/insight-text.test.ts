@@ -64,7 +64,7 @@ describe('fmtShare / NOT_MATERIAL', () => {
 describe('summary', () => {
   it('leads with the total, the top material and the top steps', () => {
     expect(buildInsightText(BASE)).toBe(
-      'Your Bike assessment under TRACI 2.1 totals {{1,235 kg CO2 eq}} for {{Global Warming}} at {{$500}}.' +
+      'Your Bike assessment under TRACI 2.1 totals {{1,235 kg CO2 eq}} for {{Global Warming}} at {{$500.00}}.' +
         ' By material, {{Aluminum}} makes up {{70.0%}} of it, across 2 steps: that is the biggest lever.' +
         ' By step, {{Frame tubes (step 10)}} carries the most ({{60.0%}}), and the top two steps account for {{85.0%}}.',
     )
@@ -87,8 +87,7 @@ describe('summary', () => {
         materials: [],
       }),
     ).toBe(
-      'Your Bike assessment under TRACI 2.1 totals {{an indicative overall load}} for {{environmental load}} at {{–}}.' +
-        ' By step, {{your top step}} carries the most ({{–%}}), and the top two steps account for {{0.0%}}.',
+      'Your Bike assessment under TRACI 2.1 totals {{an indicative overall load}} for {{environmental load}} at {{no cost was entered}}.',
     )
   })
 })

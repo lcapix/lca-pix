@@ -106,17 +106,27 @@ export function CaseWorkspace() {
   const [running, setRunning] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [runError, setRunError] = useState<string | null>(null)
+  const [runOpen, setRunOpen] = useState(false)
+  const [runMethod, setRunMethod] = useState('')
+  const [runRegion, setRunRegion] = useState('')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => () => void (timer.current && clearInterval(timer.current)), [])
   const runCase = async () => {
     if (running || !kase) return
+    setRunOpen(false)
     setRunning(true)
     setRunError(null)
     setSeconds(0)
     const started = Date.now()
     timer.current = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 1000)
     try {
-      const res = await apiRequest(`/api/cases/${kase.case_id}/assessments`, { method: 'POST', body: JSON.stringify({}) })
+      const res = await apiRequest(`/api/cases/${kase.case_id}/assessments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          calculation_method: runMethod || kase.project_lcia_method || undefined,
+          region_code: runRegion || kase.region_code || undefined,
+        }),
+      })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d?.error ?? `the run answered ${res.status}`)
       await Promise.all([reload(), reloadRuns()])
@@ -275,7 +285,11 @@ export function CaseWorkspace() {
         readOnly={readOnly}
         canRun={canRun}
         ownName={ownName}
-        onRun={runCase}
+        onRun={() => {
+          setRunMethod(kase.project_lcia_method ?? '')
+          setRunRegion(kase.region_code ?? '')
+          setRunOpen(true)
+        }}
         running={running}
         runSeconds={seconds}
         runError={runError}
@@ -367,7 +381,48 @@ export function CaseWorkspace() {
         projectId={String(kase.project_id)}
         caseId={String(kase.case_id)}
         runId={run?.run_id ?? null}
+        initialCategory={run ? Object.keys(run.impacts).find((n) => /global warming|climate/i.test(n)) : undefined}
+        caseType={kase.case_type}
       />
+      {runOpen && (
+        <form
+          className="ds-scrim"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void runCase()
+          }}
+        >
+          <div className="ds-dialog" role="dialog" aria-modal="true" aria-labelledby="run-title">
+            <h2 id="run-title" className="ds-dialog-title">
+              Run assessment
+            </h2>
+            <label style={{ display: 'block', margin: '12px 0' }}>
+              <span className="ds-section-label">Method</span>
+              <select className="ds-input" aria-label="Method" value={runMethod} onChange={(e) => setRunMethod(e.target.value)} style={{ width: '100%', marginTop: 6 }}>
+                {['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1'].map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'block', margin: '12px 0' }}>
+              <span className="ds-section-label">Region</span>
+              <select className="ds-input" aria-label="Region" value={runRegion || 'Global'} onChange={(e) => setRunRegion(e.target.value)} style={{ width: '100%', marginTop: 6 }}>
+                {['Global', 'US', 'EU'].map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+            </label>
+            <div className="ds-dialog-actions">
+              <button type="button" className="ds-btn" onClick={() => setRunOpen(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="ds-btn ds-btn--primary">
+                Run
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
