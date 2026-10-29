@@ -292,7 +292,8 @@ export async function POST(request: NextRequest) {
     // candidate, so its name and id never reach this response.
     const catalogSql = (scoped: boolean) =>
       `SELECT s.substance_id, s.substance_name, s.unit, s.category,
-              COALESCE(fc.factor_count, 0) AS factor_count
+              COALESCE(fc.factor_count, 0) AS factor_count,
+              clim.factor_value, clim.factor_unit, clim.variant, clim.factor_source
        FROM substances s
        LEFT JOIN (
          SELECT substance_id, COUNT(*) AS factor_count
@@ -300,6 +301,23 @@ export async function POST(request: NextRequest) {
          WHERE factor_value <> 0
          GROUP BY substance_id
        ) fc ON fc.substance_id = s.substance_id
+       LEFT JOIN LATERAL (
+         SELECT dif.factor_value, dif.unit AS factor_unit,
+                dif.geographic_scope AS variant, dif.source_reference AS factor_source
+         FROM driver_impact_factors dif
+         JOIN impact_categories ic ON ic.category_id = dif.category_id
+         WHERE dif.substance_id = s.substance_id
+           AND dif.method_name = 'CML 2001'
+           AND dif.factor_value <> 0
+           AND (
+             lower(ic.category_name COLLATE "C") LIKE '%global warming%'
+             OR lower(ic.category_name COLLATE "C") LIKE '%climate%'
+           )
+         ORDER BY CASE
+           WHEN lower(coalesce(dif.geographic_scope, '') COLLATE "C") IN ('global', 'glo', '') THEN 0
+           ELSE 1 END
+         LIMIT 1
+       ) clim ON true
        ${scoped ? 'WHERE s.is_custom = 0 OR s.created_by = ?' : ''}
        ORDER BY s.substance_id`;
     let substances: any[];

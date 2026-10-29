@@ -12,6 +12,7 @@ import { processModelWarnings, validateProcessModel } from './schema';
 
 /** How a unit-conversion note starts when the unit could not be converted (the review keys on it). */
 export const NO_CONVERSION = 'No conversion for'
+import { americanize } from '@/lib/substances/spelling';
 import { convertQuantity, normalizeUnit, unitFamily, unitProblem } from '@/lib/units';
 
 // Unit handling at mapping time reads every spelling through lib/units, the
@@ -32,6 +33,11 @@ export interface CatalogSubstance {
   /** 'resource', 'emission_air', 'emission_water', 'waste', or blank. */
   category?: string | null;
   factor_count?: number;
+  /** Climate factor for CML 2001, when the catalog query joined one. */
+  factor_value?: number | string | null;
+  factor_unit?: string | null;
+  variant?: string | null;
+  factor_source?: string | null;
 }
 
 /**
@@ -50,6 +56,11 @@ export interface SubstanceCandidate {
   substance_name: string;
   score: number;
   factor_count?: number;
+  unit?: string | null;
+  factor_value?: number | null;
+  factor_unit?: string | null;
+  variant?: string | null;
+  source?: string | null;
 }
 
 export interface MappedFlow {
@@ -164,9 +175,9 @@ export function matchSubstance(
   substances: CatalogSubstance[],
   topN = 3
 ): { best: CatalogSubstance | null; score: number; candidates: SubstanceCandidate[] } {
-  const t = text.toLowerCase();
+  const t = americanize(text.toLowerCase());
   const scored: Array<{ score: number; s: CatalogSubstance }> = substances.map((s) => {
-    const name = s.substance_name.toLowerCase();
+    const name = americanize(s.substance_name.toLowerCase());
     let score = sequenceRatio(t, name);
     if (name.startsWith(t) || name.includes(t)) score = Math.max(score, 0.85);
     return { score, s };
@@ -177,6 +188,11 @@ export function matchSubstance(
     substance_name: s.substance_name,
     score: Math.round(score * 1000) / 1000,
     factor_count: s.factor_count,
+    unit: s.unit ?? null,
+    factor_value: s.factor_value == null || s.factor_value === '' ? null : Number(s.factor_value),
+    factor_unit: s.factor_unit ?? null,
+    variant: s.variant ?? null,
+    source: s.factor_source ?? s.category ?? null,
   }));
   // 0.70, not the CLI's 0.55: at 0.55 a short name matched whatever shared
   // three letters ("Argon" → "Cast iron", "Electric motor" → "Electricity").
@@ -223,7 +239,7 @@ export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): Inge
     }
     if (best !== null && score < 0.9) {
       plan.review.push(
-        `'${f.substance_text}' (${f.label || f.node}) matched '${best.substance_name}' at ${score.toFixed(2)}: ` +
+        `'${f.substance_text}' (${f.label || f.node}) matched '${best.substance_name}' (substance ${best.substance_id}) at ${score.toFixed(2)}: ` +
           `check it is the right substance.`
       );
     }

@@ -50,6 +50,7 @@ import { flowConflicts, type ExistingFlow } from '@/lib/import/flow-conflicts'
 import type { CostMode } from '@/lib/ingest/cost-columns'
 import { useSampleDocs } from '@/lib/import/use-sample-docs'
 import { uploadTooLargeMessage } from '@/lib/upload-limits'
+import { itacPlantWorkbook } from '@/lib/ingest/itac-browser'
 import { readFailureKind, type ReadFailure } from '@/lib/import/file-rules'
 import { withoutSteps } from '@/lib/import/steps-hours'
 
@@ -218,6 +219,12 @@ export function useImport(projectId: string, router: ImportRouter) {
         const cases = projectCasesFrom(d)
         if (cases) {
           setProjectCases(cases)
+          setTargetCaseId((current) => {
+            if (current !== null) return current
+            const asked = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('case') : null
+            if (asked) return current
+            return cases[0]?.case_id ?? null
+          })
         }
       } catch {
         /* ignore */
@@ -391,20 +398,21 @@ export function useImport(projectId: string, router: ImportRouter) {
       setError(invalid)
       return
     }
-    // Check the size here: over the hosting limit the platform refuses the
-    // upload before our route can explain why.
-    const tooLarge = uploadTooLargeMessage(file)
-    if (tooLarge) {
-      setError(tooLarge)
-      return
-    }
     setPhase('previewing')
     setError(null)
     setReadFailure(null)
     setIdHints([])
     try {
+      let upload = file
+      if (connector === 'itac') upload = await itacPlantWorkbook(file, plantId.trim())
+      const tooLarge = uploadTooLargeMessage(upload)
+      if (tooLarge) {
+        setError(tooLarge)
+        setPhase('pick')
+        return
+      }
       const fd = new FormData()
-      fd.append('file', file)
+      fd.append('file', upload)
       for (const [name, value] of previewFields({ connector, plantId, lotSize, targetCaseId })) {
         fd.append(name, value)
       }

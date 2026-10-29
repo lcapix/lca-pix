@@ -36,6 +36,7 @@ test('G29 P129 F4 the sample study → Make my own copy → Run Assessment → R
   await expect(run).toBeEnabled(NAV);
   const posted = page.waitForResponse((r) => /\/api\/cases\/\d+\/assessments/.test(r.url()) && r.request().method() === 'POST', NAV);
   await run.click();
+  await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
   expect((await posted).status()).toBe(201);
 
   await expect(page).toHaveURL(/tab=results/, NAV);

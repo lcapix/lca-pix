@@ -15,8 +15,20 @@ export function CostsCard({
   appending: boolean
   picker: StepPicker
 }) {
+  const money = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+  const total = (prefix: string) =>
+    costs.filter((c) => c.node.startsWith(prefix)).reduce((sum, c) => sum + Number(c.amount || 0), 0)
+  const electricity = total('Electricity')
+  const gas = total('Natural gas')
   return (
     <div className="card" style={{ padding: 20 }}>
+      {(electricity > 0 || gas > 0) && (
+        <p className="ds-mono" style={{ margin: '0 0 10px' }}>
+          {electricity > 0 ? `Electricity ${money(electricity)}` : ''}
+          {electricity > 0 && gas > 0 ? ' · ' : ''}
+          {gas > 0 ? `Natural gas ${money(gas)}` : ''}
+        </p>
+      )}
       <div className="eyebrow" style={{ fontSize: 10, marginBottom: 10 }}>
         COSTS · {costs.length} LINES
       </div>

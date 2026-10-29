@@ -776,6 +776,8 @@
 .ip-walk-list li span { color: var(--ds-text-2); }
 .ip-walk-foot { margin: 0; padding: 14px 22px; font-size: 13px; color: var(--ds-text-2); }
 @media (max-width: 1100px) { .ip-done { grid-template-columns: 1fr; } }
+.ip-lines { min-width: 0; max-width: 100%; }
+.ip-lines-table { min-width: 720px; }
 .ip-lines-table td { vertical-align: top; }
 .ip-score { display: inline-block; margin-top: 6px; padding: 1px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; }
 .ip-score--good { background: var(--ds-success-bg); color: var(--ds-green); }

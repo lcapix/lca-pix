@@ -67,8 +67,7 @@ such as assignments (C06, C07).
 | P13 | Overview banner shows a hard-coded "−28.0% CO2 · +$240" for any project with a comparison case (`comparison-banner.tsx:42-51`) |
 | E01, E08 | Add step always makes a machine/line, auto-selected, so the next flow lands on it |
 | E09, E13 | No way to change a flow's substance or delete a flow |
-| I04, I08 | "Aluminium" cannot be found at import (US spelling only; held-line list cut at 500 of 3,292) |
-| I02 | Candidates never show their factor (aluminum options span 0.2976 to 8.6 kg CO2e/kg) |
+| E09, E13 | No way to change a flow's substance or delete a flow |
 | R01, R02, R07 | No full results page, no method choice, no data-quality statement on desktop |
 | G64 | A user who skipped "Institution" at sign-up can never save a profile edit (`app/profile/page.tsx:172`) |
 | G02 | An email sign-up who leaves before "About you" is never sent back to it |
@@ -140,13 +139,13 @@ classic page is full width up to 1440px (`components/lcapix/results/results-page
 | ID | Capability | Classic | Now (main) | Status |
 |---|---|---|---|---|
 | I01 | Candidate matches with % score | old `flow-row.tsx:115-129` | `flow-row.tsx:81-89` | kept |
-| I02 | Factor value, unit, variant and source per candidate | Never | Never; aluminum options span 0.2976 to 8.6 kg CO2e/kg | missing in both |
-| I03 | More than the top 3 candidates, search the whole library | No (top 3, `lib/ingest/maplca.ts:165`) | No | missing in both |
-| I04 | British spellings match (Aluminium) | No | No: library is US-only, "Aluminium sheet" scores under the 0.70 accept line (inferred, difflib) | missing in both |
-| I05 | Full provenance and a direction column | old `flow-row.tsx:46-50` | Short locator, " · OUT" only (`flow-row.tsx:55-58`) | partial |
-| I06 | Substance id in review notes | old `maplca.ts:223-224` | Removed (`maplca.ts:224-227`) | missing |
-| I07 | Held lines listed one by one after Save | old `done-card.tsx:33-36` | Count only (`done-card.tsx:86, 102`) | partial |
-| I08 | Held line: pick a substance with candidates and scores | n/a (held lines are new) | Free text over the first 500 of 3,292 substances (`WS/held-lines.tsx:154`); Aluminum sits past 900 (inferred) | partial |
+| I02 | Factor value, unit, variant and source per candidate | Never | `flow-row.tsx` option text; catalog join in `app/api/ingest/preview/route.ts` | kept |
+| I03 | More than the top 3 candidates, search the whole library | No (top 3, `lib/ingest/maplca.ts:165`) | Search the whole library on each line (`flows-table.tsx`) | kept |
+| I04 | British spellings match (Aluminium) | No | `lib/substances/spelling.ts` inside `matchSubstance` | kept |
+| I05 | Full provenance and a direction column | old `flow-row.tsx:46-50` | `flow-row.tsx` full provenance and In/Out | kept |
+| I06 | Substance id in review notes | old `maplca.ts:223-224` | `lib/ingest/maplca.ts` matched-name note | kept |
+| I07 | Held lines listed one by one after Save | old `done-card.tsx:33-36` | `done-card.tsx` lists `held_details` | kept |
+| I08 | Held line: pick a substance with candidates and scores | n/a (held lines are new) | `WS/held-lines.tsx` scores and factors over the whole library | kept |
 
 ## C. Class
 

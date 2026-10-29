@@ -49,12 +49,12 @@ export function FullResults() {
   if (!kase || runStatus === 'loading') return <p role="status">Loading results…</p>
   if (!run) {
     return (
-      <main className="ws-full-results" style={{ padding: 24 }}>
+      <div className="ws-full-results" style={{ padding: 24 }}>
         <EmptyState line="Not run yet. Run Assessment and the answer shows here." />
         <Link className="ds-link" href={`/project/${projectId}/case/${caseId}`}>
           Back to the case
         </Link>
-      </main>
+      </div>
     )
   }
 
@@ -125,7 +125,7 @@ function FullRun({
   const uncounted = run.dataQuality?.uncharacterized_flows ?? 0
 
   return (
-    <main className="ws-full-results" style={{ padding: '24px 28px', maxWidth: 1100 }}>
+    <div className="ws-full-results" style={{ padding: '24px 28px', maxWidth: 1100 }}>
       <p style={{ margin: 0 }}>
         <Link className="ds-link" href={`/project/${projectId}/case/${caseId}?tab=results`}>
           Back to the case
@@ -292,7 +292,7 @@ function FullRun({
       <p className="ds-mono" style={{ fontSize: 12 }}>
         Case type {caseType}. What builds the climate total: {whatBuilds(run, caseType)[0]?.name ?? 'none'}.
       </p>
-    </main>
+    </div>
   )
 }
 

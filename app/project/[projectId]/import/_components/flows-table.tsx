@@ -6,7 +6,8 @@
 // more are ticked"; an unticked line is not saved as a material.
 
 import { useState } from 'react'
-import type { MappedFlow } from '@/lib/ingest/maplca'
+import { authHeaders } from '@/lib/import/auth-headers'
+import { matchSubstance, type CatalogSubstance, type MappedFlow, type SubstanceCandidate } from '@/lib/ingest/maplca'
 import { noFlowsMessage } from '@/lib/import/display'
 import { flowKey, type FlowEdit } from '@/lib/import/review'
 import { lineShows, lineStatus, type LineFilter } from '@/lib/import/line-status'
@@ -23,6 +24,7 @@ export function FlowsTable({
   picker,
   title,
   intro,
+  onSearchLibrary,
 }: {
   flows: MappedFlow[]
   edits: Record<number, FlowEdit>
@@ -32,6 +34,7 @@ export function FlowsTable({
   picker: StepPicker
   title?: string
   intro?: string
+  onSearchLibrary?: (index: number) => void
 }) {
   const [filter, setFilter] = useState<LineFilter>('all')
   const placed = (i: number) =>
@@ -43,8 +46,26 @@ export function FlowsTable({
     need_step: rows.filter((r) => !placed(r.i)).length,
     need_match: rows.filter((r) => lineShows('need_match', status(r), true)).length,
   }
+  const [wider, setWider] = useState<Record<number, SubstanceCandidate[]>>({})
   const shown = rows.filter((r) => lineShows(filter, status(r), placed(r.i)))
   const ticked = rows.filter((r) => r.e.include).length
+  const widen = async (flow: MappedFlow, index: number) => {
+    const r = await fetch('/api/substances?method=CML%202001', { headers: authHeaders() })
+    const d = await r.json().catch(() => ({}))
+    const catalog: CatalogSubstance[] = (d.substances ?? []).map((s: CatalogSubstance & { climate_factor?: number; climate_unit?: string; variant_label?: string; data_source?: string }) => ({
+      substance_id: s.substance_id,
+      substance_name: s.substance_name,
+      unit: s.unit,
+      category: s.category,
+      factor_count: s.factor_count,
+      factor_value: s.climate_factor,
+      factor_unit: s.climate_unit,
+      variant: s.variant_label,
+      factor_source: s.data_source,
+    }))
+    const { candidates } = matchSubstance(flow.substance_text, catalog, catalog.length || 1)
+    setWider((prev) => ({ ...prev, [index]: candidates }))
+  }
 
   return (
     <section className="np-card ip-lines" style={{ maxWidth: 'none' }} aria-labelledby="lines-h">
@@ -85,13 +106,14 @@ export function FlowsTable({
             {shown.map(({ f, e, i }) => (
               <FlowRow
                 key={i}
-                flow={f}
+                flow={wider[i] ? { ...f, candidates: wider[i] } : f}
                 edit={e}
                 onEdit={(edit) => onEditFlow(i, edit)}
                 appending={appending}
                 stepKey={flowKey(f, i)}
                 picker={picker}
                 placed={placed(i)}
+                onSearchLibrary={() => void widen(f, i)}
               />
             ))}
             {!shown.length && rows.length > 0 && (

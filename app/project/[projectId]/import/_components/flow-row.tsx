@@ -9,9 +9,13 @@ import type { MappedFlow, SubstanceCandidate } from '@/lib/ingest/maplca'
 import { percent } from '@/lib/import/display'
 import { correctedQuantity, type FlowEdit } from '@/lib/import/review'
 import { LINE_STATUS_WORD, lineStatus } from '@/lib/import/line-status'
-import { shortLocator } from '@/lib/import/steps-hours'
 
 import { StepCell, type StepPicker } from './step-cell'
+
+function shown(value: string | null | undefined, empty: string): string {
+  const text = (value ?? '').replace(/[—–]/g, '-').trim()
+  return text || empty
+}
 
 const STATUS_TONE = { counted: 'counted', no_factor: 'warn', check_match: 'warn', pick_match: 'error' } as const
 
@@ -23,6 +27,7 @@ export function FlowRow({
   stepKey,
   picker,
   placed,
+  onSearchLibrary,
 }: {
   flow: MappedFlow
   edit: FlowEdit
@@ -31,6 +36,7 @@ export function FlowRow({
   stepKey: string
   picker: StepPicker
   placed: boolean
+  onSearchLibrary?: () => void
 }) {
   const status = lineStatus(f, e)
   const score = f.candidates.find((c) => c.substance_id === e.substance_id)?.score ?? f.match_score
@@ -53,9 +59,9 @@ export function FlowRow({
           {f.substance_text}
         </strong>
         <span className="ds-mono" style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
-          {shortLocator(String(f.provenance ?? '').split(' · ')[0] || null) ?? ''}
-          {f.direction === 'output' ? ' · OUT' : ''}
+          {f.provenance || ''}
         </span>
+        <span>{f.direction === 'output' ? 'Out' : 'In'}</span>
       </td>
       <td>
         <select
@@ -80,10 +86,15 @@ export function FlowRow({
           <option value="">No match yet (held, not saved)</option>
           {f.candidates.map((c: SubstanceCandidate) => (
             <option key={c.substance_id} value={c.substance_id}>
-              {c.substance_name} · {percent(c.score)}%{c.factor_count === 0 ? ' · no climate factor' : ''}
+              {c.substance_name} · {percent(c.score)}% · {c.factor_value == null ? 'factor not set' : `${c.factor_value} ${shown(c.factor_unit, '')}`.trim()} · {shown(c.unit, 'unit not set')} · {shown(c.variant, 'variant not set')} · {shown(c.source, 'source not set')}
             </option>
           ))}
         </select>
+        {onSearchLibrary && (
+          <button type="button" className="ds-link" onClick={onSearchLibrary}>
+            Search the whole library
+          </button>
+        )}
         <span className={`ip-score ip-score--${tone}`}>
           {e.substance_id === null ? `best ${percent(f.match_score)}%` : `${percent(score)}% match`}
         </span>

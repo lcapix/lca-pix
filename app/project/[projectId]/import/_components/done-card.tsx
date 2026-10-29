@@ -82,8 +82,8 @@ export function DoneCard({
   const next = rows ? nextFile(rows) : null
   const what = applied.appended
     ? `${applied.flows_applied ?? 0} ${applied.flows_applied === 1 ? 'line is' : 'lines are'} in ${applied.case_name ?? caseName ?? 'the case'}`
-    : `${stepCount ?? applied.components_created ?? 0} ${(stepCount ?? applied.components_created) === 1 ? 'step' : 'steps'}${applied.cost_nodes ? ' and their hours' : ''} ${(stepCount ?? applied.components_created) === 1 ? 'is' : 'are'} in ${applied.case_name ?? 'the new case'}`
-  const held = Number(applied.flows_held_for_review ?? 0)
+    : `${stepCount ?? applied.components_created ?? 0} ${(stepCount ?? applied.components_created) === 1 ? 'step' : 'steps'} ${(stepCount ?? applied.components_created) === 1 ? 'is' : 'are'} in ${applied.case_name ?? 'the new case'}`
+  const heldLines = Array.isArray(applied.held_details) ? applied.held_details.map((x) => String(x)) : []
 
   return (
     <div className="ip-done">
@@ -99,11 +99,18 @@ export function DoneCard({
               </strong>
               <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>
                 {[fileName, readByAi ? 'read by AI' : 'read from the spreadsheet', 'the file is kept with the case'].filter(Boolean).join(' · ')}
-                {held ? ` · ${held} ${held === 1 ? 'line' : 'lines'} held to give a value` : ''}
+                {heldLines.length ? ` · ${heldLines.length} ${heldLines.length === 1 ? 'line' : 'lines'} held to give a value` : ''}
                 {applied.left_out ? ` · ${applied.left_out} left out at your check` : ''}
               </span>
             </span>
           </div>
+          {heldLines.length > 0 && (
+            <ul aria-label="Held lines">
+              {heldLines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          )}
           <section className="np-section" aria-labelledby="stands-h" style={{ borderBottom: 0 }}>
             <h2 id="stands-h" className="ds-section-label" style={{ margin: 0 }}>
               Where this case stands

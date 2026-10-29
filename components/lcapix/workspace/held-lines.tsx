@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { announceComponentsChanged, useSubstanceCatalog } from '@/lib/case-editor/use-flows'
+import { matchSubstance, type CatalogSubstance } from '@/lib/ingest/maplca'
 import type { WorkspaceStep } from '@/lib/workspace/use-workspace'
 
 interface HeldLine {
@@ -33,7 +34,7 @@ export function HeldLines({ caseId, steps, readOnly }: { caseId: number; steps: 
   const [lines, setLines] = useState<HeldLine[]>([])
   const [saved, setSaved] = useState<string | null>(null)
   // The library list, loaded once for every row's substance picker.
-  const { substances } = useSubstanceCatalog()
+  const { substances } = useSubstanceCatalog('CML 2001')
   const load = useCallback(async () => {
     const r = await apiRequest(`/api/cases/${caseId}/held-lines`)
     const d = r.ok ? await r.json().catch(() => null) : null
@@ -90,14 +91,30 @@ function HeldRow({
   onDone: (savedLine: string) => void
 }) {
   const byName = useMemo(() => new Map(substances.map((s: any) => [String(s.substance_name).toLowerCase(), s])), [substances])
-  // The step the file named, when the case has it.
-  const named = steps.find((s) => s.name.toLowerCase() === (line.step_name ?? '').toLowerCase())
-  const [stepId, setStepId] = useState<number | ''>(named?.id ?? '')
   const [substance, setSubstance] = useState(line.substance_name ?? '')
   const [unit, setUnit] = useState(line.unit ?? '')
   const [qty, setQty] = useState(line.quantity == null ? '' : String(line.quantity))
   const [busy, setBusy] = useState<'resolve' | 'dismiss' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const picks = useMemo(() => {
+    const text = substance.trim()
+    if (!text) return []
+    const catalog: CatalogSubstance[] = substances.map((s: any) => ({
+      substance_id: Number(s.substance_id),
+      substance_name: String(s.substance_name),
+      unit: s.unit ?? null,
+      category: s.category ?? null,
+      factor_count: s.factor_count,
+      factor_value: s.climate_factor,
+      factor_unit: s.climate_unit,
+      variant: s.variant_label,
+      factor_source: s.data_source,
+    }))
+    return matchSubstance(text, catalog, 8).candidates
+  }, [substance, substances])
+  // The step the file named, when the case has it.
+  const named = steps.find((s) => s.name.toLowerCase() === (line.step_name ?? '').toLowerCase())
+  const [stepId, setStepId] = useState<number | ''>(named?.id ?? '')
   const what = line.line_kind === 'cost' ? `${line.cost_category ?? 'Cost'} ${line.amount ?? ''}` : line.substance_text ?? 'A line'
   const listId = `held-subs-${line.held_id}`
 
@@ -151,10 +168,21 @@ function HeldRow({
             <>
               <input className="ds-input" list={listId} aria-label={`Substance for ${what}`} placeholder="Substance" value={substance} onChange={(e) => setSubstance(e.target.value)} style={{ width: 200 }} />
               <datalist id={listId}>
-                {substances.slice(0, 500).map((s: any) => (
+                {substances.map((s: any) => (
                   <option key={s.substance_id} value={s.substance_name} />
                 ))}
               </datalist>
+              {picks.length > 0 && (
+                <ul aria-label={`Matches for ${what}`} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                  {picks.map((c) => (
+                    <li key={c.substance_id}>
+                      <button type="button" className="ds-link" onClick={() => setSubstance(c.substance_name)}>
+                        {c.substance_name} · {Math.round(c.score * 100)}% · {c.factor_value == null ? 'factor not set' : `${c.factor_value} ${c.factor_unit ?? ''}`.replace(/[—–]/g, '-').trim()} · {(c.variant || 'variant not set').replace(/[—–]/g, '-')} · {(c.source || 'source not set').replace(/[—–]/g, '-')}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <input className="ds-input ds-mono" aria-label={`Amount of ${what}`} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} style={{ width: 90 }} />
               <input className="ds-input ds-mono" aria-label={`Unit of ${what}`} value={unit} onChange={(e) => setUnit(e.target.value)} style={{ width: 70 }} />
             </>

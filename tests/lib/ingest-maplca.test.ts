@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
+import { isBomHeader, structureBom } from '@/lib/ingest/bom'
+import { readSheet } from '@/lib/ingest/sheet-reader'
 import {
   convertIngestUnit,
   mapModel,
@@ -16,6 +19,27 @@ const CATALOG: CatalogSubstance[] = [
   { substance_id: 4, substance_name: 'Water', unit: 'm3', factor_count: 0 },
   { substance_id: 5, substance_name: 'Steel, reinforced', unit: 'g', factor_count: 6 },
 ]
+
+describe('matchSubstance', () => {
+  it('is a spelling test made from tests/e2e/fixtures/import/small-bom.csv', () => {
+    const raw = readFileSync('tests/e2e/fixtures/import/small-bom.csv', 'utf8').replace('Aluminum', 'Aluminium sheet')
+    const csv = `${raw.trim()}\nSS-1,Bracket,Stainless steel 304,1,ea,0.4,12.00,20\n`
+    const read = readSheet(Buffer.from(csv), 'small-bom.csv', isBomHeader)
+    expect(read).toBeTruthy()
+    const model = structureBom(read!.rows, 'small-bom.csv', 'Frame', { massHints: read!.massHints, decimalComma: read!.decimalComma })
+    const catalog: CatalogSubstance[] = [
+      { substance_id: 10, substance_name: 'Aluminum sheet', unit: 'kg', factor_count: 2, factor_value: 8.6, factor_unit: 'kg CO2e', variant: 'Global', factor_source: 'CML 2001' },
+      { substance_id: 11, substance_name: 'Stainless steel 304', unit: 'kg', factor_count: 2 },
+    ]
+    for (const [text, id] of [['Aluminium sheet', 10], ['Stainless steel 304', 11]] as const) {
+      expect(model.flows.some((f) => f.substance_text === text)).toBe(true)
+      const hit = matchSubstance(text, catalog)
+      expect(hit.best?.substance_id).toBe(id)
+      expect(hit.score).toBeGreaterThanOrEqual(0.7)
+    }
+    expect(matchSubstance('Aluminium sheet', catalog).candidates[0].factor_value).toBe(8.6)
+  })
+})
 
 describe('sequenceRatio', () => {
   it('matches difflib.SequenceMatcher on known pairs', () => {
