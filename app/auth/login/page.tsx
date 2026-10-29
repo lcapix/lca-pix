@@ -127,7 +127,7 @@ export default function LoginPage() {
       localStorage.setItem("auth_token", data.token)
       localStorage.setItem("user", JSON.stringify(data.user))
       login({ id: data.user.id.toString(), name: data.user.username, email: data.user.email, createdAt: new Date() })
-      router.push("/home")
+      router.push(data.user?.onboarded_at ? "/home" : "/auth/onboarding")
     } catch (error) {
       setErrors({ general: error instanceof Error ? error.message : "You were not logged in. Try again." })
     } finally {

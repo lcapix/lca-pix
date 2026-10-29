@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Find user by email
     const user = await queryOne<any>(
-      `SELECT id, username, email, password_hash, account_type, is_active
+      `SELECT id, username, email, password_hash, account_type, is_active, onboarded_at
        FROM account WHERE email = ?`,
       [normalizedEmail]
     );
@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
         username: user.username,
         email: user.email,
         account_type: user.account_type,
+        onboarded_at: user.onboarded_at ?? null,
       },
       token,
     });

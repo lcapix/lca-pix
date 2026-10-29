@@ -169,7 +169,6 @@ export default function ProfilePage() {
     e.preventDefault()
     const nextErrors: typeof errors = {}
     if (!draft.fullName.trim()) nextErrors.fullName = "Required."
-    if (!draft.company.trim()) nextErrors.company = "Required."
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
