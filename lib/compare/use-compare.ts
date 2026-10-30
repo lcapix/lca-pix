@@ -77,6 +77,7 @@ export function useCompare(projectId: number, me: number) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
+  const [runs, setRuns] = useState('')
   const key = selected.join(',')
   useEffect(() => {
     if (!key) {
@@ -87,7 +88,8 @@ export function useCompare(projectId: number, me: number) {
     ;(async () => {
       setLoading(true)
       try {
-        const r = await apiRequest(`/api/projects/${projectId}/compare?cases=${key}`)
+        const q = runs ? `&runs=${encodeURIComponent(runs)}` : ''
+        const r = await apiRequest(`/api/projects/${projectId}/compare?cases=${key}${q}`)
         const d = await r.json().catch(() => null)
         if (cancelled) return
         if (!r.ok || !d?.success) throw new Error(d?.error ?? `the comparison answered ${r.status}`)
@@ -102,12 +104,13 @@ export function useCompare(projectId: number, me: number) {
     return () => {
       cancelled = true
     }
-  }, [projectId, key, tick])
+  }, [projectId, key, tick, runs])
 
   // Keep the address shareable.
   useEffect(() => {
     if (!cases || !inited.current) return
-    window.history.replaceState(null, '', `/project/${projectId}/comparison${key ? `?cases=${key}` : ''}`)
+    const q = [`cases=${key}`, runs ? `runs=${runs}` : ''].filter(Boolean).join('&')
+    window.history.replaceState(null, '', `/project/${projectId}/comparison?${q}`)
   }, [cases, key, projectId])
 
   const toggle = useCallback((id: string) => {
@@ -130,7 +133,14 @@ export function useCompare(projectId: number, me: number) {
     [],
   )
 
+  const pickRun = useCallback((caseId: string, runId: string) => {
+    setRuns((cur) => {
+      const parts = cur.split(',').filter((p) => p && !p.startsWith(`${caseId}:`))
+      if (runId) parts.push(`${caseId}:${runId}`)
+      return parts.join(',')
+    })
+  }, [])
   const reload = useCallback(() => setTick((t) => t + 1), [])
   const byId = useMemo(() => new Map((cases ?? []).map((c) => [c.id, c])), [cases])
-  return { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload }
+  return { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload, pickRun }
 }

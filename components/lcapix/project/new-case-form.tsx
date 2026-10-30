@@ -17,7 +17,7 @@ import { casesHeader } from '@/lib/project/cases-view'
 import { perNoun } from '@/lib/compare/compare-view'
 import { layoutOnLanes, TIER_COLOURS, TIER_LABEL, type TierLayout } from '@/lib/workspace/tier-layout'
 
-type Kind = 'whatif' | 'base'
+type Kind = 'whatif' | 'base' | 'emptycomp'
 type Start = 'empty' | 'file'
 
 export function NewCaseForm() {
@@ -98,7 +98,10 @@ export function NewCaseForm() {
       const res =
         kind === 'whatif'
           ? await apiRequest(`/api/cases/${sourceId}/duplicate`, { method: 'POST', body: JSON.stringify(body) })
-          : await apiRequest(`/api/projects/${projectId}/cases`, { method: 'POST', body: JSON.stringify({ ...body, case_type: 'base' }) })
+          : await apiRequest(`/api/projects/${projectId}/cases`, {
+              method: 'POST',
+              body: JSON.stringify({ ...body, case_type: kind === 'emptycomp' ? 'comparative' : 'base' }),
+            })
       const d = await res.json().catch(() => ({}))
       if (res.status === 409) return setNameError(d?.error ?? 'This project already has a case with that name.')
       if (res.status === 403) return setFormError('You can read this project but not make cases in it. Its owner can give you Can change.')
@@ -129,6 +132,7 @@ export function NewCaseForm() {
               {casesHeader({ all: data.cases.length, mine, others: data.cases.length - mine }, word, scope)}
             </span>
           </h1>
+          <p><Link className="ds-link" href={`/project/${projectId}`}>Open the project and decide later</Link></p>
         </div>
       </header>
 
@@ -200,6 +204,16 @@ export function NewCaseForm() {
                 </label>
               </div>
             )}
+          </div>
+
+          <div className="nc-option" data-on={kind === 'emptycomp' || undefined}>
+            <label className="nc-option-head">
+              <input type="radio" name="kind" checked={kind === 'emptycomp'} onChange={() => setKind('emptycomp')} />
+              <span>
+                <strong>An empty comparative</strong>
+                <span>A comparison case with no steps yet.</span>
+              </span>
+            </label>
           </div>
         </fieldset>
 

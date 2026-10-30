@@ -47,12 +47,12 @@ export function ComparePage() {
   const params = useParams()
   const projectId = Number(params.projectId)
   const { profile } = useShellData()
-  const { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload } = useCompare(projectId, profile?.id ?? -1)
+  const { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload, pickRun } = useCompare(projectId, profile?.id ?? -1)
   const [category, setCategory] = useState(CLIMATE)
   const [vs, setVs] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
-  const [more, setMore] = useState<More | null>(null)
+  const [more, setMore] = useState<More>('results')
 
   // Base first, then the copies in the order they were added.
   const compared: CompareCase[] = useMemo(() => {
@@ -252,6 +252,32 @@ export function ComparePage() {
             </p>
           )}
 
+          <ul aria-label="Cases in this comparison" style={{ listStyle: 'none', padding: 0, margin: '12px 0' }}>
+            {compared.map((c) => (
+              <li key={c.caseId}>
+                <strong>{c.name}</strong>
+                <span> {c.inventory?.steps ?? 0} steps · {c.inventory?.flows ?? 0} flows</span>
+                {c.run?.stale && <span> Older run. The case changed after run #{c.run.runId}.</span>}
+                {c.run && <span> Compared on run #{c.run.runId} because {c.run.reason.replaceAll('-', ' ')}.</span>}
+                {c.runs?.length > 0 && (
+                  <label>
+                    {' '}Run
+                    <select aria-label={`Run for ${c.name}`} value={String(c.run?.runId ?? '')} onChange={(e) => pickRun(c.caseId, e.target.value)}>
+                      {c.runs.map((r) => (
+                        <option key={r.runId} value={r.runId}>#{r.runId} {r.method ?? ''} {r.region ?? ''}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {!c.run && <Link href={`/project/${projectId}/case/${c.caseId}`}> Open the case</Link>}
+                {c.statusReason && <span> {c.statusReason}</span>}
+              </li>
+            ))}
+          </ul>
+          <p>
+            <Link className="ds-btn" href={`/project/${projectId}/case/new?kind=whatif`}>Duplicate the base</Link>
+          </p>
+
           <section className="cmp-totals" aria-label="Totals">
             <div className="cmp-totals-grid" style={{ gridTemplateColumns: `repeat(${Math.min(compared.length, 4)}, minmax(0, 1fr))` }}>
               {compared.map((c, i) => {
@@ -443,13 +469,9 @@ export function ComparePage() {
           )}
 
           <section className="cmp-more" aria-label="More ways to compare">
-            <button type="button" className="pc-more" aria-expanded={!!more} onClick={() => setMore((m) => (m ? null : 'results'))}>
-              {more ? 'Hide the other views' : 'More ways to compare: every category, hotspots, cost, data quality'}
-            </button>
-            {more && (
-              <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12 }}>
                 <Tabs<More>
-                  label="More ways to compare"
+                  label="Results, hotspots and cost"
                   selected={more}
                   onSelect={setMore}
                   tabs={[
@@ -473,7 +495,6 @@ export function ComparePage() {
                   )}
                 </div>
               </div>
-            )}
           </section>
         </>
       )}

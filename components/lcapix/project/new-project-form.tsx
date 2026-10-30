@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { Button, ErrorCard } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { useShellData, useShellStore } from '@/lib/shell/use-shell'
+import { ISO_STEPS } from '@/lib/home/projects'
 import { startEmptyCase } from '@/lib/project/start-empty'
 
 // Only the methods with factors loaded (driver_impact_factors) and the regions
@@ -171,7 +172,12 @@ export function NewProjectForm() {
           <h2 id="np-q" className="np-h2">
             The question
           </h2>
-          <p className="np-sub">Every case in this project answers it for the same one unit.</p>
+          <p className="np-sub">Every case in this project answers it for the same one unit. Goal and scope names what you are assessing. Inventory lists what goes in and comes out. Impact assessment turns that into scores. Interpretation says what the scores mean.</p>
+          <ol aria-label="ISO 14040 phases">
+            {ISO_STEPS.map((s, i) => (
+              <li key={s.title}><strong>{i + 1}. {s.title}.</strong> {s.description}</li>
+            ))}
+          </ol>
           <label className="np-field" style={{ display: 'block', marginBottom: 12 }}>
             <span className="edu-field-label">Goal of the study</span>
             <textarea className="edu-input" value={goal} maxLength={2000} rows={3} aria-label="Goal of the study" onChange={(e) => setGoal(e.target.value)} />
