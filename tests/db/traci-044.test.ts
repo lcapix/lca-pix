@@ -65,10 +65,24 @@ describe('migrate-044 on a fresh database', () => {
         WHERE ic.category_name IN ('Human Health - Cancer', 'Particulate Matter') AND d.method_name = 'TRACI 2.1'
         GROUP BY ic.category_name ORDER BY ic.category_name`,
     );
-    // 609 flowables for cancer less the 8 the header lists; all 8 for particulate matter.
+    // 609 flowables for cancer less the 8 the header lists; all 8 for particulate matter, plus the
+    // library's own PM2.5, NOx and SO2 (review finding: a flow picked from the library must not read 0).
     expect(per.map((p) => [p.category_name, Number(p.n)])).toEqual([
       ['Human Health - Cancer', 601],
-      ['Particulate Matter', 8],
+      ['Particulate Matter', 11],
+    ]);
+    const lib = await rows<{ substance_name: string; v: string }>(
+      conn,
+      `SELECT s.substance_name, d.factor_value::text AS v FROM driver_impact_factors d
+         JOIN substances s ON s.substance_id = d.substance_id
+         JOIN impact_categories ic ON ic.category_id = d.category_id
+        WHERE ic.category_name = 'Particulate Matter' AND s.substance_name IN ('Particulate Matter (PM2.5)', 'Nitrogen oxides (NOx)', 'Sulfur dioxide (SO2)', 'Particulate matter (PM10)')
+        ORDER BY s.substance_name`,
+    );
+    expect(lib.map((r) => [r.substance_name, Number(r.v)])).toEqual([
+      ['Nitrogen oxides (NOx)', 0.0072222222],
+      ['Particulate Matter (PM2.5)', 1],
+      ['Sulfur dioxide (SO2)', 0.0611111111],
     ]);
 
     const old = `category_id NOT IN (SELECT category_id FROM impact_categories WHERE category_name IN ('Human Health - Cancer', 'Particulate Matter'))`;

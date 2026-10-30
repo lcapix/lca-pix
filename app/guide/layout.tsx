@@ -2,7 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { SignedIn } from '@/components/lcapix/shell/signed-in'
+import { useEffect, useState } from 'react'
+import { AppShell } from '@/components/lcapix/shell/app-shell'
+import { PublicLayout } from '@/components/lcapix/landing/public-layout'
+import { useAuthStore } from '@/lib/store'
 
 export const TOC: readonly { slug: string; label: string }[] = [
   { slug: '', label: 'Getting started' },
@@ -19,9 +22,16 @@ export default function GuideLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname() || '/guide'
+  const { isAuthenticated } = useAuthStore()
+  // Wait for the stored session before choosing, so a signed-in reader never sees the public header flash.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => setHydrated(true), [])
+  if (!hydrated) return null
+  // G121: signed in, the guide sits inside the app's shell (one nav on every
+  // signed-in page); signed out, it reads in the public layout, as /docs links to it.
+  const Frame = isAuthenticated ? AppShell : PublicLayout
   return (
-    // G121: signed in, the guide sits inside the app's shell: one nav on every signed-in page.
-    <SignedIn>
+    <Frame>
       <div>
         <div
           style={{
@@ -83,6 +93,6 @@ export default function GuideLayout({
           </div>
         </div>
       </div>
-    </SignedIn>
+    </Frame>
   )
 }

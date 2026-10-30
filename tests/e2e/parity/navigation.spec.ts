@@ -75,6 +75,7 @@ test.describe('shell', () => {
 
     await page.getByRole('button', { name: /^Account menu/ }).click();
     await row(page.getByRole('menu').getByText(seed.users.owner.email), 'G118', 'Account menu: name + email');
+    if (seed.users.owner.name) await row(page.getByRole('menu').getByText(seed.users.owner.name, { exact: true }), 'G118', 'Account menu: name + email');
   });
 
   test('G140 G141 G143 G145 Magic Insights from the case', async ({ page, seed }) => {

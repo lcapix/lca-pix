@@ -30,30 +30,24 @@ const SECTIONS = [
       { l: 'LCIA methods (CML · ReCiPe · TRACI)', href: '/guide/glossary' },
       { l: 'Midpoint vs. endpoint', href: '/guide/glossary' },
       { l: 'Characterization factors', href: '/guide/glossary' },
-      { l: 'Normalization & weighting', href: '/guide/glossary' },
       { l: 'Impact categories', href: '/guide/glossary' },
     ],
   },
   {
     icon: 'dollar' as const,
     title: 'ABC costing',
-    blurb: 'Activity-Based Costing applied to every flow.',
+    blurb: 'Cost lines on the steps that cause them, read beside the impact.',
     items: [
-      { l: 'Cost drivers: Labor · Energy · Material', href: '/guide/data-model' },
-      { l: 'Operational vs capital', href: '/guide/data-model' },
-      { l: 'Per-flow attribution', href: '/guide/data-model' },
-      { l: 'Cost ↔ impact trade-off', href: '/guide/first-assessment' },
+      { l: 'Cost by kind and per unit of impact', href: '/guide/first-assessment' },
     ],
   },
   {
     icon: 'database' as const,
     title: 'Data sources',
-    blurb: 'openLCA, PubChem, Electricity Maps, BLS, EIA.',
+    blurb: 'Where the factors and substances come from.',
     items: [
       { l: 'Substance catalog & sources', href: '/guide/data-model' },
-      { l: 'PubChem substance enrichment', href: '/guide/glossary' },
       { l: 'Where each number comes from', href: '/guide/faq' },
-      { l: 'Reference cost rates', href: '/guide/data-model' },
     ],
   },
   {

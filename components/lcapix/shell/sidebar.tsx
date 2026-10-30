@@ -284,7 +284,7 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
             style={{ position: 'absolute', bottom: '100%', left: 0, width: 228, marginBottom: 6, padding: 6 }}
           >
             {profile && (
-              <div role="presentation" style={{ padding: '6px 10px 8px', borderBottom: '1px solid var(--ds-line-soft)', marginBottom: 4 }}>
+              <div style={{ padding: '6px 10px 8px', borderBottom: '1px solid var(--ds-line-soft)', marginBottom: 4 }}>
                 {profile.fullName && <div style={{ fontSize: 13, fontWeight: 600 }}>{profile.fullName}</div>}
                 <div style={{ fontSize: 12, color: 'var(--ds-text-3)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.email}</div>
               </div>

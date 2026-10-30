@@ -608,7 +608,7 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G118 | Account menu: name + email | atb:551-561 | sidebar.tsx account menu heads with name and email | GET /api/auth/profile | kept | navigation.spec.ts G116 test |
 | G119 | Account menu: Profile | atb:563-573 | sb:261-263 | - | kept | |
 | G120 | Account menu: Log out | atb:599-606 | sb:269-271 | POST /api/auth/logout | kept | |
-| G121 | One nav on every signed-in page | AppTopBar in app/project/layout.tsx:21 and each page | app/guide/layout.tsx wraps the guide in SignedIn (the shell); about, docs, changelog, pricing, product and legal use components/lcapix/landing/public-layout.tsx | - | kept | tests/e2e/parity/public.spec.ts. The guide still needs an account, as at HEAD |
+| G121 | One nav on every signed-in page | AppTopBar in app/project/layout.tsx:21 and each page | app/guide/layout.tsx wraps the guide in SignedIn (the shell); about, docs, changelog, pricing, product and legal use components/lcapix/landing/public-layout.tsx | - | kept | tests/e2e/parity/public.spec.ts. Signed out, the guide reads in the public layout (review of Tasks 9 to 11) |
 | G122 | Recent projects shortcut | cp:62-69, 105-120 | sb:181-196 Recent; components/lcapix/shell/project-switcher.tsx:30-205 | GET /api/projects | moved | |
 | G123 | Page /library/factors | linked via G08 | sidebar and Home tile | - | kept |  |
 | G124 | Page /library/substances | linked via G09 | sidebar and Home tile | - | kept |  |
@@ -627,8 +627,8 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G132 | Home | cp:83-86 | components/lcapix/shell/command-palette.tsx | - | kept | |
 | G133 | Projects | cp:87-90 | components/lcapix/shell/command-palette.tsx | - | kept | |
 | G134 | Admin | cp:91-94 | components/lcapix/shell/command-palette.tsx | - | kept | |
-| G135 | About | cp:95-98 | components/lcapix/shell/command-palette.tsx | - | kept | page sits outside the shell |
-| G136 | Guide | cp:99-102 | components/lcapix/shell/command-palette.tsx | - | kept | page sits outside the shell |
+| G135 | About | cp:95-98 | components/lcapix/shell/command-palette.tsx | - | kept | the guide sits in the shell signed in, the public layout signed out |
+| G136 | Guide | cp:99-102 | components/lcapix/shell/command-palette.tsx | - | kept | the guide sits in the shell signed in, the public layout signed out |
 | G137 | Recent projects (top 5) | cp:62-69, 105-120, fed by lib/home/use-home.ts:91 | components/lcapix/shell/command-palette.tsx: recentProjects(useShellStore, this device, 5); typing searches every project | - | kept | reads the shell store, not the classic useProjectStore |
 | G138 | Theme Light / Dark / High contrast | cp:124-137 | cp:130-143 | - | dropped | Dropped by Shreya 2026-10-27. app/ds.css has 0 dark or high-contrast rules; inferred: the shell stays light. Task 10: the theme commands are removed; navigation.spec.ts checks none show |
 | G139 | Commands for Findings, Reports, New project, Profile, Log out | none | components/lcapix/shell/command-palette.tsx: Findings, Reports, New project (when the sidebar offers it), Profile, Log out | - | kept |  |

@@ -121,8 +121,9 @@ export function CommandPalette() {
       e.preventDefault()
       run(matches[pick])
     } else if (e.key === 'Tab') {
-      // One control inside: focus stays in the field.
+      // One control inside: focus goes back to the field.
       e.preventDefault()
+      inputRef.current?.focus()
     }
   }
 
@@ -130,7 +131,7 @@ export function CommandPalette() {
 
   return (
     <div className="ds-scrim" style={{ alignItems: 'flex-start', paddingTop: '12vh' }} onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-      <div className="ds-dialog cp-dialog" role="dialog" aria-modal="true" aria-label="Command Palette">
+      <div className="ds-dialog cp-dialog" role="dialog" aria-modal="true" aria-label="Command Palette" onKeyDown={onKeyDown}>
         <div className="ds-search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
             <circle cx="11" cy="11" r="7" />
@@ -150,11 +151,10 @@ export function CommandPalette() {
               setQuery(e.target.value)
               setActive(0)
             }}
-            onKeyDown={onKeyDown}
           />
         </div>
+        {matches.length === 0 && <p className="cp-empty">Nothing matches “{query.trim()}”.</p>}
         <div id="cp-list" role="listbox" aria-label="Commands" className="cp-list">
-          {matches.length === 0 && <p className="cp-empty">Nothing matches “{query.trim()}”.</p>}
           {groups.map((g) => (
             <div key={g} role="group" aria-label={g}>
               <div className="ds-section-label cp-group">{g}</div>

@@ -2,8 +2,8 @@
 
 // One public layout for the pages anyone can read (Task 9): the landing's
 // header and footer around /about, /docs, /changelog, /pricing, /product and
-// the legal pages. Signed in or out, the header is the same; the guide, which
-// needs an account, sits inside the app's shell instead (G121).
+// the legal pages, and the guide for a reader who is signed out. Signed in, the
+// guide sits inside the app's shell instead (G121).
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
@@ -56,7 +56,7 @@ export function PublicFooter() {
         </p>
       </div>
       <FootCol title="Product" links={[['Product', '/product'], ['Methods', '/#methods'], ['Pricing', '/pricing'], ['Changelog', '/changelog']]} />
-      <FootCol title="Resources" links={[['Docs', '/docs'], ['Guide (sign in to read)', '/guide'], ['About', '/about']]} />
+      <FootCol title="Resources" links={[['Docs', '/docs'], ['Guide', '/guide'], ['About', '/about']]} />
       <FootCol title="Legal" links={[['Privacy', '/legal/privacy'], ['Security', '/legal/security'], ['Terms', '/legal/terms']]} />
     </footer>
   )

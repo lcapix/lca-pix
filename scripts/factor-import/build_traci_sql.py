@@ -57,6 +57,16 @@ CATEGORIES = {
     'Particulate Matter': ('PM', 'Respiratory effects of fine particles (TRACI 2.1), in PM2.5 equivalents'),
 }
 MAX_REL_ERR = 0.01
+# The library's own names for the same pollutants (as migrate-017 did for the
+# older categories): a flow picked from the library must not read 0 while the
+# TRACI-named twin carries the factor. PM10 is left out on purpose: TRACI gives
+# only the coarse fraction (> 2.5 and <= 10 um), and total PM10 includes PM2.5.
+SYNONYMS = {
+    'Particulate Matter (PM2.5)': 'Particulate matter, ≤ 2.5μm',
+    'Nitrogen oxides (NOx)': 'Nitrogen oxides',
+    'Sulfur dioxide (SO2)': 'Sulfur dioxide',
+}
+NOT_MAPPED = ['Particulate matter (PM10): TRACI has a factor only for the coarse fraction, not total PM10']
 
 
 def compartment(ctx):
@@ -124,6 +134,8 @@ def main(path):
     ]
     out += [f'--   {n} ({c}): {v:.6g}' for n, c, v in dropped]
     out += [
+        '-- Library names given the same factor: ' + '; '.join(f'{a} as {b}' for a, b in SYNONYMS.items()) + '.',
+        '-- Not mapped: ' + '; '.join(NOT_MAPPED) + '.',
         '-- Runs twice without change: categories and substances insert only when absent; factors insert or set',
         '-- the same value. It adds categories, so no existing factor is touched.',
         '',
@@ -136,7 +148,7 @@ def main(path):
             f'WHERE NOT EXISTS (SELECT 1 FROM impact_categories WHERE category_name = {q(name)});'
         )
     out.append('')
-    # substances has no unique key on the name, so "absent" is checked by name.
+    # Insert only names the library lacks (substances__substance_name is unique, case- and accent-insensitive).
     vals = [f"({q(n)}, {'NULL' if not c else q(c)}, {q(k)}, 'kg')" for n, (c, k) in sorted(subs.items())]
     for i in range(0, len(vals), 400):
         out.append(
@@ -159,6 +171,23 @@ def main(path):
             'factor_value = EXCLUDED.factor_value, unit = EXCLUDED.unit, '
             'factor_basis = EXCLUDED.factor_basis, source_reference = EXCLUDED.source_reference;'
         )
+    out.append('')
+    out.append('-- The library\'s own names for the same pollutants get the same factor (only where that name exists).')
+    for lib_name, traci_name in SYNONYMS.items():
+        for r in kept:
+            if str(r['Flowable']).strip() != traci_name:
+                continue
+            out.append(
+                'INSERT INTO driver_impact_factors (substance_id, category_id, method_name, factor_value, unit, '
+                'geographic_scope, factor_basis, source_reference) '
+                f"SELECT s.substance_id, ic.category_id, 'TRACI 2.1', {float(r['Characterization Factor']):.10f}, "
+                f"{q(str(r['Indicator unit']).strip())}, 'Global', 'elementary', {q(SOURCE + '; as ' + traci_name)} "
+                f"FROM substances s JOIN impact_categories ic ON ic.category_name = {q(r['category'])} "
+                f"WHERE s.substance_name = {q(lib_name)} "
+                'ON CONFLICT (substance_id, category_id, method_name, geographic_scope) DO UPDATE SET '
+                'factor_value = EXCLUDED.factor_value, unit = EXCLUDED.unit, '
+                'factor_basis = EXCLUDED.factor_basis, source_reference = EXCLUDED.source_reference;'
+            )
     print('\n'.join(out))
 
 

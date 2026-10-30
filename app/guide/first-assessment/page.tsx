@@ -52,8 +52,8 @@ export default function FirstAssessmentPage() {
               </Li>
               <Li>
                 <strong>Methodology + region</strong>: defaults you can
-                override per run (CML 2001 / ReCiPe / TRACI · Global / US-CA
-                / EU).
+                override per run (CML 2001 / ReCiPe Midpoint (H) / TRACI 2.1 · Global /
+                United States / Europe).
               </Li>
             </Ul>
           </>
@@ -79,8 +79,8 @@ export default function FirstAssessmentPage() {
          └─ Task  : Welding Energy & Materials`}
             </CodeBlock>
             <p style={{ marginTop: 12 }}>
-              To change a step, open its menu: Rename, Move under another step, Add a step below it, or
-              Delete. Deleting asks whether its steps go too.
+              To change a step, right-click it for its menu: Rename, Move to…, Add a step of the next tier
+              below it, or Delete step. Deleting asks whether its steps go too.
             </p>
           </>
         }

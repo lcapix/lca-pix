@@ -35,10 +35,11 @@ test.describe('signed out', () => {
     }
   });
 
-  test('G121 the guide asks a signed-out reader to log in', async ({ page }) => {
-    await page.goto('/guide');
-    await page.waitForURL(/\/auth\/login/, { timeout: 60_000 });
-    await row(page.getByRole('button', { name: 'Log in', exact: true }), 'G121', 'The guide needs an account, as before');
+  test('G121 signed out, the guide reads in the public layout, so the links from Docs work', async ({ page }) => {
+    await open(page, '/guide/first-assessment', { ready: 'Your first assessment' });
+    await expect.soft(page, note('G121', 'no sign-in wall')).toHaveURL(/\/guide\/first-assessment$/);
+    await row(page.getByRole('navigation', { name: 'Site' }), 'G121', 'the landing header on the guide');
+    await expect.soft(page.getByRole('navigation', { name: 'Main' }), note('G121', 'no app sidebar signed out')).toHaveCount(0);
   });
 });
 
@@ -68,7 +69,8 @@ test.describe('signed in', () => {
     for (const gone of ['drag', 'is_driver', 'press r', 'clone / remove', 'historical runs']) {
       expect.soft(text.includes(gone), note('G121', `guide text does not say "${gone}"`)).toBe(false);
     }
-    // The tour is unmounted on project routes (G04, G115).
+    // The tour is unmounted on project routes (G04, G115); its component is deleted, which
+    // tests/lib/no-classic.test.ts proves. Here: nothing tour-like opens on a project.
     await page.evaluate(() => sessionStorage.setItem('lcapix:start-tour', '1'));
     await open(page, `/project/${seed.fiveTier.projectId}`, { ready: seed.fiveTier.projectName });
     await expect.soft(page.getByRole('dialog', { name: /tour/i }), note('G115', 'no tour opens on a project')).toHaveCount(0);
