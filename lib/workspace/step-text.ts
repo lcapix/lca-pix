@@ -38,6 +38,14 @@ export function splitSource(raw: string | null | undefined): { text: string | nu
   return { text: text || null, source: m ? m[1].trim() : null }
 }
 
+/** The inverse of splitSource: the text a person typed, with the import's provenance kept on the end. */
+export function joinSource(text: string | null | undefined, source: string | null | undefined): string | null {
+  const t = String(text ?? '').trim()
+  const src = String(source ?? '').trim()
+  if (!src) return t || null
+  return t ? `${t} [source: ${src}]` : `[source: ${src}]`
+}
+
 /** The step's own flows that need an amount. */
 export function stepNeedsAmount(stepId: number, rows: InventoryRow[]): boolean {
   return rows.some((r) => r.component_id === stepId && r.status === 'needs_amount')

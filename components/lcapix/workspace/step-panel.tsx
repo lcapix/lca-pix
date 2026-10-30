@@ -32,6 +32,7 @@ import { CostPanel } from './cost-panel'
 import { FlowCostNotes } from './flow-cost-notes'
 import { FloatingPanel } from './floating-panel'
 import { ExerciseSlot } from './exercise-card'
+import { StepDetails } from './step-details'
 import type { TreeView } from './tree-tab'
 
 export function StepPanel({
@@ -59,6 +60,7 @@ export function StepPanel({
     rename: (id: number, name: string) => Promise<boolean>
     move: (id: number, parentId: number) => Promise<boolean>
     setStage: (id: number, stage: string) => Promise<boolean>
+    saveFields: (id: number, fields: Record<string, unknown>) => Promise<boolean>
     scaleProduct: (from: number, to: number) => Promise<boolean>
   }
   onDelete: () => void
@@ -139,6 +141,11 @@ export function StepPanel({
           <div style={{ padding: '0 18px 12px', fontSize: 13, color: 'var(--ds-text-2)' }}>
             {stepCountsLine(step.id, inventory?.rows ?? [], children.length, children[0]?.tier ?? (TIERS[TIERS.indexOf(step.tier) + 1] ?? null))}
             {step.description ? ` · ${step.description}` : ''}
+            {step.allocationFactor != null && step.allocationFactor < 1 && (
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-3)', marginTop: 2 }}>
+                Allocated: {Math.round(step.allocationFactor * 1000) / 10}% stays with this product{step.allocationNote ? ` (${step.allocationNote})` : ''}
+              </span>
+            )}
             {step.source && <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-3)', marginTop: 2 }}>From {step.source}</span>}
           </div>
           {!readOnly && (
@@ -257,6 +264,7 @@ function StepTools({
     rename: (id: number, name: string) => Promise<boolean>
     move: (id: number, parentId: number) => Promise<boolean>
     setStage: (id: number, stage: string) => Promise<boolean>
+    saveFields: (id: number, fields: Record<string, unknown>) => Promise<boolean>
     scaleProduct: (from: number, to: number) => Promise<boolean>
   }
   onDelete: () => void
@@ -320,6 +328,7 @@ function StepTools({
           ))}
         </select>
       </label>
+      <StepDetails step={step} busy={actions.busy} saveFields={actions.saveFields} onSaved={onSaved} />
       {step.tier === 'product' && (
         <label>
           <span className="ds-section-label">Quantity</span>

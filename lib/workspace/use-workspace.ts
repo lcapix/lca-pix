@@ -58,6 +58,10 @@ export interface WorkspaceStep {
   /** Labour hours per unit on the step (from a routing, or a rate used before). */
   laborHours: number | null
   lifeCycleStage: string | null
+  /** ISO 14044 4.3.4: how a multi-output step is split, and the share that stays with this product (0..1). */
+  allocationMethod: string | null
+  allocationFactor: number | null
+  allocationNote: string | null
   updated_at: string | null
 }
 
@@ -95,6 +99,9 @@ export function toStep(c: any): WorkspaceStep {
     },
     laborHours: num(c.labor_hours),
     lifeCycleStage: c.life_cycle_stage ?? null,
+    allocationMethod: c.allocation_method ?? null,
+    allocationFactor: num(c.allocation_factor),
+    allocationNote: c.allocation_note ?? null,
     updated_at: c.updated_at ?? null,
   }
 }

@@ -174,3 +174,41 @@ test('3.10 an amount changed in another tab is not overwritten silently', async 
   await boxA.press('Enter');
   await expect.soft(a.getByText(/Saved · Steel 9\.50? kg/), note('3.10', 'saving again goes ahead')).toBeVisible();
 });
+
+test('E23 E24 a step keeps its description and its allocation', async ({ api, newUser, signIn }) => {
+  const user = await newUser('parity-alloc');
+  const { projectId, caseId } = await workedExample(api, user);
+  const { page } = await signIn(user);
+  await openCase(page, projectId, caseId);
+  await step(page, '10. Cut blank').click();
+
+  const desc = page.getByLabel('Step description');
+  await row(desc, 'E23', 'Edit a step description');
+  await desc.fill('Shear cut from coil');
+  await desc.locator('xpath=..').getByRole('button', { name: 'Save' }).click();
+  await expect.soft(page.getByText('Saved · 10. Cut blank').first(), note('E23', 'saved line')).toBeVisible();
+
+  const alloc = page.getByRole('group', { name: 'Allocation' });
+  await row(alloc.getByLabel('Allocation method'), 'E24', 'Allocate a multi-output step');
+  await alloc.getByLabel('Allocation method').selectOption('physical');
+  await alloc.getByRole('button', { name: 'Save allocation' }).click();
+  await expect.soft(alloc.getByRole('alert'), note('E24', 'a share is required')).toContainText('percent');
+  await alloc.getByLabel(/Share that belongs/).fill('80');
+  await alloc.getByRole('button', { name: 'Save allocation' }).click();
+  await expect.soft(alloc.getByRole('alert'), note('E24', 'a basis is required')).toContainText('basis');
+  await alloc.getByLabel('Allocation basis').fill('by mass: 80 kg of 100 kg output');
+  await alloc.getByRole('button', { name: 'Save allocation' }).click();
+  await expect.soft(page.getByText(/keeps 80%/).first(), note('E24', 'saved')).toBeVisible();
+
+  // Stored as the API names it, and the import-free description round-trips.
+  const comps = (await api.as(user.token).get<{ components: Array<Record<string, any>> }>(`/api/cases/${caseId}/components`)).components;
+  const cut = comps.find((c) => c.component_name === '10. Cut blank')!;
+  expect.soft(Number(cut.allocation_factor), note('E24', 'share stored 0..1')).toBeCloseTo(0.8, 6);
+  expect.soft(cut.allocation_method, note('E24', 'method')).toBe('physical');
+  expect.soft(cut.allocation_note, note('E24', 'basis')).toBe('by mass: 80 kg of 100 kg output');
+  expect.soft(String(cut.description), note('E23', 'description stored')).toContain('Shear cut from coil');
+
+  await page.reload();
+  await step(page, '10. Cut blank').click();
+  await expect.soft(page.getByText(/Allocated: 80% stays with this product/), note('E24', 'shown after reload')).toBeVisible();
+});

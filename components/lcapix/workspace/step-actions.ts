@@ -105,6 +105,10 @@ export function useStepActions({
   const remove = (id: number, children: 'delete' | 'reparent' = 'delete') =>
     run(() => apiRequest(`/api/components/${id}?children=${children}`, { method: 'DELETE' }))
 
+  /** Any of the step's own fields (description, allocation), as the PUT route names them. */
+  const saveFields = (id: number, fields: Record<string, unknown>) =>
+    run(() => apiRequest(`/api/components/${id}`, { method: 'PUT', body: JSON.stringify(fields) }))
+
   const setStage = (id: number, stage: string) =>
     run(() => apiRequest(`/api/components/${id}`, { method: 'PUT', body: JSON.stringify({ life_cycle_stage: stage }) }))
 
@@ -130,5 +134,5 @@ export function useStepActions({
       }),
     )
 
-  return { busy, error, rename, move, addBelow, addFirst, addStep, remove, setStage, scaleProduct }
+  return { busy, error, rename, move, addBelow, addFirst, addStep, remove, setStage, saveFields, scaleProduct }
 }

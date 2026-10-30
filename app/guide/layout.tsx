@@ -7,7 +7,7 @@ import { AppShell } from '@/components/lcapix/shell/app-shell'
 import { PublicLayout } from '@/components/lcapix/landing/public-layout'
 import { useAuthStore } from '@/lib/store'
 
-export const TOC: readonly { slug: string; label: string }[] = [
+const TOC: readonly { slug: string; label: string }[] = [
   { slug: '', label: 'Getting started' },
   { slug: 'data-model', label: 'Data model' },
   { slug: 'first-assessment', label: 'First assessment' },
