@@ -167,3 +167,33 @@ export function frozenStepCosts(steps: RunStep[] | undefined) {
       other: (s.kinds?.transportation ?? 0) + (s.kinds?.equipment ?? 0) + (s.kinds?.overhead ?? 0),
     }))
 }
+
+export const CLIMATE = 'Global Warming'
+
+interface FlowRowLike {
+  flow_id: number
+  category_name: string
+  dir: 'IN' | 'OUT'
+}
+
+/**
+ * K03: the input flows a run counted in climate only (materials carry a
+ * climate factor and nothing else). In any other category they read
+ * "climate only", not a silent gap. One row per flow, its climate row.
+ */
+export function climateOnlyFlows<T extends FlowRowLike>(rows: T[] | undefined): T[] {
+  const cats = new Map<number, Set<string>>()
+  for (const r of rows ?? []) {
+    const set = cats.get(r.flow_id) ?? new Set<string>()
+    set.add(r.category_name.toLowerCase())
+    cats.set(r.flow_id, set)
+  }
+  const seen = new Set<number>()
+  return (rows ?? []).filter((r) => {
+    if (r.dir !== 'IN' || seen.has(r.flow_id)) return false
+    const set = cats.get(r.flow_id)!
+    if (set.size !== 1 || !set.has(CLIMATE.toLowerCase())) return false
+    seen.add(r.flow_id)
+    return true
+  })
+}

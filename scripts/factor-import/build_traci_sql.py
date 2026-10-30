@@ -1,29 +1,44 @@
-"""Build migrate-015 (US EPA TRACI 2.1 characterization factors) from the
-lciafmt / Federal LCA Commons parquet.
+"""Build a Postgres migration of US EPA TRACI 2.1 characterization factors from
+the lciafmt / Federal LCA Commons parquet.
 
 Source (CC0 / US-EPA public domain):
   https://dmap-data-commons-ord.s3.amazonaws.com/lciafmt/traci/TRACI_2.1_v1.0.0_5555779.parquet
+  sha256 e1f43a0266e1a844e69da633c58c69685cb0996ca446e24f9b7f0df9d0cedee5
+  (the copy read here: ~/lca/corpus/traci/, listed in ~/lca/corpus/SOURCES.md;
+  never copy it into the repo)
 
 Usage:
-  python -m venv .venv && .venv/bin/pip install pandas pyarrow
-  .venv/bin/python scripts/factor-import/build_traci_sql.py TRACI_2.1.parquet \
-      > migrate-015-traci-lciafmt-factors.sql
+  python3 -m venv .venv && .venv/bin/pip install pandas pyarrow
+  .venv/bin/python -I scripts/factor-import/build_traci_sql.py TRACI_2.1.parquet \
+      > db/pg/migrations/migrate-044-traci-cancer-pm.sql
+
+History: migrate-015 (MySQL, now part of db/pg/001-reference.sql) loaded the
+seven categories in CROSSWALK_015. This script now writes Postgres and only the
+categories in CROSSWALK, the two 015 left out for want of an LCAPIX category.
+The migration adds those categories, so it never touches an existing factor.
 
 Crosswalk: TRACI indicator -> LCAPIX impact category, matched by NAME so the
 SQL never depends on category ids being equal between databases. One factor
-per (flowable, category): a flowable repeats across emission sub-compartments
-with the same value, and the base 'emission/air' row wins when present.
-Factors outside DECIMAL(20,10) are skipped. TRACI 'Human health - cancer' and
-'Human health - particulate matter' have no LCAPIX category yet, so they are
-left out (non-cancer maps to Human Toxicity). Every row is basis 'elementary':
-these factors characterize emissions, i.e. OUTPUT flows.
+per (flowable, category): a flowable repeats across emission sub-compartments,
+and the unspecified 'emission/air' row wins; it exists for every flowable of
+both categories here. Every row is basis 'elementary': these factors
+characterize emissions, i.e. OUTPUT flows.
+
+Precision: driver_impact_factors.factor_value is NUMERIC(20,10). A factor that
+ten decimals hold only to more than 1% off EPA's value is left out (listed in
+the header), so no stored factor differs from the source by more than 1%.
 """
+import hashlib
 import math
 import sys
 
 import pandas as pd
 
-CROSSWALK = {
+SOURCE_URL = 'https://dmap-data-commons-ord.s3.amazonaws.com/lciafmt/traci/TRACI_2.1_v1.0.0_5555779.parquet'
+SHA256 = 'e1f43a0266e1a844e69da633c58c69685cb0996ca446e24f9b7f0df9d0cedee5'
+SOURCE = 'lciafmt TRACI 2.1 (US EPA, public domain)'
+
+CROSSWALK_015 = {
     'Global warming': 'Global Warming',
     'Ozone depletion': 'Ozone Depletion',
     'Acidification': 'Acidification',
@@ -32,21 +47,30 @@ CROSSWALK = {
     'Freshwater ecotoxicity': 'Ecotoxicity',
     'Human health - non-cancer': 'Human Toxicity',
 }
-SOURCE = 'lciafmt TRACI 2.1 (US EPA, public domain)'
+CROSSWALK = {
+    'Human health - cancer': 'Human Health - Cancer',
+    'Human health - particulate matter': 'Particulate Matter',
+}
+# name -> (abbreviation, description); the unit comes from the parquet.
+CATEGORIES = {
+    'Human Health - Cancer': ('HTc', 'Cancer effects on human health (TRACI 2.1, USEtox), in comparative toxic units'),
+    'Particulate Matter': ('PM', 'Respiratory effects of fine particles (TRACI 2.1), in PM2.5 equivalents'),
+}
+MAX_REL_ERR = 0.01
 
 
 def compartment(ctx):
     c = str(ctx).lower()
     if c.startswith('emission/water'):
         return 'emission_water'
-    if 'soil' in c:
+    if 'soil' in c or c.startswith('emission/ground'):
         return 'emission_soil'
     if c.startswith('resource'):
         return 'resource'
     return 'emission_air'
 
 
-def ok(v):
+def finite(v):
     try:
         v = float(v)
     except (TypeError, ValueError):
@@ -54,22 +78,36 @@ def ok(v):
     return math.isfinite(v) and abs(v) < 1e10
 
 
-def esc(s):
-    return str(s).replace('\\', '\\\\').replace("'", "''")
+def q(s):
+    return "'" + str(s).replace("'", "''") + "'"
 
 
 def main(path):
+    digest = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+    if digest != SHA256:
+        sys.exit(f'{path}: sha256 {digest} is not the cited file ({SHA256})')
+
     df = pd.read_parquet(path)
+    units = df[df['Indicator'].isin(CROSSWALK)].groupby('Indicator')['Indicator unit'].first().to_dict()
     df = df[df['Indicator'].isin(CROSSWALK)].copy()
     df['category'] = df['Indicator'].map(CROSSWALK)
     df['rank'] = (df['Context'].astype(str) != 'emission/air').astype(int)
-    df = df.sort_values(['Flowable', 'category', 'rank'])
+    df = df.sort_values(['Flowable', 'category', 'rank', 'Context'], kind='stable')
     fac = df.drop_duplicates(subset=['Flowable', 'category'], keep='first')
-    fac = fac[fac['Characterization Factor'].map(ok)]
+    fac = fac[fac['Characterization Factor'].map(finite)]
     fac = fac[fac['Flowable'].astype(str).str.strip().ne('')]
 
-    subs = {}
+    kept, dropped = [], []
     for _, r in fac.iterrows():
+        v = float(r['Characterization Factor'])
+        stored = round(v, 10)
+        if v != 0 and (stored == 0 or abs(stored - v) / abs(v) > MAX_REL_ERR):
+            dropped.append((str(r['Flowable']).strip(), r['category'], v))
+        else:
+            kept.append(r)
+
+    subs = {}
+    for r in kept:
         name = str(r['Flowable']).strip()
         cas = str(r['CAS No']).strip()
         cas = cas if cas and cas.lower() != 'nan' else None
@@ -77,29 +115,49 @@ def main(path):
             subs[name] = (cas, compartment(r['Context']))
 
     out = [
-        '-- migrate-015-traci-lciafmt-factors.sql  (idempotent; generated by scripts/factor-import/build_traci_sql.py)',
-        f'-- {len(subs)} substances, {len(fac)} TRACI 2.1 factors. Source: {SOURCE}.',
-        '-- Run migrate-017 afterwards (synonyms + unit quarantine).',
+        '-- migrate-044-traci-cancer-pm.sql: TRACI 2.1 human health cancer and particulate matter.',
+        '-- Generated by scripts/factor-import/build_traci_sql.py; do not edit by hand.',
+        f'-- Source: {SOURCE_URL}',
+        f'-- sha256 {SHA256}',
+        f'-- {len(CROSSWALK)} categories, {len(kept)} factors, {len(subs)} flowables (new substances only where the name is not in the library).',
+        f'-- Left out, ten decimals would be more than {MAX_REL_ERR:.0%} off the source ({len(dropped)}):',
     ]
-    vals = [
-        f"('{esc(n)}',{'NULL' if not c else chr(39) + esc(c) + chr(39)},'{k}','kg')"
-        for n, (c, k) in subs.items()
+    out += [f'--   {n} ({c}): {v:.6g}' for n, c, v in dropped]
+    out += [
+        '-- Runs twice without change: categories and substances insert only when absent; factors insert or set',
+        '-- the same value. It adds categories, so no existing factor is touched.',
+        '',
     ]
+    for name, (abbr, desc) in CATEGORIES.items():
+        indicator = next(k for k, v in CROSSWALK.items() if v == name)
+        out.append(
+            'INSERT INTO impact_categories (category_name, abbreviation, unit, description) '
+            f'SELECT {q(name)}, {q(abbr)}, {q(units[indicator])}, {q(desc)} '
+            f'WHERE NOT EXISTS (SELECT 1 FROM impact_categories WHERE category_name = {q(name)});'
+        )
+    out.append('')
+    # substances has no unique key on the name, so "absent" is checked by name.
+    vals = [f"({q(n)}, {'NULL' if not c else q(c)}, {q(k)}, 'kg')" for n, (c, k) in sorted(subs.items())]
     for i in range(0, len(vals), 400):
         out.append(
-            'INSERT IGNORE INTO substances (substance_name,cas_number,category,unit) VALUES\n'
-            + ',\n'.join(vals[i:i + 400]) + ';'
+            'INSERT INTO substances (substance_name, cas_number, category, unit)\n'
+            'SELECT v.name, v.cas, v.cat, v.unit FROM (VALUES\n'
+            + ',\n'.join(vals[i:i + 400])
+            + '\n) AS v(name, cas, cat, unit)\n'
+            'WHERE NOT EXISTS (SELECT 1 FROM substances s WHERE s.substance_name = v.name);'
         )
-    for _, r in fac.iterrows():
+    out.append('')
+    for r in sorted(kept, key=lambda r: (r['category'], str(r['Flowable']).strip())):
         out.append(
-            'INSERT INTO driver_impact_factors (substance_id,category_id,method_name,factor_value,unit,'
-            'geographic_scope,factor_basis,source_reference) '
+            'INSERT INTO driver_impact_factors (substance_id, category_id, method_name, factor_value, unit, '
+            'geographic_scope, factor_basis, source_reference) '
             f"SELECT s.substance_id, ic.category_id, 'TRACI 2.1', {float(r['Characterization Factor']):.10f}, "
-            f"'{esc(str(r['Indicator unit']).strip())}', 'Global', 'elementary', '{esc(SOURCE)}' "
-            f"FROM substances s JOIN impact_categories ic ON ic.category_name = '{esc(r['category'])}' "
-            f"WHERE s.substance_name = '{esc(str(r['Flowable']).strip())}' "
-            'ON DUPLICATE KEY UPDATE factor_value=VALUES(factor_value),unit=VALUES(unit),'
-            'factor_basis=VALUES(factor_basis),source_reference=VALUES(source_reference);'
+            f"{q(str(r['Indicator unit']).strip())}, 'Global', 'elementary', {q(SOURCE)} "
+            f"FROM substances s JOIN impact_categories ic ON ic.category_name = {q(r['category'])} "
+            f"WHERE s.substance_name = {q(str(r['Flowable']).strip())} "
+            'ON CONFLICT (substance_id, category_id, method_name, geographic_scope) DO UPDATE SET '
+            'factor_value = EXCLUDED.factor_value, unit = EXCLUDED.unit, '
+            'factor_basis = EXCLUDED.factor_basis, source_reference = EXCLUDED.source_reference;'
         )
     print('\n'.join(out))
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changeWords, comparableRun, previousComparable, runCosts, runLabel, stepDiffRows } from '@/lib/results/full-results-view'
+import { changeWords, climateOnlyFlows, comparableRun, previousComparable, runCosts, runLabel, stepDiffRows } from '@/lib/results/full-results-view'
 import { compareNote } from '@/lib/workspace/results-view'
 import { notCounted } from '@/lib/runs/method-categories-view'
 import { snapshotRunSteps } from '@/lib/run-snapshot'
@@ -126,5 +126,21 @@ describe('R17 categories left out are named, not zero (findings 1.8, 2.11)', () 
     expect(notCounted(traci, { 'Global Warming': {}, Acidification: {} })).toEqual(['Ecotoxicity', 'Eutrophication', 'Human Toxicity', 'Ozone Depletion', 'Photochemical Oxidation'])
     expect(notCounted(traci, Object.fromEntries(traci.map((c) => [c, {}])))).toEqual([])
     expect(notCounted(undefined, { 'Global Warming': {} })).toEqual([])
+  })
+})
+
+describe('K03 materials are climate only', () => {
+  const row = (flow_id: number, category_name: string, dir: 'IN' | 'OUT') => ({ flow_id, category_name, dir })
+  it('K03 names an input counted only in Global Warming, once, and nothing else', () => {
+    const rows = [
+      row(1, 'Global Warming', 'IN'), // a material: climate factor only
+      row(2, 'Global Warming', 'IN'), // electricity with an acidification factor too
+      row(2, 'Acidification', 'IN'),
+      row(3, 'Global Warming', 'OUT'), // an emission with one category is not a material
+      row(4, 'Acidification', 'IN'),
+    ]
+    expect(climateOnlyFlows(rows).map((r) => r.flow_id)).toEqual([1])
+    expect(climateOnlyFlows([])).toEqual([])
+    expect(climateOnlyFlows(undefined)).toEqual([])
   })
 })

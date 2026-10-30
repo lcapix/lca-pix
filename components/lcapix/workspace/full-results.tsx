@@ -15,7 +15,7 @@ import { boundaryGaps, groupByStage, stageLabel, STAGES, type StageId } from '@/
 import { amount, grouped, money, result3, share } from '@/lib/ui/format'
 import { isCompletedRun } from '@/lib/results/run-math'
 import { factorTitle, isGlobalFallback, isWeakFactorSource, safeRunDate } from '@/lib/results/results-view'
-import { caseRunNumber, changeWords, comparableRun, frozenStepCosts, previousComparable, runCosts, stepDiffRows } from '@/lib/results/full-results-view'
+import { caseRunNumber, changeWords, CLIMATE, climateOnlyFlows, comparableRun, frozenStepCosts, previousComparable, runCosts, stepDiffRows } from '@/lib/results/full-results-view'
 import { notCounted } from '@/lib/runs/method-categories-view'
 import { useCaseRuns } from '@/lib/workspace/use-runs'
 import { useCaseWorkspace } from '@/lib/workspace/use-workspace'
@@ -649,10 +649,14 @@ function FlowTable({ run, category, stepHref }: { run: WorkspaceRun; category: s
   // Steps by name only for older rows without an id; two steps may share a name.
   const idOf = new Map(run.componentBreakdown.map((c) => [c.component_name, c.component_id]))
   const rows = (run.flowDetail ?? []).filter((f) => (!category || f.category_name === category) && (dir === 'all' || f.dir === dir))
+  // K03: materials have a climate factor only; in any other category they say so.
+  const climateOnly =
+    category && category.toLowerCase() !== CLIMATE.toLowerCase() && dir !== 'OUT' ? climateOnlyFlows(run.flowDetail) : []
   return (
     <section aria-label="Flows" style={{ display: 'grid', gap: 8 }}>
       <SectionLabel>
         Flows in {category}: {rows.length}
+        {climateOnly.length > 0 ? `, and ${climateOnly.length} with a climate factor only` : ''}
       </SectionLabel>
       <Segmented
         label="Direction"
@@ -717,6 +721,32 @@ function FlowTable({ run, category, stepHref }: { run: WorkspaceRun; category: s
                   <td className="ds-num">
                     {result3(f.impact)}
                     {f.allocation != null && f.allocation < 1 ? ` (allocated ${Math.round(f.allocation * 100)}%)` : ''}
+                  </td>
+                </tr>
+              )
+            })}
+            {climateOnly.map((f) => {
+              const id = f.component_id ?? idOf.get(f.component)
+              return (
+                <tr key={`${f.flow_id}-climate-only`} data-climate-only="true">
+                  <td>
+                    {id ? (
+                      <Link className="ds-link" href={stepHref(id)}>
+                        {f.component}
+                      </Link>
+                    ) : (
+                      f.component
+                    )}
+                  </td>
+                  <td>{f.substance}</td>
+                  <td>In</td>
+                  <td className="ds-num">
+                    {grouped(amount(f.amount))} {f.unit}
+                  </td>
+                  <td colSpan={3}>
+                    <span className="ds-tag" title={`This material has a ${CLIMATE} factor and no ${category} factor, so it is not counted here.`}>
+                      climate only
+                    </span>
                   </td>
                 </tr>
               )

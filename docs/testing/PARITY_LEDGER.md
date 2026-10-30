@@ -157,6 +157,16 @@ classic page is full width up to 1440px (`components/lcapix/results/results-page
 | I11 | The saved screen does not say "and their hours" when none were read, and shows one step count (finding 3.8) | n/a (discovery run 3) | `app/project/[projectId]/import/_components/done-card.tsx` | kept |
 | I12 | "Into" starts on the project's case; the equipment list opens when that case has steps (finding 3.9) | n/a (discovery run 3) | `lib/import/use-import.ts`; `app/project/[projectId]/import/_components/pick-form.tsx` | kept |
 
+## K. Impact categories
+
+Added 2026-10-30 (Task 11, decision D3 (a)). The prefix is K because I is the import section. Source: US EPA TRACI 2.1 via lciafmt, sha256 e1f43a02...cee5, loaded by `db/pg/migrations/migrate-044-traci-cancer-pm.sql`.
+
+| ID | Capability | Classic | Now (main) | Status |
+|---|---|---|---|---|
+| K01 | Human health, cancer (TRACI 2.1, CTUcancer) | none | category "Human Health - Cancer", 601 factors; `tests/db/traci-044.test.ts`, `tests/api-real/flows/f36-traci-cancer-pm.test.ts` | new |
+| K02 | Particulate matter (TRACI 2.1, PM 2.5 eq) | none | category "Particulate Matter", 8 factors; same tests | new |
+| K03 | A material flow says "climate only" in every other category | none | `climateOnlyFlows` in `lib/results/full-results-view.ts`, rows in the full results flow table; `f36-traci-cancer-pm.test.ts` | new |
+
 ## C. Class
 
 | ID | Capability | Classic | Now (main) | Status |
