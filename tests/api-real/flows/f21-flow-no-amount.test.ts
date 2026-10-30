@@ -95,6 +95,14 @@ describe('F21 a flow may have no amount yet', () => {
     // Saving again with the amount it now knows goes ahead.
     expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 3, expected_quantity: 5 } })).status).toBe(200);
     expect(Number((await sqlOne('SELECT quantity FROM flows WHERE flow_id = ?', [id])).quantity)).toBe(3);
+    // Review finding: another tab changed only the unit (kg to g). An amount typed against kg is refused.
+    expect((await api.put(`/api/flows/${id}`, { token: t, json: { unit: 'g', expected_quantity: 3, expected_unit: 'kg' } })).status).toBe(200);
+    const unitStale = await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 4, expected_quantity: 3, expected_unit: 'kg' } });
+    expect(unitStale.status, unitStale.text).toBe(409);
+    expect(unitStale.json.current).toEqual({ quantity: 3, unit: 'g' });
+    expect(await sqlOne('SELECT quantity, unit FROM flows WHERE flow_id = ?', [id])).toEqual({ quantity: 3, unit: 'g' });
+    // A unit picked in a stale tab is refused the same way.
+    expect((await api.put(`/api/flows/${id}`, { token: t, json: { unit: 'kg', expected_quantity: 3, expected_unit: 'kg' } })).status).toBe(409);
     // No amount yet counts as a known amount too, and a save without expected_quantity is unchanged.
     expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: null } })).status).toBe(200);
     expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 4, expected_quantity: null } })).status).toBe(200);

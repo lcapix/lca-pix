@@ -27,9 +27,12 @@ export async function saveFlowAmount(
     return { saved: false, amount: row.amount, error: 'Enter an amount of 0 or more, or leave it empty for now.' }
   }
   if (next === known) return { saved: false, amount: next, error: null }
+  // The box shows a rounded amount (at most 4 decimals): text left as shown is
+  // no change, never a save of the rounded number (0.00015 would become 0.0002).
+  if (trimmed === amountBox(known)) return { saved: false, amount: known, error: null }
   const res = await apiRequest(`/api/flows/${row.flow_id}`, {
     method: 'PUT',
-    body: JSON.stringify({ quantity: next, expected_quantity: known }),
+    body: JSON.stringify({ quantity: next, expected_quantity: known, ...(row.unit ? { expected_unit: row.unit } : {}) }),
   })
   if (!res.ok) {
     const d = await res.json().catch(() => ({}))
@@ -49,13 +52,22 @@ export async function saveFlowAmount(
 }
 
 /** Save a flow's unit (the left-out fix: "Pick kg or g"). */
-export async function saveFlowUnit(row: Pick<InventoryRow, 'flow_id'>, unit: string): Promise<string | null> {
-  const res = await apiRequest(`/api/flows/${row.flow_id}`, { method: 'PUT', body: JSON.stringify({ unit }) })
+export async function saveFlowUnit(row: Pick<InventoryRow, 'flow_id' | 'amount' | 'unit'>, unit: string): Promise<string | null> {
+  // The amount and unit this tab loaded go with it (3.10): a unit picked in a
+  // stale tab must not relabel an amount someone else changed.
+  const res = await apiRequest(`/api/flows/${row.flow_id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ unit, expected_quantity: row.amount, ...(row.unit ? { expected_unit: row.unit } : {}) }),
+  })
   if (res.ok) {
     announceComponentsChanged()
     return null
   }
   const d = await res.json().catch(() => ({}))
+  if (res.status === 409 && d?.current) {
+    const now = d.current.quantity == null ? 'no amount' : `${d.current.quantity} ${d.current.unit ?? ''}`.trim()
+    return `This flow changed in another tab or by someone else: it is now ${now}. Reload to see it, then pick the unit again.`
+  }
   return d?.error ?? `The unit was not saved (${res.status}).`
 }
 

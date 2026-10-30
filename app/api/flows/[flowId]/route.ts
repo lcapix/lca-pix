@@ -115,6 +115,8 @@ export async function PUT(
       return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
     }
     const expected = expectedParsed?.ok ? expectedParsed.value : null;
+    // The unit the tab loaded too: an amount typed against kg must not land on a flow someone moved to g.
+    const expectedUnit = guarded && typeof body.expected_unit === 'string' && body.expected_unit.trim() ? body.expected_unit.trim() : null;
 
     try {
       const changed = await execute(
@@ -123,7 +125,7 @@ export async function PUT(
              flow_type = COALESCE(?, flow_type),
              quantity = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, quantity) END,
              unit = COALESCE(?, unit)
-         WHERE flow_id = ?${guarded ? ' AND quantity IS NOT DISTINCT FROM ?::float8' : ''}`,
+         WHERE flow_id = ?${guarded ? ' AND quantity IS NOT DISTINCT FROM ?::float8' : ''}${expectedUnit ? ' AND unit = ?' : ''}`,
         [
           substance_id != null ? Number(substance_id) : null,
           flow_type ?? null,
@@ -132,6 +134,7 @@ export async function PUT(
           unit ?? null,
           flowId,
           ...(guarded ? [expected] : []),
+          ...(expectedUnit ? [expectedUnit] : []),
         ]
       );
       if (guarded && changed === 0) {

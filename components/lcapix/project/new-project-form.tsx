@@ -203,7 +203,7 @@ export function NewProjectForm() {
               <span className="edu-field-label">
                 Functional unit<HelpTip label="What is a functional unit?">{ISO_HELP.functionalUnit}</HelpTip>
               </span>
-              <input className="edu-input" value={functionalUnit} placeholder="e.g. 1 enclosure" maxLength={255} onChange={(e) => setFunctionalUnit(e.target.value)} />
+              <input className="edu-input" aria-label="Functional unit" value={functionalUnit} placeholder="e.g. 1 enclosure" maxLength={255} onChange={(e) => setFunctionalUnit(e.target.value)} />
             </label>
             <label className="np-field">
               <span className="edu-field-label">

@@ -30,7 +30,7 @@ export function HelpTip({ label, children }: { label: string; children: ReactNod
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((v) => !v)}
-        style={{ width: 22, height: 22, fontSize: 12 }}
+        style={{ width: 24, height: 24, fontSize: 12 }}
       >
         ?
       </button>

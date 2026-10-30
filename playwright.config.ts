@@ -77,6 +77,16 @@ export default defineConfig({
     { name: 'parity', testMatch: 'parity/**/*.spec.ts' },
     { name: 'visual', testMatch: 'visual/**/*.spec.ts', fullyParallel: true },
     { name: 'a11y', testMatch: 'a11y/**/*.spec.ts', fullyParallel: true },
+    // The demo video (tests/e2e/demo): run only by name, never in the gate. Video on, slowed so a person can follow.
+    {
+      name: 'demo',
+      testMatch: 'demo/**/*.spec.ts',
+      use: {
+        video: { mode: 'on', size: { width: 1440, height: 900 } },
+        contextOptions: { reducedMotion: 'no-preference' },
+        launchOptions: { slowMo: 250, args: ['--force-color-profile=srgb', '--font-render-hinting=none'] },
+      },
+    },
   ],
   webServer: {
     command: 'node tests/e2e/support/serve.mjs',

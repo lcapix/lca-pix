@@ -123,7 +123,7 @@
     {
       "slug": "project-start",
       "path": "/project/{exampleProject}/start",
-      "ready": "How do you want to start?",
+      "ready": "What kind of case?",
       "brief": "7 Project start"
     },
     {
@@ -141,13 +141,13 @@
     {
       "slug": "case-new-base",
       "path": "/project/{exampleProject}/case/base/new",
-      "ready": "Create your Base Case",
+      "ready": "What kind of case?",
       "brief": "9 New base case"
     },
     {
       "slug": "case-new-comparative",
       "path": "/project/{exampleProject}/case/comparative/new",
-      "ready": "Create Comparative Case",
+      "ready": "What kind of case?",
       "brief": "9 New comparative case"
     },
     {

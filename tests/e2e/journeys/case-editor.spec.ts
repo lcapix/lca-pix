@@ -137,6 +137,23 @@ test.describe('F7 flows', () => {
     await step(page, '20. Weld tab').click();
     await page.getByRole('button', { name: '+ Add a flow to this step' }).click();
 
+    // E17: the process library. Laser cutting, 12 minutes at 0.05 kWh a minute: one electricity
+    // flow of 0.6 kWh, and the flow keeps the arithmetic behind it.
+    await page.getByRole('button', { name: /Use the process library/ }).click();
+    const library = page.getByRole('group', { name: 'Process library' });
+    await library.getByRole('combobox').selectOption({ label: 'Laser cutting (per min)' });
+    await library.getByPlaceholder('e.g. 12 (min)').fill('12');
+    await library.getByLabel('Electricity per min').fill('0.05');
+    await expect(library.getByText('= 0.6 kWh')).toBeVisible();
+    const fromLibrary = page.waitForResponse((r) => /\/api\/components\/\d+\/flows/.test(r.url()) && r.request().method() === 'POST');
+    await library.getByRole('button', { name: 'Add these flows' }).click();
+    const libRes = await fromLibrary;
+    expect(libRes.status()).toBe(201);
+    const sent = libRes.request().postDataJSON();
+    expect(sent).toMatchObject({ unit: 'kWh', driver_description: 'Laser cutting: 0.05 kWh/min × 12 min' });
+    expect(sent.quantity).toBeCloseTo(0.6, 9);
+    // The add form stays open for the next flow.
+
     // A plain input: 0.5 kg aluminium.
     await page.getByPlaceholder('Search substances…').fill('Aluminum');
     await page.getByRole('button', { name: /^Aluminum\b/ }).first().click();

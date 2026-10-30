@@ -40,6 +40,7 @@ export function SubstancePicker({
         </span>
         <input
           className="ds-input af-full"
+          aria-label="Substance"
           placeholder="Search substances…"
           value={selectedSubstance ? selectedSubstance.substance_name : search}
           onChange={(e) => searchFor(e.target.value)}

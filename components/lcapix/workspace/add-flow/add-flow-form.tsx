@@ -47,7 +47,7 @@ export function AddFlowForm({
             Direction
             <HelpTip label="Input or output?">{ISO_HELP.flowDirection}</HelpTip>
           </span>
-          <select className="ds-input af-full" value={dir} onChange={(e) => setDir(e.target.value as 'input' | 'output')}>
+          <select className="ds-input af-full" aria-label="Direction" value={dir} onChange={(e) => setDir(e.target.value as 'input' | 'output')}>
             <option value="input">Input</option>
             <option value="output">Output</option>
           </select>
@@ -59,6 +59,7 @@ export function AddFlowForm({
           </span>
           <input
             className="ds-input af-full"
+            aria-label="Quantity"
             type="number"
             value={qty}
             onChange={(e) => setQty(e.target.value)}
@@ -74,7 +75,7 @@ export function AddFlowForm({
             Unit
             <HelpTip label="Which units work?">{ISO_HELP.flowUnit}</HelpTip>
           </span>
-          <input className="ds-input af-full" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="kg" list="af-units" />
+          <input className="ds-input af-full" aria-label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="kg" list="af-units" />
           <datalist id="af-units">
             {(selectedSubstance ? compatibleUnits(selectedSubstance.unit) : []).map((u) => (
               <option key={u} value={u} />

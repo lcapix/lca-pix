@@ -68,8 +68,11 @@ test.describe('shell', () => {
     await expect(palette.getByRole('option', { name: seed.example.projectName })).toBeVisible();
     await page.keyboard.press('Enter');
     await expect.soft(page, note('G137', 'Enter opens the project')).toHaveURL(new RegExp(`/project/${seed.example.projectId}$`), { timeout: 60_000 });
-    await page.keyboard.press('Control+k');
-    await expect(palette).toBeVisible();
+    // The project page mounts its own shell: press again until its palette is listening (under load it can lag).
+    await expect(async () => {
+      if (!(await palette.isVisible())) await page.keyboard.press('Control+k');
+      await expect(palette).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await expect.soft(palette, note('G131', 'Esc closes')).toHaveCount(0);
 

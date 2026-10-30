@@ -303,8 +303,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     // The question comes first, one unit for every case.
     await open(page, '/project/new', { ready: 'Start your own project' });
     await page.getByLabel(/^Project name/).fill('Aluminium enclosure');
-    await page.getByLabel('Functional unit').fill('1 enclosure');
-    await expect(page.getByRole('radio', { name: /^From a file/ })).toBeChecked();
+    await page.getByRole('textbox', { name: 'Functional unit' }).fill('1 enclosure');
+    await expect(page.getByRole('radio', { name: 'Start from a file' })).toBeChecked();
     await shot(page, 'F2.1-new-project');
     await page.getByRole('button', { name: 'Continue →' }).click();
     await expect(page.getByText('What kind of file is it?')).toBeVisible(NAV);
@@ -381,8 +381,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     // Or start empty: the product at the top, and the first step under it.
     await open(page, '/project/new', { ready: 'Start your own project' });
     await page.getByLabel(/^Project name/).fill('Enclosure, from scratch');
-    await page.getByLabel('Functional unit').fill('1 enclosure');
-    await page.getByRole('radio', { name: /^Empty/ }).click();
+    await page.getByRole('textbox', { name: 'Functional unit' }).fill('1 enclosure');
+    await page.getByRole('radio', { name: 'Start empty' }).click();
     await page.getByRole('button', { name: 'Continue →' }).click();
     await expect(page.getByRole('heading', { name: 'Build the tree for 1 enclosure' })).toBeVisible(NAV);
     await shot(page, 'F2.5-start-empty');

@@ -72,7 +72,8 @@ test.describe('F10 export', () => {
   ] as const) {
     test(`R13 P120 Reports: Export ${format} downloads a ${ext} file of the run`, async ({ page, seed }) => {
       await open(page, `/reports?project=${seed.example.projectId}&case=${seed.example.baseCaseId}`, { ready: 'Build a report' });
-      await expect(page.locator('.rp-paper-top')).toContainText(`Run #${seed.example.baseRunId}`, NAV);
+      // Runs are labelled by their place in the case (2.8), not their id.
+      await expect(page.locator('.rp-paper-top')).toContainText(/Run \d+/, NAV);
       await page.getByRole('radio', { name: format, exact: true }).click();
       // Building the file (and compiling the export route) can pass 20 s under load.
       const download = page.waitForEvent('download', NAV);

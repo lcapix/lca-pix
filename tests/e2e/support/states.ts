@@ -133,11 +133,10 @@ export const STATES: ScreenState[] = [
   },
   {
     slug: 'compare-add-case',
-    brief: '16 Compare: the + Add a case menu',
+    brief: '16 Compare: choosing the cases (the chips; "+ Add a case" shows only with one case)',
     path: (s) => `/project/${s.example.projectId}/comparison?cases=${s.example.baseCaseId},${s.example.compCaseId}`,
     prepare: async (page) => {
-      await page.getByRole('button', { name: '+ Add a case' }).click();
-      await expect(page.getByRole('menu', { name: 'Cases to compare' })).toBeVisible();
+      await expect(page.getByRole('group', { name: 'Cases to compare' })).toBeVisible();
     },
   },
   {

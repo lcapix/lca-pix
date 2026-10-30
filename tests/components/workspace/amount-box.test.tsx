@@ -56,18 +56,30 @@ describe('the amount box', () => {
 
   it('Enter saves the cleared box (no amount), even before React saw the change', async () => {
     render(<InventoryTab caseId={5} steps={steps} inventory={inventory} readOnly={false} onOpenInsights={() => {}} />)
-    const box = screen.getByRole('textbox', { name: /^Electricity/ }) as HTMLInputElement
+    const box = screen.getByRole('textbox', { name: 'Electricity, amount in kWh' }) as HTMLInputElement
     expect(box.value).toBe('0.0013')
     typeUnseen(box, '')
     fireEvent.keyDown(box, { key: 'Enter' })
-    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: null, expected_quantity: 0.0013 } }]))
+    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: null, expected_quantity: 0.0013, expected_unit: 'kWh' } }]))
   })
 
   it('blur saves a new amount the same way', async () => {
     render(<InventoryTab caseId={5} steps={steps} inventory={inventory} readOnly={false} onOpenInsights={() => {}} />)
-    const box = screen.getByRole('textbox', { name: /^Electricity/ }) as HTMLInputElement
+    const box = screen.getByRole('textbox', { name: 'Electricity, amount in kWh' }) as HTMLInputElement
     typeUnseen(box, '0.002')
     fireEvent.blur(box)
-    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: 0.002, expected_quantity: 0.0013 } }]))
+    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: 0.002, expected_quantity: 0.0013, expected_unit: 'kWh' } }]))
+  })
+
+  it('a box left as shown saves nothing, though it shows a rounded amount', async () => {
+    // Review finding: 0.00015 shows as 0.0002; focus and leave must not save 0.0002 (+33%).
+    const fine = { ...inventory, rows: inventory.rows.map((r: any) => ({ ...r, amount: 0.00015 })) }
+    render(<InventoryTab caseId={5} steps={steps} inventory={fine} readOnly={false} onOpenInsights={() => {}} />)
+    const box = screen.getByRole('textbox', { name: 'Electricity, amount in kWh' }) as HTMLInputElement
+    fireEvent.focus(box)
+    fireEvent.blur(box)
+    fireEvent.keyDown(box, { key: 'Enter' })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(puts).toEqual([])
   })
 })
