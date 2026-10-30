@@ -1,10 +1,10 @@
 'use client'
 
-import { fmtSig } from '@/components/lcapix/formatters'
+import { amount, grouped } from '@/lib/ui/format'
 import type { Contributor } from '@/lib/insights/magic-insights'
 
 /** Top contributor mini-list (per active category). */
-export function ContributorsList({ activeLabel, contributors }: { activeLabel: string; contributors: Contributor[] }) {
+export function ContributorsList({ activeLabel, unit, contributors }: { activeLabel: string; unit?: string; contributors: Contributor[] }) {
   return (
     <div
       style={{
@@ -16,7 +16,7 @@ export function ContributorsList({ activeLabel, contributors }: { activeLabel: s
     >
       <div
         className="ds-section-label"
-        style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 14, marginBottom: 8 }}
+        style={{ fontSize: 10, color: 'var(--ds-text-3)', marginTop: 14, marginBottom: 8 }}
       >
         Source data: top contributors for {activeLabel}
       </div>
@@ -30,20 +30,21 @@ export function ContributorsList({ activeLabel, contributors }: { activeLabel: s
             fontSize: 12,
             padding: '6px 10px',
             borderRadius: 6,
-            background: 'var(--surface-overlay)',
+            background: 'var(--ds-card)',
           }}
         >
-          <span style={{ flex: 1, color: 'var(--text-primary)' }}>{c.name}</span>
+          <span style={{ flex: 1, color: 'var(--ds-text)' }}>{c.name}</span>
           <span
             className="ds-mono"
-            style={{ color: 'var(--text-tertiary)', fontSize: 11 }}
+            style={{ color: 'var(--ds-text-3)', fontSize: 11 }}
           >
-            {fmtSig(c.value)}
+            {/* 1.16: the value says what it is: the step's amount in the category's unit. */}
+            {grouped(amount(c.value))} {unit ?? ''}
           </span>
           <span
             className="ds-mono"
             style={{
-              color: 'var(--brand-primary)',
+              color: 'var(--ds-green)',
               fontWeight: 600,
               fontSize: 11,
               minWidth: 42,

@@ -2,6 +2,7 @@
 // come from the case's own result; values wrapped in {{…}} render as cited
 // chips (see ./citations). Pure: no React, no browser globals.
 
+import { money } from '@/lib/ui/format'
 import { fmtSig } from '@/components/lcapix/formatters'
 import { stepLabel, type ConsultantItem } from '@/lib/insights/consultant'
 import {
@@ -61,11 +62,9 @@ export function buildInsightText({
     activeTotal !== undefined
       ? `${fmtSig(activeTotal)} ${activeUnit}`
       : 'an indicative overall load'
-  const costStr = totalCost !== undefined ? `$${totalCost.toLocaleString()}` : '–'
-  const summaryCost =
-    typeof totalCost === 'number' && totalCost > 0
-      ? `$${totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      : 'no cost was entered'
+  // 3.4: the one money format the screens use.
+  const costStr = totalCost !== undefined ? money(totalCost) : '–'
+  const summaryCost = typeof totalCost === 'number' && totalCost > 0 ? money(totalCost) : 'no cost was entered'
   const loadLabel = selectedCategory === OVERALL_KEY ? 'environmental load' : activeLabel
 
   switch (activeChip) {
@@ -96,7 +95,7 @@ export function buildInsightText({
           : `To cut {{${loadLabel}}} by {{${reducePct}%}}, start with {{${m0.name}}}: it is {{${m0.pct.toFixed(1)}%}} of the load, across ${m0.steps} step${m0.steps === 1 ? '' : 's'}. A {{${need}%}} cut in its footprint gets you there: use less of it, a lower-carbon grade, or another material. Duplicate the case, swap it on the step${m0.steps === 1 ? '' : 's'} that use${m0.steps === 1 ? 's' : ''} it, and run both.`
       }
       // If the target exceeds what's practically achievable on the top
-      // contributor, say so plainly — that's the "magic" the user asked for.
+      // contributor, say so plainly; that's the "magic" the user asked for.
       if (reducePct > topShare) {
         return `Cutting {{${loadLabel}}} by {{${reducePct}%}} is more than any one step carries: the largest, {{${stepLabel(top.name)}}}, is {{${topShare.toFixed(1)}%}}. It takes changes on several steps, or a different design. Open each step to see which flow drives it, and test every change on a copy of the case.`
       }

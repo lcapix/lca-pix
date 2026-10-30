@@ -176,7 +176,7 @@ export function useMagicInsights({
   // When AI mode is on, stream a grounded narration from the open model for the
   // current facts. Re-runs whenever the facts change (chip/category/target/
   // question). Any failure or missing key degrades silently to the computed
-  // insight — the AI path is strictly additive.
+  // insight; the AI path is strictly additive.
   useEffect(() => {
     if (!open || !aiMode) return
     // 'custom' with no submitted question: nothing to narrate yet.

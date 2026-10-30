@@ -29,8 +29,8 @@ export function MagicInsightsHeader({
       style={{
         padding: '20px 24px 14px',
         background:
-          'linear-gradient(135deg, oklch(from var(--brand-primary) l c h / 0.08), oklch(from var(--brand-primary) l c h / 0.02))',
-        borderBottom: '1px solid var(--border-subtle)',
+          'linear-gradient(135deg, oklch(from var(--ds-green) l c h / 0.08), oklch(from var(--ds-green) l c h / 0.02))',
+        borderBottom: '1px solid var(--ds-line)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -39,8 +39,8 @@ export function MagicInsightsHeader({
             width: 36,
             height: 36,
             borderRadius: 10,
-            background: 'var(--brand-gradient)',
-            color: 'var(--on-primary)',
+            background: 'var(--ds-green)',
+            color: 'var(--ds-card)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -50,12 +50,12 @@ export function MagicInsightsHeader({
           <Icon name="sparkle" size={18} />
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--ds-text)' }}>
             Magic Insights
           </div>
           <div
             className="ds-mono"
-            style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}
+            style={{ fontSize: 11, color: 'var(--ds-text-3)', marginTop: 2 }}
           >
             {caseName} · {method}
           </div>
@@ -72,7 +72,7 @@ export function MagicInsightsHeader({
             background: 'transparent',
             border: 'none',
             cursor: 'pointer',
-            color: 'var(--text-tertiary)',
+            color: 'var(--ds-text-3)',
             padding: 6,
             borderRadius: 6,
             display: 'inline-flex',
@@ -82,7 +82,7 @@ export function MagicInsightsHeader({
         </button>
       </div>
 
-      {/* Category selector — operate across ALL impact categories. */}
+      {/* Category selector; operate across ALL impact categories. */}
       {categoryOptions.length > 1 && (
         <CategorySelect
           options={categoryOptions}
@@ -102,7 +102,7 @@ export function InsightModeToggle({ aiMode, onChange }: { aiMode: boolean; onCha
       aria-label="Insight mode"
       style={{
         display: 'inline-flex',
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--ds-line)',
         borderRadius: 8,
         overflow: 'hidden',
         flexShrink: 0,
@@ -125,8 +125,8 @@ export function InsightModeToggle({ aiMode, onChange }: { aiMode: boolean; onCha
               fontWeight: on ? 600 : 500,
               border: 'none',
               cursor: 'pointer',
-              background: on ? 'var(--brand-primary)' : 'transparent',
-              color: on ? 'var(--on-primary)' : 'var(--text-secondary)',
+              background: on ? 'var(--ds-green)' : 'transparent',
+              color: on ? 'var(--ds-card)' : 'var(--ds-text-2)',
               display: 'inline-flex',
               alignItems: 'center',
               gap: 4,
@@ -163,7 +163,7 @@ export function CategorySelect({
     >
       <span
         className="ds-section-label"
-        style={{ fontSize: 10, color: 'var(--text-tertiary)' }}
+        style={{ fontSize: 10, color: 'var(--ds-text-3)' }}
       >
         Impact category
       </span>
@@ -175,10 +175,10 @@ export function CategorySelect({
           fontSize: 12,
           padding: '4px 8px',
           borderRadius: 6,
-          border: '1px solid var(--border-subtle)',
-          background: 'var(--surface-base)',
-          color: 'var(--text-primary)',
-          fontFamily: 'var(--font-ui)',
+          border: '1px solid var(--ds-line)',
+          background: 'var(--ds-main)',
+          color: 'var(--ds-text)',
+          fontFamily: 'var(--ds-font)',
           cursor: 'pointer',
         }}
       >

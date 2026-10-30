@@ -51,11 +51,11 @@ export function co2Unit(unit: string | null | undefined): string {
   return String(unit ?? 'kg CO2 eq').replace(/CO2(\s*eq)?/i, 'CO₂-eq').replace(/CO₂-eq\.?/, 'CO₂-eq')
 }
 
-/** Money in cents ("$0.55", "$1.75"). */
+/** Money in cents with thousands grouped ("$0.55", "$1.75", "$101,150.00"): one format on every screen. */
 export function money(x: number | null | undefined, currency = 'USD'): string {
   if (x === null || x === undefined || !Number.isFinite(x)) return '–'
   const symbol = currency === 'USD' ? '$' : `${currency} `
-  return `${x < 0 ? '−' : ''}${symbol}${fixed(Math.abs(x), 2)}`
+  return `${x < 0 ? '−' : ''}${symbol}${grouped(fixed(Math.abs(x), 2))}`
 }
 
 /** Thousands grouped for reading ("1,520.158"). Display only: Number() cannot read it back. */

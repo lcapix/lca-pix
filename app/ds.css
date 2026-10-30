@@ -561,8 +561,10 @@
 .ws-inv-table th:nth-child(4), .ws-inv-table td:nth-child(4) { min-width: 160px; }
 .ws-inv-table .ws-amount { width: 96px; text-align: right; }
 
-.ws-answer { display: flex; align-items: baseline; gap: 10px; }
-.ws-answer-num { font-size: 64px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; }
+/* 3.3: a long number or unit wraps under the number instead of being cut off. */
+.ws-answer { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; min-width: 0; }
+.ws-answer > .ds-mono { overflow-wrap: anywhere; min-width: 0; }
+.ws-answer-num { font-size: 64px; line-height: 1; font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
 .ws-bar { height: 8px; background: var(--ds-line-soft); border-radius: 999px; overflow: hidden; }
 .ws-bar > span { display: block; height: 100%; background: var(--ds-green); border-radius: 999px; }
 .ws-grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }

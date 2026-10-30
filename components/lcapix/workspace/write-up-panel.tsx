@@ -6,6 +6,7 @@
 // student (it does not lock the case), and Export the report as PDF,
 // PowerPoint or CSV.
 
+import { runLabel } from '@/lib/results/full-results-view'
 import { perUnit } from '@/lib/workspace/per-unit'
 import { useEffect, useState } from 'react'
 import { Button, Flag, SavedLine, Segmented } from '@/components/lcapix/ds'
@@ -77,7 +78,7 @@ export function WriteUpPanel({
     setError(null)
     try {
       await downloadRunExport(run.run_id, format, kase.case_name)
-      setSaved(`Exported · ${format === 'pptx' ? 'PowerPoint' : format.toUpperCase()} of Run #${run.run_id}`)
+      setSaved(`Exported · ${format === 'pptx' ? 'PowerPoint' : format.toUpperCase()} of ${runLabel(run)}`)
     } catch (e: any) {
       setError(`The report was not exported: ${e?.message ?? 'the request failed'}`)
     } finally {

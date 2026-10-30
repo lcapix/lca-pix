@@ -4,7 +4,8 @@ import { getPool } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
-import { newestRunIds } from '@/lib/runs/newest-first';
+import { caseRunNumbers, newestRunIds } from '@/lib/runs/newest-first';
+import { caseChangedAfterRun } from '@/lib/runs/stale';
 import { calculateCaseImpacts } from '@/lib/lca-engine';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { canonicalMethod, parseRunSnapshot } from '@/lib/run-snapshot';
@@ -71,6 +72,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const snap = last ? parseRunSnapshot(last.run_snapshot) : null;
     const now = rows.map((r) => ({ flow_id: r.flow_id, substance: r.substance, direction: r.direction, amount: r.amount, unit: r.unit }));
     const frozen = snap?.inventory ?? null;
+    // The one rule Compare and Home use: an edit after the run, or drift from what it froze (3.11).
+    const changedAfter = last ? await caseChangedAfterRun(caseId, Number(last.run_id)) : false;
+    const runNumber = last ? (await caseRunNumbers(caseId)).get(Number(last.run_id)) ?? null : null;
 
     return NextResponse.json({
       success: true,
@@ -86,11 +90,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       latest_run: last
         ? {
             run_id: Number(last.run_id),
+            case_run_number: runNumber,
             method: last.calculation_method,
             region: last.region_code,
             run_date: last.run_date,
             // null when the run froze no inventory (an older run): we cannot tell.
             changed_flows: frozen ? changedFlowCount(frozen, now) : null,
+            changed_after_run: changedAfter,
           }
         : null,
     });

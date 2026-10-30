@@ -1,43 +1,65 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 export interface MagicInsightsShellProps {
   onClose: () => void
   children: ReactNode
 }
 
-/** The blurred overlay (click closes) and the card (clicks stay inside). */
+/**
+ * The design system's dialog for Magic Insights: a scrim (a click outside
+ * closes), focus moves in and stays inside (Tab wraps), Esc closes, and focus
+ * returns to the button that opened it.
+ */
 export function MagicInsightsShell({ onClose, children }: MagicInsightsShellProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    const node = ref.current
+    const focusables = () =>
+      Array.from(
+        node?.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? [],
+      ).filter((el) => !el.hasAttribute('disabled'))
+    focusables()[0]?.focus()
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const list = focusables()
+      if (!list.length) return
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      opener?.focus?.()
+    }
+  }, [])
+
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.45)',
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 100,
-        animation: 'fadeIn 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-      }}
-    >
+    <div className="ds-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="ds-card"
-        style={{
-          width: 680,
-          maxWidth: '92vw',
-          maxHeight: '88vh',
-          overflow: 'auto',
-          padding: 0,
-          background: 'var(--surface-raised)',
-          boxShadow:
-            '0 20px 60px -20px rgba(15,23,42,0.35), 0 0 0 1px rgba(15,23,42,0.06)',
-        }}
+        ref={ref}
+        className="ds-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Magic Insights"
+        style={{ width: 680, maxWidth: '92vw', maxHeight: '88vh', overflow: 'auto', padding: 0 }}
       >
         {children}
       </div>

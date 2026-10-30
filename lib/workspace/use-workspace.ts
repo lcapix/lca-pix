@@ -66,7 +66,7 @@ export interface WorkspaceInventory {
   counts: { all: number; counted: number; no_factor: number; needs_amount: number; left_out: number }
   climate: { value: number; unit: string } | null
   steps: Array<{ component_id: number; climate: number }>
-  latest_run: { run_id: number; method: string; region: string; run_date: string; changed_flows: number | null } | null
+  latest_run: { run_id: number; case_run_number?: number | null; method: string; region: string; run_date: string; changed_flows: number | null; changed_after_run?: boolean } | null
 }
 
 const num = (v: unknown): number | null => (v === null || v === undefined || v === '' ? null : Number(v))

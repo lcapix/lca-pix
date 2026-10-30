@@ -5,6 +5,7 @@
 // flows by step, the answer with what builds it, how sure it is and its
 // sources, and the write-up as text. Editing happens on a larger screen.
 
+import { runLabel } from '@/lib/results/full-results-view'
 import { perUnit } from '@/lib/workspace/per-unit'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyState, FlowStatusPill, SourceTag, Tabs } from '@/components/lcapix/ds'
@@ -38,7 +39,7 @@ export function PhoneCase({
   steps: WorkspaceStep[]
   inventory: WorkspaceInventory | null
   run: WorkspaceRun | null
-  against: { label: string; run_id: number; total: number } | null
+  against: { label: string; run_id: number; case_run_number?: number | null; total: number; method?: string | null; region?: string | null } | null
   targetCaseId: number | null
   projectName: string | null
   tab: Tab
@@ -56,7 +57,7 @@ export function PhoneCase({
         {projectName && <p style={{ margin: 0, fontSize: 14, color: 'var(--ds-text-2)' }}>{projectName}</p>}
         <h1 className="ph-title">{kase.case_name}</h1>
         <p style={{ margin: 0, fontSize: 15, color: 'var(--ds-text-2)' }}>
-          {caseKind(kase.case_type)} · {run ? `Run #${run.run_id}` : 'not run yet'}
+          {caseKind(kase.case_type)} · {run ? runLabel(run) : 'not run yet'}
         </p>
       </header>
       <div className="ph-tabs">
@@ -68,7 +69,7 @@ export function PhoneCase({
           tabs={[
             { id: 'tree', label: 'Tree', badge: <span className="ds-mono ph-badge">{steps.length}</span>, controls: 'ph-panel' },
             { id: 'inventory', label: 'Inventory', controls: 'ph-panel' },
-            { id: 'results', label: 'Results', badge: run ? <span className="ds-mono ph-badge">Run #{run.run_id}</span> : undefined, controls: 'ph-panel' },
+            { id: 'results', label: 'Results', badge: run ? <span className="ds-mono ph-badge">{runLabel(run)}</span> : undefined, controls: 'ph-panel' },
             { id: 'writeup', label: 'Write-up', controls: 'ph-panel' },
           ]}
         />
@@ -200,14 +201,16 @@ function PhoneResults({
   kase: WorkspaceCase
   run: WorkspaceRun
   climate: { name: string; value: number; unit: string }
-  against: { label: string; run_id: number; total: number } | null
+  against: { label: string; run_id: number; case_run_number?: number | null; total: number; method?: string | null; region?: string | null } | null
   targetCaseId: number | null
   per: string
 }) {
   const builds = whatBuilds(run, kase.case_type)
   const sure = howSure(run, kase.case_type)
   const sources = sourcesOf(run.flowDetail ?? [])
-  const note = against ? compareNote(climate.value, against, !!kase.copied_from) : null
+  // Only against a run of the same method and region.
+  const comparable = !!against && (against.method ?? null) === (run.calculation_method ?? null) && (against.region ?? 'Global') === (run.regionCode ?? 'Global')
+  const note = against && comparable ? compareNote(climate.value, against, !!kase.copied_from) : null
   const changed = useWhatChanged(kase.project_id, targetCaseId, kase.case_id)
 
   return (

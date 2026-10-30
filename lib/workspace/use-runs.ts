@@ -25,7 +25,7 @@ export function useCaseRuns(caseId: number, target: CompareTarget | null) {
   const [runs, setRuns] = useState<WorkspaceRun[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
-  const [against, setAgainst] = useState<{ label: string; run_id: number; total: number } | null>(null)
+  const [against, setAgainst] = useState<{ label: string; run_id: number; case_run_number?: number | null; total: number; method?: string | null; region?: string | null } | null>(null)
   const seq = useRef(0)
 
   const load = useCallback(async () => {
@@ -67,7 +67,7 @@ export function useCaseRuns(caseId: number, target: CompareTarget | null) {
       .then((d) => {
         const run = d?.assessments?.[0] ? toRun(d.assessments[0]) : null
         const total = run ? runClimate(run)?.value : undefined
-        if (live && run && total !== undefined) setAgainst({ label: targetLabel, run_id: Number(run.run_id), total })
+        if (live && run && total !== undefined) setAgainst({ label: targetLabel, run_id: Number(run.run_id), case_run_number: run.case_run_number, total, method: run.calculation_method ?? null, region: run.regionCode ?? 'Global' })
       })
       .catch(() => {})
     return () => {

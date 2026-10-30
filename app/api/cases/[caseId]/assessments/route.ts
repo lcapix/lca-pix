@@ -22,7 +22,8 @@ import {
 } from '@/lib/run-snapshot';
 import { parseId } from '@/lib/ids';
 import { runCaseInTransaction } from '@/lib/runs/run-case';
-import { inRunOrder, newestRunIds, placeholders } from '@/lib/runs/newest-first';
+import { caseRunNumbers, inRunOrder, newestRunIds, placeholders } from '@/lib/runs/newest-first';
+import { methodCategories } from '@/lib/runs/method-categories';
 
 /** Flow-level detail of a snapshot, as the results screen reads it. */
 function snapshotFlowDetail(snapshot: RunSnapshot) {
@@ -97,7 +98,7 @@ export async function GET(
 
     // The production `assessment_runs` table's timestamp column is `run_date`
     // (there is no `run_at` column). A prior "fix" selected/ordered by `ar.run_at`,
-    // which threw "Unknown column 'ar.run_at'" and 500'd this whole endpoint —
+    // which threw "Unknown column 'ar.run_at'" and 500'd this whole endpoint;
     // making every case read as "Not Yet Assessed" even when completed runs with
     // results existed. Use `run_date` (present in prod) and also expose it under
     // the `run_at` alias so any client that still reads `run_at` keeps working.
@@ -121,6 +122,8 @@ export async function GET(
           ),
         )
       : [];
+    const numbers = await caseRunNumbers(caseId);
+    const categoriesOf = await methodCategories((assessments as any[]).map((a) => String(a.calculation_method ?? '')));
 
     // Each run reports what it froze at run time (snapshot v3): totals, the
     // per-step breakdown with stages, flow detail. Runs made before v3 fall back
@@ -129,6 +132,8 @@ export async function GET(
     const assessmentsWithResults = await Promise.all(
       (assessments as any[]).map(async (assessment) => {
         const snapshot = parseRunSnapshot((assessment as any).run_snapshot);
+        (assessment as any).case_run_number = numbers.get(Number(assessment.run_id)) ?? null;
+        (assessment as any).method_categories = categoriesOf.get(String(assessment.calculation_method ?? '')) ?? [];
 
         if (hasFrozenResults(snapshot)) {
           return {
@@ -255,7 +260,7 @@ export async function GET(
 
         // Dedupe to one factor per (flow, category): prefer a row whose
         // geographic_scope matches the run region, else 'Global', else first
-        // seen — mirroring the engine's region-preference logic.
+        // seen; mirroring the engine's region-preference logic.
         const region = (assessment.region_code || '').toLowerCase();
         const picked = new Map<string, any>();
         for (const row of flowRowsRaw as any[]) {
@@ -449,7 +454,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       assessment: newAssessment,
-      // Promote run_id to the top level too — clients shouldn't have to dig into `assessment.run_id`. (Bug #8.)
+      // Promote run_id to the top level too; clients shouldn't have to dig into `assessment.run_id`. (Bug #8.)
       run_id: result.runId,
       summary: result.lcaResult.summary,
       ...(warnings.length ? { warnings } : {}),

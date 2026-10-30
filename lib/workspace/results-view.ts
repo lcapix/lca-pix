@@ -17,6 +17,8 @@ export interface RunStep {
   type: string
   cost: number | null
   currency?: string | null
+  /** The six cost kinds as frozen (null = not entered). Runs from before have none. */
+  kinds?: Partial<Record<'labor' | 'energy' | 'material' | 'transportation' | 'equipment' | 'overhead', number | null>>
 }
 
 export interface RunFlow {
@@ -212,14 +214,15 @@ function listWords(xs: string[]): string {
  */
 export function compareNote(
   thisTotal: number,
-  other: { label: string; run_id: number; total: number },
+  other: { label: string; run_id: number; case_run_number?: number | null; total: number },
   isCopy: boolean,
 ): { chip: string; note: string } {
   const a = Number(fixed(thisTotal, 3))
   const b = Number(fixed(other.total, 3))
   const diff = Number(fixed(a - b, 3))
   // An empty label is the case's own previous run: "Same as Run #100".
-  const against = other.label ? `the ${other.label}, Run #${other.run_id}` : `Run #${other.run_id}`
+  const run = other.case_run_number ? `Run ${other.case_run_number}` : `Run #${other.run_id}`
+  const against = other.label ? `the ${other.label}, ${run}` : run
   if (diff === 0) return { chip: `Same as ${against}`, note: isCopy ? 'Nothing in your copy differs yet.' : 'The two totals agree.' }
   const word = diff < 0 ? 'lower' : 'higher'
   const pct = b ? `${fixed((Math.abs(diff) / b) * 100, 1)}% ${word}` : ''

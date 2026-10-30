@@ -36,7 +36,7 @@ export function InsightBody({
         key={bodyKey}
         style={{
           fontSize: 14,
-          color: 'var(--text-primary)',
+          color: 'var(--ds-text)',
           lineHeight: 1.65,
         }}
       >
@@ -50,13 +50,13 @@ export function InsightBody({
               height: 14,
               marginLeft: 2,
               verticalAlign: '-2px',
-              background: 'var(--brand-primary)',
+              background: 'var(--ds-green)',
               animation: 'fadeIn 600ms ease infinite alternate',
             }}
           />
         )}
       </div>
-      {/* Honest provenance line: computed vs AI, and — crucially — that the
+      {/* Honest provenance line: computed vs AI, and, crucially, that the
           numbers always come from the engine, never the model. */}
       <ProvenanceLine usingAI={usingAI} aiMode={aiMode} aiStatus={aiStatus} aiModel={aiModel} />
     </div>
@@ -76,7 +76,7 @@ export function ProvenanceLine({
   aiModel: string
 }) {
   return (
-    <div style={{ marginTop: 12, fontSize: 10.5, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+    <div style={{ marginTop: 12, fontSize: 10.5, color: 'var(--ds-text-3)', lineHeight: 1.5 }}>
       {usingAI ? (
         <>
           Narrated by <span className="ds-mono">{aiModel || 'an open model'}</span> via Hugging

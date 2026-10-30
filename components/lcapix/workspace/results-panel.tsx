@@ -20,6 +20,8 @@ import { answerSentence, compareNote, costBeside, howSure, otherCategories, runC
 import type { WorkspaceRun } from '@/lib/workspace/use-runs'
 import type { WorkspaceCase } from '@/lib/workspace/use-workspace'
 import { FloatingPanel } from './floating-panel'
+import { previousComparable, runLabel } from '@/lib/results/full-results-view'
+import { notCounted } from '@/lib/runs/method-categories-view'
 import { ExerciseSlot } from './exercise-card'
 
 const SURE_COLOUR: Record<string, string> = {
@@ -37,6 +39,7 @@ export function ResultsPanel({
   completed,
   against,
   readOnly,
+  editedAfter,
   onOpenRun,
   onOpenInsights,
 }: {
@@ -44,8 +47,10 @@ export function ResultsPanel({
   run: WorkspaceRun | null
   older: boolean
   completed: WorkspaceRun[]
-  against: { label: string; run_id: number; total: number } | null
+  against: { label: string; run_id: number; case_run_number?: number | null; total: number; method?: string | null; region?: string | null } | null
   readOnly: boolean
+  /** The case changed after this run (the rule Compare uses, 3.11). */
+  editedAfter?: boolean
   onOpenRun: (runId: number | null) => void
   onOpenInsights: () => void
 }) {
@@ -73,13 +78,16 @@ export function ResultsPanel({
   const cost = costBeside(run)
   const others = otherCategories(run)
   const latest = completed[0]
-  const prev = completed.find((r) => r.run_id < run.run_id) ?? null
+  // A change is read only between runs of the same method and region (Task 4, item 3).
+  const prev = previousComparable(completed, run)
   const prevTotal = prev ? runClimate(prev)?.value : undefined
+  const sameBasis = (o: { method?: string | null; region?: string | null } | null) =>
+    !!o && (o.method ?? null) === (run.calculation_method ?? null) && (o.region ?? 'Global') === (run.regionCode ?? 'Global')
   const note =
-    climate && against
+    climate && against && sameBasis(against)
       ? compareNote(climate.value, against, !!kase.copied_from)
       : climate && prev && prevTotal !== undefined
-        ? compareNote(climate.value, { label: '', run_id: prev.run_id, total: prevTotal }, false)
+        ? compareNote(climate.value, { label: '', run_id: prev.run_id, case_run_number: prev.case_run_number, total: prevTotal }, false)
         : null
   const maxBuild = Math.max(...builds.map((b) => b.fraction), 0)
 
@@ -110,11 +118,11 @@ export function ResultsPanel({
 
   return (
     <FloatingPanel
-      label={`Results, Run #${run.run_id}`}
+      label={`Results, ${runLabel(run)}`}
       title={
         <>
           <span style={{ color: 'var(--ds-text-3)' }}>Results · </span>
-          <strong>Run #{run.run_id}</strong>
+          <strong>{runLabel(run)}</strong>
           <Link className="ds-link" href={`/project/${kase.project_id}/case/${kase.case_id}/results?run=${run.run_id}`} style={{ marginLeft: 12 }}>
             Open full page
           </Link>
@@ -124,11 +132,18 @@ export function ResultsPanel({
       {older && latest && (
         <div className="ws-outofdate" role="status">
           <span style={{ flex: 1 }}>
-            <strong>Run #{run.run_id} is an older run.</strong> It is read-only and shows what it froze.
+            <strong>{runLabel(run)} is an older run.</strong> It is read-only and shows what it froze.
           </span>
           <button type="button" className="ds-link" onClick={() => onOpenRun(null)}>
-            Back to Run #{latest.run_id}
+            Back to {runLabel(latest)}
           </button>
+        </div>
+      )}
+      {!older && editedAfter && (
+        <div className="ws-outofdate" role="status">
+          <span style={{ flex: 1 }}>
+            <strong>Edited after this run.</strong> Run again to update the answer.
+          </span>
         </div>
       )}
       <ExerciseSlot
@@ -176,16 +191,17 @@ export function ResultsPanel({
           <SectionLabel>What builds this number</SectionLabel>
           <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'grid', gap: 10 }}>
             {builds.map((b) => (
-              <li key={b.component_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 90px 52px 52px', gap: 12, alignItems: 'center', fontSize: 14 }}>
+              // 3.3: the value and share columns size to their text, so a six-digit value never runs into its share.
+              <li key={b.component_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(48px, 90px) max-content max-content', gap: 12, alignItems: 'center', fontSize: 14 }}>
                 {/* rules.md: a step's name wraps, never shortened ("30. Powder coat and cure"). */}
                 <span style={{ overflowWrap: 'anywhere' }}>{b.name}</span>
                 <span className="ws-bar" aria-hidden>
                   <span style={{ width: `${maxBuild ? (b.fraction / maxBuild) * 100 : 0}%` }} />
                 </span>
-                <span className="ds-mono" style={{ textAlign: 'right' }}>
+                <span className="ds-mono" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {b.value ? result3(b.value) : '0'}
                 </span>
-                <span className="ds-mono" style={{ textAlign: 'right', color: 'var(--ds-text-2)' }}>
+                <span className="ds-mono" style={{ textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--ds-text-2)' }}>
                   {b.share}
                 </span>
               </li>
@@ -273,6 +289,13 @@ export function ResultsPanel({
           )}
         </div>
       )}
+      {notCounted(run.method_categories, run.impacts).length > 0 && (
+        <div className="ws-panel-section" role="note">
+          Not counted: {notCounted(run.method_categories, run.impacts).join(', ')}. No flow in this case has a{' '}
+          {run.calculation_method} factor for {notCounted(run.method_categories, run.impacts).length === 1 ? 'it' : 'them'}, so{' '}
+          {notCounted(run.method_categories, run.impacts).length === 1 ? 'it is' : 'they are'} left out, not zero.
+        </div>
+      )}
 
       {completed.length > 1 && (
         <div className="ws-panel-section">
@@ -289,7 +312,7 @@ export function ResultsPanel({
                     aria-current={here || undefined}
                     onClick={() => onOpenRun(r.run_id === latest?.run_id ? null : r.run_id)}
                   >
-                    <span style={{ fontWeight: 600 }}>Run #{r.run_id}</span>
+                    <span style={{ fontWeight: 600 }}>{runLabel(r)}</span>
                     <span style={{ color: 'var(--ds-text-2)' }}>{String(r.run_date ?? '').slice(0, 10)}</span>
                     <span className="ds-mono" style={{ marginLeft: 'auto' }}>
                       {t !== undefined ? caseTotal(t, kase.case_type) : '–'}

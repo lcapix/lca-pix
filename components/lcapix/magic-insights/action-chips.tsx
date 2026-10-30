@@ -37,17 +37,17 @@ export function InsightActionChips({ chips, activeChip, reducePct, onSelect }: I
               padding: '6px 12px',
               borderRadius: 999,
               border: active
-                ? '1px solid var(--brand-primary)'
-                : '1px solid var(--border-subtle)',
+                ? '1px solid var(--ds-green)'
+                : '1px solid var(--ds-line)',
               background: active
-                ? 'oklch(from var(--brand-primary) l c h / 0.10)'
-                : 'var(--surface-raised)',
-              color: active ? 'var(--brand-primary)' : 'var(--text-secondary)',
+                ? 'oklch(from var(--ds-green) l c h / 0.10)'
+                : 'var(--ds-card)',
+              color: active ? 'var(--ds-green)' : 'var(--ds-text-2)',
               fontSize: 12,
               fontWeight: active ? 600 : 500,
               cursor: 'pointer',
               transition: 'all 180ms',
-              fontFamily: 'var(--font-ui)',
+              fontFamily: 'var(--ds-font)',
             }}
           >
             <Icon name={c.icon as any} size={12} />

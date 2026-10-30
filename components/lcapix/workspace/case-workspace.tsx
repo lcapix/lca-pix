@@ -8,6 +8,7 @@
 // case with the study's method and region, counts the seconds, then opens
 // Results.
 
+import { frozenStepCosts, runCosts, runLabel } from '@/lib/results/full-results-view'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
@@ -159,7 +160,7 @@ export function CaseWorkspace() {
     const total = runClimate(run)?.value
     if (total === undefined) return null
     const tree = (run.run_steps ?? []).map((s) => ({ id: s.component_id, parentId: s.parent_id }))
-    return { run_id: run.run_id, total, sums: subtreeSums(tree, ownClimate(run)) }
+    return { run_id: run.run_id, label: runLabel(run), total, sums: subtreeSums(tree, ownClimate(run)) }
   }, [run])
 
   if (status === 'loading' && !kase) {
@@ -216,14 +217,6 @@ export function CaseWorkspace() {
     ? `/project/${kase.project_id}/comparison?cases=${target.caseId},${kase.case_id}`
     : `/project/${kase.project_id}/comparison?cases=${kase.case_id}`
 
-  const stepCosts = steps.map((s) => ({
-    id: String(s.id),
-    name: s.name,
-    labor: s.costs.labor ?? 0,
-    material: s.costs.material ?? 0,
-    energy: s.costs.energy ?? 0,
-    other: (s.costs.transportation ?? 0) + (s.costs.equipment ?? 0) + (s.costs.overhead ?? 0),
-  }))
 
   const treeProps = {
     kase,
@@ -260,6 +253,7 @@ export function CaseWorkspace() {
                   completed={completed}
                   against={against}
                   readOnly={readOnly}
+                  editedAfter={Boolean(run && inventory?.latest_run?.run_id === run.run_id && inventory.latest_run.changed_after_run)}
                   onOpenRun={(id) => go('results', id)}
                   onOpenInsights={() => setInsightsOpen(true)}
                 />
@@ -321,7 +315,7 @@ export function CaseWorkspace() {
           {
             id: 'results',
             label: 'Results',
-            badge: <span className="ws-tabbadge">{run ? `Run #${run.run_id}` : 'not run yet'}</span>,
+            badge: <span className="ws-tabbadge">{run ? runLabel(run) : 'not run yet'}</span>,
             controls: 'ws-tabpanel',
           },
           { id: 'writeup', label: 'Write-up', controls: 'ws-tabpanel' },
@@ -376,8 +370,9 @@ export function CaseWorkspace() {
         impacts={run?.impacts}
         componentBreakdown={insightsBreakdownOf(run)}
         materialBreakdown={insightsMaterialsOf(run)}
-        totalCost={stepCosts.reduce((t, s) => t + s.labor + s.material + s.energy + s.other, 0)}
-        stepCosts={stepCosts}
+        // The run's own costs, as frozen with it: never today's beside a past run's impacts.
+        totalCost={runCosts(run?.run_steps)?.total}
+        stepCosts={frozenStepCosts(run?.run_steps)}
         projectId={String(kase.project_id)}
         caseId={String(kase.case_id)}
         runId={run?.run_id ?? null}

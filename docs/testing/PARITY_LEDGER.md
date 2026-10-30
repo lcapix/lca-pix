@@ -116,22 +116,29 @@ classic page is full width up to 1440px (`components/lcapix/results/results-page
 
 | ID | Capability | Classic (`components/lcapix/results/`) | Now (main) | Status |
 |---|---|---|---|---|
-| R01 | Full-page results, printable | `results-page.tsx:176-179` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R02 | Choose method and region for a run | `results-header.tsx:132-200`, run dialog `results-page.tsx:302-309` | `components/lcapix/workspace/case-workspace.tsx` | kept |
-| R03 | Total for the selected category, change vs the previous comparable run | `dashboard-hero.tsx:88-163` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R04 | KPI row: categories, components, last run | `dashboard-hero.tsx:166-199` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R05 | Top 5 contributors for any category | `dashboard-hero.tsx:210-284` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R06 | Switch the whole page to another category | `impact-categories-panel.tsx:51-120` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R07 | ISO summary: goal and scope, per-functional-unit table, data-quality statement | `iso-run-summary.tsx:67-175` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R08 | Stage panel and boundary gaps | `stage-panel.tsx:32-143` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R09 | Flow table: amount × factor = impact per category, filters, Global-fallback flag, jump to step | `flow-table.tsx:72-222` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R10 | Run history with method, region, status, timeline | `historical-runs-card.tsx:56-104` | `components/lcapix/workspace/full-results.tsx` | kept |
-| R11 | Frozen data-quality warnings for the run | `data-quality-warnings.tsx:5-24` | `components/lcapix/workspace/full-results.tsx` | kept |
+| R01 | Full-page results, printable | `results-page.tsx:176-179` | `components/lcapix/workspace/full-results.tsx:129`; "Open full page" in `results-panel.tsx:119` | kept |
+| R02 | Choose method and region for a run | `results-header.tsx:132-200`, run dialog `results-page.tsx:302-309` | `components/lcapix/workspace/case-workspace.tsx` run dialog | kept |
+| R03 | Total for the selected category, change vs the previous comparable run | `dashboard-hero.tsx:88-163` | `components/lcapix/workspace/full-results.tsx:172` | kept |
+| R04 | KPI row: categories, components, last run | `dashboard-hero.tsx:166-199` | `components/lcapix/workspace/full-results.tsx:184` | kept |
+| R05 | Top 5 contributors for any category | `dashboard-hero.tsx:210-284` | `components/lcapix/workspace/full-results.tsx:253` | kept |
+| R06 | Switch the whole page to another category | `impact-categories-panel.tsx:51-120` | `components/lcapix/workspace/full-results.tsx:148` | kept |
+| R07 | ISO summary: goal and scope, per-functional-unit table, data-quality statement | `iso-run-summary.tsx:67-175` | `components/lcapix/workspace/full-results.tsx:507` | kept |
+| R08 | Stage panel and boundary gaps | `stage-panel.tsx:32-143` | `components/lcapix/workspace/full-results.tsx:588` | kept |
+| R09 | Flow table: amount × factor = impact per category, filters, Global-fallback flag, jump to step | `flow-table.tsx:72-222` | `components/lcapix/workspace/full-results.tsx:630` | kept |
+| R10 | Run history with method, region, status, timeline | `historical-runs-card.tsx:56-104` | `components/lcapix/workspace/full-results.tsx:275` | kept |
+| R11 | Frozen data-quality warnings for the run | `data-quality-warnings.tsx:5-24` | `components/lcapix/workspace/full-results.tsx:311` | kept |
 | R12 | Older-run banner | `older-run-banner.tsx:22-44` | `WS/results-panel.tsx:120-129` | kept |
 | R13 | Export PDF, PowerPoint, CSV | `results-header.tsx:204-229` | Write-up tab (`WS/write-up-panel.tsx:224-241`) and `/reports` | moved |
 | R14 | Write-up | `results-page.tsx:256-264` | Write-up tab | moved |
 | R15 | Duplicate the case, compare | `next-steps-bar.tsx:37-53` | What-if button, Compare link | kept |
 | R16 | Magic Insights on the selected category | `results-page.tsx:311-325` | Button; modal has its own category picker | kept |
+| R17 | Categories left out for lack of a factor are named, never shown as zero (finding 1.8, 2.11) | n/a (discovery run 1, 2) | `components/lcapix/workspace/results-panel.tsx` "Not counted" note; `components/lcapix/workspace/full-results.tsx` Coverage; `method_categories` from GET /api/cases/:id/assessments | kept |
+| R18 | Magic Insights says "no cost was entered", "the top two steps" only with two, and labels each Source data value (finding 1.16) | n/a (discovery run 1) | `lib/insights/insight-text.ts`; `components/lcapix/magic-insights/contributors-list.tsx` | kept |
+| R19 | No "Compare to base" on the base case itself (finding 1.17) | n/a (discovery run 1) | `components/lcapix/magic-insights-modal.tsx` | kept |
+| R20 | A run is named by its place in its case, "Run 1" (finding 2.8) | n/a (discovery run 2) | `lib/results/full-results-view.ts` `runLabel`; `case_run_number` from the API | kept |
+| R21 | Six-digit values never run into their shares; the unit wraps (finding 3.3) | n/a (discovery run 3) | `components/lcapix/workspace/results-panel.tsx` What builds this number; `.ws-answer` in `app/ds.css` | kept |
+| R22 | One money format with thousands grouped, "$101,150.00" (finding 3.4) | n/a (discovery run 3) | `lib/ui/format.ts` `money` | kept |
+| R23 | Results says when the case changed after its run, with Compare's rule (finding 3.11) | n/a (discovery run 3) | `components/lcapix/workspace/results-panel.tsx`, `components/lcapix/workspace/full-results.tsx`; `changed_after_run` from GET /api/cases/:id/inventory | kept |
 
 ## I. Document import
 
@@ -184,7 +191,7 @@ Path legend:
 | P02 | Project name heading | PH c:50-64 | PH m:53-64 (OVm:117-127) | GET /api/projects/:id | kept | |
 | P03 | "comparison" chip when there are comparatives | PH c:65-71 | PH m:65-73 | none | kept | |
 | P04 | Project description | PH c:72-82 | PH m:75-85 | GET /api/projects/:id | kept | New projects now save description '' (see P106), so this is empty for them |
-| P05 | Analytics button (?caseId=active) | PH c:84-96 | PH m:87-99 | none | partial | Now opens the class-progress Analytics, which ignores caseId (see P45) |
+| P05 | Analytics button (?caseId=active) | PH c:84-96 | `components/lcapix/project/analytics-page.tsx:34` sends `?caseId=` to that case's full results page | none | kept |  |
 | P06 | Compare Cases button (disabled under 2 cases) | PH c:97-109 | PH m:100-112 | none | kept | Target is the new Compare |
 | P07 | Class button to /class | PH c:110-117 | PH m:113-120 | none | kept | Only entry to /class; sidebar links /people |
 | P08 | Import Data button | PH c:118-127 | PH m:123-132 | none | kept | Hidden for viewers |
@@ -234,18 +241,18 @@ Path legend:
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P45 | Single-case analytics for any case (?caseId, default base) | ANc:34, `lib/analytics/load.ts:12-25` | `components/lcapix/project/analytics-page.tsx` opens the case results page | GET /api/projects/:id/cases, GET /api/cases/:id/assessments, GET /api/assessments/:runId | kept | |
+| P45 | Single-case analytics for any case (?caseId, default base) | ANc:34, `lib/analytics/load.ts:12-25` | `components/lcapix/project/analytics-page.tsx:34` opens the case's full results page | GET /api/projects/:id/cases, GET /api/cases/:id/assessments, GET /api/assessments/:runId | kept |  |
 | P46 | Who can open it | any member via Overview | A solo owner sees their own cases (`components/lcapix/project/analytics-page.tsx`) | none | kept | |
 | P47 | Header: project name, assessed-case count | ANc:91-96 | `components/lcapix/project/analytics-page.tsx` counts the cases it shows | GET /api/projects/:id | kept | |
-| P48 | PDF export (window.print) | `analytics-header.tsx:60-65` | `@media print` in `app/ds.css` on the full results page | none | kept | |
+| P48 | PDF export (window.print) | `analytics-header.tsx:60-65` | `@media print` in `app/ds.css:1284` on the full results page | none | kept |  |
 | P49 | Back to project button and breadcrumb | `analytics-header.tsx:31-37` | sidebar | none | moved | |
-| P50 | Case card: GWP, change vs base, total cost, tiles | ANc:103, `case-cards.tsx` | `components/lcapix/workspace/full-results.tsx` | as P45 | kept | |
+| P50 | Case card: GWP, change vs base, total cost, tiles | ANc:103, `case-cards.tsx` | `components/lcapix/workspace/full-results.tsx:190` | as P45 | kept |  |
 | P51 | Verdict card | ANc:106-108 | MISSING | none | dropped | Dropped by Shreya 2026-10-27. Dead in classic too: only one case is loaded |
-| P52 | Category comparison: Absolute / Radar / Log-scale toggle | ANc:111-115, `category-comparison-panel.tsx:110-120` | `components/lcapix/workspace/full-results.tsx` | as P45 | kept | |
-| P53 | Cost analysis: cost by kind, cost per unit impact | ANc:119-121, `cost-analysis-panel.tsx:174` | `components/lcapix/workspace/full-results.tsx` | GET /api/cases/:id/components | kept | |
+| P52 | Category comparison: Absolute / Radar / Log-scale toggle | ANc:111-115, `category-comparison-panel.tsx:110-120` | `components/lcapix/workspace/full-results.tsx:384` | as P45 | kept |  |
+| P53 | Cost analysis: cost by kind, cost per unit impact | ANc:119-121, `cost-analysis-panel.tsx:174` | `components/lcapix/workspace/full-results.tsx:214`, from the run's frozen costs | GET /api/cases/:id/assessments (run_steps) | kept |  |
 | P54 | Delta vs baseline chart | ANc:124-129 | MISSING | none | dropped | Dropped by Shreya 2026-10-27. Dead in classic (needs 2 loaded cases) |
-| P55 | Component breakdown stacked bar | ANc:132-137 | `components/lcapix/workspace/full-results.tsx` | as P45 | kept | |
-| P56 | Component diff table | ANc:140-146 | `components/lcapix/workspace/full-results.tsx` | as P45 | kept | |
+| P55 | Component breakdown stacked bar | ANc:132-137 | `components/lcapix/workspace/full-results.tsx:446`, one bar per case | as P45 | kept |  |
+| P56 | Component diff table | ANc:140-146 | `components/lcapix/workspace/full-results.tsx:248`, steps matched by their path of names | as P45 | kept |  |
 | P57 | No-data card with Try again | ANc:98-99 | ANm:62-67 ErrorCard retry | none | kept | |
 
 ### Compare /project/[projectId]/comparison (and /comparisons redirects)
@@ -584,7 +591,7 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G126 | Saved comparisons /project/[id]/comparisons and /comparisons/[id] | list on app/project/[projectId]/comparison/page.tsx:85-160 | both redirect to /comparison?tab=saved (comparisons/page.tsx:12; [comparisonId]/page.tsx:11), but compare-page.tsx has no saved list ("saved" not found) | GET /api/comparisons | missing | |
 | G127 | Page .../case/[caseId]/component/new | Redirects to the case with the Add step form open (`?add=step`) | `app/project/[projectId]/case/[caseId]/component/new/page.tsx` | - | kept | |
 | G128 | Page .../component/[componentId]/edit | Redirects to the case with that step selected (`?componentId=`) | `app/project/[projectId]/case/[caseId]/component/[componentId]/edit/page.tsx` | - | kept | |
-| G129 | Case-by-case analytics (radar, normalised view, log scale, PDF export) | app/project/[projectId]/analytics/page.tsx | `components/lcapix/workspace/full-results.tsx` | - | kept | |
+| G129 | Case-by-case analytics (radar, normalised view, log scale, PDF export) | app/project/[projectId]/analytics/page.tsx | `components/lcapix/workspace/full-results.tsx:384` (Absolute, Radar, Log scale) and print | - | kept |  |
 | G130 | /project/[id]/case/[caseId]/results | page | `components/lcapix/workspace/full-results.tsx` | - | kept | |
 
 ### Command palette
@@ -607,7 +614,7 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 |---|---|---|---|---|---|---|
 | G140 | Results header button, pulses after a run | components/lcapix/results/results-header.tsx:224-240; lib/results/use-results.ts:177 | classic results only (flag); workspace buttons tree-tab.tsx:406, inventory-tab.tsx:136, results-panel.tsx:307 | POST /api/insights | moved | no pulse |
 | G141 | Next-steps "See what drives it" | components/lcapix/results/next-steps-bar.tsx:34-40 | classic results only | POST /api/insights | moved | |
-| G142 | Opens on the category picked on Results | app/project/[projectId]/case/[caseId]/results/page.tsx:280 | `components/lcapix/workspace/case-workspace.tsx` | - | kept | |
+| G142 | Opens on the category picked on Results | app/project/[projectId]/case/[caseId]/results/page.tsx:280 | `components/lcapix/workspace/full-results.tsx:153` Magic Insights opens on the category chosen on the full results page | - | kept |  |
 | G143 | AI narration | lib/insights/use-magic-insights.ts (facts only) | adds run_id (use-magic-insights.ts:216); server number-check, cache, project switch (app/api/insights/route.ts:206-212) | POST /api/insights | kept | no run means computed text only |
 | G144 | Project AI on/off switch | none | no UI | PUT /api/projects/{id} ai_enabled (route.ts:143-147) | hidden | new, API only |
 | G145 | Footer: provenance, Open case editor, Close | components/lcapix/magic-insights/footer.tsx | same file, names the model or "Computed by LCAPIX" | - | kept | |

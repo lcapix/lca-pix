@@ -5,6 +5,7 @@
 // and the one primary: Run Assessment, or Make my own copy on the read-only
 // sample. While a run is going: "Running… N s".
 
+import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { makeOwnCopy } from '@/lib/workspace/make-copy'
@@ -25,7 +26,7 @@ export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSt
     ? `${fmtAmount(k.reference_flow ?? 1)} ${k.reference_flow_unit}`
     : k.project_functional_unit?.trim() || `${fmtAmount(k.reference_flow ?? 1)} unit`
   const scope = inv ? `${inv.method} · ${inv.region}` : k.project_lcia_method ?? ''
-  const run = inv?.latest_run ? `Run #${inv.latest_run.run_id}` : noSteps ? 'no steps yet' : 'not run yet'
+  const run = inv?.latest_run ? runLabel(inv.latest_run) : noSteps ? 'no steps yet' : 'not run yet'
   return [kind, unit, scope, run, k.read_only ? 'Sample, read-only' : null].filter(Boolean).join(' · ')
 }
 

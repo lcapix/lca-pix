@@ -53,3 +53,11 @@ describe('display helpers', () => {
     expect(result3(1538.0004)).toBe('1,538.000')
   })
 })
+
+describe('R22 one money format (finding 3.4)', () => {
+  it('R22 groups thousands in every amount of money', () => {
+    expect(money(101150)).toBe('$101,150.00')
+    expect(money(-1234.5)).toBe('−$1,234.50')
+    expect(money(0.38745)).toBe('$0.39')
+  })
+})

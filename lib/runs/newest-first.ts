@@ -48,3 +48,13 @@ export function inRunOrder<T extends { run_id: unknown }>(ids: number[], rows: T
 
 /** "?, ?, ?" for an IN list of n ids. */
 export const placeholders = (n: number) => Array.from({ length: n }, () => '?').join(', ');
+
+/**
+ * Each completed run's place in its own case, oldest first: Run 1, Run 2 (2.8).
+ * Screens say "Run 1 of this case"; only exports keep the site-wide run id.
+ */
+export async function caseRunNumbers(caseId: number): Promise<Map<number, number>> {
+  const ids = await newestRunIds(caseId, { status: 'completed-or-unset', order: 'id' });
+  const oldestFirst = [...ids].sort((a, b) => a - b);
+  return new Map(oldestFirst.map((id, i) => [id, i + 1]));
+}

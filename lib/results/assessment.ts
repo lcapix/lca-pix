@@ -24,6 +24,8 @@ export interface APIComponentBreakdown {
 /** One row of a run's per-flow detail (API shape). */
 export interface FlowDetailRow {
   flow_id: number
+  /** The step the flow sits on, in the run's own tree (snapshot runs). */
+  component_id?: number | null
   component: string
   substance: string
   category_name: string
@@ -32,9 +34,9 @@ export interface FlowDetailRow {
   unit: string
   factor: number
   impact: number
-  /** Factor scope the engine selected ('US', 'Global', ...) — snapshot runs only. */
+  /** Factor scope the engine selected ('US', 'Global', ...); snapshot runs only. */
   scope?: string
-  /** Unit conversion the engine applied (e.g. "1 g = 0.001 kg") — snapshot runs only. */
+  /** Unit conversion the engine applied (e.g. "1 g = 0.001 kg"); snapshot runs only. */
   conversion?: string | null
   /** Provenance tier of the factor (authoritative / industry_average / unverified / unknown). */
   source_tier?: string | null
@@ -47,6 +49,10 @@ export interface FlowDetailRow {
 /** A run as the results screen holds it. */
 export interface AssessmentResult {
   run_id: number
+  /** The run's place among its case's completed runs (2.8); null on a run that did not complete. */
+  case_run_number?: number | null
+  /** Every category the run's method has factors for; the ones missing from impacts were not counted. */
+  method_categories?: string[]
   run_name: string
   calculation_method: string
   status: string
@@ -74,6 +80,8 @@ export type FilterDir = 'all' | 'in' | 'out'
 export function toAssessmentResult(assessment: any): AssessmentResult {
   return {
     run_id: assessment.run_id,
+    case_run_number: assessment.case_run_number ?? null,
+    method_categories: Array.isArray(assessment.method_categories) ? assessment.method_categories : [],
     run_name: assessment.run_name,
     calculation_method: assessment.calculation_method,
     status: assessment.status,

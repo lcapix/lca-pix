@@ -92,6 +92,20 @@ describe('summary', () => {
   })
 })
 
+describe('R18 Magic Insights reads what was entered (finding 1.16)', () => {
+  it('R18 says "no cost was entered" instead of $0', () => {
+    expect(buildInsightText({ ...BASE, totalCost: 0 })).toContain('at {{no cost was entered}}.')
+    expect(buildInsightText({ ...BASE, totalCost: undefined })).not.toContain('$0')
+  })
+
+  it('R18 names "the top two steps" only when there are two', () => {
+    const one = buildInsightText({ ...BASE, contributors: [FRAME] })
+    expect(one).toContain('carries the most ({{60.0%}}).')
+    expect(one).not.toContain('top two steps')
+    expect(buildInsightText(BASE)).toContain('the top two steps account for')
+  })
+})
+
 describe('reduce', () => {
   const reduce = (over: Partial<InsightTextInput>) => buildInsightText({ ...BASE, activeChip: 'reduce', ...over })
 
@@ -215,7 +229,7 @@ describe('trade-off', () => {
   it('is reached from the trade-off chip with the case’s cost', () => {
     expect(
       buildInsightText({ ...BASE, activeChip: 'tradeoff', costView: costView({ material: 60, labor: 40, energy: 0, other: 0 }) }),
-    ).toContain('of the {{$500}} cost')
+    ).toContain('of the {{$500.00}} cost')
     expect(buildInsightText({ ...BASE, activeChip: 'tradeoff', totalCost: undefined, costView: costView({ material: 60, labor: 40, energy: 0, other: 0 }) })).toContain(
       'of the {{–}} cost',
     )

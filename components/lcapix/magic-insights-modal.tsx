@@ -94,7 +94,7 @@ export function MagicInsightsModal({
         onSelect={ins.setActiveChip}
       />
 
-      {/* Reduce % input — only visible when the reduce chip is active. */}
+      {/* Reduce % input; only visible when the reduce chip is active. */}
       {ins.activeChip === 'reduce' && (
         <ReduceTargetRow
           reducePctInput={ins.reducePctInput}
@@ -104,7 +104,7 @@ export function MagicInsightsModal({
         />
       )}
 
-      {/* Free-text prompt — only when the custom chip is active. */}
+      {/* Free-text prompt; only when the custom chip is active. */}
       {ins.activeChip === 'custom' && (
         <CustomPromptForm
           prompt={ins.prompt}
@@ -133,7 +133,7 @@ export function MagicInsightsModal({
 
       {/* Top contributor mini-list (per active category) */}
       {ins.contributors.length > 0 && (
-        <ContributorsList activeLabel={ins.activeLabel} contributors={ins.contributors} />
+        <ContributorsList activeLabel={ins.activeLabel} unit={ins.activeUnit} contributors={ins.contributors} />
       )}
 
       {/* Footer actions */}

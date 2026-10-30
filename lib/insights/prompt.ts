@@ -2,7 +2,7 @@
 //
 // The engine computes every number (contributor shares, totals, feasibility
 // math). The open model's ONLY job is to phrase and reason over those
-// computed facts and answer the user's free-text question — it must never
+// computed facts and answer the user's free-text question; it must never
 // produce a new figure. This is the same "never invents numbers" discipline
 // the ingestion pipeline follows; it is what keeps AI narration defensible
 // in an LCA context.
@@ -49,7 +49,7 @@ const SYSTEM = [
   '   or extrapolate a number that is not given. Percentages and totals must be',
   '   quoted exactly as provided.',
   '2. If the question cannot be answered from the FACTS, say so plainly and name',
-  '   what data would be needed — do not guess.',
+  '   what data would be needed; do not guess.',
   '3. Do not claim a specific characterization factor, emission value, or source',
   '   unless it appears in the FACTS.',
   '4. Be concise: at most ~140 words, plain prose, no markdown headings.',
@@ -62,7 +62,7 @@ const SYSTEM = [
   '   order; do not invent levers the facts do not support. Do not do arithmetic',
   '   and do not estimate savings: a what-if is proven by running a copy of the',
   '   case. No platitudes like "consider reducing energy use". Never repeat a point.',
-  '7. Each mode must read differently and lead with different figures — a summary,',
+  '7. Each mode must read differently and lead with different figures; a summary,',
   '   a reduction plan, a cost trade-off, and a base comparison are not the same.',
 ].join('\n');
 
@@ -104,7 +104,8 @@ export function buildInsightMessages(facts: InsightFacts): {
     factLines.push(`Category total: ${facts.total.value} ${facts.total.unit}`);
   }
   if (facts.totalCost !== undefined) {
-    factLines.push(`Total activity-based cost: $${facts.totalCost.toLocaleString()}`);
+    // The screens' money format ($101,150.00), fixed to en-US so it never depends on the locale.
+    factLines.push(`Total activity-based cost: $${facts.totalCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   }
   if (facts.mode === 'reduce' && facts.reducePct !== undefined) {
     factLines.push(`Requested reduction target: ${facts.reducePct}%`);

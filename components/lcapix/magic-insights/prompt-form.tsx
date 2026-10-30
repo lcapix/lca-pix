@@ -9,7 +9,7 @@ export interface CustomPromptFormProps {
   exampleQs: string[]
 }
 
-/** Free-text prompt — shown while the custom chip is active. */
+/** Free-text prompt; shown while the custom chip is active. */
 export function CustomPromptForm({ prompt, onPromptChange, onSubmit, exampleQs }: CustomPromptFormProps) {
   return (
     <form
@@ -33,10 +33,10 @@ export function CustomPromptForm({ prompt, onPromptChange, onSubmit, exampleQs }
           fontSize: 13,
           padding: '8px 10px',
           borderRadius: 8,
-          border: '1px solid var(--border-subtle)',
-          background: 'var(--surface-base)',
-          color: 'var(--text-primary)',
-          fontFamily: 'var(--font-ui)',
+          border: '1px solid var(--ds-line)',
+          background: 'var(--ds-main)',
+          color: 'var(--ds-text)',
+          fontFamily: 'var(--ds-font)',
           resize: 'vertical',
           minHeight: 48,
         }}

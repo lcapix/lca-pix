@@ -11,7 +11,7 @@ export interface ReduceTargetRowProps {
   onPreset: (preset: number) => void
 }
 
-/** Reduce % input and presets — shown while the reduce chip is active. */
+/** Reduce % input and presets; shown while the reduce chip is active. */
 export function ReduceTargetRow({ reducePctInput, onInputChange, reducePct, onPreset }: ReduceTargetRowProps) {
   return (
     <div
@@ -23,7 +23,7 @@ export function ReduceTargetRow({ reducePctInput, onInputChange, reducePct, onPr
         flexWrap: 'wrap',
       }}
     >
-      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+      <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
         Reduce target
       </span>
       <input
@@ -38,14 +38,14 @@ export function ReduceTargetRow({ reducePctInput, onInputChange, reducePct, onPr
           fontSize: 13,
           padding: '4px 8px',
           borderRadius: 6,
-          border: '1px solid var(--border-subtle)',
-          background: 'var(--surface-base)',
-          color: 'var(--text-primary)',
-          fontFamily: 'var(--font-ui)',
+          border: '1px solid var(--ds-line)',
+          background: 'var(--ds-main)',
+          color: 'var(--ds-text)',
+          fontFamily: 'var(--ds-font)',
           textAlign: 'right',
         }}
       />
-      <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>%</span>
+      <span style={{ fontSize: 12, color: 'var(--ds-text-3)' }}>%</span>
       <div style={{ display: 'flex', gap: 6, marginLeft: 4 }}>
         {REDUCE_PRESETS.map((preset) => (
           <button
@@ -57,17 +57,17 @@ export function ReduceTargetRow({ reducePctInput, onInputChange, reducePct, onPr
               fontSize: 11,
               padding: '3px 8px',
               borderRadius: 999,
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid var(--ds-line)',
               background:
                 reducePct === preset
-                  ? 'oklch(from var(--brand-primary) l c h / 0.10)'
+                  ? 'oklch(from var(--ds-green) l c h / 0.10)'
                   : 'transparent',
               color:
                 reducePct === preset
-                  ? 'var(--brand-primary)'
-                  : 'var(--text-secondary)',
+                  ? 'var(--ds-green)'
+                  : 'var(--ds-text-2)',
               cursor: 'pointer',
-              fontFamily: 'var(--font-ui)',
+              fontFamily: 'var(--ds-font)',
             }}
           >
             {preset}%

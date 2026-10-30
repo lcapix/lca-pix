@@ -5,7 +5,7 @@
  * applied, the factor VALUE and SCOPE it selected, and the resulting impact)
  * plus its warnings are serialized onto the run row at execution time.
  * Results pages then read the snapshot instead of recomputing from live
- * flows/factors — so a historical run keeps telling the truth after the model
+ * flows/factors; so a historical run keeps telling the truth after the model
  * or the factor table changes. That is the "same model, same numbers,
  * forever" guarantee an auditor expects.
  *
@@ -385,6 +385,8 @@ export function snapshotRunSteps(snap: RunSnapshot) {
       type: s.type,
       cost: parts.length ? parts.reduce((t, v) => t + Number(v), 0) : null,
       currency: s.costs?.currency ?? null,
+      // Each of the six kinds as frozen (null = not entered), for cost by kind.
+      kinds: Object.fromEntries(kinds.map((k) => [k, s.costs?.[k] ?? null])) as Record<(typeof kinds)[number], number | null>,
     };
   });
 }

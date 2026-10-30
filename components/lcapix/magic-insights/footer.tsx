@@ -27,14 +27,14 @@ export function MagicInsightsFooter({
     <div
       style={{
         padding: '14px 24px',
-        borderTop: '1px solid var(--border-subtle)',
+        borderTop: '1px solid var(--ds-line)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        background: 'var(--surface-base)',
+        background: 'var(--ds-main)',
       }}
     >
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0, marginRight: 12 }}>
+      <div style={{ fontSize: 12, color: 'var(--ds-text-2)', flex: 1, minWidth: 0, marginRight: 12 }}>
         {source}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>

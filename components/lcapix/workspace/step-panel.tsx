@@ -9,6 +9,7 @@
 // from these flows: $0.76 · Use it") and the ones with no price. In the Cost
 // view the panel shows the step's costs.
 
+import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useMemo, useState } from 'react'
 import type { CostBasisKind } from '@/lib/costs/cost-basis'
 import { costedInLine, flowCostNotes } from '@/lib/workspace/flow-cost-text'
@@ -100,7 +101,7 @@ export function StepPanel({
           <span>
             <strong style={{ color: 'var(--ds-warn)' }}>Out of date</strong>
             <br />
-            You changed {changed} {changed === 1 ? 'flow' : 'flows'} after Run #{inventory.latest_run.run_id}. Run again to update.
+            You changed {changed} {changed === 1 ? 'flow' : 'flows'} after {runLabel(inventory.latest_run)}. Run again to update.
           </span>
         </div>
       )}

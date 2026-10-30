@@ -99,7 +99,7 @@ export function TreeTab({
   onView: (v: TreeView) => void
   onOpenInsights: () => void
   /** Results tab: the run's value per step (its subtree) and total; chips read from it. */
-  runValues?: { run_id: number; total: number; sums: Map<number, number> } | null
+  runValues?: { run_id: number; label?: string; total: number; sums: Map<number, number> } | null
   /** Results tab: the panel beside the tree is the Results panel, not the step. */
   resultsPanel?: ReactNode
   /** The project's name: an empty case's product is named after it (F2.5). */
@@ -249,7 +249,7 @@ export function TreeTab({
             runValues && (
               <>
                 <i aria-hidden />
-                <span>Impact in kg CO₂-eq · shares from Run #{runValues.run_id}</span>
+                <span>Impact in kg CO₂-eq · shares from {runValues.label ?? `Run #${runValues.run_id}`}</span>
               </>
             )
           ) : (

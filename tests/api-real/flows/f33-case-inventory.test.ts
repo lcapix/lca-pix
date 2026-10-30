@@ -36,7 +36,7 @@ describe('F33 case inventory', () => {
       expect(frozen.impact).toBeCloseTo(r.climate.impact, 12);
       expect(r.amount * r.climate.factor).toBeCloseTo(r.climate.impact, 12);
     }
-    expect(res.json.latest_run).toMatchObject({ run_id: sample.run_id, changed_flows: 0 });
+    expect(res.json.latest_run).toMatchObject({ run_id: sample.run_id, changed_flows: 0, changed_after_run: false });
   });
 
   it('a change in a copy marks its run out of date by the number of flows changed', async () => {
@@ -45,15 +45,44 @@ describe('F33 case inventory', () => {
     expect((await api.post(`/api/cases/${cid}/assessments`, { token: u.token, json: {} })).status).toBe(201);
     let inv = (await api.get(`/api/cases/${cid}/inventory`, { token: u.token })).json;
     expect(inv.latest_run.changed_flows).toBe(0);
+    expect(inv.latest_run.changed_after_run).toBe(false);
     const cure = inv.rows.find((r: any) => r.substance === 'Electricity' && r.amount === 0.4);
     expect((await api.put(`/api/flows/${cure.flow_id}`, { token: u.token, json: { quantity: 0.25 } })).status).toBe(200);
     const tape = inv.rows.find((r: any) => r.substance === 'Packaging tape');
     expect((await api.put(`/api/flows/${tape.flow_id}`, { token: u.token, json: { unit: 'g', quantity: 4 } })).status).toBe(200);
     inv = (await api.get(`/api/cases/${cid}/inventory`, { token: u.token })).json;
     expect(inv.latest_run.changed_flows).toBe(2);
+    // 3.11: the same rule as Compare's "Edited after this run".
+    expect(inv.latest_run.changed_after_run).toBe(true);
     expect(inv.counts.left_out).toBe(0);
     expect(inv.counts.no_factor).toBe(4);
     expect(inv.climate.value.toFixed(3)).toBe('1.667');
+  });
+
+  it('3.11 an edit put back still marks the run changed, as Compare does (a value check would not)', async () => {
+    const copy = await api.post(`/api/cases/${sample.case_id}/duplicate`, { token: u.token, json: { case_name: 'Put back' } });
+    const cid = copy.json.case_id;
+    expect((await api.post(`/api/cases/${cid}/assessments`, { token: u.token, json: {} })).status).toBe(201);
+    let inv = (await api.get(`/api/cases/${cid}/inventory`, { token: u.token })).json;
+    const cure = inv.rows.find((r: any) => r.substance === 'Electricity' && r.amount === 0.4);
+    await api.put(`/api/flows/${cure.flow_id}`, { token: u.token, json: { quantity: 0.25 } });
+    await api.put(`/api/flows/${cure.flow_id}`, { token: u.token, json: { quantity: 0.4 } });
+    inv = (await api.get(`/api/cases/${cid}/inventory`, { token: u.token })).json;
+    expect(inv.latest_run.changed_flows).toBe(0);
+    expect(inv.latest_run.changed_after_run).toBe(true);
+  });
+
+  it('3.11 deleting a step after the run marks the run changed, as Compare does', async () => {
+    const copy = await api.post(`/api/cases/${sample.case_id}/duplicate`, { token: u.token, json: { case_name: 'Deleted step' } });
+    const cid = copy.json.case_id;
+    expect((await api.post(`/api/cases/${cid}/assessments`, { token: u.token, json: {} })).status).toBe(201);
+    const comps = (await api.get(`/api/cases/${cid}/components`, { token: u.token })).json;
+    const list = comps.components ?? comps;
+    const pack = list.find((k: any) => /Fold and tape/.test(k.component_name ?? k.name));
+    expect(pack).toBeTruthy();
+    expect((await api.delete(`/api/components/${pack.component_id ?? pack.id}`, { token: u.token })).status).toBeLessThan(300);
+    const inv = (await api.get(`/api/cases/${cid}/inventory`, { token: u.token })).json;
+    expect(inv.latest_run.changed_after_run).toBe(true);
   });
 
   it('a viewer reads it; an outsider gets 404', async () => {
