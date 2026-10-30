@@ -14,6 +14,7 @@ export const USE_CASES = [
   { id: 'teaching', label: 'Teaching a class', hint: 'Students copy your base case.' },
   { id: 'lab', label: 'Research in a lab', hint: 'Studies with the people you add.' },
   { id: 'own_study', label: 'My own study', hint: 'Just you, one project at a time.' },
+  { id: 'student', label: 'Student in a class', hint: 'You work on a case your instructor set.' },
 ] as const
 export type UseCase = (typeof USE_CASES)[number]['id']
 

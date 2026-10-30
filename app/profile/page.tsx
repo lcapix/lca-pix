@@ -24,6 +24,10 @@ import { ApiError, apiGet, apiRequest } from "@/lib/api-client"
  */
 
 const USE_CASES = [
+  { value: "teaching", label: "Teaching a class" },
+  { value: "lab", label: "Research in a lab" },
+  { value: "own_study", label: "My own study" },
+  { value: "student", label: "Student in a class" },
   { value: "product", label: "Product LCA" },
   { value: "facility", label: "Site / facility LCA" },
   { value: "comparative", label: "Comparative study" },

@@ -222,6 +222,13 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
         </span>
         <Switch checked={guided} onChange={setGuided} label="Guided mode" hideLabel />
       </div>
+      <p className="ds-nav-meta" style={{ margin: '0 12px 8px', fontSize: 12, color: 'var(--ds-text-3)' }}>Kept on this device.</p>
+      <Link href="/library/factors" className="ds-nav-item" onClick={go}>
+        Factors
+      </Link>
+      <Link href="/library/substances" className="ds-nav-item" onClick={go}>
+        Substances
+      </Link>
       <Link href="/guide" className="ds-nav-item" onClick={go}>
         <ShellIcon name="help" />
         Help

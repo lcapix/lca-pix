@@ -14,6 +14,7 @@ import { apiRequest } from '@/lib/api-client'
 import { useShellData, useShellStore } from '@/lib/shell/use-shell'
 import { caseTotal, co2Unit } from '@/lib/ui/format'
 import { continueNext, continueParts, countsLine, homeMode, needsAttention, projectMeta, toHomeProject, type HomeProject } from '@/lib/home/home-view'
+import { homeKpis, libraryCounts } from '@/lib/home/projects'
 import { useContinueCase } from '@/lib/home/use-continue'
 import { readLastCase, whenWords } from '@/lib/home/last-case'
 import { SampleOverview } from './sample-overview'
@@ -131,8 +132,30 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
   const [removing, setRemoving] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [q, setQ] = useState('')
+  const [filter, setFilter] = useState<'all' | 'base' | 'comp'>('all')
+  const [layout, setLayout] = useState<'grid' | 'list'>('grid')
+  const [lib, setLib] = useState<{ factors: number; components: number } | null>(null)
   const addSample = useAddSample()
   const phone = usePhone()
+  useEffect(() => {
+    let live = true
+    apiRequest('/api/integrations/status')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => live && setLib(libraryCounts(d)))
+      .catch(() => live && setLib(null))
+    return () => {
+      live = false
+    }
+  }, [])
+  const shown = own.filter((p) => (filter === 'all' ? true : filter === 'base' ? p.case_count <= 1 : p.case_count > 1))
+  const tiles = homeKpis({
+    projectCount: own.length,
+    totalCases: own.reduce((s, p) => s + p.case_count, 0),
+    totalComponents: own.reduce((s, p) => s + p.component_count, 0),
+    factors: lib?.factors ?? null,
+    substances: lib?.components ?? null,
+    fmtInt: (n) => n.toLocaleString('en-US'),
+  })
 
   const remove = async () => {
     if (!sample) return
@@ -162,6 +185,20 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
         </div>
         <HomeSearch projects={projects} q={q} setQ={setQ} />
       </header>
+      <ul aria-label="Home counts" style={{ display: 'flex', gap: 12, listStyle: 'none', padding: 0, flexWrap: 'wrap' }}>
+        {tiles.map((k) => (
+          <li key={k.label} className="ds-card" style={{ padding: 12, minWidth: 140 }}>
+            {k.href ? <Link href={k.href}><strong>{k.label}</strong></Link> : <strong>{k.label}</strong>}
+            <span style={{ display: 'block', fontSize: 22 }}>{k.display ?? k.numeric}</span>
+            <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>{k.sub}</span>
+          </li>
+        ))}
+      </ul>
+      {teaching && own[0] && (
+        <p className="ds-card" style={{ padding: 12 }}>
+          Set up a class on <Link href={`/project/${own[0].project_id}/people`}>People</Link>. Students see only their own case.
+        </p>
+      )}
 
       <div className="home-top">
         {cont.data && <ContinueCard c={cont.data} />}
@@ -191,19 +228,32 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
       <section aria-labelledby="yours-h" style={{ marginTop: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
           <h2 id="yours-h" className="ds-section-label" style={{ flex: 1 }}>
-            Your projects · {own.length}
+            Your projects · {shown.length}
           </h2>
+          <span role="group" aria-label="Show projects">
+            <button type="button" className="ds-btn ds-btn--small" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button>
+            <button type="button" className="ds-btn ds-btn--small" aria-pressed={filter === 'base'} onClick={() => setFilter('base')}>Single case</button>
+            <button type="button" className="ds-btn ds-btn--small" aria-pressed={filter === 'comp'} onClick={() => setFilter('comp')}>Comparison</button>
+            <button type="button" className="ds-btn ds-btn--small" aria-pressed={layout === 'grid'} onClick={() => setLayout('grid')}>Grid</button>
+            <button type="button" className="ds-btn ds-btn--small" aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>List</button>
+          </span>
           <Link href="/project/new" className="ds-link" style={{ fontWeight: 600 }}>
             + New project
           </Link>
         </div>
-        {own.length ? (
-          <div className="home-projects">
-            {own.map((p) => (
-              <Link key={p.project_id} href={`/project/${p.project_id}`} className="home-project ds-focusable">
+        {shown.length ? (
+          <div className="home-projects" data-layout={layout}>
+            {shown.map((p) => (
+              <div key={p.project_id} className="home-project ds-focusable" style={{ display: 'flex', gap: 12 }}>
+                <Link href={`/project/${p.project_id}`} style={{ flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <strong style={{ display: 'block', fontSize: 19 }}>{p.project_name}</strong>
+                  {p.description && <span style={{ display: 'block', fontSize: 14 }}>{p.description}</span>}
                   <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>{projectMeta(p, userId)}</span>
+                  <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)' }}>
+                    {p.case_count} {p.case_count === 1 ? 'case' : 'cases'} · {p.component_count} steps · {p.case_count > 1 ? 'Comparison' : 'Single case'}
+                    {p.updated_at ? ` · Updated ${whenWords(p.updated_at)}` : ''}
+                  </span>
                 </span>
                 <span style={{ textAlign: 'right' }}>
                   {p.base_run?.headline ? (
@@ -225,6 +275,16 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
                   )}
                 </span>
               </Link>
+              <button
+                type="button"
+                className="ds-link"
+                onClick={() => {
+                  void apiRequest(`/api/projects/${p.project_id}/pin`, { method: p.pinned ? 'DELETE' : 'PUT' }).then(() => useShellStore.getState().refresh())
+                }}
+              >
+                {p.pinned ? 'Unpin' : 'Pin'}
+              </button>
+            </div>
             ))}
           </div>
         ) : (

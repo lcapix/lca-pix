@@ -14,7 +14,7 @@ import { useAuthStore } from "@/lib/store"
 import { apiRequest } from "@/lib/api-client"
 import { USE_CASES, USE_CASE_IN_DEVELOPMENT, isAcceptedUseCase } from "@/lib/onboarding"
 import { useGuidedMode, useShellStore } from "@/lib/shell/use-shell"
-import { Button, ComingSoon, Flag, Switch } from "@/components/lcapix/ds"
+import { Button, Flag, Switch } from "@/components/lcapix/ds"
 import { EduAuthShell, FieldError } from "@/components/lcapix/auth/edu-auth-shell"
 
 type Phase = "form" | "saving" | "building" | "failed"
@@ -96,6 +96,13 @@ export default function OnboardingPage() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error ?? "Your answers were not saved.")
       if (storeUser) login({ ...storeUser, name: fullName.trim() })
+      const listed = await apiRequest("/api/projects")
+      const body = await listed.json().catch(() => ({}))
+      const hasOne = Array.isArray(body.projects) && body.projects.length > 0
+      if (hasOne) {
+        router.replace("/home")
+        return
+      }
     } catch (err: any) {
       setError(err?.message ?? "Your answers were not saved.")
       setPhase("form")
@@ -165,7 +172,7 @@ export default function OnboardingPage() {
             </legend>
             {USE_CASES.map((u) => (
               <label key={u.id} className="edu-use">
-                <input type="radio" name="useCase" value={u.id} checked={useCase === u.id} onChange={() => setUseCase(u.id)} />
+                <input type="radio" name="useCase" value={u.id} checked={useCase === u.id} aria-label={u.label} onChange={() => setUseCase(u.id)} />
                 <span>
                   <strong style={{ display: "block", fontSize: 16 }}>{u.label}</strong>
                   <span style={{ fontSize: 14, color: "var(--ds-text-2)" }}>{u.hint}</span>
@@ -207,7 +214,7 @@ export default function OnboardingPage() {
               <Switch checked={guided} onChange={setGuided} label="Guided mode" hideLabel />
             </span>
           </div>
-          <ComingSoon>Remembered on this device. Saving it to your account is coming soon.</ComingSoon>
+          <p className="edu-hint">Kept on this device. Turn it off from the sidebar.</p>
 
           {error && phase !== "failed" && (
             <div style={{ marginTop: 16 }}>

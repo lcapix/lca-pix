@@ -12,6 +12,10 @@ export interface HomeProject {
   owner_name?: string | null
   permission_name?: string | null
   is_sample: boolean
+  description: string
+  component_count: number
+  pinned: boolean
+  updated_at: string | null
   case_count: number
   member_count: number
   /** The owner once plus every other member. */
@@ -36,6 +40,10 @@ export function toHomeProject(p: Record<string, any>): HomeProject {
     permission_name: p.permission_name ?? null,
     is_sample: !!p.is_sample,
     case_count: n(p.case_count),
+    description: String(p.description ?? ''),
+    component_count: n(p.component_count),
+    pinned: !!p.pinned,
+    updated_at: p.updated_at ?? p.updatedAt ?? null,
     member_count: n(p.member_count),
     people: Math.max(1, n(p.people)),
     hand_ins: n(p.hand_ins),

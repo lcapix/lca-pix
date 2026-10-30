@@ -3,7 +3,7 @@ import { USE_CASES, isAcceptedUseCase, needsOnboarding } from '@/lib/onboarding'
 
 describe('onboarding rules (F1.3)', () => {
   it('offers teaching, lab and own study; keeps older values; refuses the company workspace and anything else', () => {
-    expect(USE_CASES.map((u) => u.id)).toEqual(['teaching', 'lab', 'own_study'])
+    expect(USE_CASES.map((u) => u.id)).toEqual(['teaching', 'lab', 'own_study', 'student'])
     for (const v of ['teaching', 'lab', 'own_study', 'research', 'product']) expect(isAcceptedUseCase(v), v).toBe(true)
     for (const v of ['company', 'hacking', '', null, 3]) expect(isAcceptedUseCase(v), String(v)).toBe(false)
   })
