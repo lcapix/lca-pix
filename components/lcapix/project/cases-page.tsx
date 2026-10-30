@@ -279,6 +279,11 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
           <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
             {c.case_name} · {c.latest_run ? <span className="ds-mono">Run #{c.latest_run.run_id}</span> : c.case_type === 'base' ? 'not run yet' : c.created_at ? `copied ${whenWords(c.created_at)}` : 'not run yet'}
           </span>
+          <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)' }}>
+            {(c as any).steps ?? 0} steps · {(c as any).flows ?? 0} flows · {(c as any).runs ?? 0} runs
+            {(c as any).lessons_total ? ` · lessons ${(c as any).lessons_answered?.length ?? 0} of ${(c as any).lessons_total}` : ''}
+            {(c as any).has_assumptions ? ' · write-up includes assumptions' : (c as any).has_interpretation ? ' · write-up' : ''}
+          </span>
         </span>
         {answer && (
           <span className="ds-mono" style={{ fontWeight: 600 }}>

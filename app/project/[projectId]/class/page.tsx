@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api-client'
@@ -48,7 +48,11 @@ type CaseProgress = {
 
 export default function ClassPage() {
   const params = useParams()
+  const router = useRouter()
   const projectId = String(params.projectId)
+  useEffect(() => {
+    router.replace(`/project/${projectId}/cases`)
+  }, [projectId, router])
 
   const [members, setMembers] = useState<Member[]>([])
   const [owner, setOwner] = useState<{ username: string | null; email: string | null } | null>(null)

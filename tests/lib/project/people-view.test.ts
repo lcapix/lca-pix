@@ -64,7 +64,7 @@ describe('people view', () => {
     expect(lines.map((l) => l.text)).toEqual([
       '2 added (Lena Ortiz and Kai Moreno)',
       '1 already here, access changed to Can read (Ana Ruiz)',
-      '1 has no account yet (j.doe@stateu.edu): they need to sign up first. No email is sent.',
+      '1 has no account. No account uses that email. They need to sign up first. (j.doe@stateu.edu)',
     ])
     expect(lines.map((l) => l.kind)).toEqual(['ok', 'changed', 'warn'])
     expect(lastAddLines([{ outcome: 'invalid', email: 'x' }, { outcome: 'limited', email: 'y@z.co' }], 'editor').map((l) => l.text)).toEqual([

@@ -42,20 +42,6 @@ export async function POST(
       (await projectAccessDenied(userId, Number(sourceCase.project_id), 'editor', { notFound: 'Case not found' }));
     if (denied) return denied;
 
-    // Copying a case whose steps have not landed yet produces a silently empty
-    // copy (seen live: Duplicate pressed while a new comparative case was still
-    // being populated). Refuse instead.
-    const sourceSize = await queryOne<any>(
-      `SELECT COUNT(*) AS n FROM component WHERE case_id = ?`,
-      [caseId]
-    );
-    if (Number(sourceSize?.n ?? 0) === 0) {
-      return NextResponse.json(
-        { error: 'This case has no steps yet, so there is nothing to copy. Wait for it to finish loading, or import a document first.' },
-        { status: 400 }
-      );
-    }
-
     // The body is optional (Duplicate with the default name sends none).
     const json = await readJson(request, { optional: true });
     if (!json.ok) return json.response;

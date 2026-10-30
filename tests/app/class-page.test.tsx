@@ -7,7 +7,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-vi.mock('next/navigation', () => ({ useParams: () => ({ projectId: '7' }) }))
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ projectId: '7' }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+}))
 vi.mock('next/link', () => ({ default: ({ children, href }: any) => <a href={href}>{children}</a> }))
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
