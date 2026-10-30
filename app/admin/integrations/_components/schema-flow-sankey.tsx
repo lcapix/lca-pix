@@ -26,9 +26,9 @@ function renderSankeyNode(sourceCount: number) {
           x={props.x + props.width + 8}
           y={props.y + props.height / 2}
           fontSize={12}
-          fill="var(--text-secondary)"
+          fill="var(--ds-text-2)"
           dominantBaseline="middle"
-          fontFamily="var(--font-mono)"
+          fontFamily="var(--ds-mono)"
         >
           {props.payload?.name}
         </text>
@@ -47,19 +47,19 @@ function renderSankeyTooltip(nodes: SankeyNode[]) {
         <div
           style={{
             background: '#fff',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--ds-line)',
             borderRadius: 8,
             padding: '8px 10px',
             fontSize: 12,
           }}
         >
           <div
-            className="mono"
+            className="ds-mono"
             style={{ marginBottom: 2 }}
           >
             {nodes[p.source]?.name} → {nodes[p.target]?.name}
           </div>
-          <div style={{ color: 'var(--text-tertiary)' }}>
+          <div style={{ color: 'var(--ds-text-3)' }}>
             {fmtInt(p.records ?? 0)} records
           </div>
         </div>
@@ -70,13 +70,13 @@ function renderSankeyTooltip(nodes: SankeyNode[]) {
         <div
           style={{
             background: '#fff',
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--ds-line)',
             borderRadius: 8,
             padding: '8px 10px',
             fontSize: 12,
           }}
         >
-          <div className="mono">{p.name}</div>
+          <div className="ds-mono">{p.name}</div>
         </div>
       )
     }
@@ -95,7 +95,7 @@ export function SchemaFlowSankey({
   sourceCount: number;
 }) {
   return (
-    <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+    <div className="ds-card" style={{ padding: 18, marginBottom: 16 }}>
       <div
         style={{
           fontSize: 14,
@@ -108,7 +108,7 @@ export function SchemaFlowSankey({
       <div
         style={{
           fontSize: 12,
-          color: 'var(--text-tertiary)',
+          color: 'var(--ds-text-3)',
           marginBottom: 14,
         }}
       >

@@ -70,7 +70,7 @@ test('P02 P03 P04 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19 P20 P2
   await row(page.getByRole('button', { name: 'Add case' }), 'P15', 'Add comparative / Add case from the tabs');
   await row(page.getByText('The base way of making it.'), 'P16', 'Active case description');
   await row(page.getByText('Frame product'), 'P17', 'Mini canvas: drag, zoom, select node');
-  await row(page.getByRole('button', { name: '+', exact: true }), 'P17', 'Mini canvas: drag, zoom, select node');
+  await row(page.getByRole('button', { name: 'Add a step' }), 'P17', 'Mini canvas: drag, zoom, select node');
   await row(page.getByRole('button', { name: 'Open editor' }).first(), 'P18', 'Open editor');
   await page.getByRole('button', { name: 'View Full Hierarchy' }).click();
   await row(page.getByRole('dialog').getByText(/Process Hierarchy/), 'P19', 'View Full Hierarchy dialog (search, expand/collapse all, zoom, pan)');
@@ -89,21 +89,13 @@ test('P02 P03 P04 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19 P20 P2
   await page.getByRole('button', { name: 'Cancel' }).click();
 
   await row(page.getByRole('button', { name: 'Delete case' }), 'P131', 'Delete case');
-  let caseConfirm = '';
-  page.once('dialog', (d) => {
-    caseConfirm = d.message();
-    return d.dismiss();
-  });
   await page.getByRole('button', { name: 'Delete case' }).click();
-  await expect.soft(caseConfirm, note('P29', 'Delete case (confirm)')).toMatch(/delete this case/i);
+  await row(page.getByRole('alertdialog', { name: 'Delete this case?' }), 'P29', 'Delete case (confirm)');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
 
-  let projectConfirm = '';
-  page.once('dialog', (d) => {
-    projectConfirm = d.message();
-    return d.dismiss();
-  });
   await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await expect.soft(projectConfirm, note('P10', 'Delete project (confirm)')).toMatch(/Delete "Parity study"/);
+  await row(page.getByRole('alertdialog', { name: 'Delete "Parity study"?' }), 'P10', 'Delete project (confirm)');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
   await row(page.getByRole('button', { name: 'Delete', exact: true }), 'P124', 'Delete project');
 
   await page.getByText('0 steps').click();
@@ -196,7 +188,7 @@ test.describe('reports', () => {
     await row(page.getByRole('combobox', { name: 'Project' }), 'P121', 'Pick project, case, run');
     await page.getByRole('combobox', { name: 'Project' }).selectOption({ label: seed.example.projectName });
     await row(page.getByRole('combobox', { name: 'Case' }), 'P121', 'Pick project, case, run');
-    await expect.soft(page.getByRole('combobox', { name: 'Case' }), note('P121', 'Pick project, case, run')).toContainText(/Run #/);
+    await expect.soft(page.getByRole('combobox', { name: 'Case' }), note('P121', 'Pick project, case, run')).toContainText(/Run \d+/);
   });
 });
 

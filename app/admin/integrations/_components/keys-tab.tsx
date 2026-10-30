@@ -12,15 +12,15 @@ import {
 export function KeysTab({ status }: { status: Status | null }) {
   const keyed = keyedSources(status);
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+    <div className="ds-card" style={{ padding: 0, overflow: 'hidden' }}>
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1.4fr 1fr 1fr',
           padding: '10px 20px',
-          background: 'var(--surface-overlay)',
+          background: 'var(--ds-card)',
           fontSize: 10,
-          color: 'var(--text-tertiary)',
+          color: 'var(--ds-text-3)',
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
           fontWeight: 600,
@@ -38,12 +38,12 @@ export function KeysTab({ status }: { status: Status | null }) {
             display: 'grid',
             gridTemplateColumns: '1fr 1.4fr 1fr 1fr',
             padding: '14px 20px',
-            borderTop: '1px solid var(--border-subtle)',
+            borderTop: '1px solid var(--ds-line)',
             alignItems: 'center',
             fontSize: 13,
           }}
         >
-          <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+          <div style={{ color: 'var(--ds-text)', fontWeight: 500 }}>
             {src.name}
           </div>
           {/* Real configured/missing state from the environment — the actual
@@ -51,16 +51,16 @@ export function KeysTab({ status }: { status: Status | null }) {
               reveal (previously a fabricated "em_live_…" string). */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <StatusDot status={keyStatusDot(src)} />
-            <span style={{ color: 'var(--text-secondary)' }}>
+            <span style={{ color: 'var(--ds-text-2)' }}>
               {keyStatusLabel(src)}
             </span>
           </div>
-          <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
+          <div className="ds-mono" style={{ color: 'var(--ds-text-3)' }}>
             {src.lastRun}
           </div>
           <div
-            className="mono"
-            style={{ color: 'var(--text-tertiary)', textAlign: 'right' }}
+            className="ds-mono"
+            style={{ color: 'var(--ds-text-3)', textAlign: 'right' }}
           >
             {src.statusLabel}
           </div>
@@ -69,9 +69,9 @@ export function KeysTab({ status }: { status: Status | null }) {
       <div
         style={{
           padding: '12px 20px',
-          borderTop: '1px solid var(--border-subtle)',
+          borderTop: '1px solid var(--ds-line)',
           fontSize: 11,
-          color: 'var(--text-tertiary)',
+          color: 'var(--ds-text-3)',
         }}
       >
         Keys are configured via server environment variables and are never

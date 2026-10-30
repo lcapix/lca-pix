@@ -64,9 +64,9 @@ export function ChangePanel({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, fontSize: 13, flexWrap: 'wrap' }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: seriesColor(idx) }} />
-              {category}: <span className="mono">{sig(b.baseTotal)}</span> →{' '}
-              <span className="mono">{sig(b.otherTotal)}</span> {unit}
-              <span className="mono" style={{ fontWeight: 600, color: b.delta <= 0 ? GOOD : BAD }}>
+              {category}: <span className="ds-mono">{sig(b.baseTotal)}</span> →{' '}
+              <span className="ds-mono">{sig(b.otherTotal)}</span> {unit}
+              <span className="ds-mono" style={{ fontWeight: 600, color: b.delta <= 0 ? GOOD : BAD }}>
                 {signedSig(b.delta)} ({signedPct(b.deltaPct, 2)})
               </span>
             </div>
@@ -82,7 +82,7 @@ export function ChangePanel({
                     <BarChart data={chartRows} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
                       <XAxis
                         type="number"
-                        tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                        tick={{ fontSize: 10, fill: 'var(--ds-text-3)' }}
                         tickFormatter={(v) => signedSig(Number(v), 2)}
                         domain={[(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]}
                         axisLine={false}
@@ -91,15 +91,15 @@ export function ChangePanel({
                       <YAxis
                         type="category"
                         dataKey="key"
-                        tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+                        tick={{ fontSize: 11, fill: 'var(--ds-text-2)' }}
                         axisLine={false}
                         tickLine={false}
                         width={200}
                       />
-                      <ReferenceLine x={0} stroke="var(--border-subtle)" />
+                      <ReferenceLine x={0} stroke="var(--ds-line)" />
                       <Tooltip
                         formatter={(v: any) => [`${signedSig(Number(v), 4)} ${unit}`, 'Change']}
-                        contentStyle={{ background: '#fff', border: '1px solid var(--border-subtle)', borderRadius: 8, fontSize: 12 }}
+                        contentStyle={{ background: '#fff', border: '1px solid var(--ds-line)', borderRadius: 8, fontSize: 12 }}
                         cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                       />
                       <Bar dataKey="delta" radius={[0, 4, 4, 0]}>

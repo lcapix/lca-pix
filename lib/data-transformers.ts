@@ -29,6 +29,9 @@ export function transformProjectFromDB(dbProject: any): Project {
     boundaryNotes: dbProject.boundary_notes ?? null,
     lciaMethod: dbProject.lcia_method ?? null,
     regionCode: dbProject.region_code ?? null,
+    // G144: read the switch as stored, so saving settings never turns AI off by accident.
+    aiEnabled: dbProject.ai_enabled == null ? true : Number(dbProject.ai_enabled) === 1,
+    isSample: Number(dbProject.is_sample ?? 0) === 1,
   };
 }
 

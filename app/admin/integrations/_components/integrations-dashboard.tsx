@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AppTopBar } from '@/components/lcapix';
+;
 import type { TabId } from '@/lib/admin/integrations';
 import { useIntegrationsStatus } from '@/lib/admin/use-integrations';
 import { DashboardHeader } from './dashboard-header';
@@ -19,7 +19,6 @@ export function IntegrationsDashboard() {
 
   return (
     <>
-      <AppTopBar current="integrations" />
 
       <div
         style={{
@@ -36,9 +35,9 @@ export function IntegrationsDashboard() {
 
         {loading && (
           <div
-            className="body"
+            className="np-sub"
             style={{
-              color: 'var(--text-tertiary)',
+              color: 'var(--ds-text-3)',
               padding: '48px 0',
               textAlign: 'center',
             }}
@@ -48,9 +47,9 @@ export function IntegrationsDashboard() {
         )}
         {error && (
           <div
-            className="mono label-sm"
+            className="ds-mono"
             style={{
-              color: 'var(--signal-error)',
+              color: 'var(--ds-error)',
               padding: '12px 0',
               fontSize: 13,
             }}

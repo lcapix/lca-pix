@@ -18,9 +18,9 @@ describe('defaultActiveCaseId', () => {
 })
 
 describe('addCasePath', () => {
-  it('creates the base case first, comparatives after it', () => {
-    expect(addCasePath('7', 0)).toBe('/project/7/case/base/new')
-    expect(addCasePath('7', 1)).toBe('/project/7/case/comparative/new')
+  it('P09 P85 opens the one New case form, on a base case when the project has none', () => {
+    expect(addCasePath('7', 0)).toBe('/project/7/case/new?kind=base')
+    expect(addCasePath('7', 1)).toBe('/project/7/case/new')
   })
 })
 
@@ -59,7 +59,7 @@ describe('workspaceKpis', () => {
     expect(cases).toEqual({ label: 'Cases', value: '3', note: '1 base · 2 comparative', tone: 'brand' })
     expect(steps.note).toBe('1 input/output flow')
     expect(gw).toEqual({ label: 'Global Warming', value: '1.723', note: 'kg CO2 eq', tone: 'brand' })
-    expect(cost.value).toBe(`$${(1235).toLocaleString()}`)
+    expect(cost.value).toBe("$1,234.50")
     expect(cost.note).toBe('Total ABC cost')
   })
 
@@ -76,7 +76,7 @@ describe('workspaceKpis', () => {
     })
     expect(steps.note).toBe('0 input/output flows')
     expect(gw.value).toBe('0.000')
-    expect(cost.value).toBe('$0')
+    expect(cost.value).toBe('$0.00')
   })
 })
 
@@ -115,7 +115,7 @@ describe('workspaceView', () => {
     expect(v.impactUnit).toBe('kg CO2-eq')
     expect(v.totalCost).toBe(10)
     expect(v.contributors).toEqual([{ name: 'Frame', value: 12, pct: 100 }])
-    expect(v.kpis.map((k) => k.value)).toEqual(['2', '3', '12.000', '$10'])
+    expect(v.kpis.map((k) => k.value)).toEqual(['2', '3', '12.000', '$10.00'])
   })
 
   it('has no contributors, cost or assessment without a run', () => {

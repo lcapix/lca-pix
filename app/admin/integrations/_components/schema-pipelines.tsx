@@ -20,7 +20,7 @@ export function SchemaPipelines({
   writersPerTable: Record<string, number>;
 }) {
   return (
-    <div className="card" style={{ padding: 18 }}>
+    <div className="ds-card" style={{ padding: 18 }}>
       <div
         style={{
           display: 'flex',
@@ -30,14 +30,14 @@ export function SchemaPipelines({
         }}
       >
         <div style={{ fontSize: 14, fontWeight: 600 }}>Source pipelines</div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+        <div style={{ fontSize: 11, color: 'var(--ds-text-3)' }}>
           ({SOURCE_PIPELINES.length} sources)
         </div>
       </div>
       <div
         style={{
           fontSize: 12,
-          color: 'var(--text-tertiary)',
+          color: 'var(--ds-text-3)',
           marginBottom: 14,
         }}
       >
@@ -61,9 +61,9 @@ export function SchemaPipelines({
               key={p.sourceId}
               style={{
                 padding: 14,
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
-                background: 'var(--surface-raised)',
+                background: 'var(--ds-card)',
               }}
             >
               <div
@@ -79,17 +79,17 @@ export function SchemaPipelines({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: 'var(--text-primary)',
+                    color: 'var(--ds-text)',
                   }}
                 >
                   {src?.name ?? p.sourceId}
                 </span>
                 <span
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     marginLeft: 'auto',
                     fontSize: 10,
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--ds-text-3)',
                   }}
                 >
                   {fmtInt(totalRecords)} rows
@@ -113,24 +113,24 @@ export function SchemaPipelines({
                         alignItems: 'center',
                         gap: 10,
                         padding: '8px 10px',
-                        background: 'var(--surface-overlay)',
+                        background: 'var(--ds-card)',
                         borderRadius: 8,
                       }}
                     >
                       <span
                         style={{
                           fontSize: 13,
-                          color: 'var(--text-tertiary)',
+                          color: 'var(--ds-text-3)',
                         }}
                       >
                         →
                       </span>
                       <div>
                         <div
-                          className="mono"
+                          className="ds-mono"
                           style={{
                             fontSize: 12,
-                            color: 'var(--text-primary)',
+                            color: 'var(--ds-text)',
                             marginBottom: 2,
                           }}
                         >
@@ -139,7 +139,7 @@ export function SchemaPipelines({
                         <div
                           style={{
                             fontSize: 11,
-                            color: 'var(--text-tertiary)',
+                            color: 'var(--ds-text-3)',
                             lineHeight: 1.4,
                           }}
                         >
@@ -147,25 +147,25 @@ export function SchemaPipelines({
                         </div>
                       </div>
                       <span
-                        className="mono"
+                        className="ds-mono"
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
                           color:
                             n > 0
-                              ? 'var(--text-primary)'
-                              : 'var(--text-tertiary)',
+                              ? 'var(--ds-text)'
+                              : 'var(--ds-text-3)',
                           padding: '3px 8px',
                           borderRadius: 999,
                           background:
                             n > 0
-                              ? 'color-mix(in oklab, var(--brand-primary) 12%, transparent)'
-                              : 'var(--surface-raised)',
+                              ? 'color-mix(in oklab, var(--ds-green) 12%, transparent)'
+                              : 'var(--ds-card)',
                           border:
                             '1px solid ' +
                             (n > 0
                               ? 'transparent'
-                              : 'var(--border-subtle)'),
+                              : 'var(--ds-line)'),
                         }}
                       >
                         {fmtInt(n)}

@@ -60,6 +60,7 @@ export function useContinueCase(): { data: ContinueCase | null; loading: boolean
           needsAmount: counts.needs_amount,
           leftOut: counts.left_out,
           latestRunId: inv?.latest_run?.run_id ?? null,
+          latestRunNumber: inv?.latest_run?.case_run_number ?? null,
           changedAfterRun: (inv?.latest_run?.changed_flows ?? 0) > 0,
           hasWriteUp: !!String(c.case?.interpretation ?? '').trim(),
           isFinal: !!c.case?.is_final,

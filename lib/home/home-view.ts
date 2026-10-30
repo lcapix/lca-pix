@@ -25,7 +25,7 @@ export interface HomeProject {
   held_case: { case_id: number; case_name: string | null } | null
   member_cases_without_run: number
   base_case_id: number | null
-  base_run: { run_id: number; run_date: string; headline: { category: string; value: number; unit: string } | null } | null
+  base_run: { run_id: number; case_run_number?: number | null; run_date: string; headline: { category: string; value: number; unit: string } | null } | null
   base_changed_after_run: boolean | null
 }
 
@@ -115,7 +115,7 @@ export function needsAttention(projects: HomeProject[], userId: number, memberWo
     out.push({
       key: `changed-${p.project_id}`,
       kind: 'changed',
-      title: `Base case changed after Run #${p.base_run.run_id}`,
+      title: `Base case changed after ${runWord(p.base_run.run_id, p.base_run.case_run_number)}`,
       where: p.project_name,
       action: 'Run again',
       href: `/project/${p.project_id}/case/${p.base_case_id}`,
@@ -153,6 +153,8 @@ export interface ContinueInput {
   needsAmount: number
   leftOut: number
   latestRunId: number | null
+  /** The latest run's place in its case (2.8). */
+  latestRunNumber?: number | null
   changedAfterRun: boolean
   hasWriteUp: boolean
   isFinal: boolean
@@ -176,7 +178,7 @@ export function continueParts(c: ContinueInput): ContinuePart[] {
       done: lines > 0 && c.flowsIn === lines,
     },
     {
-      label: c.latestRunId ? `Results · Run #${c.latestRunId}` : 'Results · no run',
+      label: c.latestRunId ? `Results · ${runWord(c.latestRunId, c.latestRunNumber)}` : 'Results · no run',
       fill: c.latestRunId ? (c.changedAfterRun ? 0.5 : 1) : 0,
       done: !!c.latestRunId && !c.changedAfterRun,
     },
@@ -205,7 +207,12 @@ export function continueNext(c: ContinueInput): { line: string; tab: 'tree' | 'i
   }
   if (!c.flowsTotal) return { line: 'Next: add the flows each step uses.', tab: 'tree', button: 'Open the tree' }
   if (!c.latestRunId) return { line: 'Next: run it.', tab: 'tree', button: 'Open the tree' }
-  if (c.changedAfterRun) return { line: `Next: run it again. It changed after Run #${c.latestRunId}.`, tab: 'tree', button: 'Open the tree' }
+  if (c.changedAfterRun) return { line: `Next: run it again. It changed after ${runWord(c.latestRunId, c.latestRunNumber)}.`, tab: 'tree', button: 'Open the tree' }
   if (!c.hasWriteUp) return { line: 'Next: write up what the result means.', tab: 'writeup', button: 'Open the write-up' }
   return { line: 'Next: compare it with another case, or export the report.', tab: 'results', button: 'Open Results' }
+}
+
+/** "Run 2": the run's place in its own case (2.8); the site-wide id only when that is unknown. */
+function runWord(runId: number, runNumber?: number | null): string {
+  return runNumber ? `Run ${runNumber}` : `Run #${runId}`
 }

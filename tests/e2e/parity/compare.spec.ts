@@ -22,13 +22,12 @@ test('P58 P61 P62 P66 P70 P73 P76 P82 P83 compare two runs, then a stale one', a
   await row(page.getByRole('heading', { name: /^Compare/ }), 'P58', 'Breadcrumb and back button');
   await row(page.getByRole('link', { name: 'Overview' }), 'P58', 'Breadcrumb and back button');
   await row(page.getByRole('region', { name: 'Totals' }).getByText(/Same as A|lower|higher/), 'P66', 'Per-case total and % vs base');
-  await row(page.getByRole('combobox'), 'P83', 'Impact category selector');
+  await row(page.getByRole('combobox', { name: 'Impact category' }), 'P83', 'Impact category selector');
 
   const again = page.waitForRequest((r) => r.method() === 'GET' && r.url().includes('/compare?cases='), { timeout: 15_000 });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect.soft(again.then(() => true), note('P62', 'Re-read on window focus')).resolves.toBe(true);
 
-  await page.getByRole('button', { name: /More ways to compare/ }).click();
   await row(page.getByRole('tab', { name: 'Data quality' }), 'P82', 'Data quality tab');
   await page.getByRole('button', { name: /Open in each case/ }).click();
   await row(page.getByRole('menuitem', { name: /My bracket/ }), 'P73', 'Per-case Results link');

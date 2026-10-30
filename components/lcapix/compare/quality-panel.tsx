@@ -30,7 +30,7 @@ const ROWS: Row[] = [
       c.run ? (
         <>
           #{c.run.runId} · {c.run.method} · {c.run.region}
-          <div style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{new Date(c.run.runDate).toLocaleString()}</div>
+          <div style={{ color: 'var(--ds-text-3)', fontSize: 11 }}>{new Date(c.run.runDate).toLocaleString()}</div>
         </>
       ) : (
         'not run'
@@ -65,7 +65,7 @@ const ROWS: Row[] = [
         <>
           {fmtInt(c.dataQuality.uncharacterized_flows)}
           {c.dataQuality.uncharacterized_examples?.length > 0 && (
-            <div style={{ color: 'var(--text-tertiary)', fontSize: 11, whiteSpace: 'normal' }}>
+            <div style={{ color: 'var(--ds-text-3)', fontSize: 11, whiteSpace: 'normal' }}>
               {c.dataQuality.uncharacterized_examples.join(', ')}
             </div>
           )}

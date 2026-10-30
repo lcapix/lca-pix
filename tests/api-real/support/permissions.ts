@@ -86,6 +86,7 @@ function resolveHandle(ref: string, ctx: BuildContext): string | number {
     '$P.base.flow': () => w.P.base.flow,
     '$P.base.run': () => w.P.base.run,
     '$P.comp': () => w.P.comp.id,
+    '$P.assignment': () => w.P.assignment,
     '$legacy.comparison': () => w.legacyComparison,
     '$substance.electricity': () => w.substances.electricity,
     '$user.invitee.email': () => w.users.invitee.email,

@@ -1291,3 +1291,30 @@
   .ws-full-results, .ws-full-results * { visibility: visible; }
   .ws-full-results { position: absolute; left: 0; top: 0; width: 100%; }
 }
+
+/* The project Overview (components/lcapix/workspace/project-hub.tsx). */
+.hub-canvas { position: relative; height: 320px; overflow: hidden; border: 1px solid var(--ds-line); border-radius: var(--ds-r-card); background: var(--ds-main); }
+.hub-kpis { display: flex; flex-wrap: wrap; gap: 12px; list-style: none; padding: 0; margin: 18px 0; }
+.hub-kpis > li { min-width: 160px; flex: 1 1 160px; }
+.hub-cases { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.hub-panes { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 16px; margin-top: 16px; }
+.hub-phases { display: flex; flex-wrap: wrap; gap: 6px 14px; list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.hub-phases > li[data-state='todo'] { color: var(--ds-text-3); }
+.hub-settings { display: grid; gap: 10px; margin-top: 18px; max-width: 720px; }
+@media (max-width: 900px) {
+  .hub-panes { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Compare: the per-case cards, the ranking and the A/B pickers. */
+.cmp-cases { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
+.cmp-cases > li { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.cmp-pick { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+.cmp-pick > select { max-width: 280px; }
+.cmp-chip[aria-pressed='false'] { opacity: 0.7; }
+
+/* New project: the five ISO phases (P112). */
+.np-rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 8px 0 16px; }
+.np-rail > li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--ds-line); border-radius: var(--ds-r-control); font-size: 13px; color: var(--ds-text-2); }
+.np-rail > li strong { color: var(--ds-text); font-size: 14px; }
+.np-rail > li[data-here] { border-color: var(--ds-green); background: var(--ds-green-wash); }
+

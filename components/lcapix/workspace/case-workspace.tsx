@@ -13,7 +13,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { EmptyState, ErrorCard, Tabs } from '@/components/lcapix/ds'
+import { Button, Callout, EmptyState, ErrorCard, Tabs } from '@/components/lcapix/ds'
+import { useGuidedMode } from '@/lib/shell/use-shell'
 import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
 import { apiRequest } from '@/lib/api-client'
 import { insightsBreakdownOf, insightsMaterialsOf } from '@/lib/results/insights-inputs'
@@ -291,6 +292,7 @@ export function CaseWorkspace() {
         runReason={steps.length ? 'Add a counted flow first' : 'Add a step first'}
         noSteps={!steps.length}
       />
+      <LearnOffer asked={search.get('learn') === '1'} />
       {error && status === 'ready' && (
         <div style={{ padding: '12px 24px 0' }}>
           <ErrorCard title="The case did not refresh" cause={error} fix="What you see may be a moment old." onRetry={reload} />
@@ -418,6 +420,36 @@ export function CaseWorkspace() {
           </div>
         </form>
       )}
+    </div>
+  )
+}
+
+/**
+ * P86: a case built by hand opens with ?learn=1. In the new design the help
+ * is Guided mode, so the case offers it once; it is never switched on for you.
+ */
+function LearnOffer({ asked }: { asked: boolean }) {
+  const [guided, setGuided] = useGuidedMode()
+  const [gone, setGone] = useState(false)
+  if (!asked || guided || gone) return null
+  return (
+    <div style={{ padding: '0 18px' }}>
+      <Callout
+        tone="info"
+        lead="Building it by hand?"
+        action={
+          <span style={{ display: 'flex', gap: 8 }}>
+            <Button size="small" variant="primary" onClick={() => setGuided(true)}>
+              Turn on Guided mode
+            </Button>
+            <Button size="small" onClick={() => setGone(true)}>
+              Not now
+            </Button>
+          </span>
+        }
+      >
+        Guided mode explains each step of the tree as you build it.
+      </Callout>
     </div>
   )
 }

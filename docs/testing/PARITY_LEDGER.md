@@ -163,12 +163,16 @@ classic page is full width up to 1440px (`components/lcapix/results/results-page
 |---|---|---|---|---|
 | C01 | Add students by email or CSV | `/class` | People page (`people-page.tsx:427, 439-512`) | moved |
 | C02 | Students see only their own case | `/class` | People page toggle with confirm | kept |
-| C03 | Per-student lesson progress | `/class` (`class/page.tsx:336-339`) | Only on `/class`, which only the classic header links (`project-header.tsx:116`) | hidden |
+| C03 | Per-student lesson progress | `/class` (`class/page.tsx:336-339`) | `components/lcapix/project/cases-page.tsx` Progress line and Lessons column (`lessonsOf`) | kept |
 | C04 | Hand-in tick, visible to the instructor | `/class` (`class/page.tsx:344`) | Cases board column, Analytics | kept |
-| C05 | Base case instructions shown to the student | No | Description returned (`progress/route.ts:114`) but never shown | missing |
-| C06 | Assignments (instructions, due date, template), many per project | No | No schema | missing (D2: build) |
-| C07 | Submission frozen at hand-in; instructor submissions list | No | Tick locks nothing | missing (D2: build) |
-| C08 | Student Home for someone who also owns projects | n/a | Shown only to users who own no project (`lib/home/student-view.ts:12-17`) | partial |
+| C05 | Base case instructions shown to the student | No | `components/lcapix/workspace/case-header.tsx` AssignmentInstructions | kept |
+| C06 | Assignments (instructions, due date, template), many per project | No | `app/project/[projectId]/assignments/page.tsx`; `lib/assignments/handlers.ts`; migrate-043 | kept |
+| C07 | Submission frozen at hand-in; instructor submissions list | No | `assignments/page.tsx` Hand in and Hand-ins; frozen read-only copy with its write-up | kept |
+| C08 | Student Home for someone who also owns projects | n/a | `components/lcapix/home/assigned-to-you.tsx` on both Homes | kept |
+| C09 | Adding an email with no account says so, once, in words (finding 2.2) | n/a (discovery run 2) | `lib/project/people-view.ts` lastAddLines | kept |
+| C10 | People shows full names and access in words, with an inline access choice (finding 2.3) | n/a (discovery run 2) | `components/lcapix/project/people-page.tsx` (tested with P34) | kept |
+| C11 | A student on the instructor's read-only base case can start their own copy (finding 2.5) | n/a (discovery run 2) | `components/lcapix/workspace/case-header.tsx` Make my own copy | kept |
+| C12 | An empty case can be copied, as classic allowed (finding 2.6) | n/a (discovery run 2) | `app/api/cases/[caseId]/duplicate/route.ts` | kept |
 
 ## P. Project pages
 
@@ -191,54 +195,54 @@ Path legend:
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P01 | Overview shown for every project | OVc:33-226 | `app/project/[projectId]/page.tsx:50-54` | GET /api/projects/:id, GET /api/projects/:id/cases | partial | Sample project gets the read-only SampleOverview instead; all of P02-P30 are gone for the sample |
-| P02 | Project name heading | PH c:50-64 | PH m:53-64 (OVm:117-127) | GET /api/projects/:id | kept | |
-| P03 | "comparison" chip when there are comparatives | PH c:65-71 | PH m:65-73 | none | kept | |
-| P04 | Project description | PH c:72-82 | PH m:75-85 | GET /api/projects/:id | kept | New projects now save description '' (see P106), so this is empty for them |
-| P05 | Analytics button (?caseId=active) | PH c:84-96 | `components/lcapix/project/analytics-page.tsx:34` sends `?caseId=` to that case's full results page | none | kept |  |
-| P06 | Compare Cases button (disabled under 2 cases) | PH c:97-109 | PH m:100-112 | none | kept | Target is the new Compare |
-| P07 | Class button to /class | PH c:110-117 | PH m:113-120 | none | kept | Only entry to /class; sidebar links /people |
-| P08 | Import Data button | PH c:118-127 | PH m:123-132 | none | kept | Hidden for viewers |
-| P09 | Add Case (to base/new or comparative/new) | PH c:128-136, `lib/project/workspace.ts:18-22` | PH m:133-143 | none | kept | Opens the classic forms, not the new case/new; hidden for viewers |
-| P10 | Delete project (confirm) | PH c:137-145, UPA:102-125 | PH m:144-154 | DELETE /api/projects/:id | kept | Owner only; this is the only delete-project control |
-| P11 | Breadcrumb Projects > name | OVc:107-112 | OVm:108-113 | none | kept | |
-| P12 | KPI strip (Cases, Steps, Global Warming, Cost) | OVc:128, `workspace.ts:65-96` | OVm:130 | GET /api/cases/:id/components, GET /api/cases/:id/assessments, GET /api/assessments/:runId | kept | |
-| P13 | Comparison banner "X vs Y" | OVc:131-133, `comparison-banner.tsx:31-51` | OVm:133-135 | none | kept | BUG in both: -28.0% CO2 and +$240 are hardcoded. Severity 1: invented numbers shown to users. |
-| P14 | Case tabs: pick base, cycle comparatives, show counts | CT:57,118,207 | CT same | none | kept | |
-| P15 | Add comparative / Add case from the tabs | CT:301-311, 328-343 | CT same | none | kept | Same target as P09 |
-| P16 | Active case description | OVc:145 | OVm:147 | none | kept | |
-| P17 | Mini canvas: drag, zoom, select node | TP:111-135 | TP same | GET /api/cases/:id/components | kept | |
-| P18 | Open editor | TP:72-82 | TP same | none | moved | Opens the new workspace |
-| P19 | View Full Hierarchy dialog (search, expand/collapse all, zoom, pan) | TP:84-90, `hierarchy-dialog.tsx:60-121` | same | GET /api/cases/:id, GET /api/cases/:id/components | kept | |
-| P20 | Node details: path, costs, flows, open in editor, dismiss | `node-details-card.tsx:105-252` | same | none | kept | |
-| P21 | Empty comparative: Clone from base / Start blank | `empty-case-overlay.tsx:80-91`, UPA:128-160 | same | POST /api/cases/:id/clone-from | kept | Only place in main that clones into an existing case |
-| P22 | Impact overview (latest GWP, method, steps, categories, flows) | OVc:173-181 | OVm:175-183 | GET /api/assessments/:runId | kept | |
-| P23 | Top contributors | OVc:183 | OVm:185 | GET /api/assessments/:runId | kept | |
-| P24 | Cost summary | OVc:185 | OVm:187 | GET /api/cases/:id/components | kept | |
-| P25 | ISO journey stepper, present/missing layers, run readiness | OVc:188-195, `case-journey.tsx` | OVm:190-197 | GET /api/cases/:id/completeness | kept | |
-| P26 | Run Assessment (gated, remembered method/region) | CA c:36-46, UPA:164-199 | CA m:39-55 | POST /api/cases/:id/assessments | kept | Lands on the workspace Results tab via redirect |
-| P27 | Results button | CA c:47-59 | CA m:56-68 | none | moved | /results redirects to ?tab=results (`case/[caseId]/results/page.tsx:16-20`) |
-| P28 | Rename case (dialog) | CA c:60-68, OVc:211-220, UPA:64-95 | CA m:69-79, OVm:214-223 | PUT /api/cases/:id | kept | The only rename-case UI in main; not on Cases or in the workspace |
-| P29 | Delete case (confirm) | CA c:69-79, UPA:36-62 | CA m:80-90 | DELETE /api/cases/:id | kept | Admin and above; the only delete-case UI |
-| P30 | Every control visible to every member | PH c, CA c | PH m:123,133,144; CA m:39,69,80 | GET /api/projects/:id (my_role) | partial | By design: hidden per role, server enforces |
+| P01 | Overview shown for every project | OVc:33-226 | `components/lcapix/workspace/project-hub.tsx` for every project; the sample opens read-only with Make my own copy (`app/project/[projectId]/page.tsx`) | GET /api/projects/:id, GET /api/projects/:id/cases | kept |  |
+| P02 | Project name heading | PH c:50-64 | `components/lcapix/workspace/project-hub.tsx` | GET /api/projects/:id | kept |  |
+| P03 | "comparison" chip when there are comparatives | PH c:65-71 | `components/lcapix/workspace/project-hub.tsx` | none | kept |  |
+| P04 | Project description | PH c:72-82 | `components/lcapix/workspace/project-hub.tsx` | GET /api/projects/:id | kept | New projects now save description '' (see P106), so this is empty for them |
+| P05 | Analytics button (?caseId=active) | PH c:84-96 | `components/lcapix/workspace/project-hub.tsx` Analytics opens the active case's full results | none | kept |  |
+| P06 | Compare Cases button (disabled under 2 cases) | PH c:97-109 | `components/lcapix/workspace/project-hub.tsx` | none | kept | Target is the new Compare |
+| P07 | Class button to /class | PH c:110-117 | `components/lcapix/workspace/project-hub.tsx` | none | kept | Only entry to /class; sidebar links /people |
+| P08 | Import Data button | PH c:118-127 | `components/lcapix/workspace/project-hub.tsx` | none | kept | Hidden for viewers |
+| P09 | Add Case (to base/new or comparative/new) | PH c:128-136, `lib/project/workspace.ts:18-22` | `components/lcapix/workspace/project-hub.tsx` | none | kept | Opens the classic forms, not the new case/new; hidden for viewers |
+| P10 | Delete project (confirm) | PH c:137-145, UPA:102-125 | `components/lcapix/workspace/project-hub.tsx` | DELETE /api/projects/:id | kept | Owner only; this is the only delete-project control |
+| P11 | Breadcrumb Projects > name | OVc:107-112 | `components/lcapix/workspace/project-hub.tsx` | none | kept |  |
+| P12 | KPI strip (Cases, Steps, Global Warming, Cost) | OVc:128, `workspace.ts:65-96` | `components/lcapix/workspace/project-hub.tsx` | GET /api/cases/:id/components, GET /api/cases/:id/assessments, GET /api/assessments/:runId | kept |  |
+| P13 | Comparison banner "X vs Y" | OVc:131-133, `comparison-banner.tsx:31-51` | `components/lcapix/workspace/project-hub.tsx` `Banner`, from `lib/project/comparison-banner.ts` over GET /api/projects/:id/compare: the runs' own numbers, or why there are none | none | kept |  |
+| P14 | Case tabs: pick base, cycle comparatives, show counts | CT:57,118,207 | `components/lcapix/workspace/project-hub.tsx` | none | kept |  |
+| P15 | Add comparative / Add case from the tabs | CT:301-311, 328-343 | `components/lcapix/workspace/project-hub.tsx` | none | kept | Same target as P09 |
+| P16 | Active case description | OVc:145 | `components/lcapix/workspace/project-hub.tsx` | none | kept |  |
+| P17 | Mini canvas: drag, zoom, select node | TP:111-135 | `components/lcapix/workspace/project-hub.tsx` MiniCanvas, "Add a step" | GET /api/cases/:id/components | kept |  |
+| P18 | Open editor | TP:72-82 | `components/lcapix/workspace/project-hub.tsx` | none | moved | Opens the new workspace |
+| P19 | View Full Hierarchy dialog (search, expand/collapse all, zoom, pan) | TP:84-90, `hierarchy-dialog.tsx:60-121` | `components/lcapix/workspace/hierarchy-view.tsx` (search, expand/collapse all, zoom, drag to pan) | GET /api/cases/:id, GET /api/cases/:id/components | kept |  |
+| P20 | Node details: path, costs, flows, open in editor, dismiss | `node-details-card.tsx:105-252` | `components/lcapix/workspace/project-hub.tsx` `NodeDetails` (path, impact share, cost, flows, steps under it) | none | kept |  |
+| P21 | Empty comparative: Clone from base / Start blank | `empty-case-overlay.tsx:80-91`, UPA:128-160 | `components/lcapix/workspace/project-hub.tsx` | POST /api/cases/:id/clone-from | kept | Only place in main that clones into an existing case |
+| P22 | Impact overview (latest GWP, method, steps, categories, flows) | OVc:173-181 | `components/lcapix/workspace/project-hub.tsx` | GET /api/assessments/:runId | kept |  |
+| P23 | Top contributors | OVc:183 | `components/lcapix/workspace/project-hub.tsx` | GET /api/assessments/:runId | kept |  |
+| P24 | Cost summary | OVc:185 | `components/lcapix/workspace/project-hub.tsx` | GET /api/cases/:id/components | kept |  |
+| P25 | ISO journey stepper, present/missing layers, run readiness | OVc:188-195, `case-journey.tsx` | `components/lcapix/workspace/project-hub.tsx` | GET /api/cases/:id/completeness | kept |  |
+| P26 | Run Assessment (gated, remembered method/region) | CA c:36-46, UPA:164-199 | `components/lcapix/workspace/project-hub.tsx` | POST /api/cases/:id/assessments | kept | Lands on the workspace Results tab via redirect |
+| P27 | Results button | CA c:47-59 | `components/lcapix/workspace/project-hub.tsx` | none | moved | /results redirects to ?tab=results (`case/[caseId]/results/page.tsx:16-20`) |
+| P28 | Rename case (dialog) | CA c:60-68, OVc:211-220, UPA:64-95 | `components/lcapix/workspace/project-hub.tsx` TextDialog | PUT /api/cases/:id | kept | The only rename-case UI in main; not on Cases or in the workspace |
+| P29 | Delete case (confirm) | CA c:69-79, UPA:36-62 | `components/lcapix/workspace/project-hub.tsx` ConfirmDialog, admin | DELETE /api/cases/:id | kept | Admin and above; the only delete-case UI |
+| P30 | Every control visible to every member | PH c, CA c | `lib/project-role.ts` in `components/lcapix/workspace/project-hub.tsx` and the Cases menu; Delete case needs admin, as the server does | GET /api/projects/:id (my_role) | kept |  |
 
 ### Class /project/[projectId]/class (classic) vs People, Cases, Analytics (new)
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P31 | Reach the page | Overview Class button (PH c:110-117) | HIDDEN: PH m:113-120 only; RT:40 highlights /class as People | none | hidden | Sidebar goes to /people; sample has no Overview button |
+| P31 | Reach the page | Overview Class button (PH c:110-117) | `app/project/[projectId]/class/page.tsx` server redirect to /cases | none | kept | Sidebar goes to /people; sample has no Overview button |
 | P32 | Members list (owner, name, email, access) | CL:227-262 | PP:197-254 | GET /api/projects/:id/members | moved | |
 | P33 | Add one person by email with role (admin only if owner) | CL:90-109, 264-286 | PP:289-292, 419-550 | POST /api/projects/:id/members | moved | Now also many emails and CSV |
 | P34 | Change someone's access | CL:103 (re-add email) | PP:236-249 | POST /api/projects/:id/members | moved | Better: inline select |
 | P35 | Remove member | CL:111-120, 250-253 | PP:254, 334-346 | DELETE /api/projects/:id/members?user_id= | moved | Now asks to confirm |
 | P36 | "Students see only their own case" switch | CL:122-140, 172-218 | PP:293-320, 347-358 | PUT /api/projects/:id | moved | Turning it on now asks to confirm |
-| P37 | Own-only notice for non-managers | CL:219-224 | MISSING (PP:280-284 shows other text) | GET /api/projects/:id/progress | missing | |
-| P38 | Per-case progress table with link to case | CL:291-353 | CP:186-235 | GET /api/projects/:id/progress | partial | New table has stage, run #, answer, hand-in only; it shows only other people's cases |
-| P39 | Steps, flows, run count per case | CL:333-335 | MISSING | progress returns them (`progress/route.ts:97-117`) | missing | |
-| P40 | Lessons answered N of M, "predicted", lesson-title tooltip | CL:336-338 | MISSING | progress lessons_answered, prediction_made | missing | |
-| P41 | Write-up column (interpretation + assumptions) | CL:340-343 | partial: CP stage "Written", ANm:126 "Wrote up" | progress has_interpretation, has_assumptions | partial | Assumptions not shown |
+| P37 | Own-only notice for non-managers | CL:219-224 | `components/lcapix/project/people-page.tsx` own-only note for non-managers | GET /api/projects/:id/progress | kept |  |
+| P38 | Per-case progress table with link to case | CL:291-353 | `cases-page.tsx` Progress on every card and the table | GET /api/projects/:id/progress | kept |  |
+| P39 | Steps, flows, run count per case | CL:333-335 | `cases-page.tsx` steps · flows · runs | progress returns them (`progress/route.ts:97-117`) | kept |  |
+| P40 | Lessons answered N of M, "predicted", lesson-title tooltip | CL:336-338 | `cases-page.tsx` Lessons column, "predicted", titles on hover | progress lessons_answered, prediction_made | kept |  |
+| P41 | Write-up column (interpretation + assumptions) | CL:340-343 | `cases-page.tsx` Write-up column (`writeUpOf`) | progress has_interpretation, has_assumptions | kept | Assumptions not shown |
 | P42 | Hand-in column | CL:344 | CP:231, ANm:127 | progress is_final | kept | |
-| P43 | Editors/viewers can open the page | Overview Class button, read-only list | HIDDEN: People only for owner/admin (NAV:159-163); URL still works | GET /api/projects/:id/members | hidden | |
+| P43 | Editors/viewers can open the page | Overview Class button, read-only list | People for every member (`lib/shell/project-nav.ts` projectPagesFor); read-only list and notice for editors and viewers (`components/lcapix/project/people-page.tsx`) | GET /api/projects/:id/members | kept | class.spec.ts P43 test |
 | P44 | Back to the project | CL:160-162 | sidebar | none | moved | |
 
 ### Analytics /project/[projectId]/analytics
@@ -264,48 +268,48 @@ Path legend:
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
 | P58 | Breadcrumb and back button | CMPc:268-286 | CMPm:127-138, sidebar | none | moved | |
-| P59 | Pick any cases with chips; base can be deselected; no cap | CMPc:296-350 | CMPm:487-534 | GET /api/projects/:id/cases | partial | Base locked; cap of 8 (`comparability.ts:15`) |
-| P60 | Default: base plus all copies | CMPc:127-137 | UC:21-28, 67-73 | none | partial | Now base plus your latest copy |
+| P59 | Pick any cases with chips; base can be deselected; no cap | CMPc:296-350 | `components/lcapix/compare/compare-page.tsx` chips toggle any case, the base included; COMPARE_MAX_CASES = 100 | GET /api/projects/:id/cases | kept |  |
+| P60 | Default: base plus all copies | CMPc:127-137 | `lib/compare/use-compare.ts` defaultPick | none | kept |  |
 | P61 | Shareable ?cases= URL | CMPc:207-214 | UC:110-113 | none | kept | |
 | P62 | Re-read on window focus | CMPc:98-104 | UC:76-80 | none | kept | |
-| P63 | Saved comparisons list with "Compare these" | CMPc:149-164, 353-395 | MISSING; ?tab=saved is read nowhere | GET /api/comparisons?project_id= (still exists) | missing | /comparisons and /comparisons/[id] redirect to a page without the list |
+| P63 | Saved comparisons list with "Compare these" | CMPc:149-164, 353-395 | `components/lcapix/compare/compare-page.tsx` `SavedComparisons` (?tab=saved), GET /api/comparisons?project_id= | GET /api/comparisons?project_id= (still exists) | kept |  |
 | P64 | Method / Region / Per-FU chips and mismatch warning | CMPc:410-440 | CMPm:192-222 | GET /api/projects/:id/compare | kept | Reworked as four checks |
-| P65 | Compare across regions on purpose (warning only) | CMPc:428-438 | CMPm:100,237,270,437 | GET /api/projects/:id/compare | partial | Region mismatch now greys totals and withholds the views |
+| P65 | Compare across regions on purpose (warning only) | CMPc:428-438 | `lib/compare/comparability.ts` region is a warning; `verdict` says "Fair to compare, with a warning" | GET /api/projects/:id/compare | kept |  |
 | P66 | Per-case total and % vs base | CMPc:705-729 | CMPm:229-268 | GET /api/projects/:id/compare | kept | |
-| P67 | Per-case "N nodes · N flows" | CMPc:731 | MISSING | GET /api/projects/:id/compare | missing | |
-| P68 | Per-case run picker (run #, method, region, date) | CMPc:742-757, 181-186 | MISSING; UC:92 sends cases only | compare?runs= still parsed (`compare/route.ts:20,72`) | missing | |
-| P69 | "Compared on run #x because ..." reason | CMPc:650-660 | MISSING | GET /api/projects/:id/compare | missing | |
+| P67 | Per-case "N nodes · N flows" | CMPc:731 | `components/lcapix/compare/compare-page.tsx` per-case card | GET /api/projects/:id/compare | kept |  |
+| P68 | Per-case run picker (run #, method, region, date) | CMPc:742-757, 181-186 | `components/lcapix/compare/compare-page.tsx` run picker (Run n · method · region · date); runs= kept in the address | compare?runs= still parsed (`compare/route.ts:20,72`) | kept |  |
+| P69 | "Compared on run #x because ..." reason | CMPc:650-660 | `components/lcapix/compare/compare-page.tsx` "Compared on Run n because ..." when not the latest | GET /api/projects/:id/compare | kept |  |
 | P70 | Stale run marker | CMPc:760-766 | CMPm:147-149, 247 | GET /api/projects/:id/compare | kept | Plus a new "Run again" button (UC:120-133) |
-| P71 | Older run (no snapshot) note | CMPc:768-772 | MISSING | GET /api/projects/:id/compare | missing | |
-| P72 | Incomplete case: reason plus "Open the case" link | CMPc:696-704 | CMPm:248-249 | GET /api/projects/:id/compare | partial | Link gone |
+| P71 | Older run (no snapshot) note | CMPc:768-772 | `components/lcapix/compare/compare-page.tsx` older-run note when resultsSource is not snapshot | GET /api/projects/:id/compare | kept |  |
+| P72 | Incomplete case: reason plus "Open the case" link | CMPc:696-704 | `components/lcapix/compare/compare-page.tsx` "Open the case" for a case with no run or an incomplete one | GET /api/projects/:id/compare | kept |  |
 | P73 | Per-case Results link | CMPc:733-740 | CMPm:462-485 menu | none | moved | |
-| P74 | Ranking: lowest copy in the category, with not-ranked reasons | CMPc:467-512 | MISSING | none | missing | `rankCases` still in `lib/compare/analytics.ts` |
-| P75 | Next: "Duplicate the base to test another change" | CMPc:534-536 | MISSING (text only, CMPm:183-185) | none | missing | |
+| P74 | Ranking: lowest copy in the category, with not-ranked reasons | CMPc:467-512 | `components/lcapix/compare/compare-page.tsx` `Ranking` (rankCases) with a reason for each case not ranked | none | kept |  |
+| P75 | Next: "Duplicate the base to test another change" | CMPc:534-536 | `components/lcapix/compare/compare-page.tsx` "Duplicate the base" (case/new?kind=whatif&from=) | none | kept |  |
 | P76 | Next: "Export a report" | CMPc:537-541 | Reports in sidebar | none | moved | |
-| P77 | What differs, all copies (run scope, exchanges, steps, costs) | CMPc:600-602, `what-differs.tsx` | CMPm:334-393 | GET /api/projects/:id/compare | partial | One pair only, shown only when checks pass |
-| P78 | Results tab (values / change / relative) | CMPc:603 | CMPm:419-440 "Every category" | GET /api/projects/:id/compare | partial | Behind a toggle and gated on the checks |
-| P79 | Where the change comes from: by step or by material | CMPc:604, `change-panel.tsx:21` | CMPm:270-332 | GET /api/projects/:id/compare | partial | By-material view missing |
-| P80 | Hotspots tab | CMPc:605 | CMPm:441-442 | GET /api/projects/:id/compare | partial | Behind toggle, gated |
-| P81 | Cost tab | CMPc:606-608 | CMPm:443-444 | GET /api/projects/:id/compare | partial | Behind toggle, gated |
+| P77 | What differs, all copies (run scope, exchanges, steps, costs) | CMPc:600-602, `what-differs.tsx` | `components/lcapix/compare/what-differs.tsx` as the "What differs" tab | GET /api/projects/:id/compare | kept |  |
+| P78 | Results tab (values / change / relative) | CMPc:603 | `components/lcapix/compare/compare-page.tsx` tabs always visible; a failed check says why | GET /api/projects/:id/compare | kept |  |
+| P79 | Where the change comes from: by step or by material | CMPc:604, `change-panel.tsx:21` | `components/lcapix/compare/change-panel.tsx` as the "By step or material" tab | GET /api/projects/:id/compare | kept |  |
+| P80 | Hotspots tab | CMPc:605 | `components/lcapix/compare/compare-page.tsx` Hotspots tab, always visible | GET /api/projects/:id/compare | kept |  |
+| P81 | Cost tab | CMPc:606-608 | `components/lcapix/compare/compare-page.tsx` Cost tab, always visible | GET /api/projects/:id/compare | kept |  |
 | P82 | Data quality tab | CMPc:609 | CMPm:445-446 | GET /api/projects/:id/compare | kept | Behind toggle |
 | P83 | Impact category selector | CMPc:588-598 | CMPm:154-165 | none | kept | |
-| P84 | Single case readable alone | CMPc:402-403 | CMPm:180-188 asks for a second case | none | partial | |
+| P84 | Single case readable alone | CMPc:402-403 | `components/lcapix/compare/compare-page.tsx` `OneCase` | none | kept |  |
 
 ### Start /project/[projectId]/start
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P85 | Reach the page | NPc:120 after create | HIDDEN: only from `classic-new-project.tsx:120` (flag only) | none | hidden | No link with default flags |
-| P86 | Build by hand: "Base case", described "Built by hand", opens with ?learn=1 (lesson rail + reference pane) | ST:26-52, 103-111 | NPm:77-84, `lib/project/start-empty.ts:11-24` | POST /api/projects/:id/cases | partial | No description; no ?learn; only the classic editor reads it (`lib/case-editor/use-editor-panels.ts:16`) |
-| P87 | Start from documents, /import?first=1 (guided banner) | ST:138-144 | NPm:73-75 opens /import without ?first=1 | none | partial | Routing is the default anyway (`use-import.ts:69`); banner never shows |
-| P88 | "Open the project and decide later" | ST:148-153 | MISSING | none | partial | The "From a file" choice makes no case until you save |
+| P85 | Reach the page | NPc:120 after create | `app/project/[projectId]/start`, `case/base/new`, `case/comparative/new` go to `case/new?kind=` | none | kept |  |
+| P86 | Build by hand: "Base case", described "Built by hand", opens with ?learn=1 (lesson rail + reference pane) | ST:26-52, 103-111 | `components/lcapix/project/new-case-form.tsx` "Built by hand" and ?learn=1; the case offers Guided mode (`case-workspace.tsx` LearnOffer) | POST /api/projects/:id/cases | kept |  |
+| P87 | Start from documents, /import?first=1 (guided banner) | ST:138-144 | New case and New project open `/import?first=1` | none | kept |  |
+| P88 | "Open the project and decide later" | ST:148-153 | `new-case-form.tsx` "Open the project and decide later" | none | kept |  |
 | P89 | Base case name clash (409) | ST:40-43 | `start-empty.ts:18-22` | POST /api/projects/:id/cases | kept | |
 
 ### Import /project/[projectId]/import (page-level only)
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P90 | Header back button (to project or case) | IMc:58, `import-header.tsx` c:22-39 | `pick-form.tsx:291`, `use-import.ts:622` | none | partial | Pick step only |
+| P90 | Header back button (to project or case) | IMc:58, `import-header.tsx` c:22-39 | `import/_components/import-header.tsx` "Back to the case/project" on every step | none | kept |  |
 | P91 | Project status card | IMc:68-72 | IMm:130-132 | GET /api/cases/:id/completeness | kept | |
 | P92 | Pick form: connector, new or append, attach step, file, plant id, lot size, preview, sample, template | IMc:74-98 | IMm:134-160 | POST /api/ingest/preview | kept | Adds reads-left |
 | P93 | Append banner with unplaced count | IMc:102-104 | IMm:74-82 (Save blocked reason) | none | moved | |
@@ -322,7 +326,7 @@ Path legend:
 | P99 | Base case: name + multi-line description | BN:246-290, 55-62 | NC:171-233, 95; BN unchanged | POST /api/projects/:id/cases | kept | New form: description is one line, 500 chars |
 | P100 | Comparative: pick reference base case | CN:317-337, 96 | NC:151-167 | POST /api/cases/:id/duplicate (sets parent_case_id, `duplicate/route.ts:98`) | kept | Can now copy any case |
 | P101 | Copy base steps, flows, costs (checkbox, on by default) | CN:345-356, 106-120 | NC always copies | POST /api/cases/:id/clone-from vs /duplicate | kept | |
-| P102 | Empty comparative case (copy unticked) | CN:350 | MISSING in NC; HIDDEN via Overview Add Case or P21 | POST /api/projects/:id/cases | hidden | |
+| P102 | Empty comparative case (copy unticked) | CN:350 | `new-case-form.tsx` empty comparative with parent_case_id; ?kind=emptycomp | POST /api/projects/:id/cases | kept |  |
 | P103 | Name clash 409 shown | BN, CN | NC:97 | POST /api/projects/:id/cases | kept | |
 | P104 | Reach the forms | Overview Add Case (P09) | Cases "+ New case" (CP:105-107) to NC; BN and CN only via Overview | none | kept | Two parallel flows now |
 
@@ -331,13 +335,13 @@ Path legend:
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
 | P105 | Name, required, 409 inline | NPc:218-246, 122-123 | NPm:148-165, 101 | POST /api/projects | kept | |
-| P106 | Goal of the study (description + goal_statement) | NPc:248-270, 67-69, 95 | MISSING (NPm:97 sends '', NPm:108-115 omits goal_statement) | POST /api/projects, PUT /api/projects/:id | missing | |
+| P106 | Goal of the study (description + goal_statement) | NPc:248-270, 67-69, 95 | `components/lcapix/project/new-project-form.tsx` goal saved as description and goal_statement | POST /api/projects, PUT /api/projects/:id | kept |  |
 | P107 | Functional unit | NPc:281-293 | NPm:174-177 | PUT /api/projects/:id | kept | |
 | P108 | System boundary | NPc:294-310 | NPm:178-187 | PUT /api/projects/:id | kept | |
 | P109 | Method | NPc:322-347 | NPm:188-195 | PUT /api/projects/:id | kept | Now defaults to the sample's |
 | P110 | Region | NPc:348-372 | NPm:196-205 | PUT /api/projects/:id | kept | |
-| P111 | ISO help tips (goal, FU, boundary, method, region) | NPc:252,284,297,325,351 | MISSING | none | missing | |
-| P112 | ISO five-phase rail | NPc:178-204 | MISSING | none | missing | |
+| P111 | ISO help tips (goal, FU, boundary, method, region) | NPc:252,284,297,325,351 | `new-project-form.tsx` HelpTip (`components/lcapix/workspace/help-tip.tsx`) on goal, FU, boundary, method, region | none | kept |  |
+| P112 | ISO five-phase rail | NPc:178-204 | `new-project-form.tsx` five-phase rail, classic text | none | kept |  |
 | P113 | Warning when settings fail to save | NPc:107-111 | NPm:236-257 | PUT /api/projects/:id | kept | Better: Continue anyway / Open the project |
 | P114 | Then choose how to start | NPc:120 (to /start) | NPm:212-234 | none | moved | |
 | P115 | Cancel / Back | NPc:147-166, 384-394 | NPm:135-140, 264 | none | kept | |
@@ -348,7 +352,7 @@ Path legend:
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
 | P117 | Case list with base/comparative | CT:57-343 (tabs) | CP:110-257 | GET /api/projects/:id/progress | moved | Overview tabs also kept |
-| P118 | Rename / delete / clone / run a case from the list | CA, TP (Overview) | MISSING on CP; Overview only | PUT/DELETE /api/cases/:id | hidden | |
+| P118 | Rename / delete / clone / run a case from the list | CA, TP (Overview) | `components/lcapix/project/cases-page.tsx` CaseMenu: rename (dialog), copy, run, delete (confirm), role-gated | PUT/DELETE /api/cases/:id | kept |  |
 | P119 | Import from the case list | PH Import button | MISSING on CP; NC "From a file" and Overview | none | moved | |
 
 ### Reports /reports (new)
@@ -363,11 +367,11 @@ Path legend:
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P123 | Rename project | none in classic UI | MISSING | PUT /api/projects/:id (project_name accepted) | missing | Not a regression |
+| P123 | Rename project | none in classic UI | `components/lcapix/workspace/project-settings.tsx` name; header and sidebar update on save | PUT /api/projects/:id (project_name accepted) | kept |  |
 | P124 | Delete project | P10 | P10 | DELETE /api/projects/:id | kept | Overview only |
 | P125 | Archive project | none (Home shows status only, `lib/home/projects.ts:57`) | MISSING | none (inferred: no column, no route) | missing | Not a regression |
-| P126 | Edit FU, boundary, goal, exclusions after creation | case editor GoalScopeCard: `lib/case-editor/use-goal-scope.ts:95-125`, `goal-scope-card.tsx:113-197` | MISSING (only with WORKSPACE=classic) | PUT /api/projects/:id | missing | |
-| P127 | Change project default method/region after creation | none (chosen per run) | MISSING | PUT /api/projects/:id (lcia_method, region_code accepted) | missing | Compare's "Run again" uses the base case's settings |
+| P126 | Edit FU, boundary, goal, exclusions after creation | case editor GoalScopeCard: `lib/case-editor/use-goal-scope.ts:95-125`, `goal-scope-card.tsx:113-197` | `project-settings.tsx` FU, boundary, goal, exclusions | PUT /api/projects/:id | kept |  |
+| P127 | Change project default method/region after creation | none (chosen per run) | `project-settings.tsx` default method and region | PUT /api/projects/:id (lcia_method, region_code accepted) | kept |  |
 | P128 | Members and roles | P32-P36 | PP | /members GET, POST, DELETE | moved | |
 | P129 | Duplicate a case | CN + clone-from; P21 | NC; workspace `make-copy.ts:12-24` and `results-panel.tsx:93` | POST /api/cases/:id/duplicate | kept | |
 | P130 | Rename case | P28 | P28 | PUT /api/cases/:id | kept | Overview only |
@@ -382,6 +386,11 @@ Path legend:
 | P134 | Search button | TB:333-342 | HIDDEN: Cmd+K only (`command-palette.tsx:46`) | none | hidden | |
 | P135 | Notifications bell | TB:362-460 | MISSING in the shell | none | missing | Inferred |
 | P136 | Docs, profile, Integrations, logout | TB:25-28, 560-600 | `sidebar.tsx:225-273` | none | moved | |
+| P137 | The sidebar counts a case or a person added, without a reload (findings 1.9, 2.4) | n/a (discovery run) | `lib/shell/use-shell.ts` (the newest load wins); refresh after the case exists (`new-project-form.tsx`, Cases menu) | - | kept |  |
+| P138 | Cases board: the base case is not "copied", and "N people have no case yet" is counted only from a view that sees every case (finding 2.7) | n/a (discovery run) | `components/lcapix/project/cases-page.tsx` | - | kept |  |
+| P139 | Compare: A and B show the same number with the same decimals (finding 2.9) | n/a (discovery run) | `components/lcapix/compare/compare-page.tsx` | - | kept |  |
+| P140 | Compare: pickers for A and B, and the letters follow the pick (finding 2.10) | n/a (discovery run) | `components/lcapix/compare/compare-page.tsx` | - | kept |  |
+| P141 | The Overview uses the number and money formats of Results (finding 3.4) | n/a (discovery run) | `lib/project/workspace.ts` workspaceKpis; `components/lcapix/workspace/project-hub.tsx` | - | kept |  |
 
 ### Classic capabilities the new navigation no longer links to
 
@@ -423,42 +432,42 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
 | G01 | Dashboard at /home | app/home/page.tsx:21-116 | app/home/page.tsx:12-15 -> eh:25-59 | - | moved | classic dashboard only with SHELL=classic (hc/classic-home.tsx) |
-| G02 | Onboarding gate: needsOnboarding -> /auth/onboarding | lib/home/use-home.ts:58-75 | MISSING | GET /api/auth/profile (still returns needsOnboarding, app/api/auth/profile/route.ts:59) | missing | login goes to /home (app/auth/login/page.tsx:130); no other gate (grep) |
+| G02 | Onboarding gate: needsOnboarding -> /auth/onboarding | lib/home/use-home.ts:58-75 | `app/auth/login/page.tsx` needsOnboarding (one rule with Google) | GET /api/auth/profile (still returns needsOnboarding, app/api/auth/profile/route.ts:59) | kept |  |
 | G03 | Greeting + project count line | hc/home-greeting.tsx:23-31 | eh:160-161; lib/home/home-view.ts:62-70 | GET /api/projects, /api/auth/profile | kept | |
 | G04 | "Walk me through" guided tour | hc/home-greeting.tsx:34-41; app/home/page.tsx:109-113 | MISSING; Guided mode switch sb:218-224 | - | dropped | Dropped by Shreya 2026-10-27. different feature: guide cards only where a page calls useSidebarGuide (lib/shell/guide-slot.ts:20) |
 | G05 | New project | hc/home-greeting.tsx:42-48 | eh:196-198; sb:205-212 | POST /api/projects (on /project/new) | kept | hidden for students (lib/shell/project-nav.ts:165-169) |
-| G06 | KPI PROJECTS | lib/home/projects.ts:156-161; hc/home-kpis.tsx:19-31 | count pill sb:202 only | GET /api/projects | partial | |
-| G07 | KPI CASES + process steps | projects.ts:162-168 | MISSING | GET /api/projects (case_count, component_count still sent, app/api/projects/route.ts:26-29) | missing | |
-| G08 | KPI FACTORS, links /library/factors | projects.ts:169-176 | MISSING | GET /api/integrations/status | missing | was the only link to the factor library |
-| G09 | KPI SUBSTANCES, links /library/substances | projects.ts:177-184 | MISSING | GET /api/integrations/status | missing | was the only link to the substance catalog |
-| G10 | Filter chips All / Single case / Comparison / Active | hc/projects-toolbar.tsx:54-78; projects.ts:77-93 | MISSING | client | missing | "Active" was already a no-op: no archived field in the API or any migration (grep) |
-| G11 | Search projects | hc/projects-toolbar.tsx:80-112 (name + description) | eh:352-428 (name + case names) | GET /api/projects/{id}/cases per project | partial | no description match; cases only for the first 20 projects (eh:361) |
-| G12 | Grid / list toggle | hc/projects-toolbar.tsx:113-170 | MISSING | - | missing | |
+| G06 | KPI PROJECTS | lib/home/projects.ts:156-161; hc/home-kpis.tsx:19-31 | `components/lcapix/home/edu-home.tsx` Home counts | GET /api/projects | kept |  |
+| G07 | KPI CASES + process steps | projects.ts:162-168 | `components/lcapix/home/edu-home.tsx` Home counts | GET /api/projects (case_count, component_count still sent, app/api/projects/route.ts:26-29) | kept |  |
+| G08 | KPI FACTORS, links /library/factors | projects.ts:169-176 | `components/lcapix/home/edu-home.tsx` factors tile, says when it could not load | GET /api/integrations/status | kept |  |
+| G09 | KPI SUBSTANCES, links /library/substances | projects.ts:177-184 | `components/lcapix/home/edu-home.tsx` substances tile, says when it could not load | GET /api/integrations/status | kept |  |
+| G10 | Filter chips All / Single case / Comparison / Active | hc/projects-toolbar.tsx:54-78; projects.ts:77-93 | `components/lcapix/home/edu-home.tsx` Segmented filter | client | kept |  |
+| G11 | Search projects | hc/projects-toolbar.tsx:80-112 (name + description) | `components/lcapix/home/edu-home.tsx` HomeSearch matches descriptions | GET /api/projects/{id}/cases per project | kept |  |
+| G12 | Grid / list toggle | hc/projects-toolbar.tsx:113-170 | `components/lcapix/home/edu-home.tsx` Layout grid or list | - | kept |  |
 | G13 | Sort control | none | none | order is updated_at DESC (app/api/projects/route.ts:84) | missing | Not a regression: absent in classic too; the switcher orders by activity (project-nav.ts:93-109) |
 | G14 | Open project | hc/project-list-views.tsx:29,186 | eh:203 | - | kept | |
-| G15 | Card: description | project-list-views.tsx:50-62 | MISSING | GET /api/projects (description still sent) | missing | new-project-form.tsx:97 now sends description '' (no field) |
+| G15 | Card: description | project-list-views.tsx:50-62 | `components/lcapix/home/edu-home.tsx` card | GET /api/projects (description still sent) | kept |  |
 | G16 | Card: active/archived chip | project-list-views.tsx:64-78 | MISSING | none | missing | always "active" in classic |
 | G17 | Card: case count | project-list-views.tsx:92-100 | eh:206 (home-view.ts:132-137) | GET /api/projects | kept | adds people and hand-ins |
-| G18 | Card: process step count | project-list-views.tsx:102-110 | MISSING | component_count still sent | missing | |
-| G19 | Card: last run | project-list-views.tsx:112; projects.ts:60-62 | eh:209-224 | GET /api/projects (base_run) | partial | now base case Run # + headline CO2, no time; classic actually showed the updated time (transformer has no lastRun) |
-| G20 | Card: SINGLE CASE / COMPARISON chip | project-list-views.tsx:122-132 | MISSING | - | missing | |
-| G21 | Card: "Updated X ago" | project-list-views.tsx:133-141 | MISSING | updated_at still sent | missing | |
-| G22 | List view columns Name/Type/Cases/Comps/Last run/Updated | project-list-views.tsx:150-238 | MISSING | - | missing | |
+| G18 | Card: process step count | project-list-views.tsx:102-110 | `components/lcapix/home/edu-home.tsx` card | component_count still sent | kept |  |
+| G19 | Card: last run | project-list-views.tsx:112; projects.ts:60-62 | `components/lcapix/home/edu-home.tsx` card "Last run" | GET /api/projects (base_run) | kept |  |
+| G20 | Card: SINGLE CASE / COMPARISON chip | project-list-views.tsx:122-132 | `components/lcapix/home/edu-home.tsx` card chip | - | kept |  |
+| G21 | Card: "Updated X ago" | project-list-views.tsx:133-141 | `components/lcapix/home/edu-home.tsx` card | updated_at still sent | kept |  |
+| G22 | List view columns Name/Type/Cases/Comps/Last run/Updated | project-list-views.tsx:150-238 | `components/lcapix/home/edu-home.tsx` ProjectList | - | kept |  |
 | G23 | Delete project from the list | none | only "Remove the sample" eh:137-150,246 | DELETE /api/projects/{id} | missing | Not a regression: absent in classic too; delete stays on the overview header (lib/project/use-project-actions.ts:102-115) |
-| G24 | Pin project | none | HIDDEN: the switcher shows a Pinned group (project-switcher.tsx:24; project-nav.ts:99-101) but nothing sets a pin | PUT/DELETE /api/projects/{id}/pin | hidden | new, API only (no UI caller, grep) |
+| G24 | Pin project | none | `components/lcapix/home/edu-home.tsx` Pin / Unpin, named, says why it failed | PUT/DELETE /api/projects/{id}/pin | kept |  |
 | G25 | Load error + Retry | hc/project-states.tsx:12-40 | eh:35-41 | GET /api/projects | kept | |
 | G26 | Loading state | project-states.tsx:43-72 | eh:42-48 | - | kept | text, not skeleton |
-| G27 | Empty: ISO 14040 five-phase rail | project-states.tsx:95-99; projects.ts:192-218 | MISSING | - | missing | info only |
+| G27 | Empty: ISO 14040 five-phase rail | project-states.tsx:95-99; projects.ts:192-218 | `components/lcapix/home/edu-home.tsx` EmptyHome ISO rail | - | kept |  |
 | G28 | Empty: create first project | project-states.tsx:111-116 | eh:106-117 | - | kept | |
 | G29 | Empty: worked example | project-states.tsx:117-125; use-home.ts:131-151 | eh:93-105 "Open the sample study"; also onboarding | POST /api/example-project | kept | stays on /home instead of opening the project |
-| G30 | Empty: trust strip | project-states.tsx:127-130 | MISSING | - | missing | info only |
+| G30 | Empty: trust strip | project-states.tsx:127-130 | `components/lcapix/home/edu-home.tsx` EmptyHome trust strip | - | kept |  |
 | G31 | Recent activity sidebar | hc/recent-activity.tsx:8-95 | MISSING | none (client store) | dropped | Dropped by Shreya 2026-10-27. |
 
 ### /library/factors (file unchanged except punctuation; line numbers match in both)
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| G32 | Entry point | via G08 | HIDDEN | - | hidden | URL only: only href is lib/home/projects.ts:174, used by classic-home only |
+| G32 | Entry point | via G08 | `app/library/factors/page.tsx` in the shell, ds | - | kept |  |
 | G33 | Page chrome | AppTopBar app/library/factors/page.tsx:137 | shell (app/library/layout.tsx:1-6; atb:122 returns null) | - | moved | |
 | G34 | Back to home | :147-165 | same | - | kept | |
 | G35 | Header: N factors across M methods | :168-177 | same | GET /api/integrations/status, GET /api/driver-factors | kept | |
@@ -476,7 +485,7 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| G45 | Entry point | via G09 | HIDDEN | - | hidden | URL only |
+| G45 | Entry point | via G09 | `app/library/substances/page.tsx` in the shell, ds | - | kept |  |
 | G46 | Page chrome | AppTopBar app/library/substances/page.tsx:125 | shell | - | moved | |
 | G47 | Back to home | :135-155 | same | - | kept | |
 | G48 | Header counts | :158-160 | same | GET /api/substances | kept | |
@@ -497,12 +506,12 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G58 | Page chrome | AppTopBar pp:217 | shell (app/profile/layout.tsx) | - | moved | |
 | G59 | Back to home | pp:228-250 | same | - | kept | |
 | G60 | Header: name, email, company | pp:252-266 | same | GET /api/auth/profile | kept | |
-| G61 | Meta row: role, focus, country, joined | pp:270-277, 514-575 | same | GET /api/auth/profile | partial | Focus maps legacy values only (pp:26-32): teaching/lab/own_study show "Not set" |
+| G61 | Meta row: role, focus, country, joined | pp:270-277, 514-575 | `app/profile/page.tsx` meta row | GET /api/auth/profile | kept |  |
 | G62 | Edit full name (required) | pp:324-336 | same | PUT /api/auth/profile | kept | |
 | G63 | Edit country | pp:339-356 | pp:339-358 | PUT /api/auth/profile | kept | onboarding no longer asks |
-| G64 | Edit company (required) | pp:365-377, :172 | pp:366-378, :172 | PUT /api/auth/profile | partial | API made it optional (check removed, profile/route.ts:97-104); onboarding calls it optional "Institution"; anyone who skipped it cannot save any edit |
+| G64 | Edit company (required) | pp:365-377, :172 | `app/profile/page.tsx` optional | PUT /api/auth/profile | kept |  |
 | G65 | Edit role | pp:378-386 | pp:379-387 | PUT /api/auth/profile | kept | now the only place to set it |
-| G66 | Edit primary use case | pp:387-402 (5 legacy) | pp:388-403 (same 5) | PUT (accepts both sets, lib/onboarding.ts:26-31) | partial | onboarding values (lib/onboarding.ts:13-17) are not options; picking any option overwrites "teaching", which Home reads (eh:58) |
+| G66 | Edit primary use case | pp:387-402 (5 legacy) | `app/profile/page.tsx` onboarding choices | PUT (accepts both sets, lib/onboarding.ts:26-31) | kept |  |
 | G67 | Read-only email / username / member since | pp:411-428 | pp:413-430 | GET /api/auth/profile | kept | |
 | G68 | Load error + Retry | pp:281-308 | same | GET /api/auth/profile | kept | |
 | G69 | Discard / Save bar | pp:~480-498 | pp:~482-500 | PUT /api/auth/profile | kept | |
@@ -560,9 +569,9 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G101 | Full name required | C:78, 193-205 | M:78-81, 132-145 | PUT /api/auth/profile | kept | |
 | G102 | Company required | C:79, 207-218 | M:146-159 "Institution", optional | PUT /api/auth/profile | moved | intentional; clashes with /profile (G64) |
 | G103 | Role (optional) | C:220-227 | MISSING (old value kept, M:32, 91) | PUT /api/auth/profile | moved | /profile only |
-| G104 | Use case (5 options) | C:22-28, 229-242 | M:162-184 (teaching/lab/own_study; company disabled) | PUT /api/auth/profile | partial | mismatch with /profile (G66) |
+| G104 | Use case (5 options) | C:22-28, 229-242 | `lib/onboarding.ts` USE_CASES | PUT /api/auth/profile | kept |  |
 | G105 | Country (optional) | C:244-251 | MISSING (old value kept, M:93) | PUT /api/auth/profile | moved | /profile only |
-| G106 | Save, then /home | C:75-118 | M:76-105: save, then build the sample (M:61-74), then /home | PUT /api/auth/profile, POST /api/example-project | partial | saving always builds the sample; Skip (M:107-117, PUT {skip:true}) saves nothing typed |
+| G106 | Save, then /home | C:75-118 | `app/auth/onboarding/page.tsx` the button says what Save will do | PUT /api/auth/profile, POST /api/example-project | kept |  |
 | G107 | Success / failure toasts | C:109, 114 | M:212-230 inline | - | moved | |
 
 ### /auth/callback and Google route
@@ -571,7 +580,7 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 |---|---|---|---|---|---|---|
 | G108 | Token hand-off, store, redirect (next whitelist /home, /auth/onboarding) | app/auth/callback/page.tsx:44-91 | unchanged | POST /api/auth/google/session | kept | |
 | G109 | Failure: toast + /auth/login?error=oauth_sync_failed | :92-98 | unchanged; login shows it as a card | - | kept | |
-| G110 | Choose onboarding vs home | app/api/auth/google/route.ts (onboarded_at or company) | route.ts:216 needsOnboarding(user) | GET /api/auth/google | partial | accounts with no company are no longer sent to onboarding (by design) |
+| G110 | Choose onboarding vs home | app/api/auth/google/route.ts (onboarded_at or company) | `app/api/auth/google/route.ts` needsOnboarding | GET /api/auth/google | kept |  |
 
 ### Global navigation (classic AppTopBar vs shell)
 
@@ -589,10 +598,10 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G120 | Account menu: Log out | atb:599-606 | sb:269-271 | POST /api/auth/logout | kept | |
 | G121 | One nav on every signed-in page | AppTopBar in app/project/layout.tsx:21 and each page | shell on SignedIn layouts (home, project, library, profile, admin, findings, reports); classic bar still on /guide/* (app/guide/layout.tsx:24-26) and /about (app/about/page.tsx:43-45) | - | partial | two navs; Help drops the sidebar |
 | G122 | Recent projects shortcut | cp:62-69, 105-120 | sb:181-196 Recent; components/lcapix/shell/project-switcher.tsx:30-205 | GET /api/projects | moved | |
-| G123 | Page /library/factors | linked via G08 | no clickable link | - | hidden | |
-| G124 | Page /library/substances | linked via G09 | no clickable link | - | hidden | |
-| G125 | Page /project/[id]/start | app/project/new/page.tsx:120 | only app/project/new/_components/classic-new-project.tsx:120 (flag) | - | hidden | the same choice is now in components/lcapix/project/new-project-form.tsx:217-235 |
-| G126 | Saved comparisons /project/[id]/comparisons and /comparisons/[id] | list on app/project/[projectId]/comparison/page.tsx:85-160 | both redirect to /comparison?tab=saved (comparisons/page.tsx:12; [comparisonId]/page.tsx:11), but compare-page.tsx has no saved list ("saved" not found) | GET /api/comparisons | missing | |
+| G123 | Page /library/factors | linked via G08 | sidebar and Home tile | - | kept |  |
+| G124 | Page /library/substances | linked via G09 | sidebar and Home tile | - | kept |  |
+| G125 | Page /project/[id]/start | app/project/new/page.tsx:120 | `/project/[id]/start` goes to case/new?kind=hand | - | kept |  |
+| G126 | Saved comparisons /project/[id]/comparisons and /comparisons/[id] | list on app/project/[projectId]/comparison/page.tsx:85-160 | `components/lcapix/compare/compare-page.tsx` ?tab=saved | GET /api/comparisons | kept |  |
 | G127 | Page .../case/[caseId]/component/new | Redirects to the case with the Add step form open (`?add=step`) | `app/project/[projectId]/case/[caseId]/component/new/page.tsx` | - | kept | |
 | G128 | Page .../component/[componentId]/edit | Redirects to the case with that step selected (`?componentId=`) | `app/project/[projectId]/case/[caseId]/component/[componentId]/edit/page.tsx` | - | kept | |
 | G129 | Case-by-case analytics (radar, normalised view, log scale, PDF export) | app/project/[projectId]/analytics/page.tsx | `components/lcapix/workspace/full-results.tsx:384` (Absolute, Radar, Log scale) and print | - | kept |  |
@@ -620,9 +629,13 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G141 | Next-steps "See what drives it" | components/lcapix/results/next-steps-bar.tsx:34-40 | classic results only | POST /api/insights | moved | |
 | G142 | Opens on the category picked on Results | app/project/[projectId]/case/[caseId]/results/page.tsx:280 | `components/lcapix/workspace/full-results.tsx:153` Magic Insights opens on the category chosen on the full results page | - | kept |  |
 | G143 | AI narration | lib/insights/use-magic-insights.ts (facts only) | adds run_id (use-magic-insights.ts:216); server number-check, cache, project switch (app/api/insights/route.ts:206-212) | POST /api/insights | kept | no run means computed text only |
-| G144 | Project AI on/off switch | none | no UI | PUT /api/projects/{id} ai_enabled (route.ts:143-147) | hidden | new, API only |
+| G144 | Project AI on/off switch | none | `project-settings.tsx`, owner only; `lib/data-transformers.ts` reads ai_enabled so a save never flips it | PUT /api/projects/{id} ai_enabled (route.ts:143-147) | kept |  |
 | G145 | Footer: provenance, Open case editor, Close | components/lcapix/magic-insights/footer.tsx | same file, names the model or "Computed by LCAPIX" | - | kept | |
 | G146 | Tour step on Magic Insights | lib/lcapix-tour-steps.ts:92 | same | - | dropped | Dropped by Shreya 2026-10-27. its anchor data-tour="results-magic-insights" is rendered in neither version (grep); the tour is unreachable in the shell |
+| G147 | Teaching a class leads somewhere: Home offers to set up a class, students seeing only their own case (finding 2.1) | n/a (discovery run) | `components/lcapix/home/edu-home.tsx` SetUpClass | - | kept |  |
+| G148 | Sign-up and onboarding name students (finding 1.11) | n/a (discovery run) | `app/auth/signup/page.tsx`; `lib/onboarding.ts` "Student in a class" | - | kept |  |
+| G149 | Guided mode says where the setting is kept, with no COMING SOON (finding 1.12) | n/a (discovery run) | `app/auth/onboarding/page.tsx`; sidebar | - | kept |  |
+| G150 | Screen readers get names for the onboarding radios and New project's start choice and dropdowns (finding 1.13) | n/a (discovery run) | `components/lcapix/project/new-project-form.tsx`; onboarding | - | kept |  |
 
 ### Needs only UI
 

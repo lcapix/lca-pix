@@ -6,13 +6,18 @@
 // step, and what changed in the copy. When one fails: the totals greyed,
 // change by step held back with the reason, and the run that fixes it, under
 // the base case's method and region. The fuller views (every category,
-// hotspots, cost, data quality) sit behind "More ways to compare".
+// hotspots, cost, where the change comes from by step or material, what
+// differs in every copy, data quality) are tabs below; when the checks fail,
+// each says why. ?tab=saved lists the project's saved comparisons.
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { useParams } from 'next/navigation'
-import { Button, ComingSoon, ErrorCard, SourceTag, Tabs } from '@/components/lcapix/ds'
+import { useParams, useSearchParams } from 'next/navigation'
+import { Button, ComingSoon, EmptyState, ErrorCard, SourceTag, Tabs } from '@/components/lcapix/ds'
+import { apiRequest } from '@/lib/api-client'
+import { rankCases } from '@/lib/compare/analytics'
+import { safeRunDate } from '@/lib/results/results-view'
 import { useShellData } from '@/lib/shell/use-shell'
 import { useCompare } from '@/lib/compare/use-compare'
 import { comparability, COMPARE_MAX_CASES } from '@/lib/compare/comparability'
@@ -31,7 +36,7 @@ import {
   verdict,
   whatChanged,
 } from '@/lib/compare/compare-view'
-import { caseTotal, amountBox, co2Unit, fixed } from '@/lib/ui/format'
+import { caseTotal, amountBox, co2Unit, fixed, result3, share } from '@/lib/ui/format'
 import { sourceKindOf } from '@/lib/workspace/inventory'
 import type { CompareCase } from './types'
 // The fuller views load only when "More ways to compare" opens: they carry the chart code.
@@ -39,32 +44,62 @@ const ResultsPanel = dynamic(() => import('./results-panel').then((m) => m.Resul
 const HotspotPanel = dynamic(() => import('./hotspot-panel').then((m) => m.HotspotPanel))
 const CostPanel = dynamic(() => import('./cost-panel').then((m) => m.CostPanel))
 const QualityPanel = dynamic(() => import('./quality-panel').then((m) => m.QualityPanel))
+const ChangePanel = dynamic(() => import('./change-panel').then((m) => m.ChangePanel))
+const WhatDiffersPanel = dynamic(() => import('./what-differs').then((m) => m.WhatDiffersPanel))
 
 const CLIMATE = 'Global Warming'
-type More = 'results' | 'hotspots' | 'cost' | 'quality'
+type More = 'results' | 'hotspots' | 'cost' | 'change' | 'differs' | 'quality'
+
+/** Why this run was compared, in words (P69). */
+const RUN_REASON: Record<string, string> = {
+  picked: 'you picked it',
+  'matches-copies': 'it matches the copies\u2019 method and region',
+  'matches-study': 'it matches the study\u2019s method and region',
+  latest: 'it is the latest',
+}
+const NOT_RANKED: Record<string, string> = {
+  incomplete: 'it has no complete run',
+  stale: 'it changed after its run',
+  method: 'its run used another method',
+  'functional-unit': 'its run used another functional unit',
+  'no-result': 'it has no result in this category',
+}
 
 export function ComparePage() {
   const params = useParams()
   const projectId = Number(params.projectId)
   const { profile } = useShellData()
   const { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload, pickRun } = useCompare(projectId, profile?.id ?? -1)
+  const search = useSearchParams()
+  const [view, setView] = useState<'compare' | 'saved'>(search?.get('tab') === 'saved' ? 'saved' : 'compare')
   const [category, setCategory] = useState(CLIMATE)
   const [vs, setVs] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [more, setMore] = useState<More>('results')
 
-  // Base first, then the copies in the order they were added.
+  // In the order chosen: A is the first case picked (the base by default), so
+  // the letters on the page match the pickers (2.10).
   const compared: CompareCase[] = useMemo(() => {
     const all = data?.cases ?? []
+    const byCase = new Map(all.map((c) => [c.caseId, c]))
+    const ordered = selected.map((id) => byCase.get(id)).filter((c): c is CompareCase => !!c)
+    const rest = all.filter((c) => !selected.includes(c.caseId))
+    if (ordered.length) return [...ordered, ...rest]
     const base = all.find((c) => c.caseId === data?.baseCaseId)
     return base ? [base, ...all.filter((c) => c !== base)] : all
-  }, [data])
+  }, [data, selected])
   const togglePair = (index: number, id: string) => {
     setSelected((cur) => {
       const next = [...cur]
-      if (!id) next.splice(index, 1)
-      else next[index] = id
+      if (!id) {
+        next.splice(index, 1)
+        return next.filter(Boolean)
+      }
+      // A case already picked elsewhere moves here and the two swap: a case is never in the list twice.
+      const was = next.indexOf(id)
+      if (was !== -1 && was !== index) next[was] = next[index]
+      next[index] = id
       return next.filter(Boolean)
     })
   }
@@ -144,38 +179,76 @@ export function ComparePage() {
         </div>
         {compared.length > 0 && <ResultsMenu projectId={projectId} cases={compared} />}
       </header>
+      <Tabs<'compare' | 'saved'>
+        label="Compare or saved comparisons"
+        selected={view}
+        onSelect={(t) => {
+          setView(t)
+          const q = new URLSearchParams(window.location.search)
+          if (t === 'saved') q.set('tab', 'saved')
+          else q.delete('tab')
+          window.history.replaceState(null, '', `${window.location.pathname}?${q.toString()}`)
+        }}
+        tabs={[
+          { id: 'compare', label: 'Compare' },
+          { id: 'saved', label: 'Saved comparisons' },
+        ]}
+      />
 
       <div className="cmp-bar">
-        {compared.map((c, i) => (
-          <span key={c.caseId} className="cmp-chip">
-            <span className="cmp-letter" data-l={LETTERS[i]} aria-hidden>
-              {LETTERS[i]}
-            </span>
-            <span>{c.name}</span>
-            <span className="ds-mono cmp-chip-run">
-              {!c.run ? 'not run' : c.status === 'stale' || c.run.stale ? 'run out of date' : `#${c.run.runId}`}
-            </span>
-          </span>
-        ))}
-        <label>
-          A
-          <select aria-label="Case A" value={selected[0] ?? ''} onChange={(e) => togglePair(0, e.target.value)}>
-            <option value="">None</option>
+        {/* P59: any case, the base included, in or out with one click; no cap of 8. */}
+        <span role="group" aria-label="Cases to compare" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {(cases ?? []).map((c) => {
+            const i = compared.findIndex((x) => x.caseId === c.id)
+            const on = selected.includes(c.id)
+            const cc = i >= 0 ? compared[i] : null
+            return (
+              <button
+                key={c.id}
+                type="button"
+                className="cmp-chip"
+                aria-pressed={on}
+                disabled={on && selected.length === 1}
+                title={on && selected.length === 1 ? 'Keep one case in the comparison' : undefined}
+                onClick={() => toggle(c.id)}
+              >
+                {on && i >= 0 && (
+                  <span className="cmp-letter" data-l={LETTERS[i]} aria-hidden>
+                    {LETTERS[i]}
+                  </span>
+                )}
+                <span>{c.name}</span>
+                {on && cc && (
+                  <span className="ds-mono cmp-chip-run">
+                    {!cc.run ? 'not run' : cc.status === 'stale' || cc.run.stale ? 'run out of date' : `Run ${runNumber(cc, cc.run.runId)}`}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </span>
+        {/* 2.10: any two cases as A and B, without editing the address. */}
+        <label className="cmp-pick">
+          <span>A</span>
+          <select className="ds-input" aria-label="Case A" value={selected[0] ?? ''} onChange={(e) => togglePair(0, e.target.value)}>
             {(cases ?? []).map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
             ))}
           </select>
         </label>
-        <label>
-          B
-          <select aria-label="Case B" value={selected[1] ?? ''} onChange={(e) => togglePair(1, e.target.value)}>
+        <label className="cmp-pick">
+          <span>B</span>
+          <select className="ds-input" aria-label="Case B" value={selected[1] ?? ''} onChange={(e) => togglePair(1, e.target.value)}>
             <option value="">None</option>
             {(cases ?? []).map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
             ))}
           </select>
         </label>
-        <AddCaseMenu cases={cases} selected={selected} baseId={base?.caseId ?? null} onToggle={toggle} />
         <span style={{ flex: 1 }} />
         {categories.length > 0 && (
           <label className="cmp-cat">
@@ -203,17 +276,20 @@ export function ComparePage() {
         </p>
       )}
 
-      {data && compared.length < 2 && (
-        <div className="pp-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
+      {view === 'saved' && <SavedComparisons projectId={projectId} onCompare={(ids) => { setSelected(ids); setView('compare') }} />}
+
+      {view === 'compare' && data && compared.length === 1 && <OneCase c={compared[0]} projectId={projectId} />}
+      {view === 'compare' && data && compared.length < 2 && (
+        <div className="pp-card" style={{ textAlign: 'center', padding: '40px 24px', marginTop: 12 }}>
           <strong style={{ display: 'block', fontSize: 18 }}>Add a second case to compare</strong>
           <p className="np-sub" style={{ margin: '6px 0 14px' }}>
             Make a copy of the base case, change one input, run it, then add it here.
           </p>
-          <AddCaseMenu cases={cases} selected={selected} baseId={base?.caseId ?? null} onToggle={toggle} primary />
+          <AddCaseMenu cases={cases} selected={selected} baseId={null} onToggle={toggle} primary />
         </div>
       )}
 
-      {data && compared.length >= 2 && (
+      {view === 'compare' && data && compared.length >= 2 && (
         <>
           <section className="cmp-checks" data-ok={v.ok || undefined} aria-label="Whether these cases compare fairly">
             <div className="cmp-verdict">
@@ -252,30 +328,57 @@ export function ComparePage() {
             </p>
           )}
 
-          <ul aria-label="Cases in this comparison" style={{ listStyle: 'none', padding: 0, margin: '12px 0' }}>
-            {compared.map((c) => (
-              <li key={c.caseId}>
-                <strong>{c.name}</strong>
-                <span> {c.inventory?.steps ?? 0} steps · {c.inventory?.flows ?? 0} flows</span>
-                {c.run?.stale && <span> Older run. The case changed after run #{c.run.runId}.</span>}
-                {c.run && <span> Compared on run #{c.run.runId} because {c.run.reason.replaceAll('-', ' ')}.</span>}
+          <ul aria-label="Cases in this comparison" className="cmp-cases">
+            {compared.map((c, i) => (
+              <li key={c.caseId} className="ds-card ds-card-pad">
+                <span className="cmp-total-name">
+                  <span className="cmp-letter cmp-letter--sq" data-l={LETTERS[i]} aria-hidden>
+                    {LETTERS[i]}
+                  </span>
+                  <strong>{c.name}</strong>
+                </span>
+                <span className="ds-mono">
+                  {c.inventory?.steps ?? 0} steps · {c.inventory?.flows ?? 0} flows
+                </span>
                 {c.runs?.length > 0 && (
-                  <label>
-                    {' '}Run
-                    <select aria-label={`Run for ${c.name}`} value={String(c.run?.runId ?? '')} onChange={(e) => pickRun(c.caseId, e.target.value)}>
-                      {c.runs.map((r) => (
-                        <option key={r.runId} value={r.runId}>#{r.runId} {r.method ?? ''} {r.region ?? ''}</option>
-                      ))}
+                  <label className="cmp-pick">
+                    <span>Run</span>
+                    <select className="ds-input" aria-label={`Run for ${c.name}`} value={String(c.run?.runId ?? '')} onChange={(e) => pickRun(c.caseId, e.target.value)}>
+                      {[...c.runs]
+                        .sort((a, b) => a.runId - b.runId)
+                        .map((r) => (
+                          <option key={r.runId} value={r.runId}>
+                            Run {runNumber(c, r.runId)} · {r.method ?? 'method not set'} · {r.region ?? 'Global'} · {safeRunDate(r.runDate)}
+                          </option>
+                        ))}
                     </select>
                   </label>
                 )}
-                {!c.run && <Link href={`/project/${projectId}/case/${c.caseId}`}> Open the case</Link>}
-                {c.statusReason && <span> {c.statusReason}</span>}
+                {c.run && c.run.reason !== 'latest' && (
+                  <span>
+                    Compared on Run {runNumber(c, c.run.runId)} because {RUN_REASON[c.run.reason] ?? c.run.reason}.
+                  </span>
+                )}
+                {c.run?.stale && <span>The case changed after this run. Run it again to compare what it is now.</span>}
+                {c.run && c.run.resultsSource !== 'snapshot' && (
+                  <span>An older run: made before results were saved with each run, so its step names are read from the case as it is now.</span>
+                )}
+                {(!c.run || c.status === 'incomplete') && (
+                  <span>
+                    {c.statusReason ?? 'Not run yet.'}{' '}
+                    <Link className="ds-link" href={`/project/${projectId}/case/${c.caseId}`}>
+                      Open the case
+                    </Link>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
+          <Ranking cases={compared} baseId={base.caseId} category={category} unit={unit} />
           <p>
-            <Link className="ds-btn" href={`/project/${projectId}/case/new?kind=whatif`}>Duplicate the base</Link>
+            <Link className="ds-btn" href={`/project/${projectId}/case/new?kind=whatif&from=${base.caseId}`}>
+              Duplicate the base
+            </Link>
           </p>
 
           <section className="cmp-totals" aria-label="Totals">
@@ -301,7 +404,8 @@ export function ComparePage() {
                       <span className="cmp-total-none">{c.statusReason ?? 'No result in this category'}</span>
                     ) : (
                       <span className="cmp-total-row">
-                        <span className="cmp-total-num ds-mono">{caseTotal(t.value, i === 0 ? 'base' : 'comparative')}</span>
+                        {/* 2.9: every case at the same decimals, so A and B read alike. */}
+                        <span className="cmp-total-num ds-mono">{caseTotal(t.value, 'comparative')}</span>
                         <span className="cmp-total-unit">
                           {unit} per {perNoun(fu)}
                         </span>
@@ -478,12 +582,24 @@ export function ComparePage() {
                     { id: 'results', label: 'Every category' },
                     { id: 'hotspots', label: 'Hotspots' },
                     { id: 'cost', label: 'Cost' },
+                    { id: 'change', label: 'By step or material' },
+                    { id: 'differs', label: 'What differs' },
                     { id: 'quality', label: 'Data quality' },
                   ]}
                 />
                 <div className="pp-card" style={{ marginTop: 12 }}>
-                  {!fair && more !== 'quality' ? (
-                    <p style={{ margin: 0, fontSize: 15, color: 'var(--ds-text-2)' }}>This view shows once every check passes.</p>
+                  {!fair && more !== 'quality' && more !== 'differs' ? (
+                    <p style={{ margin: 0, fontSize: 15, color: 'var(--ds-text-2)' }}>
+                      This view shows once every check passes. Now:{' '}
+                      {checks.checks
+                        .filter((k) => !k.ok && !k.warn)
+                        .map((k) => `${k.label}.`)
+                        .join(' ') || 'it needs two cases with a run.'}
+                    </p>
+                  ) : more === 'change' ? (
+                    <ChangePanel base={base} cases={compared} category={category} />
+                  ) : more === 'differs' ? (
+                    <WhatDiffersPanel base={base} cases={compared} diffs={data.diffs} category={category} />
                   ) : more === 'results' ? (
                     <ResultsPanel cases={compared} baseId={base.caseId} />
                   ) : more === 'hotspots' ? (
@@ -604,4 +720,116 @@ function useMenu(): [{ on: boolean; ref: RefObject<HTMLSpanElement | null> }, (o
     }
   }, [on])
   return [{ on, ref }, setOn]
+}
+
+/** A run's place in its own case among the runs Compare lists for it (2.8). */
+function runNumber(c: CompareCase, runId: number): number {
+  const ids = (c.runs ?? []).map((r) => r.runId).sort((a, b) => a - b)
+  const i = ids.indexOf(runId)
+  return i < 0 ? ids.length + 1 : i + 1
+}
+
+/** P74: the copies ranked against A in this category, lowest first, and why any is not ranked. */
+function Ranking({ cases, baseId, category, unit }: { cases: CompareCase[]; baseId: string; category: string; unit: string }) {
+  const r = rankCases(
+    cases.map((c) => ({ ...c, method: c.run?.method ?? null, functionalUnit: c.run?.functionalUnit ?? null })) as any,
+    baseId,
+    category,
+  )
+  const nameOf = (id: string) => cases.find((c) => c.caseId === id)?.name ?? id
+  return (
+    <section aria-label="Ranking" className="ds-card ds-card-pad" style={{ margin: '12px 0' }}>
+      <span className="ds-section-label">Ranking · {sentenceCase(category)}, lowest first</span>
+      {r.baseExcluded ? (
+        <p style={{ margin: '6px 0 0' }}>Nothing is ranked: {nameOf(baseId)} cannot anchor it because {NOT_RANKED[r.baseExcluded]}.</p>
+      ) : (
+        <ol style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+          {r.ranked.map((x) => (
+            <li key={x.caseId}>
+              {nameOf(x.caseId)} <span className="ds-mono">{result3(x.value)}</span> {unit}
+              {r.baseValue ? ` (${x.value === r.baseValue ? 'the same as A' : `${share(Math.abs(x.value - r.baseValue), Math.abs(r.baseValue))} ${x.value < r.baseValue ? 'lower' : 'higher'} than A`})` : ''}
+            </li>
+          ))}
+        </ol>
+      )}
+      {r.excluded.map((x) => (
+        <p key={x.caseId} style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--ds-text-2)' }}>
+          {nameOf(x.caseId)} is not ranked: {NOT_RANKED[x.reason]}.
+        </p>
+      ))}
+    </section>
+  )
+}
+
+/** P84: one case reads on its own: its run and every category. */
+function OneCase({ c, projectId }: { c: CompareCase; projectId: number }) {
+  return (
+    <section aria-label="One case" className="ds-card ds-card-pad" style={{ marginTop: 12 }}>
+      <strong style={{ display: 'block', fontSize: 18 }}>{c.name}, on its own</strong>
+      {!c.run ? (
+        <p>
+          Not run yet.{' '}
+          <Link className="ds-link" href={`/project/${projectId}/case/${c.caseId}`}>
+            Open the case
+          </Link>
+        </p>
+      ) : (
+        <>
+          <p className="np-sub" style={{ margin: '4px 0 10px' }}>
+            Run {runNumber(c, c.run.runId)} · {c.run.method ?? 'method not set'} · {c.run.region ?? 'Global'} · {c.inventory?.steps ?? 0} steps · {c.inventory?.flows ?? 0} flows
+          </p>
+          <table className="ds-table">
+            <tbody>
+              {c.totals.map((t) => (
+                <tr key={t.category}>
+                  <td>{sentenceCase(t.category)}</td>
+                  <td className="ds-num">
+                    {result3(t.value)} {t.unit}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  )
+}
+
+/** P63, G126: the project's saved comparisons, each with Compare these. */
+function SavedComparisons({ projectId, onCompare }: { projectId: number; onCompare: (ids: string[]) => void }) {
+  const [rows, setRows] = useState<Array<{ comparison_id: number; comparison_name: string; case_ids: number[]; base_case_id: number | null; created_at?: string }> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    apiRequest(`/api/comparisons?project_id=${projectId}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d?.error ?? `error ${r.status}`)
+        if (live) setRows(d.comparisons ?? [])
+      })
+      .catch((e) => live && setError(e?.message ?? 'the saved comparisons did not load'))
+    return () => {
+      live = false
+    }
+  }, [projectId])
+  if (error) return <ErrorCard title="The saved comparisons did not load" cause={error} />
+  if (!rows) return <p role="status">Loading the saved comparisons…</p>
+  if (!rows.length) return <EmptyState line="No saved comparisons in this project yet." />
+  return (
+    <ul aria-label="Saved comparisons" className="cmp-cases" style={{ marginTop: 12 }}>
+      {rows.map((r) => {
+        const ids = [r.base_case_id, ...r.case_ids].filter((x, i, a): x is number => x != null && a.indexOf(x) === i).map(String)
+        return (
+          <li key={r.comparison_id} className="ds-card ds-card-pad">
+            <strong>{r.comparison_name}</strong>
+            <span className="ds-mono">{ids.length} cases{r.created_at ? ` · ${safeRunDate(r.created_at)}` : ''}</span>
+            <Button size="small" onClick={() => onCompare(ids)}>
+              Compare these
+            </Button>
+          </li>
+        )
+      })}
+    </ul>
+  )
 }

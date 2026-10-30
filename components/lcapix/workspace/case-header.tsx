@@ -9,7 +9,8 @@ import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { makeOwnCopy } from '@/lib/workspace/make-copy'
-import { Button, ErrorCard } from '@/components/lcapix/ds'
+import { Button, Callout, ErrorCard } from '@/components/lcapix/ds'
+import { apiRequest } from '@/lib/api-client'
 import { ACCESS_WORD } from '@/lib/ui/words'
 import type { WorkspaceCase, WorkspaceInventory } from '@/lib/workspace/use-workspace'
 import { amount as fmtAmount } from '@/lib/ui/format'
@@ -27,7 +28,9 @@ export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSt
     : k.project_functional_unit?.trim() || `${fmtAmount(k.reference_flow ?? 1)} unit`
   const scope = inv ? `${inv.method} · ${inv.region}` : k.project_lcia_method ?? ''
   const run = inv?.latest_run ? runLabel(inv.latest_run) : noSteps ? 'no steps yet' : 'not run yet'
-  return [kind, unit, scope, run, k.read_only ? 'Sample, read-only' : null].filter(Boolean).join(' · ')
+  // A frozen hand-in is read-only too, and is not the sample.
+  const ro = k.read_only ? (k.assignment_id ? 'Handed in, read-only' : 'Sample, read-only') : null
+  return [kind, unit, scope, run, ro].filter(Boolean).join(' · ')
 }
 
 /** "2 flows have no amount. They are left out of a run." / "1 flow is left out: its unit can't convert." */
@@ -115,8 +118,11 @@ export function CaseHeader({
           )}
         </div>
         <CaseSwitcher kase={kase} siblings={siblings} />
-        {/* A copy is a new case: it needs Can change, so someone who can only read is told so instead. */}
-        {kase.read_only && kase.project_role !== 'viewer' ? (
+        {/* A copy is a new case: it needs Can change, so someone who can only read is told so instead.
+            2.5: a member who can change the project but not this case (an instructor's base case) can copy it too. */}
+        {kase.read_only && kase.assignment_id ? (
+          <span className="ds-status ds-status--saved">Handed in</span>
+        ) : (kase.read_only || readOnly) && kase.project_role && kase.project_role !== 'viewer' ? (
           <Button variant="primary" onClick={makeCopy} busy={copying}>
             Make my own copy
           </Button>
@@ -143,6 +149,15 @@ export function CaseHeader({
           </Button>
         )}
       </header>
+      <AssignmentInstructions kase={kase} />
+      {!kase.assignment_id && kase.copied_from?.base_description?.trim() && (
+        // C05: a copy shows the base case's instructions while the student works.
+        <div style={{ padding: '0 18px' }} aria-label="Instructions" role="region">
+          <Callout tone="info" lead={`From the ${kase.copied_from.case_name}:`}>
+            {kase.copied_from.base_description}
+          </Callout>
+        </div>
+      )}
       {(runError || copyError) && (
         <div style={{ padding: '12px 24px 0' }}>
           <ErrorCard
@@ -223,6 +238,38 @@ function CaseSwitcher({
           {!list.length && <p style={{ fontSize: 13, color: 'var(--ds-text-3)', margin: '8px 12px' }}>No case matches.</p>}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * C05: a student's case started for an assignment shows its instructions,
+ * so they are in front of the student while they work, not on another page.
+ */
+function AssignmentInstructions({ kase }: { kase: WorkspaceCase }) {
+  const [text, setText] = useState<{ title: string; instructions: string | null } | null>(null)
+  const id = kase.assignment_id
+  useEffect(() => {
+    setText(null)
+    if (!id || kase.read_only) return
+    let live = true
+    apiRequest(`/api/projects/${kase.project_id}/assignments`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const a = (d?.assignments ?? []).find((x: any) => Number(x.assignment_id) === Number(id))
+        if (live && a) setText({ title: a.title, instructions: a.instructions ?? null })
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [id, kase.project_id, kase.read_only])
+  if (!text) return null
+  return (
+    <div style={{ padding: '0 18px' }} aria-label="Instructions" role="region">
+      <Callout tone="info" lead={`${text.title}:`}>
+        {text.instructions || 'No instructions written yet.'}
+      </Callout>
     </div>
   )
 }

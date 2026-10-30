@@ -13,25 +13,27 @@ import { useRouter } from 'next/navigation'
 import { Button, ErrorCard } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { useShellData, useShellStore } from '@/lib/shell/use-shell'
-import { ISO_STEPS } from '@/lib/home/projects'
 import { startEmptyCase } from '@/lib/project/start-empty'
+import { BOUNDARIES, METHODS, REGIONS } from '@/lib/project/study-options'
+import { ISO_HELP } from '@/components/lcapix/iso-help'
+import { HelpTip } from '@/components/lcapix/workspace/help-tip'
 
-// Only the methods with factors loaded (driver_impact_factors) and the regions
-// with their own electricity factors; anything else would quietly read as
-// zero or fall back to Global.
-const METHODS = ['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1'] as const
-const REGIONS = [
-  { value: 'Global', label: 'Global' },
-  { value: 'US', label: 'United States' },
-  { value: 'EU', label: 'Europe (EU-27)' },
-] as const
-const BOUNDARIES = [
-  { value: 'cradle-to-gate', label: 'Cradle-to-gate' },
-  { value: 'gate-to-gate', label: 'Gate-to-gate' },
-  { value: 'cradle-to-grave', label: 'Cradle-to-grave' },
-] as const
 
 type Start = 'file' | 'empty'
+
+// P112: classic's rail, word for word.
+const FIVE_PHASES = [
+  { title: 'Goal & scope', description: "You're here. Name the study and choose its boundaries." },
+  { title: 'Inventory', description: 'List inputs and outputs across every stage.' },
+  { title: 'Impact', description: 'Convert flows into category scores.' },
+  { title: 'Interpretation', description: 'Sensitivity, contribution, and uncertainty checks.' },
+  { title: 'Report', description: 'Defensible record of method and result.' },
+]
+// P111: classic's help for the method and the region.
+const METHOD_HELP =
+  'The impact-assessment method: the set of characterization factors that turns inputs and outputs into impact scores. CML 2001 (Leiden University) is common in Europe, TRACI 2.1 is the US EPA method, and ReCiPe Midpoint (H) uses the default "hierarchist" perspective. You can still choose the method each time you run an assessment; keep one method for every case you compare.'
+const REGION_HELP =
+  'Where the product is made, part of the study\'s scope. Runs use it by default, and each case can be run for another region to compare. Today only electricity has region-specific factors (US: EPA eGRID, EU: Ember, Global: Ember); everything else uses the Global factor, marked "Global (fallback)" in the results.'
 
 export function NewProjectForm() {
   const router = useRouter()
@@ -71,14 +73,17 @@ export function NewProjectForm() {
   }, [sampleId])
 
   const next = async (projectId: number) => {
-    await useShellStore.getState().refresh()
     if (start === 'file') {
-      router.push(`/project/${projectId}/import`)
+      await useShellStore.getState().refresh()
+      // P87: the first file of a new project gets the guided banner.
+      router.push(`/project/${projectId}/import?first=1`)
       return
     }
     // Empty: the case is made now, with no steps, and opens on its tree (F2.5).
     try {
       const caseId = await startEmptyCase(projectId)
+      // 1.9: after the case exists, so the sidebar counts it without a reload.
+      await useShellStore.getState().refresh()
       router.push(`/project/${projectId}/case/${caseId}`)
     } catch (e: any) {
       setError(`The project was made, but its first case was not: ${e?.message ?? 'the request failed'}.`)
@@ -96,7 +101,7 @@ export function NewProjectForm() {
     setError(null)
     setBusy(true)
     try {
-      const res = await apiRequest('/api/projects', { method: 'POST', body: JSON.stringify({ project_name: name.trim(), description: '' }) })
+      const res = await apiRequest('/api/projects', { method: 'POST', body: JSON.stringify({ project_name: name.trim(), description: goal.trim() }) })
       const data = await res.json().catch(() => ({}))
       const projectId = Number(data?.project?.project_id ?? data?.project_id)
       if (!res.ok || !projectId) {
@@ -172,24 +177,39 @@ export function NewProjectForm() {
           <h2 id="np-q" className="np-h2">
             The question
           </h2>
-          <p className="np-sub">Every case in this project answers it for the same one unit. Goal and scope names what you are assessing. Inventory lists what goes in and comes out. Impact assessment turns that into scores. Interpretation says what the scores mean.</p>
-          <ol aria-label="ISO 14040 phases">
-            {ISO_STEPS.map((s, i) => (
-              <li key={s.title}><strong>{i + 1}. {s.title}.</strong> {s.description}</li>
+          <p className="np-sub">Every case in this project answers it for the same one unit.</p>
+          {/* P112: the five phases you will work through, as classic named them. */}
+          <span className="ds-section-label" id="np-phases-h">
+            The five phases you&apos;ll work through
+          </span>
+          <ol aria-labelledby="np-phases-h" className="np-rail">
+            {FIVE_PHASES.map((p, i) => (
+              <li key={p.title} data-here={i === 0 || undefined}>
+                <strong>
+                  {i + 1}. {p.title}
+                </strong>
+                <span>{p.description}</span>
+              </li>
             ))}
           </ol>
           <label className="np-field" style={{ display: 'block', marginBottom: 12 }}>
-            <span className="edu-field-label">Goal of the study</span>
+            <span className="edu-field-label">
+              Goal of the study<HelpTip label="What goes in the goal?">{ISO_HELP.goal}</HelpTip>
+            </span>
             <textarea className="edu-input" value={goal} maxLength={2000} rows={3} aria-label="Goal of the study" onChange={(e) => setGoal(e.target.value)} />
           </label>
           <div className="np-grid">
             <label className="np-field">
-              <span className="edu-field-label">Functional unit</span>
+              <span className="edu-field-label">
+                Functional unit<HelpTip label="What is a functional unit?">{ISO_HELP.functionalUnit}</HelpTip>
+              </span>
               <input className="edu-input" value={functionalUnit} placeholder="e.g. 1 enclosure" maxLength={255} onChange={(e) => setFunctionalUnit(e.target.value)} />
             </label>
             <label className="np-field">
-              <span className="edu-field-label">System boundary</span>
-              <select className="edu-input" value={boundary} onChange={(e) => setBoundary(e.target.value)}>
+              <span className="edu-field-label">
+                System boundary<HelpTip label="What is a system boundary?">{ISO_HELP.systemBoundary}</HelpTip>
+              </span>
+              <select className="edu-input" aria-label="System boundary" value={boundary} onChange={(e) => setBoundary(e.target.value)}>
                 {BOUNDARIES.map((b) => (
                   <option key={b.value} value={b.value}>
                     {b.label}
@@ -198,16 +218,20 @@ export function NewProjectForm() {
               </select>
             </label>
             <label className="np-field">
-              <span className="edu-field-label">Method</span>
-              <select className="edu-input" value={method} onChange={(e) => setMethod(e.target.value)}>
+              <span className="edu-field-label">
+                Method<HelpTip label="What is a methodology?">{METHOD_HELP}</HelpTip>
+              </span>
+              <select className="edu-input" aria-label="Method" value={method} onChange={(e) => setMethod(e.target.value)}>
                 {METHODS.map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>
             </label>
             <label className="np-field">
-              <span className="edu-field-label">Region</span>
-              <select className="edu-input" value={region} onChange={(e) => setRegion(e.target.value)}>
+              <span className="edu-field-label">
+                Region<HelpTip label="What does the regional context do?">{REGION_HELP}</HelpTip>
+              </span>
+              <select className="edu-input" aria-label="Region" value={region} onChange={(e) => setRegion(e.target.value)}>
                 {REGIONS.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}
@@ -227,7 +251,7 @@ export function NewProjectForm() {
           </h2>
           <div className="edu-uses" role="radiogroup" aria-labelledby="np-start" style={{ marginTop: 12 }}>
             <label className="edu-use">
-              <input type="radio" name="start" checked={start === 'file'} onChange={() => setStart('file')} />
+              <input type="radio" name="start" value="file" aria-label="Start from a file" checked={start === 'file'} onChange={() => setStart('file')} />
               <span>
                 <strong style={{ display: 'block', fontSize: 18 }}>From a file</strong>
                 <span style={{ fontSize: 15, color: 'var(--ds-text-2)' }}>
@@ -236,7 +260,7 @@ export function NewProjectForm() {
               </span>
             </label>
             <label className="edu-use">
-              <input type="radio" name="start" checked={start === 'empty'} onChange={() => setStart('empty')} />
+              <input type="radio" name="start" value="empty" aria-label="Start empty" checked={start === 'empty'} onChange={() => setStart('empty')} />
               <span>
                 <strong style={{ display: 'block', fontSize: 18 }}>Empty</strong>
                 <span style={{ fontSize: 15, color: 'var(--ds-text-2)' }}>An empty case. You add each step and what goes in and comes out yourself.</span>

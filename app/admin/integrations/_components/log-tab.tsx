@@ -10,11 +10,11 @@ export function LogTab({ logRefresh }: { logRefresh: number }) {
   const [filter, setFilter] = useState<LogFilter>('all');
 
   return (
-    <div className="card" style={{ padding: 0 }}>
+    <div className="ds-card" style={{ padding: 0 }}>
       <div
         style={{
           padding: '14px 20px',
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--ds-line)',
           display: 'flex',
           gap: 8,
           alignItems: 'center',
@@ -45,7 +45,7 @@ export function LogTab({ logRefresh }: { logRefresh: number }) {
           Errors
         </button>
         <div style={{ flex: 1 }} />
-        <button type="button" className="btn btn-ghost btn-sm">
+        <button type="button" className="ds-btn ds-btn--small">
           <Icon name="download" size={13} /> CSV
         </button>
       </div>

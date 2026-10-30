@@ -6,6 +6,8 @@
 // named after them, with no runs). The sample as a small row. On a phone
 // everything reads only, with the bar that says so.
 
+import { runLabel } from '@/lib/results/full-results-view'
+import { AssignedToYou } from './assigned-to-you'
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -31,6 +33,7 @@ export function StudentHome({ projects, userId, fullName }: { projects: HomeProj
         <h1 className="ds-title">{first ? `Hi, ${first}.` : 'Hi.'}</h1>
         <p className="home-sub">{sharedLine(shared.length, LMS_NAME)}</p>
       </header>
+      <AssignedToYou projects={projects} userId={userId} />
       {shared.map((p) => (
         <SharedCard key={p.project_id} project={p} userId={userId} fullName={fullName} phone={phone} />
       ))}
@@ -130,7 +133,7 @@ function SharedCard({ project, userId, fullName, phone }: { project: HomeProject
                   {c.change ? (
                     <span className="ds-mono st-change">{c.change}</span>
                   ) : c.latest_run && !phone ? (
-                    <span className="ds-mono st-run">Run #{c.latest_run.run_id}</span>
+                    <span className="ds-mono st-run">{runLabel(c.latest_run)}</span>
                   ) : null}
                   <span className="ds-mono st-value">{c.answer ?? 'not run'}</span>
                 </Link>
@@ -167,7 +170,7 @@ function YourCase({
         <span style={{ minWidth: 0 }}>
           <strong style={{ display: 'block', fontSize: 20 }}>{kase.case_name}</strong>
           <span style={{ color: 'var(--ds-text-2)', fontSize: 15 }}>
-            {kase.case_type === 'base' ? 'Base case' : 'Comparative case'} · {kase.latest_run ? `Run #${kase.latest_run.run_id}` : 'not run yet'}
+            {kase.case_type === 'base' ? 'Base case' : 'Comparative case'} · {kase.latest_run ? runLabel(kase.latest_run) : 'not run yet'}
           </span>
         </span>
         {v && (

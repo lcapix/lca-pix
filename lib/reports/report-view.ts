@@ -28,10 +28,12 @@ export const INCLUDED = [
 ]
 
 /** The line under Export: what the file holds and which moment it shows. */
-export function formatNote(format: ReportFormat, runId: number): string {
-  if (format === 'csv') return `Every flow of Run #${runId} by impact category: amount, factor, source and result, as it was when it ran.`
-  if (format === 'pptx') return `Slides of Run #${runId} as it was when it ran. The write-up shows as it is now.`
-  return `Prints Run #${runId} as it was when it ran. The write-up prints as it is now.`
+export function formatNote(format: ReportFormat, runId: number, runNumber?: number | null): string {
+  // 2.8: the run is named by its place in its case; the site-wide id only when that is unknown.
+  const run = runNumber ? `Run ${runNumber}` : `Run #${runId}`
+  if (format === 'csv') return `Every flow of ${run} by impact category: amount, factor, source and result, as it was when it ran.`
+  if (format === 'pptx') return `Slides of ${run} as it was when it ran. The write-up shows as it is now.`
+  return `Prints ${run} as it was when it ran. The write-up prints as it is now.`
 }
 
 /** "Steel bracket · LCA 301 · TRACI 2.1 · US · per 1 bracket". */
@@ -39,8 +41,9 @@ export function scopeLine(parts: { project?: string | null; method?: string | nu
   return [parts.project, parts.method, parts.region, parts.fu ? `per ${parts.fu}` : null].filter(Boolean).join(' · ')
 }
 
-/** The case picker's option: "Base case · Run #301" or "Ana's case · not run yet". */
-export function caseOption(c: { case_name: string; author?: string | null; latest_run: { run_id: number } | null }, showAuthor: boolean): string {
+/** The case picker's option: "Base case · Run 1" or "Ana's case · not run yet". */
+export function caseOption(c: { case_name: string; author?: string | null; latest_run: { run_id: number; case_run_number?: number | null } | null }, showAuthor: boolean): string {
   const who = showAuthor && c.author ? ` (${c.author})` : ''
-  return `${c.case_name}${who} · ${c.latest_run ? `Run #${c.latest_run.run_id}` : 'not run yet'}`
+  const run = c.latest_run ? (c.latest_run.case_run_number ? `Run ${c.latest_run.case_run_number}` : `Run #${c.latest_run.run_id}`) : null
+  return `${c.case_name}${who} · ${run ?? 'not run yet'}`
 }

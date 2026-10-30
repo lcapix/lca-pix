@@ -26,6 +26,19 @@ export default function OnboardingPage() {
   const [guided, setGuided] = useGuidedMode()
 
   const [fullName, setFullName] = useState("")
+  // G106: whether Save builds the sample depends on the projects the account
+  // has, so the button says which it will do before it is pressed.
+  const [hasProjects, setHasProjects] = useState<boolean | null>(null)
+  useEffect(() => {
+    let live = true
+    apiRequest("/api/projects")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => live && setHasProjects(Array.isArray(d?.projects) ? d.projects.length > 0 : null))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
   const [institution, setInstitution] = useState("")
   const [useCase, setUseCase] = useState<string>("teaching")
   // Kept as loaded: this screen does not ask for them, so it must not clear them.
@@ -240,7 +253,7 @@ export default function OnboardingPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 20, marginTop: 24 }}>
                 <button type="submit" className="edu-submit" disabled={loading || busy} aria-busy={busy || undefined} style={{ flex: 1 }}>
                   {busy && <span className="ds-spinner" aria-hidden />}
-                  {phase === "building" ? "Building your sample study…" : phase === "saving" ? "Saving…" : "Open the sample study"}
+                  {phase === "building" ? "Building your sample study…" : phase === "saving" ? "Saving…" : hasProjects ? "Save and go to Home" : "Open the sample study"}
                   {!busy && (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
                       <path d="M5 12h14m-6-6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
@@ -254,7 +267,9 @@ export default function OnboardingPage() {
               <p className="edu-hint" style={{ margin: "12px 0 0" }} role={phase === "building" ? "status" : undefined}>
                 {phase === "building"
                   ? "A few seconds: the study, its two runs and a what-if."
-                  : "We build a finished sample study for you to read first. It takes a few seconds."}
+                  : hasProjects
+                    ? "Your projects are on Home."
+                    : "We build a finished sample study for you to read first. It takes a few seconds."}
               </p>
             </>
           )}

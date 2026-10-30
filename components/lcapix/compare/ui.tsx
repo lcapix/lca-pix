@@ -11,7 +11,7 @@ export { pctChange as pctOf } from '@/lib/compare/analytics'
 export const SERIES_COLORS = ['#2d6a4f', '#74c69d', '#d98568', '#9f88cc', '#4f90c9', '#c9a227', '#6b8f71', '#b5651d']
 export const seriesColor = (i: number) => SERIES_COLORS[i % SERIES_COLORS.length]
 
-export const GOOD = 'var(--signal-success, #16a34a)'
+export const GOOD = 'var(--ds-green)'
 export const BAD = '#b45309'
 
 /**
@@ -69,9 +69,9 @@ export function Panel({
   children: ReactNode
 }) {
   return (
-    <div className="card" style={{ padding: 20, marginBottom: 16 }}>
+    <div className="ds-card" style={{ padding: 20, marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ds-text)' }}>
           {title}
           {help && <HelpTip label={`About ${title.toLowerCase()}`}>{help}</HelpTip>}
         </div>
@@ -103,8 +103,8 @@ export function Segmented<T extends string>({
         gap: 2,
         padding: 2,
         borderRadius: 7,
-        border: '1px solid var(--border-subtle)',
-        background: 'var(--surface-raised)',
+        border: '1px solid var(--ds-line)',
+        background: 'var(--ds-card)',
       }}
     >
       {options.map((o) => {
@@ -122,10 +122,10 @@ export function Segmented<T extends string>({
               border: 'none',
               cursor: 'pointer',
               fontSize: 12,
-              fontFamily: 'var(--font-ui)',
+              fontFamily: 'var(--ds-font)',
               fontWeight: on ? 600 : 400,
-              background: on ? 'var(--surface-overlay, #fff)' : 'transparent',
-              color: on ? 'var(--text-primary)' : 'var(--text-tertiary)',
+              background: on ? 'var(--ds-card)' : 'transparent',
+              color: on ? 'var(--ds-text)' : 'var(--ds-text-3)',
               boxShadow: on ? '0 1px 2px rgba(15,23,42,0.08)' : 'none',
             }}
           >
@@ -149,10 +149,10 @@ export function SelectBox({
   label: string
 }) {
   return (
-    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-tertiary)' }}>
+    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--ds-text-3)' }}>
       {label}
       <select
-        className="input"
+        className="ds-input"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         style={{ height: 30, fontSize: 12, padding: '0 8px', minWidth: 120 }}
@@ -171,22 +171,22 @@ export const th: React.CSSProperties = {
   textAlign: 'left',
   fontSize: 11,
   fontWeight: 600,
-  color: 'var(--text-tertiary)',
+  color: 'var(--ds-text-3)',
   padding: '8px 10px',
-  borderBottom: '1px solid var(--border-subtle)',
+  borderBottom: '1px solid var(--ds-line)',
   whiteSpace: 'nowrap',
 }
 
 export const td: React.CSSProperties = {
   fontSize: 12.5,
   padding: '8px 10px',
-  borderBottom: '1px solid var(--border-subtle)',
-  color: 'var(--text-primary)',
+  borderBottom: '1px solid var(--ds-line)',
+  color: 'var(--ds-text)',
   verticalAlign: 'top',
 }
 
-export const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }
+export const tdNum: React.CSSProperties = { ...td, textAlign: 'right', fontFamily: 'var(--ds-mono)', whiteSpace: 'nowrap' }
 
 export function Muted({ children }: { children: ReactNode }) {
-  return <div style={{ fontSize: 12.5, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>{children}</div>
+  return <div style={{ fontSize: 12.5, color: 'var(--ds-text-3)', lineHeight: 1.5 }}>{children}</div>
 }

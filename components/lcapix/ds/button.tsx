@@ -30,7 +30,8 @@ export function Button({
   const cls = ['ds-btn', variant !== 'secondary' && `ds-btn--${variant}`, size === 'small' && 'ds-btn--small', className]
     .filter(Boolean)
     .join(' ')
-  const isDisabled = disabled || busy
+  // A reason why it cannot be pressed means it cannot be pressed: never a reason on a live button.
+  const isDisabled = disabled || busy || !!disabledReason
   const id = useId()
   const reasonId = disabledReason && isDisabled ? `${id}-reason` : undefined
   const button = (

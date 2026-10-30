@@ -6,6 +6,7 @@
 // is no reset route yet. A ?error= code from the Google route shows as a card
 // above the form, known codes only.
 
+import { needsOnboarding } from "@/lib/onboarding"
 import type React from "react"
 
 import { useEffect, useState } from "react"
@@ -127,7 +128,8 @@ export default function LoginPage() {
       localStorage.setItem("auth_token", data.token)
       localStorage.setItem("user", JSON.stringify(data.user))
       login({ id: data.user.id.toString(), name: data.user.username, email: data.user.email, createdAt: new Date() })
-      router.push(data.user?.onboarded_at ? "/home" : "/auth/onboarding")
+      // G02: one rule with the Google path (lib/onboarding.ts).
+      router.push(needsOnboarding(data.user ?? {}) ? "/auth/onboarding" : "/home")
     } catch (error) {
       setErrors({ general: error instanceof Error ? error.message : "You were not logged in. Try again." })
     } finally {

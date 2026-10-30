@@ -204,8 +204,9 @@
     },
     {
       "slug": "class",
-      "path": "/project/{exampleProject}/class",
-      "ready": "Progress",
+      "path": "/project/{boardProject}/class",
+      "landsOn": "/cases",
+      "ready": "Your cases",
       "brief": "18 Class"
     },
     {
@@ -289,7 +290,7 @@
     },
     {
       "slug": "cases",
-      "path": "/project/{exampleProject}/cases",
+      "path": "/project/{boardProject}/cases",
       "ready": "Your cases",
       "brief": "22 Cases (E07)"
     },

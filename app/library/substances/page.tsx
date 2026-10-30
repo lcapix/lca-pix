@@ -1,9 +1,10 @@
 'use client'
 
+import { TitleBlock } from '@/components/lcapix/ds'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthGuard } from '@/components/auth-guard'
-import { AppTopBar, Icon, SectionHeader } from '@/components/lcapix'
+import { Icon } from '@/components/lcapix'
 import { useAuthStore } from '@/lib/store'
 import { apiRequest } from '@/lib/api-client'
 
@@ -121,8 +122,7 @@ export default function SubstancesLibraryPage() {
 
   return (
     <AuthGuard>
-      <div className="app-shell">
-        <AppTopBar current="integrations" userInitials={userInitials} />
+      <div className="np">
 
         <div
           style={{
@@ -134,11 +134,11 @@ export default function SubstancesLibraryPage() {
           {/* Back */}
           <button
             onClick={() => router.push('/home')}
-            className="press-active"
+            className="ds-focusable"
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-tertiary)',
+              color: 'var(--ds-text-3)',
               fontSize: 12,
               cursor: 'pointer',
               display: 'inline-flex',
@@ -153,7 +153,7 @@ export default function SubstancesLibraryPage() {
           </button>
 
           {/* Header */}
-          <SectionHeader
+          <TitleBlock
             as="h1"
             eyebrow="LIBRARY"
             title="Substance catalog"
@@ -164,21 +164,21 @@ export default function SubstancesLibraryPage() {
           {/* Explainer */}
           <div
             style={{
-              background: 'var(--surface-raised)',
-              border: '1px solid var(--border-subtle)',
+              background: 'var(--ds-card)',
+              border: '1px solid var(--ds-line)',
               borderRadius: 12,
               padding: '18px 20px',
               margin: '20px 0 28px',
               fontSize: 13.5,
               lineHeight: 1.6,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
             }}
           >
             <div
               style={{
                 fontSize: 11,
                 letterSpacing: '0.14em',
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
                 marginBottom: 6,
                 fontWeight: 600,
               }}
@@ -217,17 +217,17 @@ export default function SubstancesLibraryPage() {
                     onClick={() =>
                       setActiveCategory(isActive ? null : category)
                     }
-                    className="press-active"
+                    className="ds-focusable"
                     style={{
                       textAlign: 'left',
                       background: isActive
-                        ? 'var(--brand-subtle)'
-                        : 'var(--surface-raised)',
+                        ? 'var(--ds-green-wash)'
+                        : 'var(--ds-card)',
                       border:
                         '1px solid ' +
                         (isActive
-                          ? 'var(--brand-primary)'
-                          : 'var(--border-subtle)'),
+                          ? 'var(--ds-green)'
+                          : 'var(--ds-line)'),
                       borderRadius: 10,
                       padding: '14px 16px',
                       cursor: 'pointer',
@@ -238,7 +238,7 @@ export default function SubstancesLibraryPage() {
                       style={{
                         fontSize: 11,
                         letterSpacing: '0.1em',
-                        color: 'var(--text-tertiary)',
+                        color: 'var(--ds-text-3)',
                         textTransform: 'uppercase',
                         marginBottom: 4,
                       }}
@@ -246,11 +246,11 @@ export default function SubstancesLibraryPage() {
                       {CATEGORY_LABELS[category] ?? category}
                     </div>
                     <div
-                      className="mono"
+                      className="ds-mono"
                       style={{
                         fontSize: 22,
                         fontWeight: 600,
-                        color: 'var(--text-primary)',
+                        color: 'var(--ds-text)',
                       }}
                     >
                       {count}
@@ -258,7 +258,7 @@ export default function SubstancesLibraryPage() {
                     <div
                       style={{
                         fontSize: 12,
-                        color: 'var(--text-tertiary)',
+                        color: 'var(--ds-text-3)',
                         marginTop: 4,
                         lineHeight: 1.4,
                       }}
@@ -277,8 +277,8 @@ export default function SubstancesLibraryPage() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              background: 'var(--surface-raised)',
-              border: '1px solid var(--border-subtle)',
+              background: 'var(--ds-card)',
+              border: '1px solid var(--ds-line)',
               borderRadius: 8,
               padding: '0 12px',
               height: 38,
@@ -286,7 +286,7 @@ export default function SubstancesLibraryPage() {
               maxWidth: 420,
             }}
           >
-            <Icon name="search" size={14} style={{ color: 'var(--text-tertiary)' }} />
+            <Icon name="search" size={14} style={{ color: 'var(--ds-text-3)' }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -297,8 +297,8 @@ export default function SubstancesLibraryPage() {
                 border: 'none',
                 outline: 'none',
                 fontSize: 13.5,
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-ui)',
+                color: 'var(--ds-text)',
+                fontFamily: 'var(--ds-font)',
               }}
             />
             {activeCategory && (
@@ -307,7 +307,7 @@ export default function SubstancesLibraryPage() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--ds-text-3)',
                   fontSize: 12,
                   cursor: 'pointer',
                 }}
@@ -323,7 +323,7 @@ export default function SubstancesLibraryPage() {
               style={{
                 padding: 40,
                 textAlign: 'center',
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
               }}
             >
               Loading substance catalog…
@@ -332,7 +332,7 @@ export default function SubstancesLibraryPage() {
             <div
               style={{
                 padding: 20,
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
                 color: 'var(--signal-danger, #dc2626)',
               }}
@@ -344,8 +344,8 @@ export default function SubstancesLibraryPage() {
               style={{
                 padding: 40,
                 textAlign: 'center',
-                color: 'var(--text-tertiary)',
-                border: '1px dashed var(--border-subtle)',
+                color: 'var(--ds-text-3)',
+                border: '1px dashed var(--ds-line)',
                 borderRadius: 10,
               }}
             >
@@ -354,7 +354,7 @@ export default function SubstancesLibraryPage() {
           ) : (
             <div
               style={{
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
                 overflow: 'hidden',
                 background: 'var(--surface-card, #fff)',
@@ -362,7 +362,7 @@ export default function SubstancesLibraryPage() {
             >
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: 'var(--surface-raised)' }}>
+                  <tr style={{ background: 'var(--ds-card)' }}>
                     <Th>Substance</Th>
                     <Th>CAS</Th>
                     <Th>Category</Th>
@@ -374,7 +374,7 @@ export default function SubstancesLibraryPage() {
                     <tr
                       key={s.substance_id}
                       style={{
-                        borderTop: '1px solid var(--border-subtle)',
+                        borderTop: '1px solid var(--ds-line)',
                       }}
                     >
                       <Td>{s.substance_name}</Td>
@@ -390,8 +390,8 @@ export default function SubstancesLibraryPage() {
                   style={{
                     padding: '10px 14px',
                     fontSize: 12,
-                    color: 'var(--text-tertiary)',
-                    borderTop: '1px solid var(--border-subtle)',
+                    color: 'var(--ds-text-3)',
+                    borderTop: '1px solid var(--ds-line)',
                   }}
                 >
                   Showing first 200 of {filtered.length}. Narrow the search to
@@ -416,7 +416,7 @@ function Th({ children }: { children: React.ReactNode }) {
         fontWeight: 600,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
-        color: 'var(--text-tertiary)',
+        color: 'var(--ds-text-3)',
       }}
     >
       {children}
@@ -436,7 +436,7 @@ function Td({
       className={mono ? 'mono' : ''}
       style={{
         padding: '10px 14px',
-        color: 'var(--text-primary)',
+        color: 'var(--ds-text)',
       }}
     >
       {children}

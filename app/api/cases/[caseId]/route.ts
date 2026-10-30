@@ -76,8 +76,15 @@ export async function GET(
       if (await caseAccessDenied(userId, parentId)) {
         caseData.parent_case_id = null;
       } else {
-        const parent = await queryOne<any>(`SELECT case_id, case_name FROM case_table WHERE case_id = ?`, [parentId]);
-        caseData.copied_from = parent ? { case_id: Number(parent.case_id), case_name: parent.case_name } : null;
+        const parent = await queryOne<any>(`SELECT case_id, case_name, case_type, description FROM case_table WHERE case_id = ?`, [parentId]);
+        caseData.copied_from = parent
+          ? {
+              case_id: Number(parent.case_id),
+              case_name: parent.case_name,
+              // C05: a copy of the base case carries the base's instructions (its description).
+              base_description: parent.case_type === 'base' ? parent.description ?? null : null,
+            }
+          : null;
       }
     }
 

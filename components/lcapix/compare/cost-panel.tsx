@@ -71,7 +71,7 @@ export function CostPanel({
                   {views.map((v) => (
                     <td key={v.caseId} style={tdNum}>
                       {money(v.byKind[k])}
-                      <span style={{ color: 'var(--text-tertiary)', marginLeft: 6 }}>
+                      <span style={{ color: 'var(--ds-text-3)', marginLeft: 6 }}>
                         {v.total ? `${fmtNum((v.byKind[k] / v.total) * 100, 1)}%` : ''}
                       </span>
                     </td>
@@ -133,14 +133,14 @@ export function CostPanel({
                         )}
                       </td>
                       <td style={{ ...tdNum, color: ci.costDelta <= 0 ? GOOD : BAD }}>{signedMoney(ci.costDelta)}</td>
-                      <td style={{ ...tdNum, color: !hasRuns ? 'var(--text-tertiary)' : ci.impactDelta <= 0 ? GOOD : BAD }}>
+                      <td style={{ ...tdNum, color: !hasRuns ? 'var(--ds-text-3)' : ci.impactDelta <= 0 ? GOOD : BAD }}>
                         {hasRuns ? `${signedSig(ci.impactDelta)} (${signedPct(ci.impactDeltaPct, 2)})` : why}
                       </td>
                       <td style={tdNum}>
                         {hasRuns && ci.costPerUnitAvoided !== null ? (
                           <span style={{ fontWeight: 600 }}>{signedMoney(ci.costPerUnitAvoided)}</span>
                         ) : (
-                          <span style={{ color: 'var(--text-tertiary)' }}>
+                          <span style={{ color: 'var(--ds-text-3)' }}>
                             {!hasRuns ? '–' : ci.impactDelta >= 0 ? 'no reduction' : 'cost unchanged'}
                           </span>
                         )}

@@ -15,6 +15,7 @@ import { useShellData, useShellStore } from '@/lib/shell/use-shell'
 import { useProjectCases } from '@/lib/project/use-project-cases'
 import { casesHeader } from '@/lib/project/cases-view'
 import { perNoun } from '@/lib/compare/compare-view'
+import { runLabel } from '@/lib/results/full-results-view'
 import { layoutOnLanes, TIER_COLOURS, TIER_LABEL, type TierLayout } from '@/lib/workspace/tier-layout'
 
 type Kind = 'whatif' | 'base' | 'emptycomp'
@@ -48,6 +49,7 @@ export function NewCaseForm() {
     const asked = search?.get('kind')
     if (asked === 'base' || asked === 'hand') setKind('base')
     if (asked === 'whatif' || asked === 'comparative') setKind('whatif')
+    if (asked === 'emptycomp') setKind('emptycomp')
   }, [search])
   useEffect(() => {
     if (sourceId != null || !sources.length) return
@@ -93,8 +95,13 @@ export function NewCaseForm() {
     setFormError(null)
     try {
       const body: Record<string, string> = { case_name: caseName }
+      // P86: built by hand only when it is a base case started empty from "Build by hand".
+      const byHand = search?.get('kind') === 'hand' && kind === 'base'
       if (change.trim()) body.description = change.trim()
-      else if (search?.get('kind') === 'hand') body.description = 'Built by hand'
+      else if (byHand) body.description = 'Built by hand'
+      // P102: an empty comparative names the base case it will be compared with.
+      const baseCase = data.cases.find((c) => c.case_type === 'base')
+      if (kind === 'emptycomp' && baseCase) body.parent_case_id = String(baseCase.case_id)
       const res =
         kind === 'whatif'
           ? await apiRequest(`/api/cases/${sourceId}/duplicate`, { method: 'POST', body: JSON.stringify(body) })
@@ -108,7 +115,7 @@ export function NewCaseForm() {
       if (!res.ok) return setFormError(d?.error ?? `The case was not made (${res.status}).`)
       const id = Number(d.case_id ?? d.case?.case_id)
       void useShellStore.getState().refresh()
-      const learn = search?.get('kind') === 'hand' ? '?learn=1' : ''
+      const learn = byHand ? '?learn=1' : ''
       router.push(`/project/${projectId}/case/${id}${learn}`)
     } catch (err: any) {
       setFormError(err?.message ?? 'The case was not made.')
@@ -167,7 +174,7 @@ export function NewCaseForm() {
                     {sources.map((c) => (
                       <option key={c.case_id} value={c.case_id}>
                         {c.case_name}
-                        {others(c)} · {c.latest_run ? `Run #${c.latest_run.run_id}` : 'not run yet'}
+                        {others(c)} · {c.latest_run ? runLabel(c.latest_run) : 'not run yet'}
                       </option>
                     ))}
                   </select>
@@ -281,7 +288,7 @@ export function NewCaseForm() {
                     <span aria-hidden>✓</span> Steps, flows and step costs come along
                   </li>
                   <li data-no>
-                    <span aria-hidden>✕</span> {source.latest_run ? `Run #${source.latest_run.run_id} stays with ${source.case_name}` : `${source.case_name} has no run yet; nothing to leave behind`}
+                    <span aria-hidden>✕</span> {source.latest_run ? `${runLabel(source.latest_run)} stays with ${source.case_name}` : `${source.case_name} has no run yet; nothing to leave behind`}
                   </li>
                 </ul>
               </div>

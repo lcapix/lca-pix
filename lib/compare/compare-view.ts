@@ -39,6 +39,9 @@ export function headerLine(names: string[], c: Comparability): string {
 
 export function verdict(c: Comparability, cases: number): { ok: boolean; title: string; sub: string } {
   if (cases < 2) return { ok: false, title: 'Add a second case', sub: 'Compare puts two or more cases side by side' }
+  // P65: a region difference is a warning, shown, not a failed check.
+  const warned = c.checks.filter((k) => k.warn && !k.ok)
+  if (!c.failed && warned.length) return { ok: true, title: 'Fair to compare, with a warning', sub: warned.map((k) => k.label).join('. ') }
   if (!c.failed) return { ok: true, title: 'Fair to compare', sub: 'All four checks pass' }
   return { ok: false, title: 'Not comparable yet', sub: `${c.failed} of 4 checks ${c.failed === 1 ? 'fails' : 'fail'}` }
 }

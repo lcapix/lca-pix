@@ -9,6 +9,7 @@
 // State, effects and actions live in useImport (lib/import/use-import.ts);
 // this file composes the sections under ./_components.
 
+import { backLabel } from '@/lib/import/display'
 import * as React from 'react'
 import { use, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -103,6 +104,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
               targetName={phase === 'done' && applied ? applied.case_name ?? targetName : targetName}
               title={title}
               onBack={imp.goBack}
+              backLabel={backLabel(imp.targetCaseId)}
             />
             {reviewing && imp.file && (
               <p style={{ margin: '-10px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>

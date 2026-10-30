@@ -2,6 +2,7 @@
 // case is active, the KPI strip, the right-rail numbers and the run request.
 
 import { DEFAULT_IMPACT_UNIT, type CaseImpact } from './case-impact'
+import { money, result3 } from '@/lib/ui/format'
 
 /** A case as the workspace holds it (lib/data-transformers transformCaseFromDB). */
 export type WorkspaceCase = any
@@ -14,11 +15,9 @@ export function defaultActiveCaseId(cases: WorkspaceCase[]): string | null {
   return firstCase.id
 }
 
-/** Where "Add Case" goes: the base case first, comparatives after it. */
+/** Where "Add Case" goes: the one New case form, on a base case when there is none yet (P09, P85). */
 export function addCasePath(projectId: string, baseCaseCount: number): string {
-  return baseCaseCount === 0
-    ? `/project/${projectId}/case/base/new`
-    : `/project/${projectId}/case/comparative/new`
+  return baseCaseCount === 0 ? `/project/${projectId}/case/new?kind=base` : `/project/${projectId}/case/new`
 }
 
 /** One tile of the KPI strip under the project header. */
@@ -83,13 +82,14 @@ export function workspaceKpis(args: {
     },
     {
       label: 'Global Warming',
-      value: totalImpact != null ? totalImpact.toFixed(3) : '–',
+      // 3.4: the same formats as Results.
+      value: totalImpact != null ? result3(totalImpact) : '–',
       note: totalImpact != null ? impactUnit : 'Run an assessment',
       tone: totalImpact != null ? 'brand' : 'neutral',
     },
     {
       label: 'Cost',
-      value: totalCost != null ? `$${Math.round(totalCost).toLocaleString()}` : '–',
+      value: totalCost != null ? money(totalCost) : '–',
       note: totalCost != null ? 'Total ABC cost' : 'Add cost data on operations',
       tone: totalCost != null ? 'brand' : 'neutral',
     },

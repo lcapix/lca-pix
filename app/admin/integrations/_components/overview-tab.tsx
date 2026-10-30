@@ -22,11 +22,11 @@ export function OverviewTab({
         <ImportButtons onRefresh={onRefresh} />
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="ds-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid var(--border-subtle)',
+            borderBottom: '1px solid var(--ds-line)',
             display: 'flex',
             alignItems: 'center',
           }}
@@ -37,7 +37,7 @@ export function OverviewTab({
           <button
             type="button"
             onClick={onRefresh}
-            className="btn btn-ghost btn-sm"
+            className="ds-btn ds-btn--small"
             style={{ marginLeft: 'auto' }}
           >
             <Icon name="refresh" size={13} /> Refresh all
@@ -48,9 +48,9 @@ export function OverviewTab({
             display: 'grid',
             gridTemplateColumns: '1.5fr 1fr 1fr 1fr 120px',
             padding: '10px 20px',
-            background: 'var(--surface-overlay)',
+            background: 'var(--ds-card)',
             fontSize: 10,
-            color: 'var(--text-tertiary)',
+            color: 'var(--ds-text-3)',
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
             fontWeight: 600,
@@ -69,35 +69,35 @@ export function OverviewTab({
               display: 'grid',
               gridTemplateColumns: '1.5fr 1fr 1fr 1fr 120px',
               padding: '14px 20px',
-              borderTop: '1px solid var(--border-subtle)',
+              borderTop: '1px solid var(--ds-line)',
               fontSize: 13,
               alignItems: 'center',
             }}
           >
             <div>
-              <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+              <div style={{ color: 'var(--ds-text)', fontWeight: 500 }}>
                 {src.name}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+              <div style={{ fontSize: 11, color: 'var(--ds-text-3)' }}>
                 {src.description}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <StatusDot status={src.status} />
-              <span style={{ color: 'var(--text-secondary)' }}>
+              <span style={{ color: 'var(--ds-text-2)' }}>
                 {src.statusLabel}
               </span>
             </div>
-            <div className="mono" style={{ color: 'var(--text-tertiary)' }}>
+            <div className="ds-mono" style={{ color: 'var(--ds-text-3)' }}>
               {src.lastRun}
             </div>
-            <div className="mono" style={{ color: 'var(--text-secondary)' }}>
+            <div className="ds-mono" style={{ color: 'var(--ds-text-2)' }}>
               {fmtInt(src.records)}
             </div>
             <div style={{ textAlign: 'right' }}>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="ds-btn ds-btn--small"
                 style={{ padding: '4px 10px' }}
               >
                 {sourceActionLabel(src)}

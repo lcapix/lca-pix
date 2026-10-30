@@ -24,6 +24,7 @@ export function idsFromSeed(seed: Seed): Record<string, number> {
     cutBlank: seed.example.cutBlankId,
     fiveTierProject: seed.fiveTier.projectId,
     fiveTierCase: seed.fiveTier.caseId,
+    boardProject: seed.board.projectId,
   };
 }
 

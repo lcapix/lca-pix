@@ -31,7 +31,7 @@ type Mode = 'values' | 'change' | 'relative'
 
 const tooltipStyle = {
   background: '#fff',
-  border: '1px solid var(--border-subtle)',
+  border: '1px solid var(--ds-line)',
   borderRadius: 8,
   fontSize: 12,
 }
@@ -109,7 +109,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                     {r.category}
                     <HelpTip label={`What is ${r.category}?`}>{impactCategoryHelp(r.category)}</HelpTip>
                   </td>
-                  <td style={{ ...td, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{mode === 'relative' ? '%' : r.unit}</td>
+                  <td style={{ ...td, color: 'var(--ds-text-3)', whiteSpace: 'nowrap' }}>{mode === 'relative' ? '%' : r.unit}</td>
                   {r.cells.map((cell) => {
                     const isBase = cell.caseId === baseId
                     if (cell.value === null) return <td key={cell.caseId} style={tdNum}>–</td>
@@ -118,13 +118,13 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                       return (
                         <td key={cell.caseId} style={tdNum}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                            <div style={{ width: 60, height: 6, borderRadius: 3, background: 'var(--border-subtle)' }}>
+                            <div style={{ width: 60, height: 6, borderRadius: 3, background: 'var(--ds-line)' }}>
                               <div
                                 style={{
                                   width: `${cell.relMax ?? 0}%`,
                                   height: 6,
                                   borderRadius: 3,
-                                  background: 'var(--brand-primary)',
+                                  background: 'var(--ds-green)',
                                 }}
                               />
                             </div>
@@ -138,7 +138,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                         key={cell.caseId}
                         style={{
                           ...tdNum,
-                          color: isBase ? 'var(--text-tertiary)' : (cell.delta ?? 0) <= 0 ? GOOD : BAD,
+                          color: isBase ? 'var(--ds-text-3)' : (cell.delta ?? 0) <= 0 ? GOOD : BAD,
                           fontWeight: isBase ? 400 : 600,
                         }}
                       >
@@ -161,9 +161,9 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
           <div style={{ width: '100%', height: 320 }}>
             <ResponsiveContainer>
               <RadarChart data={radarData} outerRadius="78%">
-                <PolarGrid stroke="var(--border-subtle)" />
-                <PolarAngleAxis dataKey="category" tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} />
-                <PolarRadiusAxis tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }} tickFormatter={(v) => `${v}%`} />
+                <PolarGrid stroke="var(--ds-line)" />
+                <PolarAngleAxis dataKey="category" tick={{ fontSize: 11, fill: 'var(--ds-text-2)' }} />
+                <PolarRadiusAxis tick={{ fontSize: 10, fill: 'var(--ds-text-3)' }} tickFormatter={(v) => `${v}%`} />
                 {cases.map((c, i) => hasComparableResults(c) && (
                   <Radar
                     key={c.caseId}
@@ -193,7 +193,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
               <BarChart data={deltaData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
                 <XAxis
                   type="number"
-                  tick={{ fontSize: 10, fill: 'var(--text-tertiary)' }}
+                  tick={{ fontSize: 10, fill: 'var(--ds-text-3)' }}
                   tickFormatter={(v) => `${v > 0 ? '+' : ''}${Number(v).toFixed(1)}%`}
                   axisLine={false}
                   tickLine={false}
@@ -201,12 +201,12 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
                 <YAxis
                   type="category"
                   dataKey="category"
-                  tick={{ fontSize: 11, fill: 'var(--text-secondary)' }}
+                  tick={{ fontSize: 11, fill: 'var(--ds-text-2)' }}
                   axisLine={false}
                   tickLine={false}
                   width={130}
                 />
-                <ReferenceLine x={0} stroke="var(--border-subtle)" />
+                <ReferenceLine x={0} stroke="var(--ds-line)" />
                 <Tooltip formatter={(v: any, n: string) => [signedPct(Number(v), 2), n]} contentStyle={tooltipStyle} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} iconType="circle" />
                 {others.map((c) => (

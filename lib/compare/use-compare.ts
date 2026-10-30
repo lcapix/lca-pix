@@ -59,6 +59,7 @@ export function useCompare(projectId: number, me: number) {
     }
   }, [projectId])
 
+  const [runs, setRuns] = useState('')
   // The first selection, once: the address's ?cases= when it names cases
   // here, else the default, which waits for the profile (whose copy is "yours").
   const inited = useRef(false)
@@ -68,6 +69,9 @@ export function useCompare(projectId: number, me: number) {
     if (!fromUrl.length && me < 0) return
     inited.current = true
     setSelected(fromUrl.length ? fromUrl.slice(0, COMPARE_MAX_CASES) : defaultPick(cases, me))
+    // P68: a run picked earlier comes back from the address.
+    const runsFromUrl = new URLSearchParams(window.location.search).get('runs') ?? ''
+    if (/^(\d+:\d+)(,\d+:\d+)*$/.test(runsFromUrl)) setRuns(runsFromUrl)
   }, [cases, me])
 
   // Coming back from a run in another tab reads the comparison again.
@@ -77,7 +81,6 @@ export function useCompare(projectId: number, me: number) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  const [runs, setRuns] = useState('')
   const key = selected.join(',')
   useEffect(() => {
     if (!key) {
@@ -89,7 +92,10 @@ export function useCompare(projectId: number, me: number) {
       setLoading(true)
       try {
         const q = runs ? `&runs=${encodeURIComponent(runs)}` : ''
-        const r = await apiRequest(`/api/projects/${projectId}/compare?cases=${key}${q}`)
+        // The page reads every case against the first picked one (A), so the
+        // server measures "what differs" from that same case, not the base type.
+        const base = `&base=${encodeURIComponent(String(selected[0]))}`
+        const r = await apiRequest(`/api/projects/${projectId}/compare?cases=${key}${base}${q}`)
         const d = await r.json().catch(() => null)
         if (cancelled) return
         if (!r.ok || !d?.success) throw new Error(d?.error ?? `the comparison answered ${r.status}`)
@@ -106,12 +112,13 @@ export function useCompare(projectId: number, me: number) {
     }
   }, [projectId, key, tick, runs])
 
-  // Keep the address shareable.
+  // Keep the address shareable: the cases, the picked runs and the tab (?tab=saved).
   useEffect(() => {
     if (!cases || !inited.current) return
-    const q = [`cases=${key}`, runs ? `runs=${runs}` : ''].filter(Boolean).join('&')
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    const q = [`cases=${key}`, runs ? `runs=${runs}` : '', tab ? `tab=${encodeURIComponent(tab)}` : ''].filter(Boolean).join('&')
     window.history.replaceState(null, '', `/project/${projectId}/comparison?${q}`)
-  }, [cases, key, projectId])
+  }, [cases, key, projectId, runs])
 
   const toggle = useCallback((id: string) => {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length >= COMPARE_MAX_CASES ? s : [...s, id]))
@@ -142,5 +149,5 @@ export function useCompare(projectId: number, me: number) {
   }, [])
   const reload = useCallback(() => setTick((t) => t + 1), [])
   const byId = useMemo(() => new Map((cases ?? []).map((c) => [c.id, c])), [cases])
-  return { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload, pickRun }
+  return { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload, pickRun, runs }
 }

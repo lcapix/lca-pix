@@ -282,6 +282,12 @@ export function PeoplePage() {
               Only the owner and people who can share add or remove people here.
             </p>
           )}
+          {/* P37: everyone is told when they see only their own cases. */}
+          {!data.canManage && data.ownOnly && (
+            <p className="ds-callout ds-callout--info" role="note" style={{ marginTop: 12 }}>
+              In this project you see only your own cases. Your instructor sees everyone&apos;s.
+            </p>
+          )}
         </section>
 
         {data.canManage && (

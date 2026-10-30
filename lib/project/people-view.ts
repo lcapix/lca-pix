@@ -131,7 +131,8 @@ export function lastAddLines(results: AddResult[], role: Access): AddLine[] {
     const one = none.length === 1
     lines.push({
       kind: 'warn',
-      text: `${none.length} ${one ? 'has' : 'have'} no account. No account uses that email. They need to sign up first. (${namesList(none.map((r) => r.email))})`,
+      // 2.2: said once, in agreement with the count.
+      text: `${namesList(none.map((r) => r.email))} ${one ? 'has' : 'have'} no account yet. ${one ? 'They need' : 'Each needs'} to sign up first, then add ${one ? 'them' : 'them'} again.`,
     })
   }
   const owner = of('owner')

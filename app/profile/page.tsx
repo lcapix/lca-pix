@@ -1,5 +1,7 @@
 "use client"
 
+import { TitleBlock } from '@/components/lcapix/ds'
+import { USE_CASES as ONBOARDING_USE_CASES } from '@/lib/onboarding'
 import {
   useEffect,
   useMemo,
@@ -9,31 +11,32 @@ import {
 } from "react"
 import { useRouter } from "next/navigation"
 import { AuthGuard } from "@/components/auth-guard"
-import { AppTopBar, Icon, SectionHeader } from "@/components/lcapix"
+import { Icon } from "@/components/lcapix"
 import { useAuthStore } from "@/lib/store"
 import { toast } from "sonner"
 import { ApiError, apiGet, apiRequest } from "@/lib/api-client"
 
 /**
- * /profile — editable user profile.
+ * /profile: editable user profile.
  *
  * Layout intent: hero with avatar / account meta on top, then two parallel
  * column cards (Personal / Professional). A sticky save bar at the bottom
- * surfaces dirty state — Save only enables when fields have actually
+ * surfaces dirty state: Save only enables when fields have actually
  * diverged from the server snapshot, and there's a one-click Discard.
  */
 
-const USE_CASES = [
-  { value: "teaching", label: "Teaching a class" },
-  { value: "lab", label: "Research in a lab" },
-  { value: "own_study", label: "My own study" },
-  { value: "student", label: "Student in a class" },
-  { value: "product", label: "Product LCA" },
-  { value: "facility", label: "Site / facility LCA" },
-  { value: "comparative", label: "Comparative study" },
-  { value: "research", label: "Research / academic" },
-  { value: "other", label: "Other" },
-]
+// G66: the same choices as About you (lib/onboarding.ts). A value saved before
+// those choices still reads by its old name, and is offered only to whoever has it.
+const LEGACY_LABEL: Record<string, string> = {
+  product: "Product LCA",
+  facility: "Site / facility LCA",
+  comparative: "Comparative study",
+  research: "Research / academic",
+  other: "Other",
+}
+const USE_CASES = ONBOARDING_USE_CASES.map((u) => ({ value: u.id as string, label: u.label as string }))
+const useCaseChoices = (current: string) =>
+  LEGACY_LABEL[current] ? [...USE_CASES, { value: current, label: LEGACY_LABEL[current] }] : USE_CASES
 
 const COUNTRIES = [
   "United States",
@@ -212,12 +215,11 @@ export default function ProfilePage() {
   }
 
   const useCaseLabel =
-    USE_CASES.find((u) => u.value === draft.useCase)?.label ?? "Not set"
+    useCaseChoices(draft.useCase).find((u) => u.value === draft.useCase)?.label ?? "Not set"
 
   return (
     <AuthGuard>
-      <div className="app-shell">
-        <AppTopBar current="home" userInitials={userInitials} />
+      <div className="np">
 
         <div style={{ paddingBottom: dirty ? 96 : 48 }}>
           <div
@@ -230,11 +232,11 @@ export default function ProfilePage() {
             {/* Back link */}
             <button
               onClick={() => router.push("/home")}
-              className="press-active"
+              className="ds-focusable"
               style={{
                 background: "transparent",
                 border: "none",
-                color: "var(--text-tertiary)",
+                color: "var(--ds-text-3)",
                 fontSize: 12,
                 cursor: "pointer",
                 display: "inline-flex",
@@ -252,8 +254,8 @@ export default function ProfilePage() {
               Back to home
             </button>
 
-            {/* Header — enfos posture: eyebrow + display title + sub, no gradient blob */}
-            <SectionHeader
+            {/* Header: enfos posture: eyebrow + display title + sub, no gradient blob */}
+            <TitleBlock
               as="h1"
               eyebrow="ACCOUNT"
               title={
@@ -270,7 +272,7 @@ export default function ProfilePage() {
               }
               style={{ marginBottom: 8 }}
             />
-            {/* Quiet meta row — initials avatar + read-only chips */}
+            {/* Quiet meta row: initials avatar + read-only chips */}
             <CalmMetaRow
               initials={userInitials}
               role={draft.role}
@@ -289,7 +291,7 @@ export default function ProfilePage() {
                 style={{
                   marginTop: 28,
                   padding: 24,
-                  border: "1px solid var(--border-subtle)",
+                  border: "1px solid var(--ds-line)",
                   borderRadius: 12,
                   display: "flex",
                   flexDirection: "column",
@@ -297,13 +299,13 @@ export default function ProfilePage() {
                   gap: 10,
                 }}
               >
-                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)" }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ds-text)" }}>
                   Couldn&apos;t load your profile
                 </div>
-                <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>{loadError}</div>
+                <div style={{ fontSize: 13, color: "var(--ds-text-2)" }}>{loadError}</div>
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className="ds-btn"
                   onClick={() => setReloadKey((n) => n + 1)}
                 >
                   Retry
@@ -366,9 +368,9 @@ export default function ProfilePage() {
                   description="Drives defaults and onboarding tips."
                   icon="factory"
                 >
+                  {/* G64: optional, as in About you. */}
                   <Field
-                    label="Company / organization"
-                    required
+                    label="Institution or company (optional)"
                     error={errors.company}
                   >
                     <input
@@ -396,7 +398,7 @@ export default function ProfilePage() {
                       style={{ ...inputStyle, appearance: "auto" }}
                     >
                       <option value="">Choose one…</option>
-                      {USE_CASES.map((u) => (
+                      {useCaseChoices(draft.useCase).map((u) => (
                         <option key={u.value} value={u.value}>
                           {u.label}
                         </option>
@@ -434,7 +436,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Sticky save bar — only when dirty */}
+        {/* Sticky save bar: only when dirty */}
         {dirty && !loading && (
           <div
             style={{
@@ -450,11 +452,11 @@ export default function ProfilePage() {
             }}
           >
             <div
-              className="fade-slide-up"
+              
               style={{
                 pointerEvents: "auto",
                 background: "var(--surface-card, #fff)",
-                border: "1px solid var(--border-subtle)",
+                border: "1px solid var(--ds-line)",
                 borderRadius: 14,
                 padding: "10px 12px 10px 18px",
                 display: "flex",
@@ -469,13 +471,13 @@ export default function ProfilePage() {
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  background: "var(--brand-primary)",
+                  background: "var(--ds-green)",
                 }}
               />
               <div
                 style={{
                   fontSize: 13,
-                  color: "var(--text-primary)",
+                  color: "var(--ds-text)",
                   flex: 1,
                 }}
               >
@@ -483,7 +485,7 @@ export default function ProfilePage() {
               </div>
               <button
                 type="button"
-                className="btn"
+                className="ds-btn"
                 onClick={() => {
                   setDraft(server)
                   setErrors({})
@@ -494,7 +496,7 @@ export default function ProfilePage() {
               </button>
               <button
                 type="button"
-                className="btn btn-primary"
+                className="ds-btn ds-btn--primary"
                 onClick={(e) => handleSubmit(e as unknown as FormEvent)}
                 disabled={saving}
                 style={{ height: 34, fontSize: 12.5 }}
@@ -541,7 +543,7 @@ function CalmMetaRow({
         padding: "20px 0 0",
         marginTop: 18,
         marginBottom: 32,
-        borderTop: "1px solid var(--border-subtle)",
+        borderTop: "1px solid var(--ds-line)",
       }}
     >
       <div
@@ -549,15 +551,15 @@ function CalmMetaRow({
           width: 56,
           height: 56,
           borderRadius: 12,
-          background: "var(--brand-subtle)",
-          color: "var(--brand-primary)",
+          background: "var(--ds-green-wash)",
+          color: "var(--ds-green)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontWeight: 600,
           fontSize: 19,
           letterSpacing: "-0.01em",
-          fontFamily: "var(--font-ui)",
+          fontFamily: "var(--ds-font)",
           flexShrink: 0,
         }}
       >
@@ -601,12 +603,12 @@ function MetaCell({
         flexDirection: "column",
         gap: 4,
         padding: "0 18px",
-        borderRight: last ? "none" : "1px solid var(--border-subtle)",
+        borderRight: last ? "none" : "1px solid var(--ds-line)",
       }}
     >
       <span
         style={{
-          color: "var(--text-tertiary)",
+          color: "var(--ds-text-3)",
           fontSize: 10.5,
           letterSpacing: "0.12em",
           fontWeight: 600,
@@ -615,7 +617,7 @@ function MetaCell({
       >
         {label}
       </span>
-      <span style={{ color: "var(--text-primary)", fontWeight: 500, fontSize: 13 }}>
+      <span style={{ color: "var(--ds-text)", fontWeight: 500, fontSize: 13 }}>
         {value}
       </span>
     </div>
@@ -643,7 +645,7 @@ function SectionCard({
     <div
       style={{
         background: "var(--surface-raised, #fff)",
-        border: "1px solid var(--border-subtle)",
+        border: "1px solid var(--ds-line)",
         borderRadius: 14,
         padding: "24px 24px 22px",
         gridColumn: fullWidth ? "1 / -1" : undefined,
@@ -655,8 +657,8 @@ function SectionCard({
             width: 30,
             height: 30,
             borderRadius: 8,
-            background: "var(--brand-subtle)",
-            color: "var(--brand-primary)",
+            background: "var(--ds-green-wash)",
+            color: "var(--ds-green)",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
@@ -669,7 +671,7 @@ function SectionCard({
           style={{
             fontSize: 10.5,
             letterSpacing: "0.16em",
-            color: "var(--text-tertiary)",
+            color: "var(--ds-text-3)",
             fontWeight: 700,
           }}
         >
@@ -690,7 +692,7 @@ function SectionCard({
         <p
           style={{
             fontSize: 12.5,
-            color: "var(--text-tertiary)",
+            color: "var(--ds-text-3)",
             margin: "4px 0 18px",
           }}
         >
@@ -727,7 +729,7 @@ function Field({
           fontSize: 11,
           letterSpacing: "0.12em",
           fontWeight: 600,
-          color: "var(--text-tertiary)",
+          color: "var(--ds-text-3)",
           textTransform: "uppercase",
           marginBottom: 6,
         }}
@@ -754,7 +756,7 @@ function Field({
       {!error && hint && (
         <div
           style={{
-            color: "var(--text-tertiary)",
+            color: "var(--ds-text-3)",
             fontSize: 11.5,
             marginTop: 5,
           }}
@@ -770,11 +772,11 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "11px 14px",
   borderRadius: 10,
-  border: "1px solid var(--border-subtle)",
-  background: "var(--surface-raised)",
+  border: "1px solid var(--ds-line)",
+  background: "var(--ds-card)",
   fontSize: 14,
-  fontFamily: "var(--font-ui)",
-  color: "var(--text-primary)",
+  fontFamily: "var(--ds-font)",
+  color: "var(--ds-text)",
   outline: "none",
   transition: "border-color 120ms ease, box-shadow 120ms ease",
 }
@@ -798,8 +800,8 @@ function ReadOnlyGrid({
         <div
           key={r.label}
           style={{
-            background: "var(--surface-raised)",
-            border: "1px solid var(--border-subtle)",
+            background: "var(--ds-card)",
+            border: "1px solid var(--ds-line)",
             borderRadius: 10,
             padding: "12px 14px",
           }}
@@ -809,7 +811,7 @@ function ReadOnlyGrid({
               fontSize: 10.5,
               letterSpacing: "0.12em",
               fontWeight: 600,
-              color: "var(--text-tertiary)",
+              color: "var(--ds-text-3)",
               textTransform: "uppercase",
               marginBottom: 6,
             }}
@@ -819,7 +821,7 @@ function ReadOnlyGrid({
           <div
             style={{
               fontSize: 13.5,
-              color: "var(--text-primary)",
+              color: "var(--ds-text)",
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -850,7 +852,7 @@ function Skeleton() {
           key={i}
           style={{
             background: "var(--surface-card, #fff)",
-            border: "1px solid var(--border-subtle)",
+            border: "1px solid var(--ds-line)",
             borderRadius: 16,
             padding: 22,
             height: 280,
@@ -863,7 +865,7 @@ function Skeleton() {
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(90deg, transparent, color-mix(in oklab, var(--text-tertiary) 8%, transparent), transparent)",
+                "linear-gradient(90deg, transparent, color-mix(in oklab, var(--ds-text-3) 8%, transparent), transparent)",
               animation: "shimmer 1.4s linear infinite",
             }}
           />

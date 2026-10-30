@@ -6,6 +6,7 @@
 // the report says (the answer, the steps that build it, the sections). A
 // case with no run cannot be exported, and says which case has one.
 
+import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -152,7 +153,7 @@ function ReportBuilder({
     setSaved(null)
     try {
       await downloadRunExport(Number(run.run_id), format, kase.case_name)
-      setSaved(`Exported · ${FORMAT_LABEL[format]} of ${kase.case_name}, Run #${run.run_id}`)
+      setSaved(`Exported · ${FORMAT_LABEL[format]} of ${kase.case_name}, ${runLabel(run)}`)
     } catch (e: any) {
       setExportError(`The report was not exported: ${e?.message ?? 'the request failed'}`)
     } finally {
@@ -207,7 +208,7 @@ function ReportBuilder({
                   <select className="ds-input rp-select" value={run?.run_id ?? ''} onChange={(e) => setRunId(Number(e.target.value))}>
                     {completed.map((r, i) => (
                       <option key={r.run_id} value={r.run_id}>
-                        Run #{r.run_id}
+                        {runLabel(r)}
                         {i === 0 ? ' · latest' : ''}
                         {r.run_date ? ` · ${new Date(r.run_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : ''}
                       </option>
@@ -270,14 +271,14 @@ function ReportBuilder({
                   busy={busy}
                   disabled={!run}
                   disabledReason={
-                    noRun ? `Needs a run.${withRun?.latest_run ? ` ${withRun.case_name} has Run #${withRun.latest_run.run_id}.` : ''}` : undefined
+                    noRun ? `Needs a run.${withRun?.latest_run ? ` ${withRun.case_name} has ${runLabel(withRun.latest_run)}.` : ''}` : undefined
                   }
                   onClick={() => void doExport()}
                 >
                   <DownloadIcon /> Export {FORMAT_LABEL[format]}
                 </Button>
               </div>
-              {run && <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--ds-text-2)' }}>{formatNote(format, Number(run.run_id))}</p>}
+              {run && <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--ds-text-2)' }}>{formatNote(format, Number(run.run_id), run.case_run_number)}</p>}
               {noRun && kase && (
                 <p style={{ margin: '10px 0 0', fontSize: 14 }}>
                   <Link className="ds-link" href={`/project/${projectId}/case/${kase.case_id}`}>
@@ -313,7 +314,7 @@ function ReportBuilder({
                   <span>
                     <strong className="ds-mono">LCAPIX</strong> LCA report
                   </span>
-                  <span className="ds-mono">Run #{run.run_id}</span>
+                  <span className="ds-mono">{runLabel(run)}</span>
                 </div>
                 <h3 className="rp-paper-title">{data.project.project_name}</h3>
                 <p className="rp-paper-sub">{[kase.case_name, run.calculation_method, run.regionCode, fu ? `per ${fu}` : null].filter(Boolean).join(' · ')}</p>

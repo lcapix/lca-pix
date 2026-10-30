@@ -24,11 +24,11 @@ const qty = (q: number | null) => (q === null ? 'no amount' : String(Number(q.to
 const side = (s: FlowSide) => `${s.substance} ${qty(s.quantity)} ${s.unit}`
 
 const KIND_STYLE: Record<FlowChange['kind'], { label: string; color: string }> = {
-  swapped: { label: 'Swapped', color: 'var(--brand-primary)' },
-  changed: { label: 'Changed', color: 'var(--brand-primary)' },
+  swapped: { label: 'Swapped', color: 'var(--ds-green)' },
+  changed: { label: 'Changed', color: 'var(--ds-green)' },
   added: { label: 'Added', color: GOOD },
   removed: { label: 'Removed', color: BAD },
-  factor: { label: 'Factor', color: 'var(--brand-primary)' },
+  factor: { label: 'Factor', color: 'var(--ds-green)' },
 }
 
 function Tag({ children, color }: { children: React.ReactNode; color: string }) {
@@ -52,7 +52,7 @@ function Tag({ children, color }: { children: React.ReactNode; color: string }) 
 function NoFactor({ method }: { method: string | null }) {
   return (
     <span
-      className="chip"
+      className="ds-tag"
       title={`No factor under ${method ?? 'this method'}, so this exchange adds nothing to the result`}
       style={{ marginLeft: 6, fontSize: 10, padding: '1px 7px', color: BAD }}
     >
@@ -108,9 +108,9 @@ export function WhatDiffersPanel({
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: seriesColor(idx) }} />
               {bothRun ? (
                 <span style={{ fontSize: 13 }}>
-                  {category}: <span className="mono">{sig(bTotal)}</span> →{' '}
-                  <span className="mono">{sig(cTotal)}</span> {unit}{' '}
-                  <span className="mono" style={{ fontWeight: 600, color: delta <= 0 ? GOOD : BAD }}>
+                  {category}: <span className="ds-mono">{sig(bTotal)}</span> →{' '}
+                  <span className="ds-mono">{sig(cTotal)}</span> {unit}{' '}
+                  <span className="ds-mono" style={{ fontWeight: 600, color: delta <= 0 ? GOOD : BAD }}>
                     ({signedSig(delta)}, {signedPct(pctOf(cTotal, bTotal), 2)})
                   </span>
                 </span>
@@ -169,7 +169,7 @@ export function WhatDiffersPanel({
               <div style={{ display: 'grid', gap: 14 }}>
                 {inv.flows.length > 0 && (
                   <div>
-                    <div className="eyebrow" style={{ fontSize: 10, marginBottom: 6 }}>
+                    <div className="ds-section-label" style={{ fontSize: 10, marginBottom: 6 }}>
                       Exchanges ({inv.flows.length})
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -179,7 +179,7 @@ export function WhatDiffersPanel({
                             <td style={{ ...td, width: 80 }}>
                               <Tag color={KIND_STYLE[f.kind].color}>{KIND_STYLE[f.kind].label}</Tag>
                             </td>
-                            <td style={{ ...td, color: 'var(--text-secondary)', width: '32%' }}>{f.step}</td>
+                            <td style={{ ...td, color: 'var(--ds-text-2)', width: '32%' }}>{f.step}</td>
                             <td style={td}>
                               {f.kind === 'added' ? (
                                 <>
@@ -222,7 +222,7 @@ export function WhatDiffersPanel({
 
                 {inv.steps.length > 0 && (
                   <div>
-                    <div className="eyebrow" style={{ fontSize: 10, marginBottom: 6 }}>
+                    <div className="ds-section-label" style={{ fontSize: 10, marginBottom: 6 }}>
                       Steps ({inv.steps.length})
                     </div>
                     {inv.steps.map((s, i) => (
@@ -236,14 +236,14 @@ export function WhatDiffersPanel({
 
                 {(inv.costs.length > 0 || inv.hours.length > 0) && (
                   <div>
-                    <div className="eyebrow" style={{ fontSize: 10, marginBottom: 6 }}>
+                    <div className="ds-section-label" style={{ fontSize: 10, marginBottom: 6 }}>
                       Costs ({inv.costs.length + inv.hours.length})
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <tbody>
                         {inv.costs.map((c, i) => (
                           <tr key={`c${i}`}>
-                            <td style={{ ...td, color: 'var(--text-secondary)', width: '32%' }}>{c.step}</td>
+                            <td style={{ ...td, color: 'var(--ds-text-2)', width: '32%' }}>{c.step}</td>
                             <td style={td}>
                               {COST_LABEL[c.kind]} cost: {money(c.from)} → <strong>{money(c.to)}</strong>
                             </td>
@@ -251,7 +251,7 @@ export function WhatDiffersPanel({
                         ))}
                         {inv.hours.map((h, i) => (
                           <tr key={`h${i}`}>
-                            <td style={{ ...td, color: 'var(--text-secondary)', width: '32%' }}>{h.step}</td>
+                            <td style={{ ...td, color: 'var(--ds-text-2)', width: '32%' }}>{h.step}</td>
                             <td style={td}>
                               labor hours: {h.from ?? '–'} → <strong>{h.to ?? '–'}</strong>
                             </td>

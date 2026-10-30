@@ -29,7 +29,7 @@ describe('F3 Google sign-in', () => {
     expect(verifier.length).toBeGreaterThanOrEqual(43);
   });
 
-  it('F3.3-F3.5 a new Google user: account created, hand-off cookie, onboarding next, session once', async () => {
+  it('G110 F3.3-F3.5 a new Google user: account created, hand-off cookie, onboarding next, session once', async () => {
     const email = uniqueEmail('f3new');
     const { res, cookies } = await googleCallback({ email, name: 'Gus Google' });
     expect(res.status).toBe(307);

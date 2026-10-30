@@ -53,6 +53,11 @@ beforeAll(async () => {
     `INSERT INTO comparison_runs (comparison_name, project_id, case_ids, base_case_id, created_by) VALUES (?, ?, ?, ?, ?)`,
     [`Q legacy ${w.tag}`, w.Q.id, JSON.stringify([w.Q.caseId, qCopy]), w.Q.caseId, B.id],
   );
+  // An assignment in Q, with Q's case as its template (migrate-043).
+  const qAssignment: any = await sql(
+    `INSERT INTO assignment (project_id, title, template_case_id, created_by) VALUES (?, ?, ?, ?)`,
+    [w.Q.id, `Q secret assignment ${w.tag}`, w.Q.caseId, B.id],
+  );
   // A held import line on Q's case (migrate-040).
   const qHeld: any = await sql(
     `INSERT INTO import_held_lines (case_id, line_kind, reason, step_name, substance_text, direction, quantity, unit, created_by)
@@ -85,6 +90,8 @@ beforeAll(async () => {
     '$fresh.flow': qFlow2,
     '$fresh.legacyComparison': Number(qLegacy.insertId),
     '$fresh.heldLine': Number(qHeld.insertId),
+    '$P.assignment': Number(qAssignment.insertId),
+    '$fresh.assignment': Number(qAssignment.insertId),
   };
 });
 

@@ -1,9 +1,10 @@
 'use client'
 
+import { TitleBlock } from '@/components/lcapix/ds'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthGuard } from '@/components/auth-guard'
-import { AppTopBar, Icon, SectionHeader } from '@/components/lcapix'
+import { Icon } from '@/components/lcapix'
 import { useAuthStore } from '@/lib/store'
 import { apiRequest } from '@/lib/api-client'
 
@@ -133,8 +134,7 @@ export default function FactorsLibraryPage() {
 
   return (
     <AuthGuard>
-      <div className="app-shell">
-        <AppTopBar current="integrations" userInitials={userInitials} />
+      <div className="np">
 
         <div
           style={{
@@ -146,11 +146,11 @@ export default function FactorsLibraryPage() {
           {/* Back */}
           <button
             onClick={() => router.push('/home')}
-            className="press-active"
+            className="ds-focusable"
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-tertiary)',
+              color: 'var(--ds-text-3)',
               fontSize: 12,
               cursor: 'pointer',
               display: 'inline-flex',
@@ -165,7 +165,7 @@ export default function FactorsLibraryPage() {
           </button>
 
           {/* Header */}
-          <SectionHeader
+          <TitleBlock
             as="h1"
             eyebrow="LIBRARY"
             title="Factor library"
@@ -179,22 +179,22 @@ export default function FactorsLibraryPage() {
           {/* Explainer */}
           <div
             style={{
-              background: 'var(--surface-raised)',
-              border: '1px solid var(--border-subtle)',
+              background: 'var(--ds-card)',
+              border: '1px solid var(--ds-line)',
               borderRadius: 12,
               padding: '20px 22px',
               marginBottom: 28,
               fontSize: 13.5,
               lineHeight: 1.6,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
             }}
           >
             <div
-              className="eyebrow"
+              className="ds-section-label"
               style={{
                 fontSize: 11,
                 letterSpacing: '0.16em',
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
                 marginBottom: 8,
                 fontWeight: 600,
                 textTransform: 'uppercase',
@@ -205,8 +205,8 @@ export default function FactorsLibraryPage() {
             <p style={{ margin: 0 }}>
               An <strong>impact factor</strong> tells you how much environmental
               damage one unit of a substance causes: for example, how many{' '}
-              <span className="mono">kg CO₂-eq</span> are released per{' '}
-              <span className="mono">kg</span> of methane emitted to air.
+              <span className="ds-mono">kg CO₂-eq</span> are released per{' '}
+              <span className="ds-mono">kg</span> of methane emitted to air.
               LCAPIX multiplies the substance flows in your project by these
               factors to produce a total impact result.
             </p>
@@ -226,7 +226,7 @@ export default function FactorsLibraryPage() {
                 style={{
                   fontSize: 11,
                   letterSpacing: '0.14em',
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--ds-text-3)',
                   fontWeight: 600,
                   marginBottom: 10,
                 }}
@@ -240,7 +240,7 @@ export default function FactorsLibraryPage() {
                   style={{
                     cursor: 'pointer',
                     border: 'none',
-                    fontFamily: 'var(--font-ui)',
+                    fontFamily: 'var(--ds-font)',
                   }}
                 >
                   All ({totalFactors})
@@ -260,7 +260,7 @@ export default function FactorsLibraryPage() {
                     style={{
                       cursor: 'pointer',
                       border: 'none',
-                      fontFamily: 'var(--font-ui)',
+                      fontFamily: 'var(--ds-font)',
                     }}
                   >
                     {g.method_name} ({g.factors})
@@ -276,8 +276,8 @@ export default function FactorsLibraryPage() {
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              background: 'var(--surface-raised)',
-              border: '1px solid var(--border-subtle)',
+              background: 'var(--ds-card)',
+              border: '1px solid var(--ds-line)',
               borderRadius: 8,
               padding: '0 12px',
               height: 38,
@@ -285,7 +285,7 @@ export default function FactorsLibraryPage() {
               maxWidth: 420,
             }}
           >
-            <Icon name="search" size={14} style={{ color: 'var(--text-tertiary)' }} />
+            <Icon name="search" size={14} style={{ color: 'var(--ds-text-3)' }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -296,8 +296,8 @@ export default function FactorsLibraryPage() {
                 border: 'none',
                 outline: 'none',
                 fontSize: 13.5,
-                color: 'var(--text-primary)',
-                fontFamily: 'var(--font-ui)',
+                color: 'var(--ds-text)',
+                fontFamily: 'var(--ds-font)',
               }}
             />
           </div>
@@ -308,7 +308,7 @@ export default function FactorsLibraryPage() {
               style={{
                 padding: 40,
                 textAlign: 'center',
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
               }}
             >
               Loading factor library…
@@ -317,7 +317,7 @@ export default function FactorsLibraryPage() {
             <div
               style={{
                 padding: 20,
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
                 color: 'var(--signal-danger, #dc2626)',
               }}
@@ -329,8 +329,8 @@ export default function FactorsLibraryPage() {
               style={{
                 padding: 40,
                 textAlign: 'center',
-                color: 'var(--text-tertiary)',
-                border: '1px dashed var(--border-subtle)',
+                color: 'var(--ds-text-3)',
+                border: '1px dashed var(--ds-line)',
                 borderRadius: 10,
               }}
             >
@@ -339,7 +339,7 @@ export default function FactorsLibraryPage() {
           ) : (
             <div
               style={{
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
                 overflow: 'hidden',
                 background: 'var(--surface-card, #fff)',
@@ -347,7 +347,7 @@ export default function FactorsLibraryPage() {
             >
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: 'var(--surface-raised)' }}>
+                  <tr style={{ background: 'var(--ds-card)' }}>
                     <Th>Substance</Th>
                     <Th>Method</Th>
                     <Th>Category</Th>
@@ -371,7 +371,7 @@ export default function FactorsLibraryPage() {
                       <tr
                         key={f.factor_id}
                         style={{
-                          borderTop: '1px solid var(--border-subtle)',
+                          borderTop: '1px solid var(--ds-line)',
                         }}
                       >
                         <Td>{f.driver_name ?? '–'}</Td>
@@ -393,8 +393,8 @@ export default function FactorsLibraryPage() {
                   style={{
                     padding: '10px 14px',
                     fontSize: 12,
-                    color: 'var(--text-tertiary)',
-                    borderTop: '1px solid var(--border-subtle)',
+                    color: 'var(--ds-text-3)',
+                    borderTop: '1px solid var(--ds-line)',
                   }}
                 >
                   Showing first 200 of {filtered.length}. Narrow the search to
@@ -425,7 +425,7 @@ function Th({
         fontWeight: 600,
         letterSpacing: '0.08em',
         textTransform: 'uppercase',
-        color: 'var(--text-tertiary)',
+        color: 'var(--ds-text-3)',
       }}
     >
       {children}
@@ -448,7 +448,7 @@ function Td({
       style={{
         textAlign: align,
         padding: '10px 14px',
-        color: 'var(--text-primary)',
+        color: 'var(--ds-text)',
       }}
     >
       {children}

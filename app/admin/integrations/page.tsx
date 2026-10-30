@@ -2,7 +2,7 @@
 'use client';
 
 import { AuthGuard } from '@/components/auth-guard';
-import { AppTopBar } from '@/components/lcapix';
+;
 import { useAdminAccess } from '@/lib/admin/use-integrations';
 import { AccessNotice } from './_components/access-notice';
 import { IntegrationsDashboard } from './_components/integrations-dashboard';
@@ -19,7 +19,6 @@ export default function IntegrationsAdminPage() {
         <IntegrationsDashboard />
       ) : (
         <>
-          <AppTopBar current="integrations" />
           <AccessNotice checking={access === 'checking'} />
         </>
       )}

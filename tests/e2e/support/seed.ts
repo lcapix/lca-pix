@@ -45,6 +45,8 @@ export type Seed = {
     caseId: number;
     ids: { product: number; line: number; subprocess: number; operation: number; task: number };
   };
+  /** A project only the Cases and Class screenshots read, so no other test changes what they show. */
+  board: { projectId: number };
 };
 
 export const EXAMPLE_COMP_NAME = 'Painted steel bracket (lighter blank)';
@@ -132,6 +134,21 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
   const electricity = await substanceId(api, 'Electricity');
   await api.post(`/api/components/${t5}/flows`, { substance_id: electricity, flow_type: 'input', quantity: 0.25, unit: 'kWh' });
 
+  // ── The Cases board's own project: a base case run, and one copy run ─────
+  const p3 = (await api.post<{ project: { project_id: number } }>('/api/projects', { project_name: 'Cases board', description: 'Screenshot only' })).project.project_id;
+  const b3 = (await api.post<{ case: { case_id: number } }>(`/api/projects/${p3}/cases`, { case_name: 'Steel frame', case_type: 'base', description: 'The base' })).case.case_id;
+  const f3 = (await api.post<{ component: { component_id: number } }>(`/api/cases/${b3}/components`, {
+    component_name: 'Frame',
+    component_type: 'product',
+    parent_component_id: null,
+    quantity: 1,
+    unit: 'unit',
+  })).component.component_id;
+  await api.post(`/api/components/${f3}/flows`, { substance_id: await substanceId(api, 'Steel'), flow_type: 'input', quantity: 2, unit: 'kg' });
+  await api.post(`/api/cases/${b3}/assessments`, { run_name: 'Assessment' });
+  const d3 = await api.post<{ case_id: number }>(`/api/cases/${b3}/duplicate`, { case_name: 'Lighter frame' });
+  await api.post(`/api/cases/${d3.case_id}/assessments`, { run_name: 'Assessment' });
+
   // ── Membership: the viewer can read P1 only ───────────────────────────────
   await api.post(`/api/projects/${ex.project_id}/members`, { email: viewer.email, role: 'viewer' });
 
@@ -159,5 +176,6 @@ export async function buildSeed(request: APIRequestContext, baseURL: string): Pr
       caseId: c5,
       ids: { product: t1, line: t2, subprocess: t3, operation: t4, task: t5 },
     },
+    board: { projectId: p3 },
   };
 }

@@ -7,15 +7,19 @@
 // one is. Each card says what is missing next. Nothing here grades: it says
 // what exists. Search finds a person or a case.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import { Button, ErrorCard, Segmented } from '@/components/lcapix/ds'
+import { useParams, useRouter } from 'next/navigation'
+import { Button, ConfirmDialog, ErrorCard, Segmented, TextDialog } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
-import { useShellData } from '@/lib/shell/use-shell'
+import { useShellData, useShellStore } from '@/lib/shell/use-shell'
+import { isProjectRole, projectCapabilities } from '@/lib/project-role'
+import { readRunPrefs, runAssessmentBody } from '@/lib/project/workspace'
+import { runLabel } from '@/lib/results/full-results-view'
 import { initialsOf } from '@/lib/home/projects'
 import { LMS_NAME } from '@/lib/ui-flags'
 import { whenWords } from '@/lib/home/last-case'
+import { LESSONS } from '@/lib/lessons'
 import { useProjectCases } from '@/lib/project/use-project-cases'
 import {
   answerOf,
@@ -23,8 +27,10 @@ import {
   CARD_TAG,
   casesHeader,
   changeVsBase,
+  lessonsOf,
   matchesSearch,
   noCaseYet,
+  writeUpOf,
   PIPELINE_LABEL,
   segmentsFilled,
   splitCases,
@@ -32,6 +38,7 @@ import {
   type ProgressCase,
 } from '@/lib/project/cases-view'
 
+const LESSON_TITLES: Record<string, string> = Object.fromEntries(LESSONS.map((l) => [l.id, l.title]))
 const PER_COLUMN = 2
 const TABLE_ROWS = 8
 const DOT: Record<string, string> = { not_run: 'ring', run: '#2F7BC0', written: '#8F5B00', handed_in: '#006A44' }
@@ -68,7 +75,10 @@ export function CasesPage() {
   const base = data.cases.find((c) => c.case_type === 'base')
   const others = split.others.filter((c) => matchesSearch(c, q))
   const mine = split.mine.filter((c) => matchesSearch(c, q))
-  const missing = noCaseYet(data.members, data.cases)
+  // 2.7: only a view that holds every case can count who has none. With "see
+  // only their own case" on, a student's view holds their own cases only.
+  const seesAll = projectCapabilities(isProjectRole(data.project.my_role) ? data.project.my_role : null).canManage || !data.membersSeeOwnCases
+  const missing = seesAll ? noCaseYet(data.members, data.cases) : 0
   const plural = `${word[0].toUpperCase()}${word.slice(1)}s`
   const caseHref = (c: ProgressCase) => `/project/${projectId}/case/${c.case_id}`
 
@@ -122,8 +132,11 @@ export function CasesPage() {
                   <Link href={caseHref(c)} className="ds-focusable" style={{ flex: 1, minWidth: 0, display: 'flex', gap: 12, alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <strong style={{ display: 'block', fontSize: 18 }}>{c.case_name}</strong>
+                    <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)' }}>
+                      <Progress c={c} />
+                    </span>
                     <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>
-                      {[c.description || (c.case_type === 'base' ? 'The base case' : 'A what-if'), c.latest_run ? `Run #${c.latest_run.run_id}` : 'not run yet'].join(' · ')}
+                      {[c.description || (c.case_type === 'base' ? 'The base case' : 'A what-if'), c.latest_run ? runLabel(c.latest_run) : 'not run yet'].join(' · ')}
                     </span>
                   </span>
                   {change && change !== 'Same' && <span className="pc-change">{change}</span>}
@@ -131,7 +144,7 @@ export function CasesPage() {
                     {answer ?? '–'}
                   </span>
                   </Link>
-                  <CaseMenu projectId={projectId} caseId={c.case_id} name={c.case_name} onChanged={reload} />
+                  <CaseMenu projectId={projectId} caseId={c.case_id} name={c.case_name} role={data.project.my_role} readOnly={!!Number((c as any).read_only)} onChanged={reload} />
                 </div>
               )
             })}
@@ -143,7 +156,8 @@ export function CasesPage() {
         )}
       </section>
 
-      {split.others.length > 0 && (
+      {/* Also when nobody has a case yet: that is when "N people have no case yet" matters most (2.7). */}
+      {(split.others.length > 0 || missing > 0) && (
         <section aria-labelledby="others-h" style={{ marginTop: 26 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
             <h2 id="others-h" className="ds-section-label" style={{ flex: 1 }}>
@@ -197,6 +211,9 @@ export function CasesPage() {
                       Stage ↓
                     </th>
                     <th scope="col">Run</th>
+                    <th scope="col">Steps · flows · runs</th>
+                    <th scope="col">Lessons</th>
+                    <th scope="col">Write-up</th>
                     <th scope="col" style={{ textAlign: 'right' }}>
                       Answer
                     </th>
@@ -228,7 +245,12 @@ export function CasesPage() {
                             {PIPELINE_LABEL[c.stage]}
                           </span>
                         </td>
-                        <td className="ds-mono">{c.latest_run ? `#${c.latest_run.run_id}` : <span style={{ color: 'var(--ds-text-2)' }}>No run</span>}</td>
+                        <td className="ds-mono">{c.latest_run ? runLabel(c.latest_run) : <span style={{ color: 'var(--ds-text-2)' }}>No run</span>}</td>
+                        <td className="ds-mono">
+                          {c.steps ?? 0} · {c.flows ?? 0} · {c.runs ?? 0}
+                        </td>
+                        <td>{lessonsOf(c, LESSON_TITLES) ? <span title={lessonsOf(c, LESSON_TITLES)!.title}>{lessonsOf(c, LESSON_TITLES)!.text}</span> : '–'}</td>
+                        <td>{writeUpOf(c)}</td>
                         <td className="ds-mono" style={{ textAlign: 'right' }}>
                           {answerOf(c) ?? <span style={{ color: 'var(--ds-text-2)' }}>None yet</span>}
                         </td>
@@ -277,12 +299,10 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
         <span style={{ flex: 1, minWidth: 0 }}>
           <strong style={{ display: 'block', fontSize: 16 }}>{c.author ?? 'Someone'}</strong>
           <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
-            {c.case_name} · {c.latest_run ? <span className="ds-mono">Run #{c.latest_run.run_id}</span> : c.case_type === 'base' ? 'not run yet' : c.created_at ? `copied ${whenWords(c.created_at)}` : 'not run yet'}
+            {c.case_name} · {c.latest_run ? <span className="ds-mono">{runLabel(c.latest_run)}</span> : c.case_type === 'base' ? 'not run yet' : c.created_at ? `copied ${whenWords(c.created_at)}` : 'not run yet'}
           </span>
           <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)' }}>
-            {(c as any).steps ?? 0} steps · {(c as any).flows ?? 0} flows · {(c as any).runs ?? 0} runs
-            {(c as any).lessons_total ? ` · lessons ${(c as any).lessons_answered?.length ?? 0} of ${(c as any).lessons_total}` : ''}
-            {(c as any).has_assumptions ? ' · write-up includes assumptions' : (c as any).has_interpretation ? ' · write-up' : ''}
+            <Progress c={c} />
           </span>
         </span>
         {answer && (
@@ -301,36 +321,150 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
   )
 }
 
-function CaseMenu({ projectId, caseId, name, onChanged }: { projectId: number; caseId: number; name: string; onChanged: () => void }) {
+/**
+ * P118: a case's menu, on every row the person may act on: Rename (a dialog),
+ * Copy, Run (with the method and region remembered for the case, then its
+ * Results) and Delete (a confirm). Rename, Copy and Run need editor; Delete
+ * needs admin, as the server does. Esc or a click outside closes it.
+ */
+function CaseMenu({
+  projectId,
+  caseId,
+  name,
+  role,
+  readOnly = false,
+  onChanged,
+}: {
+  projectId: number
+  caseId: number
+  name: string
+  role: string | null
+  /** A read-only case (the sample, a hand-in) can be copied, never renamed or run. */
+  readOnly?: boolean
+  onChanged: () => void
+}) {
+  const router = useRouter()
+  const caps = projectCapabilities(isProjectRole(role) ? role : null)
   const [open, setOpen] = useState(false)
+  const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const act = async (path: string, init: RequestInit) => {
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return
+    ref.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        ref.current?.querySelector<HTMLElement>('[aria-haspopup]')?.focus()
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  if (!caps.canEdit) return null
+
+  const act = async (path: string, init: RequestInit): Promise<any | null> => {
     setError(null)
-    const res = await apiRequest(path, init)
-    const d = await res.json().catch(() => ({}))
-    if (!res.ok) return setError(d?.error ?? `Not done (${res.status}).`)
-    setOpen(false)
-    onChanged()
+    setBusy(true)
+    try {
+      const res = await apiRequest(path, init)
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d?.error ?? (res.status === 403 ? 'Your role cannot do that here.' : `Not done (${res.status}).`))
+        return null
+      }
+      setOpen(false)
+      setDialog(null)
+      void useShellStore.getState().refresh()
+      onChanged()
+      return d
+    } finally {
+      setBusy(false)
+    }
+  }
+  const run = async () => {
+    const remembered = readRunPrefs((k) => localStorage.getItem(k), String(caseId))
+    const d = await act(`/api/cases/${caseId}/assessments`, { method: 'POST', body: JSON.stringify(runAssessmentBody(name, remembered)) })
+    if (d) router.push(`/project/${projectId}/case/${caseId}/results`)
   }
   return (
-    <span style={{ position: 'relative' }}>
-      <button type="button" className="ds-btn ds-btn--small" aria-expanded={open} aria-label={`Menu for ${name}`} onClick={() => setOpen((v) => !v)}>
+    <span ref={ref} style={{ position: 'relative' }}>
+      <button type="button" className="ds-btn ds-btn--small" aria-haspopup="menu" aria-expanded={open} aria-label={`Menu for ${name}`} onClick={() => setOpen((v) => !v)}>
         Menu
       </button>
       {open && (
-        <span role="menu" style={{ position: 'absolute', right: 0, zIndex: 2, background: '#fff', border: '1px solid var(--ds-line)', borderRadius: 8, padding: 8, display: 'grid' }}>
-          <button type="button" role="menuitem" className="ds-link" onClick={() => {
-            const next = window.prompt('Rename case', name)
-            if (next && next.trim()) void act(`/api/cases/${caseId}`, { method: 'PUT', body: JSON.stringify({ case_name: next.trim() }) })
-          }}>Rename</button>
-          <button type="button" role="menuitem" className="ds-link" onClick={() => void act(`/api/cases/${caseId}/duplicate`, { method: 'POST', body: '{}' })}>Copy</button>
-          <button type="button" role="menuitem" className="ds-link" onClick={() => void act(`/api/cases/${caseId}/assessments`, { method: 'POST', body: '{}' })}>Run</button>
-          <button type="button" role="menuitem" className="ds-link" onClick={() => {
-            if (window.confirm(`Delete ${name}? This cannot be undone.`)) void act(`/api/cases/${caseId}`, { method: 'DELETE' })
-          }}>Delete</button>
+        <span className="ws-menu" role="menu" aria-label={`${name} menu`} style={{ right: 0, top: 'calc(100% + 6px)' }}>
+          {!readOnly && (
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); setDialog('rename') }}>
+              Rename
+            </button>
+          )}
+          <button type="button" role="menuitem" disabled={busy} onClick={() => void act(`/api/cases/${caseId}/duplicate`, { method: 'POST', body: '{}' })}>
+            Copy
+          </button>
+          {!readOnly && (
+            <button type="button" role="menuitem" disabled={busy} onClick={() => void run()}>
+              Run
+            </button>
+          )}
+          {caps.canManage && (
+            <button type="button" role="menuitem" onClick={() => { setOpen(false); setDialog('delete') }}>
+              Delete
+            </button>
+          )}
         </span>
       )}
-      {error && <span role="alert">{error}</span>}
+      {error && (
+        <span role="alert" style={{ display: 'block', fontSize: 13, color: 'var(--ds-error)' }}>
+          {error}
+        </span>
+      )}
+      <TextDialog
+        open={dialog === 'rename'}
+        title="Rename case"
+        label="Case name"
+        initial={name}
+        confirmLabel="Rename"
+        busy={busy}
+        error={error}
+        onCancel={() => setDialog(null)}
+        onSubmit={(next) => void act(`/api/cases/${caseId}`, { method: 'PUT', body: JSON.stringify({ case_name: next }) })}
+      />
+      <ConfirmDialog
+        open={dialog === 'delete'}
+        title="Delete this case?"
+        consequence={`"${name}" and its steps, flows and runs are removed. This cannot be undone.`}
+        confirmLabel="Delete case"
+        busy={busy}
+        onCancel={() => setDialog(null)}
+        onConfirm={() => void act(`/api/cases/${caseId}`, { method: 'DELETE' })}
+      />
     </span>
+  )
+}
+
+/** A case's progress in one line (C03, P38 to P41): steps, flows, runs, lessons and the write-up. */
+function Progress({ c }: { c: ProgressCase }) {
+  const lessons = lessonsOf(c, LESSON_TITLES)
+  return (
+    <>
+      {c.steps ?? 0} steps · {c.flows ?? 0} flows · {c.runs ?? 0} runs
+      {lessons && (
+        <>
+          {' · '}
+          <span title={lessons.title}>{lessons.text}</span>
+        </>
+      )}
+      {' · '}
+      {writeUpOf(c)}
+    </>
   )
 }

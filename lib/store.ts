@@ -28,6 +28,10 @@ export interface Project {
   /** The study's impact method and region (migrate-018); runs default to them. */
   lciaMethod?: string | null
   regionCode?: string | null
+  /** The project lets AI read its figures (migrate-036); on unless the owner turned it off. */
+  aiEnabled?: boolean
+  /** The finished, read-only sample study. */
+  isSample?: boolean
 }
 
 export interface Case {

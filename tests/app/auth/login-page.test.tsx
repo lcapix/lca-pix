@@ -83,12 +83,28 @@ describe('Login form', () => {
     vi.unstubAllGlobals();
   });
 
+  it('G02 an account that has not finished About you goes there after login', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ success: true, token: 't', user: { id: 5, username: 'jo', email: 'jo@corp.com', onboarded_at: null } }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    );
+    submit('jo@corp.com', 'right-password');
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/auth/onboarding'));
+    expect(localStorage.getItem('auth_token')).toBe('t');
+    vi.unstubAllGlobals();
+  });
+
   it('a good password goes home with the session stored', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () =>
         new Response(
-          JSON.stringify({ success: true, token: 't', user: { id: 5, username: 'jo', email: 'jo@corp.com' } }),
+          JSON.stringify({ success: true, token: 't', user: { id: 5, username: 'jo', email: 'jo@corp.com', onboarded_at: '2026-10-01T00:00:00.000Z' } }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
       ),

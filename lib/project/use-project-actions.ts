@@ -33,8 +33,10 @@ export function useProjectActions(args: {
     router.push(addCasePath(projectId, baseCases.length))
   }
 
-  const handleDeleteCase = async (caseId: string) => {
+  // `confirmed`: the caller already asked in its own dialog (the new Overview).
+  const handleDeleteCase = async (caseId: string, opts: { confirmed?: boolean } = {}) => {
     if (
+      !opts.confirmed &&
       !confirm('Are you sure you want to delete this case? This action cannot be undone.')
     ) {
       return
@@ -99,12 +101,13 @@ export function useProjectActions(args: {
     setRenameError(null)
   }
 
-  const handleDeleteProject = async () => {
+  const handleDeleteProject = async (opts: { confirmed?: boolean } = {}) => {
     // Owner-only, irreversible: removes the project and every case, component,
     // flow, cost and assessment under it (DB foreign-key cascade). This hits
     // the real DELETE endpoint so it actually persists.
     const name = project?.name ?? 'this project'
     if (
+      !opts.confirmed &&
       !confirm(
         `Delete "${name}" and ALL of its cases, flows and assessments?\n\nThis cannot be undone.`,
       )

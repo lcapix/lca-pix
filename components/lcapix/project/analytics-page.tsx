@@ -41,14 +41,26 @@ export function AnalyticsPage() {
   const word = profile?.useCase === 'teaching' ? 'student' : 'member'
   const { data, error, reload } = useProjectCases(projectId)
   const [empty, setEmpty] = useState<Array<{ substance: string; direction: string; step: string; case_ids: number[] }> | null>(null)
+  // A read that failed says so (Task 7 item 6): never "every flow has an amount".
+  const [emptyError, setEmptyError] = useState<string | null>(null)
   const [asTable, setAsTable] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const r = await apiRequest(`/api/projects/${projectId}/empty-flows`)
-      const d = r.ok ? await r.json().catch(() => null) : null
-      if (!cancelled) setEmpty(d?.flows ?? [])
+      try {
+        const r = await apiRequest(`/api/projects/${projectId}/empty-flows`)
+        const d = r.ok ? await r.json().catch(() => null) : null
+        if (cancelled) return
+        if (!r.ok || !d) {
+          setEmptyError(`it answered ${r.status}`)
+          return
+        }
+        setEmptyError(null)
+        setEmpty(d.flows ?? [])
+      } catch (e: any) {
+        if (!cancelled) setEmptyError(e?.message ?? 'the request failed')
+      }
     })()
     return () => {
       cancelled = true
@@ -177,7 +189,11 @@ export function AnalyticsPage() {
                   Marked “Needs an amount” in the {counts.ran} run {counts.ran === 1 ? 'case' : 'cases'}
                 </span>
               </div>
-              {gaps === null ? (
+              {emptyError ? (
+                <p role="alert" className="np-sub" style={{ padding: '0 26px 22px', margin: 0 }}>
+                  The empty flows could not load: {emptyError}. Reload the page to try again.
+                </p>
+              ) : gaps === null ? (
                 <p role="status" className="np-sub" style={{ padding: '0 26px 22px', margin: 0 }}>
                   Counting…
                 </p>

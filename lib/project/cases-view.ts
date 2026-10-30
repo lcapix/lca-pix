@@ -16,7 +16,34 @@ export interface ProgressCase {
   author: string | null
   stage: PipelineStage
   created_at?: string | null
-  latest_run: { run_id: number; method?: string | null; region?: string | null; headline: { value: number; unit: string } | null } | null
+  latest_run: { run_id: number; case_run_number?: number | null; method?: string | null; region?: string | null; headline: { value: number; unit: string } | null } | null
+  /** Progress, as the progress route reads it from the case (C03, P38 to P41). */
+  steps?: number
+  flows?: number
+  runs?: number
+  lessons_total?: number
+  lessons_answered?: string[]
+  prediction_made?: boolean
+  has_interpretation?: boolean
+  has_assumptions?: boolean
+}
+
+/** The lessons answered, as "Lessons 3 of 6, predicted", and their titles for a hover (P40). */
+export function lessonsOf(c: ProgressCase, titles: Record<string, string>): { text: string; title: string } | null {
+  if (!c.lessons_total) return null
+  const done = c.lessons_answered ?? []
+  return {
+    text: `Lessons ${done.length} of ${c.lessons_total}${c.prediction_made ? ', predicted' : ''}`,
+    title: done.length ? `Answered: ${done.map((id) => titles[id] ?? id).join(', ')}` : 'No lesson answered yet',
+  }
+}
+
+/** The write-up as it stands (P41): written with its assumptions, written, or not yet. */
+export function writeUpOf(c: ProgressCase): string {
+  if (c.has_interpretation && c.has_assumptions) return 'Write-up with assumptions'
+  if (c.has_interpretation) return 'Write-up'
+  if (c.has_assumptions) return 'Assumptions only'
+  return 'No write-up yet'
 }
 
 export const STAGES: PipelineStage[] = ['not_run', 'run', 'written', 'handed_in']

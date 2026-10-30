@@ -25,7 +25,9 @@ export interface WorkspaceCase {
   my_role: ProjectRole | null
   /** The caller's role in the project (my_role is the role on this case: "Can read" on a read-only case). */
   project_role: ProjectRole | null
-  copied_from: { case_id: number; case_name: string } | null
+  /** The assignment this case was started or handed in for (migrate-043). */
+  assignment_id?: number | null
+  copied_from: { case_id: number; case_name: string; base_description?: string | null } | null
   region_code: string | null
   project_lcia_method: string | null
   reference_flow: number | null
@@ -139,6 +141,7 @@ export function useCaseWorkspace(caseId: number) {
         my_role: isProjectRole(cj.my_role) ? cj.my_role : null,
         project_role: isProjectRole(cj.project_role) ? cj.project_role : null,
         copied_from: cj.copied_from ?? null,
+        assignment_id: cj.assignment_id == null ? null : Number(cj.assignment_id),
         region_code: cj.region_code ?? null,
         project_lcia_method: cj.project_lcia_method ?? null,
         reference_flow: num(cj.reference_flow),

@@ -10,7 +10,7 @@ export function SchemaTableSummary({
   tableTotals: Record<string, number>;
 }) {
   return (
-    <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+    <div className="ds-card" style={{ padding: 18, marginBottom: 16 }}>
       <div
         style={{
           fontSize: 14,
@@ -23,7 +23,7 @@ export function SchemaTableSummary({
       <div
         style={{
           fontSize: 12,
-          color: 'var(--text-tertiary)',
+          color: 'var(--ds-text-3)',
           marginBottom: 14,
         }}
       >
@@ -44,9 +44,9 @@ export function SchemaTableSummary({
               key={t}
               style={{
                 padding: '14px 16px',
-                border: '1px solid var(--border-subtle)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
-                background: 'var(--surface-raised)',
+                background: 'var(--ds-card)',
               }}
             >
               <div
@@ -65,16 +65,16 @@ export function SchemaTableSummary({
                     borderRadius: '50%',
                     background:
                       n > 0
-                        ? 'var(--brand-primary)'
-                        : 'var(--text-tertiary)',
+                        ? 'var(--ds-green)'
+                        : 'var(--ds-text-3)',
                     opacity: n > 0 ? 1 : 0.4,
                   }}
                 />
                 <div
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     fontSize: 11,
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--ds-text-3)',
                     letterSpacing: '0.04em',
                   }}
                 >
@@ -82,14 +82,14 @@ export function SchemaTableSummary({
                 </div>
               </div>
               <div
-                className="mono"
+                className="ds-mono"
                 style={{
                   fontSize: 22,
                   fontWeight: 600,
                   color:
                     n > 0
-                      ? 'var(--text-primary)'
-                      : 'var(--text-tertiary)',
+                      ? 'var(--ds-text)'
+                      : 'var(--ds-text-3)',
                   letterSpacing: '-0.02em',
                 }}
               >
@@ -98,7 +98,7 @@ export function SchemaTableSummary({
               <div
                 style={{
                   fontSize: 11,
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--ds-text-3)',
                   marginTop: 2,
                 }}
               >

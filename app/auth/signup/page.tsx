@@ -81,7 +81,7 @@ export default function SignupPage() {
     <>
       <p className="edu-eyebrow">Teaching and research</p>
       <h1 className="edu-h1">Create your account</h1>
-      <p className="edu-sub">For professors, instructors and researchers. Email or Google.</p>
+      <p className="edu-sub">For students, instructors and researchers. Email or Google.</p>
 
       {/* The first Tab stop (acceptance check 10). The server route owns the OAuth handshake. */}
       <button type="button" className="edu-google" onClick={() => (window.location.href = "/api/auth/google")} disabled={isLoading}>

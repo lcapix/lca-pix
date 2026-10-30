@@ -16,7 +16,7 @@ beforeAll(async () => {
 const gw = (c: any) => c.totals.find((t: any) => t.category === 'Global Warming');
 
 describe('F12 comparative case -> compare', () => {
-  it('F12.1 duplicate is a deep copy: tree with remapped parents, flows, costs, stage, transport leg, reference flow', async () => {
+  it('C12 F12.1 duplicate is a deep copy: tree with remapped parents, flows, costs, stage, transport leg, reference flow', async () => {
     const owner = w.users.owner;
     await api.put(`/api/components/${w.P.base.op}`, { token: owner.token, json: { labor_cost: 7.5, life_cycle_stage: 'production' } });
     await api.put(`/api/cases/${w.P.base.id}`, { token: owner.token, json: { reference_flow: 2, reference_flow_unit: 'mug' } });
@@ -59,10 +59,12 @@ describe('F12 comparative case -> compare', () => {
     // Runs are the original's history, not copied.
     expect(await sql('SELECT run_id FROM assessment_runs WHERE case_id = ?', [copy])).toEqual([]);
 
-    // Errors: a name clash, an empty source.
+    // A name clash is refused. An empty case can be copied (finding 2.6): the copy is empty too.
     expect((await api.post(`/api/cases/${w.P.base.id}/duplicate`, { token: owner.token, json: { case_name: `kiln UPGRADE ${w.tag}` } })).status).toBe(409);
     const empty = await createCase(owner, w.P.id, `Empty src ${w.tag}`, 'comparative');
-    expect((await api.post(`/api/cases/${empty}/duplicate`, { token: owner.token, json: {} })).status).toBe(400);
+    const emptyCopy = await api.post(`/api/cases/${empty}/duplicate`, { token: owner.token, json: {} });
+    expect(emptyCopy.status, emptyCopy.text).toBe(201);
+    expect(await sql('SELECT component_id FROM component WHERE case_id = ?', [Number(emptyCopy.json.case_id)])).toEqual([]);
   });
 
   it('F12.1 duplicate a case whose steps carry drivers JSON (CMP-1 fixed)', async () => {

@@ -7,6 +7,7 @@
 // next. Read-only, with Make my own copy. With Guided mode on, the guide walks
 // the seven sections from a card in the sidebar (Next section, Skip the walk).
 
+import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -275,7 +276,7 @@ export function SampleOverview({ projectId, ownName, ownsProject }: { projectId:
     {
       label: 'The answer',
       // "Global warming, per bracket": the category in sentence case.
-      lead: climate ? `${climate.name.charAt(0)}${climate.name.slice(1).toLowerCase()}, per ${unit}, from Run #${run!.run_id}.` : 'Not run yet.',
+      lead: climate ? `${climate.name.charAt(0)}${climate.name.slice(1).toLowerCase()}, per ${unit}, from ${runLabel(run!)}.` : 'Not run yet.',
       door: { label: 'Results', href: caseHref('results') },
       body: climate ? (
         <>
@@ -383,7 +384,7 @@ export function SampleOverview({ projectId, ownName, ownsProject }: { projectId:
             <span style={{ fontSize: 15, fontWeight: 400, color: 'var(--ds-text-2)' }}>
               A finished study · {s.base.reference_flow ?? 1} {unit} · {method}
               {region ? ` · ${region}` : ''}
-              {run ? ` · Run #${run.run_id}` : ''}
+              {run ? ` · ${runLabel(run)}` : ''}
             </span>
           </h1>
         </div>

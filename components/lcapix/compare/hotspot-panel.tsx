@@ -92,9 +92,9 @@ export function HotspotPanel({ cases, category }: { cases: CompareCase[]; catego
                       style={{
                         ...tdNum,
                         fontWeight: cell.hot ? 600 : 400,
-                        color: cell.value === 0 ? 'var(--text-tertiary)' : 'var(--text-primary)',
+                        color: cell.value === 0 ? 'var(--ds-text-3)' : 'var(--ds-text)',
                         background: cell.hot
-                          ? `color-mix(in oklab, var(--brand-primary) ${Math.min(40, 10 + cell.share / 2.5)}%, transparent)`
+                          ? `color-mix(in oklab, var(--ds-green) ${Math.min(40, 10 + cell.share / 2.5)}%, transparent)`
                           : 'transparent',
                       }}
                       title={`${sig(cell.value)} ${unit} · ${fmtNum(cell.share, 1)}% of the case`}

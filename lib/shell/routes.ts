@@ -39,7 +39,9 @@ export function projectPageOf(pathname: string, projectId: number): ProjectPage 
   if (!pathname.startsWith(base + '/')) return null
   if (/^\/(cases|case\/|import|start)/.test(rest)) return 'cases'
   if (/^\/(comparison|comparisons)/.test(rest)) return 'compare'
-  if (/^\/(people|class)/.test(rest)) return 'people'
+  // /class answers with a redirect to Cases (P31).
+  if (/^\/class/.test(rest)) return 'cases'
+  if (/^\/people/.test(rest)) return 'people'
   if (/^\/assignments/.test(rest)) return 'assignments'
   return null
 }

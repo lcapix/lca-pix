@@ -21,7 +21,9 @@ describe('F25 copy link', () => {
     expect(dup.status, dup.text).toBe(201);
     const got = await api.get(`/api/cases/${dup.json.case_id}`, { token: w.users.viewer.token });
     expect(got.json.case.parent_case_id).toBe(w.P.base.id);
-    expect(got.json.case.copied_from).toEqual({ case_id: w.P.base.id, case_name: w.P.base.name });
+    // C05: a copy of a base case carries the base's description as its instructions.
+    const baseDesc = (await sqlOne('SELECT description FROM case_table WHERE case_id = ?', [w.P.base.id])).description ?? null;
+    expect(got.json.case.copied_from).toEqual({ case_id: w.P.base.id, case_name: w.P.base.name, base_description: baseDesc });
   });
 
   it('a duplicate keeps "What will you change?" as its description (E18); too long is refused', async () => {
@@ -89,7 +91,7 @@ describe('F25 copy link', () => {
     const progress = await api.get(`/api/projects/${pid}/progress`, { token: w.users.editor.token });
     expect(progress.json.cases.find((c: any) => c.case_id === mine).copied_from).toBeNull();
     // The owner reaches both and sees the link.
-    expect((await api.get(`/api/cases/${mine}`, { token: owner.token })).json.case.copied_from).toEqual({ case_id: other, case_name: `Student A ${w.tag}` });
+    expect((await api.get(`/api/cases/${mine}`, { token: owner.token })).json.case.copied_from).toEqual({ case_id: other, case_name: `Student A ${w.tag}`, base_description: null });
   });
 
   it('deleting the original keeps the copy, unlinked', async () => {

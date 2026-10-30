@@ -8,18 +8,21 @@ export function ImportHeader({
   targetName,
   title,
   onBack,
+  backLabel = 'Back to the project',
 }: {
   projectName: string | null
   /** The case the file goes into; null for a new case. */
   targetName: string | null
   title: string
   onBack?: () => void
+  /** "Back to the case" or "Back to the project": named, so it is not a second "Back" (P90). */
+  backLabel?: string
 }) {
   return (
     <header className="np-head">
       {onBack && (
         <button type="button" className="ds-link" onClick={onBack}>
-          Back
+          {backLabel}
         </button>
       )}
       <p style={{ margin: 0, fontSize: 13, color: 'var(--ds-text-2)' }}>

@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { ReactNode } from 'react'
 
 /** The header bar of every page that is not a case (look.md section 3). */
@@ -65,6 +66,32 @@ export function BigValue({ value, unit }: { value: ReactNode; unit?: ReactNode }
     <div className="ds-big-value">
       <span className="ds-big-value-num">{value}</span>
       {unit && <span className="ds-big-value-unit">{unit}</span>}
+    </div>
+  )
+}
+
+/** A page's title block: an eyebrow, the title and one line under it (Profile, the libraries). */
+export function TitleBlock({
+  as = 'h1',
+  eyebrow,
+  title,
+  sub,
+  style,
+}: {
+  as?: 'h1' | 'h2'
+  eyebrow?: ReactNode
+  title: ReactNode
+  sub?: ReactNode
+  style?: React.CSSProperties
+}) {
+  const Tag = as
+  return (
+    <div style={{ display: 'grid', gap: 4, ...style }}>
+      {eyebrow && <span className="ds-section-label">{eyebrow}</span>}
+      <Tag className="ds-title" style={{ margin: 0 }}>
+        {title}
+      </Tag>
+      {sub && <p className="np-sub" style={{ margin: 0 }}>{sub}</p>}
     </div>
   )
 }

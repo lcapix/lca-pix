@@ -66,7 +66,14 @@ describe('compare view', () => {
       { caseId: '1', run: run('US') },
       { caseId: '2', name: 'Lighter blank', run: run('Global'), editedSinceRun: true },
     ])
-    expect(verdict(failed, 2)).toMatchObject({ ok: false, title: 'Not comparable yet', sub: '2 of 4 checks fail' })
+    // P65: the region difference is a warning, so only the edited run fails.
+    expect(verdict(failed, 2)).toMatchObject({ ok: false, title: 'Not comparable yet', sub: '1 of 4 checks fails' })
+    const regionOnly = comparability([
+      { caseId: '1', run: run('US') },
+      { caseId: '2', run: run('Global') },
+    ])
+    expect(verdict(regionOnly, 2)).toMatchObject({ ok: true, title: 'Fair to compare, with a warning' })
+    expect(verdict(regionOnly, 2).sub).toMatch(/Region differs/)
     expect(headerLine(['Base case', 'Lighter blank'], failed)).toBe('Base case vs Lighter blank · TRACI 2.1')
     expect(verdict(comparability([{ caseId: '1', run: run('US') }, { caseId: '2', run: null }]), 2).sub).toBe('1 of 4 checks fails')
     const name = () => 'Lighter blank'

@@ -9,15 +9,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Button, ComingSoon, ConfirmDialog, CountPill, EmptyState, ErrorCard } from '@/components/lcapix/ds'
+import { Button, ComingSoon, ConfirmDialog, CountPill, EmptyState, ErrorCard, Segmented } from '@/components/lcapix/ds'
+import { runLabel } from '@/lib/results/full-results-view'
 import { apiRequest } from '@/lib/api-client'
 import { useShellData, useShellStore } from '@/lib/shell/use-shell'
 import { caseTotal, co2Unit } from '@/lib/ui/format'
 import { continueNext, continueParts, countsLine, homeMode, needsAttention, projectMeta, toHomeProject, type HomeProject } from '@/lib/home/home-view'
-import { homeKpis, libraryCounts } from '@/lib/home/projects'
+import { homeKpis, ISO_STEPS, libraryCounts } from '@/lib/home/projects'
 import { useContinueCase } from '@/lib/home/use-continue'
 import { readLastCase, whenWords } from '@/lib/home/last-case'
 import { SampleOverview } from './sample-overview'
+import { AssignedToYou } from './assigned-to-you'
 import { StudentHome } from './student-home'
 import { ReadOnlyBar } from '../shell/read-only-bar'
 import { usePhone } from '@/lib/shell/use-phone'
@@ -53,7 +55,7 @@ export function EduHome() {
     const sample = projects.find((p) => p.is_sample)!
     return <SampleOverview projectId={sample.project_id} ownName={ownName} ownsProject={owns} />
   }
-  if (mode === 'empty') return <EmptyHome />
+  if (mode === 'empty') return <EmptyHome teaching={profile?.useCase === 'teaching'} />
   // Projects shared with them and none they run: the student's Home (E13, E15).
   if (isStudentHome(projects, userId)) return <StudentHome projects={projects} userId={userId} fullName={ownName} />
   return <HomeLater projects={projects} userId={userId} firstName={ownName?.split(/\s+/)[0] ?? null} teaching={profile?.useCase === 'teaching'} />
@@ -81,7 +83,7 @@ function useAddSample() {
 }
 
 /** No project yet (the sample was skipped, removed, or failed): the three ways in. */
-function EmptyHome() {
+function EmptyHome({ teaching }: { teaching: boolean }) {
   const router = useRouter()
   const { busy, error, build } = useAddSample()
   return (
@@ -90,6 +92,23 @@ function EmptyHome() {
         <h1 className="ds-title">Welcome to LCAPIX</h1>
         <p className="home-sub">Start one of three ways.</p>
       </header>
+      {teaching && <SetUpClass />}
+      {/* G27: the ISO 14040 path every project follows. */}
+      <section aria-labelledby="iso-h" style={{ margin: '8px 0 16px' }}>
+        <h2 id="iso-h" className="ds-section-label">
+          ISO 14040 · 5 phases
+        </h2>
+        <ol className="np-rail">
+          {ISO_STEPS.map((p, i) => (
+            <li key={p.title}>
+              <strong>
+                {i + 1}. {p.title}
+              </strong>
+              <span>{p.description}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
       <div className="home-ways">
         <div className="so-next-card">
           <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
@@ -117,7 +136,73 @@ function EmptyHome() {
           <Button onClick={() => router.push('/project/new')}>+ New project</Button>
         </div>
       </div>
+      {/* G30: the standards the method follows, as classic named them. */}
+      <section aria-labelledby="trust-h" style={{ marginTop: 24, textAlign: 'center' }}>
+        <h2 id="trust-h" className="ds-section-label">
+          Built on standards you can defend
+        </h2>
+        <ul style={{ listStyle: 'none', padding: 0, margin: '10px 0', display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {TRUST.map((t) => (
+            <li key={t.label} className="ds-tag" title={t.hint}>
+              {t.label}
+            </li>
+          ))}
+        </ul>
+        <p className="np-sub">Methodology-grade calculations, traceable from inventory to result.</p>
+      </section>
     </div>
+  )
+}
+
+const TRUST = [
+  { label: 'ISO 14040', hint: 'Life cycle assessment: principles and framework' },
+  { label: 'ISO 14044', hint: 'Life cycle assessment: requirements and guidelines' },
+  { label: 'GHG Protocol', hint: 'Greenhouse Gas Protocol corporate standard' },
+  { label: 'EPD', hint: 'Environmental Product Declaration framework' },
+  { label: 'PEF', hint: 'EU Product Environmental Footprint' },
+]
+
+/**
+ * 2.1: someone teaching a class is offered one: a project where students see
+ * only their own case, opened on People to add the class.
+ */
+function SetUpClass() {
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const go = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      let id = 0
+      for (let i = 1; i <= 20 && !id; i++) {
+        const res = await apiRequest('/api/projects', { method: 'POST', body: JSON.stringify({ project_name: i === 1 ? 'My class' : `My class ${i}`, description: 'A class: each student works in their own case.' }) })
+        const d = await res.json().catch(() => ({}))
+        if (res.status === 409) continue
+        if (!res.ok) throw new Error(d?.error ?? `error ${res.status}`)
+        id = Number(d?.project?.project_id ?? d?.project_id)
+      }
+      if (!id) throw new Error('every class name tried is taken; rename one of your classes')
+      const put = await apiRequest(`/api/projects/${id}`, { method: 'PUT', body: JSON.stringify({ members_see_own_cases: true }) })
+      if (!put.ok) throw new Error(`the class was made, but "see only their own case" was not switched on (${put.status})`)
+      await useShellStore.getState().refresh()
+      router.push(`/project/${id}/people`)
+    } catch (e: any) {
+      setError(e?.message ?? 'the class was not set up')
+      setBusy(false)
+    }
+  }
+  return (
+    <section aria-labelledby="class-h" className="ds-card ds-card-pad" style={{ margin: '12px 0' }}>
+      <h2 id="class-h" className="ds-section-label" style={{ margin: 0 }}>
+        Teaching a class
+      </h2>
+      <p style={{ margin: '6px 0 10px' }}>Set up a class project: each student sees only their own case, and you see everyone&apos;s. Then add the class on People.</p>
+      <Button variant="primary" busy={busy} onClick={() => void go()}>
+        Set up a class
+      </Button>
+      {error && <ErrorCard title="The class was not set up" cause={error} onRetry={() => void go()} />}
+    </section>
   )
 }
 
@@ -135,14 +220,19 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
   const [filter, setFilter] = useState<'all' | 'base' | 'comp'>('all')
   const [layout, setLayout] = useState<'grid' | 'list'>('grid')
   const [lib, setLib] = useState<{ factors: number; components: number } | null>(null)
+  const [libError, setLibError] = useState<string | null>(null)
+  const [pinError, setPinError] = useState<string | null>(null)
   const addSample = useAddSample()
   const phone = usePhone()
   useEffect(() => {
     let live = true
     apiRequest('/api/integrations/status')
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`error ${r.status}`)
+        return r.json()
+      })
       .then((d) => live && setLib(libraryCounts(d)))
-      .catch(() => live && setLib(null))
+      .catch((e) => live && setLibError(e?.message ?? 'the library did not load'))
     return () => {
       live = false
     }
@@ -154,6 +244,8 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
     totalComponents: own.reduce((s, p) => s + p.component_count, 0),
     factors: lib?.factors ?? null,
     substances: lib?.components ?? null,
+    // G08, G09: a failed read says so, never "Loading…" for good.
+    libraryError: libError,
     fmtInt: (n) => n.toLocaleString('en-US'),
   })
 
@@ -185,6 +277,7 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
         </div>
         <HomeSearch projects={projects} q={q} setQ={setQ} />
       </header>
+      <AssignedToYou projects={projects} userId={userId} />
       <ul aria-label="Home counts" style={{ display: 'flex', gap: 12, listStyle: 'none', padding: 0, flexWrap: 'wrap' }}>
         {tiles.map((k) => (
           <li key={k.label} className="ds-card" style={{ padding: 12, minWidth: 140 }}>
@@ -194,11 +287,7 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
           </li>
         ))}
       </ul>
-      {teaching && own[0] && (
-        <p className="ds-card" style={{ padding: 12 }}>
-          Set up a class on <Link href={`/project/${own[0].project_id}/people`}>People</Link>. Students see only their own case.
-        </p>
-      )}
+      {teaching && <SetUpClass />}
 
       <div className="home-top">
         {cont.data && <ContinueCard c={cont.data} />}
@@ -230,18 +319,39 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
           <h2 id="yours-h" className="ds-section-label" style={{ flex: 1 }}>
             Your projects · {shown.length}
           </h2>
-          <span role="group" aria-label="Show projects">
-            <button type="button" className="ds-btn ds-btn--small" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All</button>
-            <button type="button" className="ds-btn ds-btn--small" aria-pressed={filter === 'base'} onClick={() => setFilter('base')}>Single case</button>
-            <button type="button" className="ds-btn ds-btn--small" aria-pressed={filter === 'comp'} onClick={() => setFilter('comp')}>Comparison</button>
-            <button type="button" className="ds-btn ds-btn--small" aria-pressed={layout === 'grid'} onClick={() => setLayout('grid')}>Grid</button>
-            <button type="button" className="ds-btn ds-btn--small" aria-pressed={layout === 'list'} onClick={() => setLayout('list')}>List</button>
+          <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginRight: 12 }}>
+            <Segmented
+              label="Show projects"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'base', label: 'Single case' },
+                { value: 'comp', label: 'Comparison' },
+              ]}
+            />
+            <Segmented
+              label="Layout"
+              value={layout}
+              onChange={setLayout}
+              options={[
+                { value: 'grid', label: 'Grid' },
+                { value: 'list', label: 'List' },
+              ]}
+            />
           </span>
           <Link href="/project/new" className="ds-link" style={{ fontWeight: 600 }}>
             + New project
           </Link>
         </div>
-        {shown.length ? (
+        {pinError && (
+          <p role="alert" className="edu-error">
+            {pinError}
+          </p>
+        )}
+        {shown.length && layout === 'list' ? (
+          <ProjectList projects={shown} />
+        ) : shown.length ? (
           <div className="home-projects" data-layout={layout}>
             {shown.map((p) => (
               <div key={p.project_id} className="home-project ds-focusable" style={{ display: 'flex', gap: 12 }}>
@@ -251,7 +361,9 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
                   {p.description && <span style={{ display: 'block', fontSize: 14 }}>{p.description}</span>}
                   <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>{projectMeta(p, userId)}</span>
                   <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)' }}>
-                    {p.case_count} {p.case_count === 1 ? 'case' : 'cases'} · {p.component_count} steps · {p.case_count > 1 ? 'Comparison' : 'Single case'}
+                    <span className="ds-tag" style={{ marginRight: 6 }}>{p.case_count > 1 ? 'Comparison' : 'Single case'}</span>
+                    {p.case_count} {p.case_count === 1 ? 'case' : 'cases'} · {p.component_count} steps
+                    {p.base_run?.run_date ? ` · Last run ${whenWords(p.base_run.run_date)}` : ''}
                     {p.updated_at ? ` · Updated ${whenWords(p.updated_at)}` : ''}
                   </span>
                 </span>
@@ -262,7 +374,7 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
                         {caseTotal(p.base_run.headline.value, 'base')}
                       </span>
                       <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
-                        {co2Unit(p.base_run.headline.unit)} · Base case · Run #{p.base_run.run_id}
+                        {co2Unit(p.base_run.headline.unit)} · Base case · {runLabel(p.base_run)}
                       </span>
                     </>
                   ) : (
@@ -278,8 +390,18 @@ function HomeLater({ projects, userId, firstName, teaching }: { projects: HomePr
               <button
                 type="button"
                 className="ds-link"
-                onClick={() => {
-                  void apiRequest(`/api/projects/${p.project_id}/pin`, { method: p.pinned ? 'DELETE' : 'PUT' }).then(() => useShellStore.getState().refresh())
+                aria-label={`${p.pinned ? 'Unpin' : 'Pin'} ${p.project_name}`}
+                aria-pressed={!!p.pinned}
+                onClick={async () => {
+                  // G24: a refused pin (20 is the most) says why.
+                  setPinError(null)
+                  const res = await apiRequest(`/api/projects/${p.project_id}/pin`, { method: p.pinned ? 'DELETE' : 'PUT' })
+                  if (!res.ok) {
+                    const d = await res.json().catch(() => ({}))
+                    setPinError(d?.error ?? `${p.project_name} was not ${p.pinned ? 'unpinned' : 'pinned'} (${res.status}).`)
+                    return
+                  }
+                  await useShellStore.getState().refresh()
                 }}
               >
                 {p.pinned ? 'Unpin' : 'Pin'}
@@ -357,7 +479,7 @@ function ContinueCard({ c }: { c: NonNullable<ReturnType<typeof useContinueCase>
     `${c.steps} ${c.steps === 1 ? 'step' : 'steps'}`,
     `${c.flowsIn} ${c.flowsIn === 1 ? 'line' : 'lines'} in`,
     c.held ? `${c.held} held` : null,
-    c.latestRunId ? `Run #${c.latestRunId}` : 'no run yet',
+    c.latestRunId ? (c.latestRunNumber ? `Run ${c.latestRunNumber}` : `Run #${c.latestRunId}`) : 'no run yet',
   ]
     .filter(Boolean)
     .join(' · ')
@@ -436,7 +558,8 @@ function HomeSearch({ projects, q, setQ }: { projects: HomeProject[]; q: string;
   const term = q.trim().toLowerCase()
   const hits = term
     ? [
-        ...projects.filter((p) => p.project_name.toLowerCase().includes(term)).map((p) => ({ key: `p${p.project_id}`, label: p.project_name, meta: 'Project', href: `/project/${p.project_id}` })),
+        // G11: a project's description counts too.
+        ...projects.filter((p) => p.project_name.toLowerCase().includes(term) || String((p as any).description ?? '').toLowerCase().includes(term)).map((p) => ({ key: `p${p.project_id}`, label: p.project_name, meta: 'Project', href: `/project/${p.project_id}` })),
         ...(cases ?? [])
           .filter((c) => c.case_name.toLowerCase().includes(term))
           .map((c) => ({ key: `c${c.case_id}`, label: c.case_name, meta: c.project_name, href: `/project/${c.project_id}/case/${c.case_id}` })),
@@ -484,6 +607,42 @@ function HomeSearch({ projects, q, setQ }: { projects: HomeProject[]; q: string;
           {!hits.length && <li style={{ padding: '8px 12px', fontSize: 13, color: 'var(--ds-text-3)' }}>{cases ? 'Nothing matches.' : 'Looking…'}</li>}
         </ul>
       )}
+    </div>
+  )
+}
+
+/** G12, G22: the list view, one row per project with the classic columns. */
+function ProjectList({ projects }: { projects: HomeProject[] }) {
+  return (
+    <div className="ds-table-wrap">
+      <table className="ds-table" aria-label="Your projects">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Type</th>
+            <th scope="col" className="ds-num">Cases</th>
+            <th scope="col" className="ds-num">Steps</th>
+            <th scope="col">Last run</th>
+            <th scope="col">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {projects.map((p) => (
+            <tr key={p.project_id}>
+              <td>
+                <Link className="ds-link" href={`/project/${p.project_id}`}>
+                  {p.project_name}
+                </Link>
+              </td>
+              <td>{p.case_count > 1 ? 'Comparison' : 'Single case'}</td>
+              <td className="ds-num">{p.case_count}</td>
+              <td className="ds-num">{p.component_count}</td>
+              <td>{p.base_run?.run_date ? whenWords(p.base_run.run_date) : 'No run yet'}</td>
+              <td>{p.updated_at ? whenWords(p.updated_at) : '–'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

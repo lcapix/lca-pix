@@ -32,6 +32,7 @@ interface ShellState {
   reset: () => void
 }
 
+let loadSeq = 0
 let inFlight: Promise<void> | null = null
 
 export const useShellStore = create<ShellState>()((set, get) => ({
@@ -41,12 +42,16 @@ export const useShellStore = create<ShellState>()((set, get) => ({
   load: async (force = false) => {
     if (!force && (get().status === 'ready' || get().status === 'loading')) return inFlight ?? undefined
     set({ status: 'loading' })
+    // 1.9, 2.4: only the newest load writes. An older one that answers after a
+    // refresh (a case or a person just added) would put the old counts back.
+    const mine = ++loadSeq
     inFlight = (async () => {
       try {
         const [pr, me] = await Promise.all([apiRequest('/api/projects'), apiRequest('/api/auth/profile')])
         if (!pr.ok || !me.ok) throw new Error(`projects ${pr.status}, profile ${me.status}`)
         const projects = ((await pr.json()).projects ?? []) as NavProject[]
         const profile = (await me.json()).profile ?? null
+        if (mine !== loadSeq) return
         set({
           projects: projects.map((p) => ({ ...p, project_id: Number(p.project_id), owner_id: Number(p.owner_id) })),
           profile: profile && {
@@ -59,9 +64,9 @@ export const useShellStore = create<ShellState>()((set, get) => ({
           status: 'ready',
         })
       } catch {
-        set({ status: 'error' })
+        if (mine === loadSeq) set({ status: 'error' })
       } finally {
-        inFlight = null
+        if (mine === loadSeq) inFlight = null
       }
     })()
     return inFlight

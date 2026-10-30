@@ -187,10 +187,13 @@ async function addHomeSummaries(projects: any[], userId: number) {
   const runs = new Map<number, any>();
   if (runIds.length) {
     const rows = await query<any>(
-      `SELECT run_id, run_date,
-              run_snapshot->'totals' AS totals,
-              run_snapshot->'goal_scope'->'per_fu_scale' AS per_fu_scale
-         FROM assessment_runs WHERE run_id IN (${runIds.map(() => '?').join(', ')})`,
+      `SELECT ar.run_id, ar.run_date,
+              ar.run_snapshot->'totals' AS totals,
+              ar.run_snapshot->'goal_scope'->'per_fu_scale' AS per_fu_scale,
+              -- 2.8: the run's place among its case's completed runs.
+              (SELECT COUNT(*) FROM assessment_runs x
+                WHERE x.case_id = ar.case_id AND (x.status IS NULL OR x.status = 'completed') AND x.run_id <= ar.run_id) AS case_run_number
+         FROM assessment_runs ar WHERE ar.run_id IN (${runIds.map(() => '?').join(', ')})`,
       runIds,
     );
     for (const r of rows) runs.set(Number(r.run_id), r);
@@ -210,7 +213,7 @@ async function addHomeSummaries(projects: any[], userId: number) {
     const run = runs.get(Number(p.base_run_id));
     p.base_case_id = p.base_case_id == null ? null : Number(p.base_case_id);
     p.base_run = run
-      ? { run_id: Number(run.run_id), run_date: run.run_date, headline: headlineOf(run.totals, run.per_fu_scale) }
+      ? { run_id: Number(run.run_id), case_run_number: Number(run.case_run_number) || null, run_date: run.run_date, headline: headlineOf(run.totals, run.per_fu_scale) }
       : null;
     delete p.base_run_id;
     p.held_case = p.held_case_id ? { case_id: Number(p.held_case_id), case_name: heldNames.get(Number(p.held_case_id)) ?? null } : null;

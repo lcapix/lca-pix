@@ -136,6 +136,8 @@ export interface World {
     name: string;
     base: { id: number; name: string; product: number; machine: number; subprocess: number; op: number; task: number; flow: number; gasFlow: number; run: number };
     comp: { id: number; name: string; run: number };
+    /** An assignment in P with P.base as its template (migrate-043). */
+    assignment: number;
   };
   Q: { id: number; name: string; caseId: number; caseName: string; component: number; componentName: string; flow: number; run: number; substance: number; substanceName: string };
   legacyComparison: number;
@@ -153,6 +155,8 @@ export interface World {
     legacyComparison: () => Promise<number>;
     /** An import line held for review on P.base (migrate-040). */
     heldLine: () => Promise<number>;
+    /** An assignment in P with P.base as its template (migrate-043). */
+    assignment: () => Promise<number>;
   };
 }
 
@@ -287,6 +291,13 @@ export async function buildWorld(opts: { runs?: boolean } = {}): Promise<World> 
       name: pName,
       base: { id: baseId, name: baseName, product, machine, subprocess, op, task, flow, gasFlow, run: baseRun },
       comp: { id: compId, name: compName, run: compRun },
+      assignment: Number(
+        expectStatus(
+          await api.post(`/api/projects/${pId}/assignments`, { token: owner.token, json: { title: `Assignment ${tag}`, template_case_id: baseId } }),
+          201,
+          'P assignment',
+        ).json.assignment_id,
+      ),
     },
     Q: {
       id: qId,
@@ -341,6 +352,14 @@ export async function buildWorld(opts: { runs?: boolean } = {}): Promise<World> 
         createComponent(owner, baseId, { component_name: `Glaze ${next()}`, component_type: 'operation', parent_component_id: subprocess }),
       flow: async () => addFlow(owner, task, { substance_id: electricity, flow_type: 'input', quantity: 0.25, unit: 'kWh' }),
       legacyComparison: legacyComparisonRow,
+      assignment: async () => {
+        const res = expectStatus(
+          await api.post(`/api/projects/${pId}/assignments`, { token: owner.token, json: { title: `Assignment ${next()}`, template_case_id: baseId } }),
+          201,
+          'fresh assignment',
+        );
+        return Number(res.json.assignment_id);
+      },
       heldLine: async () => {
         const res: any = await sql(
           `INSERT INTO import_held_lines (case_id, line_kind, reason, step_name, substance_text, substance_id, direction, quantity, unit, created_by)

@@ -19,7 +19,7 @@ export function DashboardHeader({ onRefresh }: { onRefresh: () => void }) {
           height: 44,
           borderRadius: 10,
           background:
-            'linear-gradient(135deg, var(--brand-primary), color-mix(in oklab, var(--brand-primary) 60%, #2d6a4f))',
+            'linear-gradient(135deg, var(--ds-green), color-mix(in oklab, var(--ds-green) 60%, #2d6a4f))',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -31,7 +31,7 @@ export function DashboardHeader({ onRefresh }: { onRefresh: () => void }) {
       </div>
       <div style={{ flex: 1 }}>
         <h1
-          className="display-md"
+          className="ds-title"
           style={{
             fontSize: 26,
             fontWeight: 600,
@@ -42,10 +42,10 @@ export function DashboardHeader({ onRefresh }: { onRefresh: () => void }) {
           Integrations
         </h1>
         <div
-          className="body"
+          className="np-sub"
           style={{
             fontSize: 13,
-            color: 'var(--text-tertiary)',
+            color: 'var(--ds-text-3)',
             marginTop: 2,
           }}
         >
@@ -56,11 +56,11 @@ export function DashboardHeader({ onRefresh }: { onRefresh: () => void }) {
         <button
           type="button"
           onClick={onRefresh}
-          className="btn btn-ghost btn-sm"
+          className="ds-btn ds-btn--small"
         >
           <Icon name="refresh" size={13} /> Refresh
         </button>
-        <button type="button" className="btn btn-ghost btn-sm">
+        <button type="button" className="ds-btn ds-btn--small">
           <Icon name="download" size={13} /> Export
         </button>
       </div>

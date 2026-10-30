@@ -1,20 +1,19 @@
 'use client'
 
-// A project's Overview. The sample study keeps its read-only education
-// overview. Every other project uses the design-system hub.
+// A project's Overview: the design-system hub for every project, the sample
+// study included (P01). The sample opens read-only, with Make my own copy.
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { EmptyState } from '@/components/lcapix/ds'
 import { ProjectHub } from '@/components/lcapix/workspace/project-hub'
-import { SampleOverview } from '@/components/lcapix/home/sample-overview'
 import { useShellData } from '@/lib/shell/use-shell'
 import { EDU_SHELL } from '@/lib/ui-flags'
 
 export default function ProjectPage() {
   const params = useParams()
   const projectId = Number(params.projectId)
-  const { projects, profile, status } = useShellData()
+  const { projects, status } = useShellData()
   const here = projects.find((p) => p.project_id === projectId)
   // Which overview to show depends on the projects the shell loads, so wait
   // for them: rendering the classic overview first let its own 404 handler
@@ -44,10 +43,6 @@ export default function ProjectPage() {
         />
       </div>
     )
-  }
-  if (EDU_SHELL && here?.is_sample) {
-    const owns = projects.some((p) => !p.is_sample && p.owner_id === profile?.id)
-    return <SampleOverview projectId={projectId} ownName={profile?.fullName?.trim() || null} ownsProject={owns} />
   }
   return <ProjectHub />
 }

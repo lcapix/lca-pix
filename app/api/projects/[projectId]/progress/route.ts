@@ -32,15 +32,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // database without them the view still lists the cases and their runs.
     const sql = (withWriteup: boolean, withFinal: boolean) =>
       `SELECT c.case_id, c.case_name, c.case_type, c.description, c.created_at, c.updated_at, c.created_by, c.parent_case_id,
+              c.assignment_id, c.read_only,
               COALESCE(NULLIF(TRIM(creator.full_name), ''), creator.username) AS author
               ${withWriteup ? ', c.interpretation, c.assumptions, c.learning_state' : ''}
               ${withFinal ? ', c.is_final, c.finalized_at' : ''},
               (SELECT COUNT(*) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS run_count,
               (SELECT MAX(ar.run_date) FROM assessment_runs ar WHERE ar.case_id = c.case_id) AS last_run,
               (SELECT COUNT(*) FROM assessment_runs ar
-                WHERE ar.case_id = c.case_id AND ar.status = 'completed') AS completed_runs,
+                WHERE ar.case_id = c.case_id AND (ar.status = 'completed' OR ar.status IS NULL)) AS completed_runs,
               (SELECT MAX(ar.run_id) FROM assessment_runs ar
-                WHERE ar.case_id = c.case_id AND ar.status = 'completed') AS latest_run_id,
+                WHERE ar.case_id = c.case_id AND (ar.status = 'completed' OR ar.status IS NULL)) AS latest_run_id,
               (SELECT COUNT(*) FROM flows f
                  JOIN component cm ON cm.component_id = f.component_id
                 WHERE cm.case_id = c.case_id AND f.quantity IS NULL) AS flows_missing_amount,
@@ -123,6 +124,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         latest_run: run
           ? {
               run_id: Number(run.run_id),
+              // The newest completed run is the case's Nth: its place in its own case (2.8).
+              case_run_number: Number(r.completed_runs ?? 0) || null,
               run_date: run.run_date,
               method: run.calculation_method,
               region: run.region_code,

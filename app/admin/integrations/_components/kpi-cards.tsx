@@ -17,7 +17,7 @@ export function KpiCards({ status }: { status: Status }) {
       }}
     >
       {kpis.map((k) => (
-        <div key={k.l} className="card" style={{ padding: 20 }}>
+        <div key={k.l} className="ds-card" style={{ padding: 20 }}>
           <div
             style={{
               display: 'flex',
@@ -25,24 +25,24 @@ export function KpiCards({ status }: { status: Status }) {
               marginBottom: 10,
             }}
           >
-            <div className="eyebrow">{k.l}</div>
+            <div className="ds-section-label">{k.l}</div>
             <div style={{ marginLeft: 'auto' }}>
               <StatusDot status={k.status} />
             </div>
           </div>
           <div
-            className="mono"
+            className="ds-mono"
             style={{
               fontSize: 28,
               fontWeight: 600,
-              color: 'var(--text-primary)',
+              color: 'var(--ds-text)',
               marginBottom: 4,
               letterSpacing: '-0.01em',
             }}
           >
             {k.v}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+          <div style={{ fontSize: 11, color: 'var(--ds-text-3)' }}>
             {k.s}
           </div>
           {k.pct !== undefined && (

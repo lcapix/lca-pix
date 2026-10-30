@@ -14,7 +14,7 @@ export function SourcesTab({ status }: { status: Status | null }) {
       }}
     >
       {uiSources(status).map((src) => (
-        <div key={src.id} className="card" style={{ padding: 20 }}>
+        <div key={src.id} className="ds-card" style={{ padding: 20 }}>
           <div
             style={{
               display: 'flex',
@@ -27,14 +27,14 @@ export function SourcesTab({ status }: { status: Status | null }) {
             <div style={{ fontSize: 15, fontWeight: 600, flex: 1 }}>
               {src.name}
             </div>
-            <button type="button" className="btn btn-ghost btn-sm">
+            <button type="button" className="ds-btn ds-btn--small">
               <Icon name="settings" size={13} />
             </button>
           </div>
           <div
             style={{
               fontSize: 12,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
               marginBottom: 14,
             }}
           >
@@ -49,26 +49,26 @@ export function SourcesTab({ status }: { status: Status | null }) {
             }}
           >
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>Status</div>
-              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+              <div style={{ color: 'var(--ds-text-3)' }}>Status</div>
+              <div className="ds-mono" style={{ color: 'var(--ds-text)' }}>
                 {src.statusLabel}
               </div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>Last sync</div>
-              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+              <div style={{ color: 'var(--ds-text-3)' }}>Last sync</div>
+              <div className="ds-mono" style={{ color: 'var(--ds-text)' }}>
                 {src.lastRun}
               </div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>API key</div>
-              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+              <div style={{ color: 'var(--ds-text-3)' }}>API key</div>
+              <div className="ds-mono" style={{ color: 'var(--ds-text)' }}>
                 {apiKeyLabel(src)}
               </div>
             </div>
             <div>
-              <div style={{ color: 'var(--text-tertiary)' }}>Records synced</div>
-              <div className="mono" style={{ color: 'var(--text-primary)' }}>
+              <div style={{ color: 'var(--ds-text-3)' }}>Records synced</div>
+              <div className="ds-mono" style={{ color: 'var(--ds-text)' }}>
                 {fmtInt(src.records)}
               </div>
             </div>
