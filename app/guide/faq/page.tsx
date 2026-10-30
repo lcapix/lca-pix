@@ -5,9 +5,9 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'My assessment came back as 0. What did I miss?',
     a: (
       <>
-        Flows only attach to <strong>Elemental Task</strong> nodes (the leaves
-        of the tree). Open the editor, find an elemental task, and make sure
-        at least one driver flow is marked <code>is_driver</code>.
+        Check that each flow has an amount and that the method has a factor for it. Results names every flow
+        and every category it left out, and a flow with no amount is marked <strong>Needs an amount</strong> in
+        the Inventory tab. Flows usually go on the lowest step, an operation or an elemental task.
       </>
     ),
   },
@@ -15,9 +15,8 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'Can I compare more than two scenarios?',
     a: (
       <>
-        Yes. Add as many comparative cases as you need. Analytics overlays
-        every assessed case on the radar chart; the delta panel always
-        benchmarks against the first scenario.
+        Yes. Add as many copies of the base case as you need. <strong>Compare</strong> takes any cases you pick,
+        ranks them in the chosen category, and reads every case against the first one, A.
       </>
     ),
   },
@@ -25,9 +24,8 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'How do I share results without giving edit access?',
     a: (
       <>
-        Use <strong>PDF Export</strong> on the Analytics page. The export is a
-        static snapshot of the current run: recipients can read it without
-        touching your data.
+        Export a PDF or slides from the case&apos;s Write-up tab, or from <strong>Reports</strong>. The file is the
+        run as it was frozen: recipients read it without touching your data. Or add them on People with Can read.
       </>
     ),
   },
@@ -35,10 +33,9 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'What method should I pick?',
     a: (
       <>
-        Default to <strong>CML 2001</strong> for product LCA: it&apos;s
-        well-established and recognised in EPDs. Use ReCiPe when you need
-        single-score endpoint indicators, or EPS if your stakeholders want a
-        monetised number.
+        Use the method your readers expect. <strong>TRACI 2.1</strong> is the US EPA method, <strong>CML 2001</strong>
+        is common in European studies, and <strong>ReCiPe Midpoint (H)</strong> is a newer midpoint method. Keep one
+        method for every case you compare.
       </>
     ),
   },
@@ -48,8 +45,8 @@ const QA: { q: string; a: React.ReactNode }[] = [
       <>
         Some categories (ozone depletion, certain toxicity ones) produce
         impacts that are many orders of magnitude smaller than global warming.
-        Scientific notation keeps the absolute view readable; switch to{' '}
-        <strong>Log scale</strong> to see them on a comparable axis.
+        Scientific notation keeps them readable. On the full results page, the category chart&apos;s{' '}
+        <strong>Log scale</strong> puts them on a comparable axis.
       </>
     ),
   },
@@ -57,9 +54,8 @@ const QA: { q: string; a: React.ReactNode }[] = [
     q: 'Can I undo a run?',
     a: (
       <>
-        Runs are append-only: every assessment is archived under Historical
-        runs. You can&apos;t edit a past run, but you can rerun with the same
-        inputs at any time, and you can always diff two runs side-by-side.
+        Runs are kept as they were made: the full results page lists every run of the case. You can&apos;t edit a
+        past run, but you can run again at any time. To set two cases side by side, use Compare.
       </>
     ),
   },
@@ -68,12 +64,12 @@ const QA: { q: string; a: React.ReactNode }[] = [
 export default function FaqPage() {
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
+      <div className="ds-section-label" style={{ marginBottom: 12 }}>
         GUIDE
       </div>
       <h1
         className="display display-lg"
-        style={{ margin: 0, marginBottom: 16, color: 'var(--text-primary)' }}
+        style={{ margin: 0, marginBottom: 16, color: 'var(--ds-text)' }}
       >
         FAQ
       </h1>
@@ -81,7 +77,7 @@ export default function FaqPage() {
         className="body"
         style={{
           fontSize: 15,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
           marginBottom: 24,
         }}
@@ -95,9 +91,9 @@ export default function FaqPage() {
             key={i}
             style={{
               padding: '14px 18px',
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid var(--ds-line)',
               borderRadius: 8,
-              background: 'var(--surface-raised)',
+              background: 'var(--ds-card)',
             }}
           >
             <summary
@@ -105,7 +101,7 @@ export default function FaqPage() {
                 cursor: 'pointer',
                 fontSize: 14,
                 fontWeight: 600,
-                color: 'var(--text-primary)',
+                color: 'var(--ds-text)',
                 listStyle: 'none',
               }}
             >
@@ -115,7 +111,7 @@ export default function FaqPage() {
               style={{
                 marginTop: 10,
                 fontSize: 13,
-                color: 'var(--text-secondary)',
+                color: 'var(--ds-text-2)',
                 lineHeight: 1.7,
               }}
             >

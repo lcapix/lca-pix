@@ -4,7 +4,7 @@
  * checked with the admin screen.
  */
 import { expect, storagePath, test } from '../support/fixtures';
-import { row } from '../support/parity';
+import { note, row } from '../support/parity';
 import { open } from '../support/ui';
 
 test.describe('shell', () => {
@@ -41,6 +41,40 @@ test.describe('shell', () => {
     await row(palette.getByText('Admin', { exact: true }), 'G76', 'Palette "Admin" (all users)');
     await row(palette.getByText('About', { exact: true }), 'G135', 'About');
     await row(palette.getByText('Guide', { exact: true }), 'G136', 'Guide');
+  });
+
+  test('G116 G118 G137 G138 G139 P134 the palette from the sidebar: recent projects, account commands, no themes', async ({ page, seed }) => {
+    test.setTimeout(120_000);
+    await open(page, `/project/${seed.fiveTier.projectId}`, { ready: seed.fiveTier.projectName });
+    await open(page, '/home', { ready: /Welcome/ });
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    const hint = nav.getByRole('button', { name: /Search/ });
+    await row(hint, 'G116', 'Search ⌘K hint');
+    await row(hint.getByText('⌘K'), 'P134', 'Search button');
+    await hint.click();
+    const palette = page.getByRole('dialog', { name: 'Command Palette' });
+    await row(palette, 'P134', 'Search button');
+    const recent = palette.getByRole('group', { name: 'Recent projects' });
+    await row(recent.getByRole('option', { name: seed.fiveTier.projectName }), 'G137', 'Recent projects (top 5)');
+    expect.soft(await recent.getByRole('option').count(), note('G137', 'at most five')).toBeLessThanOrEqual(5);
+    for (const name of ['Findings', 'Reports', 'New project', 'Profile', 'Log out']) {
+      await row(palette.getByRole('option', { name, exact: true }), 'G139', `Command: ${name}`);
+    }
+    for (const name of ['Light', 'Dark', 'High contrast']) {
+      await expect.soft(palette.getByRole('option', { name, exact: true }), note('G138', `no ${name} theme command`)).toHaveCount(0);
+    }
+    // Typing searches every project; Enter opens the one in focus.
+    await palette.getByRole('combobox').fill(seed.example.projectName);
+    await expect(palette.getByRole('option', { name: seed.example.projectName })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect.soft(page, note('G137', 'Enter opens the project')).toHaveURL(new RegExp(`/project/${seed.example.projectId}$`), { timeout: 60_000 });
+    await page.keyboard.press('Control+k');
+    await expect(palette).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect.soft(palette, note('G131', 'Esc closes')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /^Account menu/ }).click();
+    await row(page.getByRole('menu').getByText(seed.users.owner.email), 'G118', 'Account menu: name + email');
   });
 
   test('G140 G141 G143 G145 Magic Insights from the case', async ({ page, seed }) => {

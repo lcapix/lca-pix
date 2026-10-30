@@ -5,7 +5,6 @@ import "./globals.css"
 import "./lcapix.css"
 import "./ds.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { GlobalCommandPalette } from "@/components/global/command-palette"
 import { ShortcutHelp } from "@/components/global/shortcut-help"
 import { RouteProgress } from "@/components/global/route-progress"
 import { ScrollProgress } from "@/components/global/scroll-progress"
@@ -45,7 +44,6 @@ export default function RootLayout({
           <RouteProgress />
           <ScrollProgress />
           {children}
-          <GlobalCommandPalette />
           <ShortcutHelp />
           {/* The one toast container: every toast() call in the app renders here. */}
           <Toaster position="bottom-right" closeButton />

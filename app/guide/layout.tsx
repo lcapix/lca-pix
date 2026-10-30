@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AuthGuard } from '@/components/auth-guard'
-import { AppTopBar } from '@/components/lcapix'
+import { SignedIn } from '@/components/lcapix/shell/signed-in'
 
 export const TOC: readonly { slug: string; label: string }[] = [
   { slug: '', label: 'Getting started' },
@@ -21,9 +20,9 @@ export default function GuideLayout({
 }) {
   const pathname = usePathname() || '/guide'
   return (
-    <AuthGuard>
-      <div className="app-shell">
-        <AppTopBar current="guide" />
+    // G121: signed in, the guide sits inside the app's shell: one nav on every signed-in page.
+    <SignedIn>
+      <div>
         <div
           style={{
             display: 'grid',
@@ -36,10 +35,10 @@ export default function GuideLayout({
           <aside
             style={{
               padding: '32px 16px',
-              borderRight: '1px solid var(--border-subtle)',
+              borderRight: '1px solid var(--ds-line)',
             }}
           >
-            <div className="eyebrow" style={{ marginBottom: 14 }}>
+            <div className="ds-section-label" style={{ marginBottom: 14 }}>
               DOCS
             </div>
             <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -56,20 +55,20 @@ export default function GuideLayout({
                       padding: '8px 12px',
                       textAlign: 'left',
                       background: isActive
-                        ? 'var(--surface-raised)'
+                        ? 'var(--ds-row-selected)'
                         : 'transparent',
                       border: 'none',
                       cursor: 'pointer',
                       borderRadius: 4,
                       color: isActive
-                        ? 'var(--text-primary)'
-                        : 'var(--text-secondary)',
+                        ? 'var(--ds-text)'
+                        : 'var(--ds-text-2)',
                       fontSize: 13,
-                      fontFamily: 'var(--font-ui)',
+                      fontFamily: 'var(--ds-font)',
                       fontWeight: isActive ? 600 : 400,
                       borderLeft:
                         '2px solid ' +
-                        (isActive ? 'var(--brand-primary)' : 'transparent'),
+                        (isActive ? 'var(--ds-green)' : 'transparent'),
                       textDecoration: 'none',
                     }}
                   >
@@ -79,11 +78,11 @@ export default function GuideLayout({
               })}
             </nav>
           </aside>
-          <main style={{ padding: '48px 56px', maxWidth: 720 }}>
+          <div className="guide-body" style={{ padding: '32px 40px', maxWidth: 720 }}>
             {children}
-          </main>
+          </div>
         </div>
       </div>
-    </AuthGuard>
+    </SignedIn>
   )
 }

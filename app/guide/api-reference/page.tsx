@@ -34,7 +34,7 @@ const ENDPOINTS: { method: string; path: string; desc: string }[] = [
   {
     method: 'POST',
     path: '/api/cases/{caseId}/clone-from',
-    desc: 'Duplicate every component (and the latest assessment, scaled) from another case in the same project.',
+    desc: 'Copy every step and flow from another case in the same project. Runs are not copied.',
   },
   {
     method: 'GET',
@@ -68,12 +68,12 @@ const METHOD_COLOR: Record<string, string> = {
 export default function ApiReferencePage() {
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
+      <div className="ds-section-label" style={{ marginBottom: 12 }}>
         GUIDE
       </div>
       <h1
         className="display display-lg"
-        style={{ margin: 0, marginBottom: 16, color: 'var(--text-primary)' }}
+        style={{ margin: 0, marginBottom: 16, color: 'var(--ds-text)' }}
       >
         API reference
       </h1>
@@ -81,13 +81,13 @@ export default function ApiReferencePage() {
         className="body"
         style={{
           fontSize: 15,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
         Every endpoint requires a bearer token in{' '}
         <code
-          className="mono"
+          className="ds-mono"
           style={{
             padding: '1px 6px',
             background: 'var(--surface-overlay)',
@@ -99,7 +99,7 @@ export default function ApiReferencePage() {
         </code>
         . Tokens are issued by{' '}
         <code
-          className="mono"
+          className="ds-mono"
           style={{
             padding: '1px 6px',
             background: 'var(--surface-overlay)',
@@ -111,7 +111,7 @@ export default function ApiReferencePage() {
         </code>{' '}
         and stored in localStorage under{' '}
         <code
-          className="mono"
+          className="ds-mono"
           style={{
             padding: '1px 6px',
             background: 'var(--surface-overlay)',
@@ -127,10 +127,10 @@ export default function ApiReferencePage() {
       <div
         style={{
           marginTop: 32,
-          border: '1px solid var(--border-subtle)',
+          border: '1px solid var(--ds-line)',
           borderRadius: 10,
           overflow: 'hidden',
-          background: 'var(--surface-raised)',
+          background: 'var(--ds-card)',
         }}
       >
         {ENDPOINTS.map((e, i) => (
@@ -141,16 +141,16 @@ export default function ApiReferencePage() {
               gridTemplateColumns: '70px 1fr',
               gap: 14,
               padding: '12px 16px',
-              borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)',
+              borderTop: i === 0 ? 'none' : '1px solid var(--ds-line)',
               alignItems: 'baseline',
             }}
           >
             <span
-              className="mono"
+              className="ds-mono"
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: METHOD_COLOR[e.method] ?? 'var(--text-secondary)',
+                color: METHOD_COLOR[e.method] ?? 'var(--ds-text-2)',
                 letterSpacing: '0.05em',
               }}
             >
@@ -158,10 +158,10 @@ export default function ApiReferencePage() {
             </span>
             <div>
               <code
-                className="mono"
+                className="ds-mono"
                 style={{
                   fontSize: 12,
-                  color: 'var(--text-primary)',
+                  color: 'var(--ds-text)',
                 }}
               >
                 {e.path}
@@ -169,7 +169,7 @@ export default function ApiReferencePage() {
               <div
                 style={{
                   fontSize: 12,
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--ds-text-3)',
                   marginTop: 3,
                   lineHeight: 1.5,
                 }}

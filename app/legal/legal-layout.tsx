@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MarketingNav } from '@/components/lcapix/marketing-nav'
+import { PublicFooter, PublicHeader } from '@/components/lcapix/landing/public-layout'
 
 const TOC = [
   { href: '/legal/privacy', label: 'Privacy policy' },
@@ -23,8 +23,8 @@ export function LegalShell({
 }) {
   const pathname = usePathname()
   return (
-    <div className="app-shell" style={{ minHeight: '100%' }}>
-      <MarketingNav />
+    <div className="lp" style={{ minHeight: '100%' }}>
+      <PublicHeader />
       <section style={{ padding: '64px 40px 96px' }}>
         <div
           style={{
@@ -37,8 +37,8 @@ export function LegalShell({
         >
           <aside>
             <div
-              className="eyebrow"
-              style={{ marginBottom: 16, color: 'var(--text-tertiary)' }}
+              className="ds-section-label"
+              style={{ marginBottom: 16, color: 'var(--ds-text-3)' }}
             >
               LEGAL
             </div>
@@ -57,8 +57,8 @@ export function LegalShell({
                       fontSize: 14,
                       textDecoration: 'none',
                       color: active
-                        ? 'var(--brand-primary)'
-                        : 'var(--text-secondary)',
+                        ? 'var(--ds-green)'
+                        : 'var(--ds-text-2)',
                       background: active
                         ? 'var(--surface-overlay)'
                         : 'transparent',
@@ -73,8 +73,8 @@ export function LegalShell({
           </aside>
           <article>
             <div
-              className="eyebrow"
-              style={{ marginBottom: 14, color: 'var(--brand-primary)' }}
+              className="ds-section-label"
+              style={{ marginBottom: 14, color: 'var(--ds-green)' }}
             >
               {eyebrow}
             </div>
@@ -86,16 +86,16 @@ export function LegalShell({
                 fontSize: 40,
                 fontWeight: 600,
                 letterSpacing: '-0.02em',
-                color: 'var(--text-primary)',
+                color: 'var(--ds-text)',
               }}
             >
               {title}
             </h1>
             <div
-              className="mono"
+              className="ds-mono"
               style={{
                 fontSize: 12,
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
                 marginBottom: 40,
               }}
             >
@@ -112,19 +112,19 @@ export function LegalShell({
           font-size: 20px;
           font-weight: 600;
           letter-spacing: -0.01em;
-          color: var(--text-primary);
+          color: var(--ds-text);
           margin: 32px 0 12px;
         }
         .legal-body p {
           font-size: 15px;
           line-height: 1.7;
-          color: var(--text-secondary);
+          color: var(--ds-text-2);
           margin: 0 0 14px;
         }
         .legal-body ul {
           margin: 0 0 14px;
           padding-left: 20px;
-          color: var(--text-secondary);
+          color: var(--ds-text-2);
           font-size: 15px;
           line-height: 1.7;
         }
@@ -132,6 +132,7 @@ export function LegalShell({
           margin-bottom: 6px;
         }
       `}</style>
+      <PublicFooter />
     </div>
   )
 }

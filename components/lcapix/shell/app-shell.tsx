@@ -9,6 +9,7 @@ import { InShellContext } from './shell-context'
 import { usePathname } from 'next/navigation'
 import { IconButton } from '@/components/lcapix/ds'
 import { Sidebar } from './sidebar'
+import { CommandPalette } from './command-palette'
 import { PixelMark, ShellIcon } from './shell-icons'
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -51,6 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main id="main" className="ds-main" tabIndex={-1}>
           {children}
         </main>
+        <CommandPalette />
       </div>
     </div>
     </InShellContext.Provider>

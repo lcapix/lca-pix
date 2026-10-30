@@ -1,8 +1,8 @@
 'use client'
 
+import { PublicLayout } from '@/components/lcapix/landing/public-layout'
 import Link from 'next/link'
 import { Icon } from '@/components/lcapix'
-import { MarketingNav } from '@/components/lcapix/marketing-nav'
 
 import type { IconName } from '@/components/lcapix/icon'
 import { SpotlightCard } from '@/components/lcapix/spotlight-card'
@@ -60,10 +60,9 @@ const CAPABILITIES: Capability[] = [
   },
 ]
 
-export default function ProductPage() {
+function ProductPageBody() {
   return (
     <div className="app-shell page-product" style={{ minHeight: '100%' }}>
-      <MarketingNav />
 
       <section
         style={{
@@ -73,22 +72,22 @@ export default function ProductPage() {
         }}
       >
         <div style={{ maxWidth: 1100, margin: '0 auto', position: 'relative' }}>
-          <div className="eyebrow" style={{ marginBottom: 16 }}>
+          <div className="ds-section-label" style={{ marginBottom: 16 }}>
             Product
           </div>
           <h1
             className="display display-lg"
-            style={{ margin: 0, color: 'var(--text-primary)', maxWidth: 800 }}
+            style={{ margin: 0, color: 'var(--ds-text)', maxWidth: 800 }}
           >
             Six capabilities. One browser tab.
             <br />
-            <span style={{ color: 'var(--text-tertiary)' }}>No desktop install. No dongles.</span>
+            <span style={{ color: 'var(--ds-text-3)' }}>No desktop install. No dongles.</span>
           </h1>
           <p
             style={{
               marginTop: 24,
               fontSize: 17,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
               maxWidth: 640,
               lineHeight: 1.55,
             }}
@@ -116,8 +115,8 @@ export default function ProductPage() {
               className="card card-hover fade-slide-up"
               style={{
                 padding: 32,
-                background: 'var(--surface-raised)',
-                border: '1px solid var(--border-subtle)',
+                background: 'var(--ds-card)',
+                border: '1px solid var(--ds-line)',
                 animationDelay: `${i * 60}ms`,
               }}
             >
@@ -127,8 +126,8 @@ export default function ProductPage() {
                     width: 36,
                     height: 36,
                     borderRadius: 9,
-                    background: 'var(--brand-subtle)',
-                    color: 'var(--brand-primary)',
+                    background: 'var(--ds-green-wash)',
+                    color: 'var(--ds-green)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -141,7 +140,7 @@ export default function ProductPage() {
                   style={{
                     fontSize: 12,
                     fontWeight: 500,
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--ds-text-3)',
                     letterSpacing: '0.01em',
                   }}
                 >
@@ -154,7 +153,7 @@ export default function ProductPage() {
                   fontWeight: 600,
                   margin: 0,
                   marginBottom: 12,
-                  color: 'var(--text-primary)',
+                  color: 'var(--ds-text)',
                   letterSpacing: '-0.01em',
                   lineHeight: 1.25,
                 }}
@@ -164,7 +163,7 @@ export default function ProductPage() {
               <p
                 style={{
                   fontSize: 14,
-                  color: 'var(--text-secondary)',
+                  color: 'var(--ds-text-2)',
                   lineHeight: 1.6,
                   margin: 0,
                   marginBottom: 18,
@@ -182,13 +181,13 @@ export default function ProductPage() {
                 {c.facts.map((f) => (
                   <span
                     key={f}
-                    className="mono"
+                    className="ds-mono"
                     style={{
                       fontSize: 11,
                       padding: '4px 10px',
                       background: 'var(--surface-overlay)',
                       borderRadius: 999,
-                      color: 'var(--text-secondary)',
+                      color: 'var(--ds-text-2)',
                     }}
                   >
                     {f}
@@ -207,7 +206,7 @@ export default function ProductPage() {
           textAlign: 'center',
         }}
       >
-        <div className="eyebrow" style={{ marginBottom: 12 }}>
+        <div className="ds-section-label" style={{ marginBottom: 12 }}>
           Try it
         </div>
         <h2 className="display display-md" style={{ margin: 0, marginBottom: 28 }}>
@@ -223,5 +222,14 @@ export default function ProductPage() {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Task 9: the public layout around the page. */
+export default function ProductPage() {
+  return (
+    <PublicLayout>
+      <ProductPageBody />
+    </PublicLayout>
   )
 }

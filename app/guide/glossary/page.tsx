@@ -11,7 +11,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Reference flow',
-    def: 'The quantity of product needed to fulfil one functional unit (e.g. four brake pads per "one brake pad set"). Stored at the Product node.',
+    def: 'The quantity of product needed to fulfil one functional unit (e.g. four brake pads per "one brake pad set"). Stored on the case, with its unit.',
   },
   {
     term: 'System boundary',
@@ -23,15 +23,11 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Elemental Task',
-    def: 'The leaf level of the tree. The only level that can carry flows (drivers): everything above just structures the calculation.',
+    def: 'The lowest level of the tree. Flows usually go here or on an Operation; the levels above add up what sits below them.',
   },
   {
     term: 'Driver / flow',
-    def: 'A quantity attached to an Elemental Task that the engine multiplies by a characterisation factor to compute impact (e.g. 12 kWh of grid electricity, or 5 g of VOC emission). Direction is input or output.',
-  },
-  {
-    term: 'is_driver flag',
-    def: 'Marks a flow as the primary impact driver for its Elemental Task. If your assessment returns 0, this flag is almost certainly missing or the substance reference did not resolve.',
+    def: 'A quantity attached to a step that the engine multiplies by a characterisation factor to compute impact (e.g. 12 kWh of grid electricity, or 5 g of VOC emission). Direction is input or output.',
   },
   {
     term: 'Substance',
@@ -43,7 +39,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'LCIA method',
-    def: 'A consistent set of impact categories and characterisation factors. CML 2001 and CML-IA 2016 are EU midpoint baselines; ReCiPe Midpoint (H) and Endpoint (H/A) cover both levels; TRACI 2.1 is the US EPA equivalent; IPCC 2021 covers climate change only; EPS 2020 produces a single monetised score.',
+    def: 'A consistent set of impact categories and characterisation factors. LCAPIX offers three: CML 2001, common in European studies; ReCiPe Midpoint (H); and TRACI 2.1, the US EPA method.',
   },
   {
     term: 'Midpoint vs. endpoint',
@@ -55,43 +51,31 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Base case',
-    def: 'The reference scenario. Pinned in every comparison. Typically captures the current production line / material mix / grid as-is.',
+    def: 'The reference scenario. Typically captures the current production line / material mix / grid as-is.',
   },
   {
     term: 'Comparative case',
-    def: 'An alternative scenario you measure against the base. Each project can hold many; the comparison view flips between them while keeping the base as the reference.',
+    def: 'An alternative scenario you measure against the base. Each project can hold many; Compare reads each one against the first case you pick.',
   },
   {
     term: 'Assessment run',
-    def: 'An immutable snapshot. Hitting Run Assessment freezes the current tree + flows + method + region and writes one assessment_runs row plus N assessment_results rows. Every chart on the Results page is sourced from a specific run.',
-  },
-  {
-    term: 'EPS / ELU',
-    def: 'Environmental Priority Strategies / Environmental Load Unit. A monetisation method that rolls every impact category into one weighted score (Euros of willingness-to-pay to avoid). Useful for executive-level comparisons.',
+    def: 'An immutable snapshot. Hitting Run Assessment freezes the current tree + flows + method + region and writes one assessment_runs row plus N assessment_results rows. Every number on Results comes from one specific run.',
   },
   {
     term: 'Hot spot',
     def: 'The component or category contributing the largest share of total impact. The first place to look when designing a comparative scenario: cutting hot spots delivers most of the win.',
-  },
-  {
-    term: 'ECP Library',
-    def: 'Environmental Component Profile library: reusable tree templates with pre-bound flows (e.g. "standard steel sheet stamping operation"). Carried over from v1 as a roadmap item for v3.',
-  },
-  {
-    term: 'EcoSpold / ILCD',
-    def: 'Industry data-exchange formats for LCI datasets. LCAPIX imports openLCA datasets in either format via the Integrations panel.',
   },
 ]
 
 export default function GlossaryPage() {
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
+      <div className="ds-section-label" style={{ marginBottom: 12 }}>
         GUIDE
       </div>
       <h1
         className="display display-lg"
-        style={{ margin: 0, marginBottom: 16, color: 'var(--text-primary)' }}
+        style={{ margin: 0, marginBottom: 16, color: 'var(--ds-text)' }}
       >
         Glossary
       </h1>
@@ -99,13 +83,12 @@ export default function GlossaryPage() {
         className="body"
         style={{
           fontSize: 15,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
           marginBottom: 28,
         }}
       >
-        Short definitions for the terms used across the LCAPIX UI and the
-        LCAPIX v1/v2 handbooks.
+        Short definitions for the terms used across LCAPIX.
       </p>
 
       <dl style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -115,7 +98,7 @@ export default function GlossaryPage() {
               style={{
                 fontSize: 14,
                 fontWeight: 600,
-                color: 'var(--text-primary)',
+                color: 'var(--ds-text)',
                 marginBottom: 4,
               }}
             >
@@ -125,7 +108,7 @@ export default function GlossaryPage() {
               style={{
                 margin: 0,
                 fontSize: 13,
-                color: 'var(--text-secondary)',
+                color: 'var(--ds-text-2)',
                 lineHeight: 1.6,
               }}
             >

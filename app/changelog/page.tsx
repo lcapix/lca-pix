@@ -1,8 +1,8 @@
 'use client'
 
+import { PublicLayout } from '@/components/lcapix/landing/public-layout'
 import { useState, useMemo } from 'react'
 import { Icon } from '@/components/lcapix'
-import { MarketingNav } from '@/components/lcapix/marketing-nav'
 
 const ENTRIES = [
   {
@@ -87,7 +87,7 @@ const ENTRIES = [
 
 const ALL_TAGS = ['All', 'Polish', 'Feature', 'Fix', 'UI', 'Launch'] as const
 
-export default function ChangelogPage() {
+function ChangelogPageBody() {
   const [activeTag, setActiveTag] = useState<(typeof ALL_TAGS)[number]>('All')
   const filtered = useMemo(
     () => (activeTag === 'All' ? ENTRIES : ENTRIES.filter((e) => e.tag === activeTag)),
@@ -96,11 +96,10 @@ export default function ChangelogPage() {
 
   return (
     <div className="app-shell page-changelog" style={{ minHeight: '100%' }}>
-      <MarketingNav />
 
       <section style={{ padding: '96px 64px 24px' }}>
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
-          <div className="eyebrow" style={{ marginBottom: 14 }}>
+          <div className="ds-section-label" style={{ marginBottom: 14 }}>
             Changelog
           </div>
           <h1 className="display display-lg" style={{ margin: 0 }}>
@@ -110,7 +109,7 @@ export default function ChangelogPage() {
             style={{
               marginTop: 18,
               fontSize: 16,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
               maxWidth: 560,
               lineHeight: 1.55,
             }}
@@ -129,10 +128,10 @@ export default function ChangelogPage() {
             }}
           >
             <span
-              className="mono"
+              className="ds-mono"
               style={{
                 fontSize: 11,
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
                 letterSpacing: '0.12em',
                 textTransform: 'uppercase',
                 marginRight: 4,
@@ -150,9 +149,9 @@ export default function ChangelogPage() {
                   style={{
                     padding: '6px 14px',
                     borderRadius: 999,
-                    border: active ? '1px solid var(--brand-primary)' : '1px solid var(--border-subtle)',
-                    background: active ? 'oklch(from var(--brand-primary) l c h / 0.10)' : 'var(--surface-raised)',
-                    color: active ? 'var(--brand-primary)' : 'var(--text-secondary)',
+                    border: active ? '1px solid var(--ds-green)' : '1px solid var(--ds-line)',
+                    background: active ? 'oklch(from var(--ds-green) l c h / 0.10)' : 'var(--ds-card)',
+                    color: active ? 'var(--ds-green)' : 'var(--ds-text-2)',
                     fontSize: 12,
                     fontWeight: active ? 600 : 500,
                     cursor: 'pointer',
@@ -171,7 +170,7 @@ export default function ChangelogPage() {
       <section style={{ padding: '32px 64px 120px' }}>
         <div style={{ maxWidth: 880, margin: '0 auto' }}>
           {filtered.length === 0 && (
-            <div style={{ padding: '40px 0', fontSize: 14, color: 'var(--text-tertiary)' }}>
+            <div style={{ padding: '40px 0', fontSize: 14, color: 'var(--ds-text-3)' }}>
               No entries with that tag: yet.
             </div>
           )}
@@ -184,7 +183,7 @@ export default function ChangelogPage() {
                 position: 'relative',
                 paddingLeft: 30,
                 paddingBottom: 40,
-                borderLeft: '1px solid var(--border-subtle)',
+                borderLeft: '1px solid var(--ds-line)',
               }}
             >
               <span
@@ -210,35 +209,35 @@ export default function ChangelogPage() {
                 }}
               >
                 <span
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     fontSize: 12,
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--ds-text-3)',
                   }}
                 >
                   {e.date}
                 </span>
                 <span
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     fontSize: 11,
                     padding: '2px 8px',
                     background: 'var(--surface-overlay)',
                     borderRadius: 4,
-                    color: 'var(--text-secondary)',
+                    color: 'var(--ds-text-2)',
                     fontWeight: 500,
                   }}
                 >
                   {e.version}
                 </span>
                 <span
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     fontSize: 10,
                     padding: '2px 8px',
                     background: `${e.accent}22`,
                     // The accent tints the pill; the word stays body-coloured so it reads (WCAG 1.4.3).
-                    color: 'var(--text-primary)',
+                    color: 'var(--ds-text)',
                     borderRadius: 999,
                     fontWeight: 600,
                     letterSpacing: '0.1em',
@@ -254,7 +253,7 @@ export default function ChangelogPage() {
                   fontWeight: 600,
                   margin: 0,
                   marginBottom: 8,
-                  color: 'var(--text-primary)',
+                  color: 'var(--ds-text)',
                   letterSpacing: '-0.01em',
                 }}
               >
@@ -263,7 +262,7 @@ export default function ChangelogPage() {
               <p
                 style={{
                   fontSize: 14,
-                  color: 'var(--text-secondary)',
+                  color: 'var(--ds-text-2)',
                   lineHeight: 1.65,
                   margin: 0,
                   marginBottom: 14,
@@ -280,7 +279,7 @@ export default function ChangelogPage() {
                       alignItems: 'center',
                       gap: 8,
                       fontSize: 13,
-                      color: 'var(--text-secondary)',
+                      color: 'var(--ds-text-2)',
                     }}
                   >
                     <Icon name="check" size={12} style={{ color: e.accent }} />
@@ -295,7 +294,7 @@ export default function ChangelogPage() {
               position: 'relative',
               paddingLeft: 30,
               fontSize: 13,
-              color: 'var(--text-tertiary)',
+              color: 'var(--ds-text-3)',
             }}
           >
             <span
@@ -308,7 +307,7 @@ export default function ChangelogPage() {
                 height: 9,
                 borderRadius: '50%',
                 background: 'var(--surface-base)',
-                border: '2px solid var(--border-subtle)',
+                border: '2px solid var(--ds-line)',
               }}
             />
             That's all for now. New entries are added here as they ship.
@@ -316,5 +315,14 @@ export default function ChangelogPage() {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Task 9: the public layout around the page. */
+export default function ChangelogPage() {
+  return (
+    <PublicLayout>
+      <ChangelogPageBody />
+    </PublicLayout>
   )
 }

@@ -18,7 +18,7 @@ export default function SecurityPage() {
 
       <h2>1. Hosting</h2>
       <ul>
-        <li>The application runs on Vercel. Its database runs on Amazon RDS (MySQL) in AWS us-east-1.</li>
+        <li>The application runs on Vercel. Its database is Postgres on Neon, in us-east-1.</li>
         <li>
           Every connection to the application uses HTTPS, and browsers are told to use HTTPS only (HSTS, two
           years, subdomains included).
@@ -30,8 +30,8 @@ export default function SecurityPage() {
         <li>Passwords are hashed with bcrypt and are never stored as written.</li>
         <li>Optional Google sign-in, with state and PKCE checks and a verified email address.</li>
         <li>
-          A session is a signed token that lasts up to 7 days. It stops working when the password changes, and
-          signing out clears it.
+          A session is a signed token that lasts up to 7 days. It stops working when the password changes.
+          Signing out removes it from this browser; a copy of the token kept elsewhere works until it expires.
         </li>
         <li>Sign-in attempts are limited to 5 a minute, and new accounts to 3 an hour from one address.</li>
       </ul>

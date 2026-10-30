@@ -1,17 +1,17 @@
-// app/guide/page.tsx — Getting started
+// app/guide/page.tsx: Getting started
 'use client'
 
 const kbdStyle: React.CSSProperties = {
   padding: '2px 6px',
-  background: 'var(--surface-overlay)',
+  background: 'var(--ds-grey-bg)',
   borderRadius: 3,
   fontSize: 11,
-  border: '1px solid var(--border-subtle)',
+  border: '1px solid var(--ds-line)',
 }
 
 const codeChipStyle: React.CSSProperties = {
   padding: '1px 6px',
-  background: 'var(--surface-overlay)',
+  background: 'var(--ds-grey-bg)',
   borderRadius: 3,
   fontSize: 12,
 }
@@ -19,20 +19,20 @@ const codeChipStyle: React.CSSProperties = {
 export default function GettingStartedPage() {
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
+      <div className="ds-section-label" style={{ marginBottom: 12 }}>
         GUIDE
       </div>
       <h1
         className="display display-lg"
-        style={{ margin: 0, marginBottom: 16, color: 'var(--text-primary)' }}
+        style={{ margin: 0, marginBottom: 16, color: 'var(--ds-text)' }}
       >
         Getting started
       </h1>
       <p
-        className="body"
+        className="np-sub"
         style={{
           fontSize: 15,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
@@ -41,88 +41,74 @@ export default function GettingStartedPage() {
         pick a method, and export a PDF.
       </p>
 
-      <h2 className="title" style={{ marginTop: 40, marginBottom: 12 }}>
+      <h2 className="ds-title" style={{ marginTop: 40, marginBottom: 12 }}>
         1. Create a project
       </h2>
       <p
-        className="body"
+        className="np-sub"
         style={{
           fontSize: 14,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
         From{' '}
-        <span className="mono" style={codeChipStyle}>
+        <span className="ds-mono" style={codeChipStyle}>
           /home
         </span>
         , click{' '}
-        <span className="chip chip-active" style={{ fontSize: 11 }}>
-          + New Project
+        <span className="ds-tag" style={{ fontSize: 11 }}>
+          + New project
         </span>
-        . Pick a type: base case or comparative study.
+        . Name the study and write its question: the goal, the functional unit, the boundary, the method and the
+        region. Then start from a file or start empty.
       </p>
 
-      <h2 className="title" style={{ marginTop: 40, marginBottom: 12 }}>
+      <h2 className="ds-title" style={{ marginTop: 40, marginBottom: 12 }}>
         2. Build the process tree
       </h2>
       <p
-        className="body"
+        className="np-sub"
         style={{
           fontSize: 14,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
-        Every case starts with a Product node. Add Machine/Line children, then
-        Subprocess, Operation, and Elemental Task nodes. Drag to restructure.
+        Every case starts with a Product step. Press + Add a step and choose its parent and its tier: Machine or
+        line, Subprocess, Operation or Elemental task. To move a step, open its menu and choose Move, or change its
+        parent in the step panel.
       </p>
 
       <Tip>
-        Flows only attach to Elemental Tasks. If your impact is zero, check
-        that at least one task has an{' '}
-        <code
-          className="mono"
-          style={{
-            padding: '1px 4px',
-            background: 'var(--surface-overlay)',
-            borderRadius: 3,
-          }}
-        >
-          is_driver
-        </code>{' '}
-        flow.
+        Flows usually go on the lowest step, an operation or an elemental task. If a result reads zero, check that
+        each flow has an amount and that the method has a factor for it: Results names every flow and category it
+        left out.
       </Tip>
 
-      <h2 className="title" style={{ marginTop: 40, marginBottom: 12 }}>
+      <h2 className="ds-title" style={{ marginTop: 40, marginBottom: 12 }}>
         3. Run and export
       </h2>
       <p
-        className="body"
+        className="np-sub"
         style={{
           fontSize: 14,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
-        Press{' '}
-        <kbd className="mono" style={kbdStyle}>
-          R
-        </kbd>{' '}
-        to run an assessment, then{' '}
-        <kbd className="mono" style={kbdStyle}>
-          E
-        </kbd>{' '}
-        to export the PDF. Use{' '}
-        <kbd className="mono" style={kbdStyle}>
+        Press Run Assessment in the case header. A small dialog asks for the method and the region, set to the
+        study&apos;s. The answer opens on the case&apos;s Results tab; Open full page shows every category. Export a
+        PDF, slides or a CSV from the Write-up tab or from Reports. Press{' '}
+        <kbd className="ds-mono" style={kbdStyle}>
           ⌘K
         </kbd>{' '}
         to open the command palette at any time.
       </p>
 
       <Tip>
-        Every run is archived under the case&apos;s Historical runs panel: you
-        can diff any two runs side-by-side without re-running the assessment.
+        Every run is kept. The full results page lists the case&apos;s runs with their method and region, and an
+        older run opens as it was frozen. To set two cases side by side, use Compare.
       </Tip>
     </>
   )
@@ -136,8 +122,8 @@ function Tip({ children }: { children: React.ReactNode }) {
         marginBottom: 32,
         padding: '14px 16px 14px 14px',
         background:
-          'color-mix(in oklab, var(--brand-primary) 6%, var(--surface-raised))',
-        border: '1px solid color-mix(in oklab, var(--brand-primary) 18%, var(--border-subtle))',
+          'color-mix(in oklab, var(--ds-green) 6%, var(--ds-card))',
+        border: '1px solid color-mix(in oklab, var(--ds-green) 18%, var(--ds-line))',
         borderRadius: 10,
         display: 'flex',
         gap: 12,
@@ -151,8 +137,8 @@ function Tip({ children }: { children: React.ReactNode }) {
           height: 22,
           borderRadius: '50%',
           background:
-            'color-mix(in oklab, var(--brand-primary) 20%, transparent)',
-          color: 'var(--brand-primary)',
+            'color-mix(in oklab, var(--ds-green) 20%, transparent)',
+          color: 'var(--ds-green)',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -167,14 +153,14 @@ function Tip({ children }: { children: React.ReactNode }) {
       <div
         style={{
           fontSize: 13,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.6,
         }}
       >
         <span
           style={{
             fontWeight: 600,
-            color: 'var(--text-primary)',
+            color: 'var(--ds-text)',
             marginRight: 6,
           }}
         >

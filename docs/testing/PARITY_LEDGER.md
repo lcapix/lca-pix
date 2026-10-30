@@ -382,9 +382,9 @@ Path legend:
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| P133 | Tour button | TB:279-312 | MISSING (TB:122 returns null in the shell; GlobalTour still mounted, project `layout.tsx:23`) | none | missing | Inferred: Guided mode is a different feature |
-| P134 | Search button | TB:333-342 | HIDDEN: Cmd+K only (`command-palette.tsx:46`) | none | hidden | |
-| P135 | Notifications bell | TB:362-460 | MISSING in the shell | none | missing | Inferred |
+| P133 | Tour button | TB:279-312 | MISSING (TB:122 returns null in the shell; GlobalTour still mounted, project `layout.tsx:23`) | none | dropped | follows the G115 drop (Shreya 2026-10-27); the tour is unmounted in Task 9 |
+| P134 | Search button | TB:333-342 | sidebar.tsx Search button with ⌘K | none | kept | navigation.spec.ts G116 test |
+| P135 | Notifications bell | TB:362-460 | MISSING in the shell | none | dropped | follows the G117 drop (Shreya 2026-10-27) |
 | P136 | Docs, profile, Integrations, logout | TB:25-28, 560-600 | `sidebar.tsx:225-273` | none | moved | |
 | P137 | The sidebar counts a case or a person added, without a reload (findings 1.9, 2.4) | n/a (discovery run) | `lib/shell/use-shell.ts` (the newest load wins); refresh after the case exists (`new-project-form.tsx`, Cases menu) | - | kept |  |
 | P138 | Cases board: the base case is not "copied", and "N people have no case yet" is counted only from a view that sees every case (finding 2.7) | n/a (discovery run) | `components/lcapix/project/cases-page.tsx` | - | kept |  |
@@ -434,7 +434,7 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G01 | Dashboard at /home | app/home/page.tsx:21-116 | app/home/page.tsx:12-15 -> eh:25-59 | - | moved | classic dashboard only with SHELL=classic (hc/classic-home.tsx) |
 | G02 | Onboarding gate: needsOnboarding -> /auth/onboarding | lib/home/use-home.ts:58-75 | `app/auth/login/page.tsx` needsOnboarding (one rule with Google) | GET /api/auth/profile (still returns needsOnboarding, app/api/auth/profile/route.ts:59) | kept |  |
 | G03 | Greeting + project count line | hc/home-greeting.tsx:23-31 | eh:160-161; lib/home/home-view.ts:62-70 | GET /api/projects, /api/auth/profile | kept | |
-| G04 | "Walk me through" guided tour | hc/home-greeting.tsx:34-41; app/home/page.tsx:109-113 | MISSING; Guided mode switch sb:218-224 | - | dropped | Dropped by Shreya 2026-10-27. different feature: guide cards only where a page calls useSidebarGuide (lib/shell/guide-slot.ts:20) |
+| G04 | "Walk me through" guided tour | hc/home-greeting.tsx:34-41; app/home/page.tsx:109-113 | MISSING; Guided mode switch sb:218-224 | - | dropped | Dropped by Shreya 2026-10-27. different feature: guide cards only where a page calls useSidebarGuide (lib/shell/guide-slot.ts:20). Task 9: the tour is unmounted (public.spec.ts) |
 | G05 | New project | hc/home-greeting.tsx:42-48 | eh:196-198; sb:205-212 | POST /api/projects (on /project/new) | kept | hidden for students (lib/shell/project-nav.ts:165-169) |
 | G06 | KPI PROJECTS | lib/home/projects.ts:156-161; hc/home-kpis.tsx:19-31 | `components/lcapix/home/edu-home.tsx` Home counts | GET /api/projects | kept |  |
 | G07 | KPI CASES + process steps | projects.ts:162-168 | `components/lcapix/home/edu-home.tsx` Home counts | GET /api/projects (case_count, component_count still sent, app/api/projects/route.ts:26-29) | kept |  |
@@ -590,13 +590,13 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 | G112 | Projects -> /home | atb:26, 263-276 | sb:96-107 Home; sb:199-204 All projects | - | kept | |
 | G113 | Docs -> /guide | atb:28 | sb:225-228 "Help" | - | kept | /guide leaves the shell (G121) |
 | G114 | Integrations (admins) | atb:27 | sb:264-268 | GET /api/auth/me | moved | same as G74 |
-| G115 | Tour button (contextual guided tour) | atb:283-313; components/global/global-tour.tsx | MISSING in shell | - | dropped | Dropped by Shreya 2026-10-27. GlobalTour still mounted (app/project/layout.tsx:23) with no trigger; the button survives only on /guide and /about, where nothing listens |
-| G116 | Search ⌘K hint | atb:314-357 (not clickable) | MISSING in sidebar; sample Overview button components/lcapix/home/sample-overview.tsx:390-397 | - | partial | ⌘K still works |
-| G117 | Notifications bell: unread count, list, mark all read, open target | atb:358-513 | MISSING in shell; HIDDEN on /guide and /about | none (client store) | dropped | Dropped by Shreya 2026-10-27. nothing in the workspace pushes events (only producer: lib/results/use-results.ts:179, classic results page) |
-| G118 | Account menu: name + email | atb:551-561 | sb:241-253 name + institution; email only when no name | GET /api/auth/profile | partial | |
+| G115 | Tour button (contextual guided tour) | atb:283-313; components/global/global-tour.tsx | MISSING in shell | - | dropped | Dropped by Shreya 2026-10-27. Task 9: GlobalTour unmounted from app/project/layout.tsx; public.spec.ts checks no tour opens on a project |
+| G116 | Search ⌘K hint | atb:314-357 (not clickable) | sidebar.tsx Search button with ⌘K, opens the palette | - | kept | navigation.spec.ts G116 test |
+| G117 | Notifications bell: unread count, list, mark all read, open target | atb:358-513 | MISSING in shell; HIDDEN on /guide and /about | none (client store) | dropped | Dropped by Shreya 2026-10-27. Task 9: the classic bar and its bell are gone from /guide and /about; public.spec.ts checks no bell on every public page |
+| G118 | Account menu: name + email | atb:551-561 | sidebar.tsx account menu heads with name and email | GET /api/auth/profile | kept | navigation.spec.ts G116 test |
 | G119 | Account menu: Profile | atb:563-573 | sb:261-263 | - | kept | |
 | G120 | Account menu: Log out | atb:599-606 | sb:269-271 | POST /api/auth/logout | kept | |
-| G121 | One nav on every signed-in page | AppTopBar in app/project/layout.tsx:21 and each page | shell on SignedIn layouts (home, project, library, profile, admin, findings, reports); classic bar still on /guide/* (app/guide/layout.tsx:24-26) and /about (app/about/page.tsx:43-45) | - | partial | two navs; Help drops the sidebar |
+| G121 | One nav on every signed-in page | AppTopBar in app/project/layout.tsx:21 and each page | app/guide/layout.tsx wraps the guide in SignedIn (the shell); about, docs, changelog, pricing, product and legal use components/lcapix/landing/public-layout.tsx | - | kept | tests/e2e/parity/public.spec.ts. The guide still needs an account, as at HEAD |
 | G122 | Recent projects shortcut | cp:62-69, 105-120 | sb:181-196 Recent; components/lcapix/shell/project-switcher.tsx:30-205 | GET /api/projects | moved | |
 | G123 | Page /library/factors | linked via G08 | sidebar and Home tile | - | kept |  |
 | G124 | Page /library/substances | linked via G09 | sidebar and Home tile | - | kept |  |
@@ -611,15 +611,15 @@ Legend: `atb` = components/lcapix/app-top-bar.tsx, `sb` = components/lcapix/shel
 
 | ID | Capability | Classic (9227580) | Now (main) | API | Status | Note |
 |---|---|---|---|---|---|---|
-| G131 | Open with ⌘K / Ctrl+K | cp:44-53 | cp:44-58 | - | kept | also opens on lcapix:open-search (cp:51-57) |
-| G132 | Home | cp:83-86 | cp:89-92 | - | kept | |
-| G133 | Projects | cp:87-90 | cp:93-96 | - | kept | |
-| G134 | Admin | cp:91-94 | cp:97-100 | - | kept | |
-| G135 | About | cp:95-98 | cp:101-104 | - | kept | page sits outside the shell |
-| G136 | Guide | cp:99-102 | cp:105-108 | - | kept | page sits outside the shell |
-| G137 | Recent projects (top 5) | cp:62-69, 105-120, fed by lib/home/use-home.ts:91 | cp:69-75, 111-126 reads useProjectStore; its only setter is use-home.ts:91 (classic) | - | partial | inferred runtime: empty, or a stale persisted list until sign-out |
-| G138 | Theme Light / Dark / High contrast | cp:124-137 | cp:130-143 | - | dropped | Dropped by Shreya 2026-10-27. app/ds.css has 0 dark or high-contrast rules; inferred: the shell stays light |
-| G139 | Commands for Findings, Reports, New project, Profile, Log out | none | none | - | missing | Not a regression: absent in classic too |
+| G131 | Open with ⌘K / Ctrl+K | cp:44-53 | components/lcapix/shell/command-palette.tsx | - | kept | also opens on lcapix:open-search (cp:51-57) |
+| G132 | Home | cp:83-86 | components/lcapix/shell/command-palette.tsx | - | kept | |
+| G133 | Projects | cp:87-90 | components/lcapix/shell/command-palette.tsx | - | kept | |
+| G134 | Admin | cp:91-94 | components/lcapix/shell/command-palette.tsx | - | kept | |
+| G135 | About | cp:95-98 | components/lcapix/shell/command-palette.tsx | - | kept | page sits outside the shell |
+| G136 | Guide | cp:99-102 | components/lcapix/shell/command-palette.tsx | - | kept | page sits outside the shell |
+| G137 | Recent projects (top 5) | cp:62-69, 105-120, fed by lib/home/use-home.ts:91 | components/lcapix/shell/command-palette.tsx: recentProjects(useShellStore, this device, 5); typing searches every project | - | kept | reads the shell store, not the classic useProjectStore |
+| G138 | Theme Light / Dark / High contrast | cp:124-137 | cp:130-143 | - | dropped | Dropped by Shreya 2026-10-27. app/ds.css has 0 dark or high-contrast rules; inferred: the shell stays light. Task 10: the theme commands are removed; navigation.spec.ts checks none show |
+| G139 | Commands for Findings, Reports, New project, Profile, Log out | none | components/lcapix/shell/command-palette.tsx: Findings, Reports, New project (when the sidebar offers it), Profile, Log out | - | kept |  |
 
 ### Magic Insights entry points
 
@@ -659,6 +659,8 @@ The API already serves or accepts the data.
 - Run-vs-run diff that the docs promise (below): neither version implements it. Inferred.
 
 ### Guide and docs pages that describe screens that no longer exist
+
+Task 9 (2026-10-30): every item below is rewritten to the screens as Tasks 3 to 8 leave them; glossary and data model also lose is_driver, EPS, ECP and ILCD. public.spec.ts checks the first-assessment text for drag, is_driver, the R key, clone and Historical runs.
 
 All links in /docs (app/docs/page.tsx:20-80), the guide TOC (app/guide/layout.tsx:8-15) and /findings (:15) resolve to existing routes. "Already stale" means stale at 9227580 too.
 

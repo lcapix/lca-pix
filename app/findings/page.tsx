@@ -10,7 +10,7 @@ export default function FindingsPage() {
         <ComingSoon>Pin a result as a finding, with what it means, and find it here again.</ComingSoon>
         <div className="ds-card">
           <EmptyState
-            line="For now, results live on each case's Results page."
+            line="For now, results live on each case's Results tab."
             action={
               <a className="ds-btn" href="/home">
                 Go to your projects

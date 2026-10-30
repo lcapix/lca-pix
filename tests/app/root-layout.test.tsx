@@ -6,7 +6,6 @@ vi.mock('next/font/google', () => ({
   Inter_Tight: () => ({ variable: 'font-sans' }),
   IBM_Plex_Mono: () => ({ variable: 'font-mono' }),
 }))
-vi.mock('@/components/global/command-palette', () => ({ GlobalCommandPalette: () => null }))
 vi.mock('@/components/global/shortcut-help', () => ({ ShortcutHelp: () => null }))
 vi.mock('@/components/global/route-progress', () => ({ RouteProgress: () => null }))
 vi.mock('@/components/global/scroll-progress', () => ({ ScrollProgress: () => null }))

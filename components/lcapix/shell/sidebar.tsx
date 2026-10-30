@@ -26,6 +26,7 @@ import { useGuideSlot } from '@/lib/shell/guide-slot'
 import { initialsOf } from '@/lib/home/projects'
 import { GuideFace, PixelMark, ShellIcon } from './shell-icons'
 import { ProjectSwitcher } from './project-switcher'
+import { OPEN_SEARCH_EVENT } from './command-palette'
 
 export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname() ?? ''
@@ -91,6 +92,23 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
           <span className="ds-brand-sub">Teaching and research</span>
         </span>
       </Link>
+
+      {/* G116, P134: the palette, findable without knowing the shortcut. */}
+      <button
+        type="button"
+        className="ds-nav-item ds-search-hint"
+        onClick={() => {
+          go?.()
+          window.dispatchEvent(new Event(OPEN_SEARCH_EVENT))
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        Search
+        <kbd aria-label="Command K">⌘K</kbd>
+      </button>
 
       <div className="ds-nav">
         {places.map((p) => (
@@ -265,6 +283,12 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
             className="ds-popover"
             style={{ position: 'absolute', bottom: '100%', left: 0, width: 228, marginBottom: 6, padding: 6 }}
           >
+            {profile && (
+              <div role="presentation" style={{ padding: '6px 10px 8px', borderBottom: '1px solid var(--ds-line-soft)', marginBottom: 4 }}>
+                {profile.fullName && <div style={{ fontSize: 13, fontWeight: 600 }}>{profile.fullName}</div>}
+                <div style={{ fontSize: 12, color: 'var(--ds-text-3)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.email}</div>
+              </div>
+            )}
             <MenuItem onClick={() => router.push('/profile')} icon="report">
               Profile
             </MenuItem>

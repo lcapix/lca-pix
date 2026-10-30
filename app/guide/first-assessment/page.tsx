@@ -3,12 +3,12 @@
 export default function FirstAssessmentPage() {
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
+      <div className="ds-section-label" style={{ marginBottom: 12 }}>
         GUIDE
       </div>
       <h1
         className="display display-lg"
-        style={{ margin: 0, marginBottom: 16, color: 'var(--text-primary)' }}
+        style={{ margin: 0, marginBottom: 16, color: 'var(--ds-text)' }}
       >
         Your first assessment
       </h1>
@@ -16,7 +16,7 @@ export default function FirstAssessmentPage() {
         className="body"
         style={{
           fontSize: 15,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
@@ -65,10 +65,9 @@ export default function FirstAssessmentPage() {
         title="Build the base-case tree"
         body={
           <>
-            Open the project, click <Chip>Add Case</Chip>, choose{' '}
-            <strong>Base</strong>. Then drop a Product node and grow downward
-            through the five tiers. The editor enforces parent/child rules,
-            so an Elemental Task can&apos;t be a direct child of a Product.
+            Open the project&apos;s Cases and press <Chip>+ New case</Chip>, then choose{' '}
+            <strong>A new base case</strong>. Start from its Product step and grow downward through the five
+            tiers with <Chip>+ Add a step</Chip>, choosing each step&apos;s parent and tier.
             <CodeBlock>
 {`Product           : Painted Metal Box
 └─ Machine/Line   : Box Assembly
@@ -80,9 +79,8 @@ export default function FirstAssessmentPage() {
          └─ Task  : Welding Energy & Materials`}
             </CodeBlock>
             <p style={{ marginTop: 12 }}>
-              Drag nodes to restructure. Right-click for clone / remove /
-              import-from-library. The case auto-saves on every change: no
-              explicit Save button.
+              To change a step, open its menu: Rename, Move under another step, Add a step below it, or
+              Delete. Deleting asks whether its steps go too.
             </p>
           </>
         }
@@ -93,34 +91,27 @@ export default function FirstAssessmentPage() {
         title="Attach drivers to the leaves"
         body={
           <>
-            Open any Elemental Task and add one or more <strong>flows</strong>
-            . Each flow needs:
+            Open a step, usually an operation or an elemental task, and add one or more{' '}
+            <strong>flows</strong>. Each flow needs:
             <Ul>
               <Li>
                 <strong>Direction</strong>: input (resource consumed) or
                 output (emission / waste).
               </Li>
               <Li>
-                <strong>Substance / resource</strong>: pulled from the
-                Integrations &gt; Library catalog (openLCA, PubChem). Avoid
-                free-text: the engine matches against
-                characterisation-factor rows by substance ID.
+                <strong>Substance</strong>: picked from the substance library, which shows each
+                substance&apos;s factor, unit and source. The engine reads the factor by substance, so pick one
+                rather than typing a name.
               </Li>
               <Li>
                 <strong>Quantity + unit</strong> per functional unit (e.g.{' '}
                 <Mono>12.5 kWh</Mono> per painted box).
               </Li>
-              <Li>
-                <strong>is_driver flag</strong> on the dominant flow so the
-                impact engine can roll the leaf up under one primary
-                category.
-              </Li>
+
             </Ul>
             <Tip>
-              If your assessment returns 0 for a category, the cause is
-              almost always a missing <Mono>is_driver</Mono> flow or a
-              substance reference that didn&apos;t resolve to a
-              characterisation factor.
+              If a category reads 0 or is missing, a flow has no amount, or the method has no factor for its
+              substance. Results names every flow and category it left out.
             </Tip>
           </>
         }
@@ -131,17 +122,14 @@ export default function FirstAssessmentPage() {
         title="Run an assessment"
         body={
           <>
-            On the project page, with your case active, hit{' '}
-            <Chip>▶ Run Assessment</Chip>. The modal asks for:
+            In the case, press <Chip>▶ Run Assessment</Chip>. A small dialog asks for:
             <Ul>
               <Li>
-                <strong>Valuation method</strong>: CML 2001 (default, EU
-                baseline), CML-IA 2016, ReCiPe Midpoint (H) / Endpoint, TRACI
-                2.1 (US EPA), EF 3.1, IPCC 2021, or EPS 2020.
+                <strong>Method</strong>: CML 2001, ReCiPe Midpoint (H) or TRACI 2.1, set to the study&apos;s.
               </Li>
               <Li>
-                <strong>Region</strong>: used for location-specific factors
-                (grid carbon, transport mixes). Global fallback otherwise.
+                <strong>Region</strong>: Global, United States or Europe. Electricity has factors per region;
+                anything else uses the Global factor, and Results marks it.
               </Li>
             </Ul>
             The engine walks the tree depth-first, multiplies each
@@ -159,31 +147,24 @@ export default function FirstAssessmentPage() {
         title="Read the results"
         body={
           <>
-            You land on <Chip>Results</Chip>, which has four reading lenses:
+            The answer opens on the case&apos;s <Chip>Results</Chip> tab: the climate answer, what builds it,
+            how sure it is, and the other categories. <Chip>Open full page</Chip> shows:
             <Ul>
               <Li>
-                <strong>KPI strip</strong>: total impact, active categories,
-                components assessed, last-run timestamp.
+                <strong>Every category</strong>, as bars, a radar or on a log scale.
               </Li>
               <Li>
-                <strong>Category tabs</strong>: switch between Global
-                warming, Ozone depletion, Smog formation, Acidification,
-                Particulate matter (or whatever the method emits).
+                <strong>Cost</strong> by kind and per unit of impact, from the run.
               </Li>
               <Li>
-                <strong>Component contribution</strong>: stacked bar that
-                tells you which leaf is dominating, in percent and absolute
-                terms.
+                <strong>Steps</strong> against the base case, and where the impact sits.
               </Li>
               <Li>
-                <strong>Flow-level detail</strong>: per-substance impact
-                row, filterable by direction.
+                <strong>Flows</strong>: amount × factor = impact, filterable by direction.
               </Li>
             </Ul>
-            Tap <Chip>✨ Magic Insights</Chip> for a natural-language
-            summary, <Chip>Export PDF</Chip> for a static deliverable, or
-            jump to <Chip>Compare Cases</Chip> to overlay a comparative
-            scenario.
+            Tap <Chip>✨ Magic Insights</Chip> for a plain-language summary, export a PDF from the Write-up tab
+            or Reports, or open <Chip>Compare</Chip> to set cases side by side.
           </>
         }
       />
@@ -215,8 +196,8 @@ function Phase({
             width: 28,
             height: 28,
             borderRadius: 8,
-            background: 'color-mix(in oklab, var(--brand-primary) 14%, transparent)',
-            color: 'var(--brand-primary)',
+            background: 'color-mix(in oklab, var(--ds-green) 14%, transparent)',
+            color: 'var(--ds-green)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -235,7 +216,7 @@ function Phase({
         className="body"
         style={{
           fontSize: 14,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
@@ -269,7 +250,7 @@ function Li({ children }: { children: React.ReactNode }) {
 function Mono({ children }: { children: React.ReactNode }) {
   return (
     <code
-      className="mono"
+      className="ds-mono"
       style={{
         padding: '1px 6px',
         background: 'var(--surface-overlay)',
@@ -293,17 +274,17 @@ function Chip({ children }: { children: React.ReactNode }) {
 function CodeBlock({ children }: { children: React.ReactNode }) {
   return (
     <pre
-      className="mono"
+      className="ds-mono"
       style={{
         marginTop: 12,
         marginBottom: 8,
         padding: 14,
         background: 'var(--surface-sunken)',
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--ds-line)',
         borderRadius: 8,
         fontSize: 12,
         lineHeight: 1.55,
-        color: 'var(--text-primary)',
+        color: 'var(--ds-text)',
         overflowX: 'auto',
       }}
     >
@@ -319,14 +300,14 @@ function Tip({ children }: { children: React.ReactNode }) {
         marginTop: 14,
         padding: '12px 14px 12px 12px',
         background:
-          'color-mix(in oklab, var(--brand-primary) 6%, var(--surface-raised))',
-        border: '1px solid color-mix(in oklab, var(--brand-primary) 18%, var(--border-subtle))',
+          'color-mix(in oklab, var(--ds-green) 6%, var(--ds-card))',
+        border: '1px solid color-mix(in oklab, var(--ds-green) 18%, var(--ds-line))',
         borderRadius: 10,
         display: 'flex',
         gap: 12,
         alignItems: 'flex-start',
         fontSize: 13,
-        color: 'var(--text-secondary)',
+        color: 'var(--ds-text-2)',
       }}
     >
       <span
@@ -336,8 +317,8 @@ function Tip({ children }: { children: React.ReactNode }) {
           height: 22,
           borderRadius: '50%',
           background:
-            'color-mix(in oklab, var(--brand-primary) 20%, transparent)',
-          color: 'var(--brand-primary)',
+            'color-mix(in oklab, var(--ds-green) 20%, transparent)',
+          color: 'var(--ds-green)',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -353,7 +334,7 @@ function Tip({ children }: { children: React.ReactNode }) {
         <span
           style={{
             fontWeight: 600,
-            color: 'var(--text-primary)',
+            color: 'var(--ds-text)',
             marginRight: 6,
           }}
         >

@@ -1,5 +1,6 @@
 'use client'
 
+import { PublicLayout } from '@/components/lcapix/landing/public-layout'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
@@ -9,7 +10,7 @@ import { EDU_SHELL } from '@/lib/ui-flags'
 import { turnOnGuidedMode } from '@/lib/shell/use-shell'
 
 // Every item links to a real guide page (no dead anchors). The professor's
-// manual content lives under /guide/* — getting started, first assessment,
+// manual content lives under /guide/*: getting started, first assessment,
 // data model, glossary, API reference, FAQ.
 const SECTIONS = [
   {
@@ -93,8 +94,8 @@ function highlight(text: string, query: string) {
       {text.slice(0, i)}
       <mark
         style={{
-          background: 'oklch(from var(--brand-primary) l c h / 0.18)',
-          color: 'var(--brand-primary)',
+          background: 'oklch(from var(--ds-green) l c h / 0.18)',
+          color: 'var(--ds-green)',
           padding: '0 2px',
           borderRadius: 3,
         }}
@@ -106,7 +107,7 @@ function highlight(text: string, query: string) {
   )
 }
 
-export default function DocsPage() {
+function DocsPageBody() {
   const router = useRouter()
   const [query, setQuery] = useState('')
 
@@ -143,7 +144,6 @@ export default function DocsPage() {
 
   return (
     <div className="app-shell page-docs" style={{ minHeight: '100%' }}>
-      <MarketingNav />
 
       <section
         style={{
@@ -153,7 +153,7 @@ export default function DocsPage() {
         }}
       >
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div className="eyebrow" style={{ marginBottom: 14 }}>
+          <div className="ds-section-label" style={{ marginBottom: 14 }}>
             Documentation
           </div>
           <h1 className="display display-lg" style={{ margin: 0 }}>
@@ -163,7 +163,7 @@ export default function DocsPage() {
             style={{
               marginTop: 20,
               fontSize: 16,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
               maxWidth: 640,
               lineHeight: 1.55,
             }}
@@ -186,14 +186,14 @@ export default function DocsPage() {
                 alignItems: 'center',
                 gap: 12,
                 padding: '14px 18px',
-                background: 'var(--surface-raised)',
-                border: '1px solid var(--border-subtle)',
+                background: 'var(--ds-card)',
+                border: '1px solid var(--ds-line)',
                 borderRadius: 10,
                 flex: '1 1 360px',
                 maxWidth: 560,
               }}
             >
-              <Icon name="search" size={16} style={{ color: 'var(--text-tertiary)' }} />
+              <Icon name="search" size={16} style={{ color: 'var(--ds-text-3)' }} />
               <input
                 placeholder="Search the docs…"
                 value={query}
@@ -204,18 +204,18 @@ export default function DocsPage() {
                   outline: 'none',
                   flex: 1,
                   fontSize: 14,
-                  color: 'var(--text-primary)',
+                  color: 'var(--ds-text)',
                   fontFamily: 'var(--font-ui)',
                 }}
               />
               <span
-                className="mono"
+                className="ds-mono"
                 style={{
                   padding: '2px 8px',
                   background: 'var(--surface-overlay)',
                   borderRadius: 4,
                   fontSize: 10,
-                  color: 'var(--text-secondary)',
+                  color: 'var(--ds-text-2)',
                 }}
               >
                 ⌘K
@@ -225,7 +225,7 @@ export default function DocsPage() {
             <button
               type="button"
               onClick={startTour}
-              className="btn btn-primary"
+              className="ds-btn ds-btn--primary"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -247,15 +247,15 @@ export default function DocsPage() {
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           {filtered.length === 0 && (
             <div
-              className="card"
+              className="ds-card"
               style={{
                 padding: 40,
                 textAlign: 'center',
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
                 fontSize: 14,
               }}
             >
-              No docs match <strong style={{ color: 'var(--text-primary)' }}>"{query}"</strong>. Try a broader term.
+              No docs match <strong style={{ color: 'var(--ds-text)' }}>"{query}"</strong>. Try a broader term.
             </div>
           )}
           <div
@@ -272,8 +272,8 @@ export default function DocsPage() {
                 style={{
                   animationDelay: `${i * 80}ms`,
                   padding: 28,
-                  background: 'var(--surface-raised)',
-                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--ds-card)',
+                  border: '1px solid var(--ds-line)',
                 }}
               >
                 <div
@@ -281,8 +281,8 @@ export default function DocsPage() {
                     width: 36,
                     height: 36,
                     borderRadius: 8,
-                    background: 'var(--brand-subtle)',
-                    color: 'var(--brand-primary)',
+                    background: 'var(--ds-green-wash)',
+                    color: 'var(--ds-green)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -297,7 +297,7 @@ export default function DocsPage() {
                     fontWeight: 600,
                     margin: 0,
                     marginBottom: 6,
-                    color: 'var(--text-primary)',
+                    color: 'var(--ds-text)',
                     letterSpacing: '-0.005em',
                   }}
                 >
@@ -306,7 +306,7 @@ export default function DocsPage() {
                 <p
                   style={{
                     fontSize: 13,
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--ds-text-3)',
                     margin: 0,
                     marginBottom: 16,
                     lineHeight: 1.55,
@@ -321,14 +321,14 @@ export default function DocsPage() {
                         href={it.href}
                         style={{
                           fontSize: 13,
-                          color: 'var(--text-secondary)',
+                          color: 'var(--ds-text-2)',
                           textDecoration: 'none',
                           display: 'flex',
                           alignItems: 'center',
                           gap: 8,
                         }}
                       >
-                        <Icon name="arrow-right" size={11} style={{ color: 'var(--text-tertiary)' }} />
+                        <Icon name="arrow-right" size={11} style={{ color: 'var(--ds-text-3)' }} />
                         {highlight(it.l, query)}
                       </Link>
                     </li>
@@ -340,5 +340,14 @@ export default function DocsPage() {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Task 9: the public layout around the page. */
+export default function DocsPage() {
+  return (
+    <PublicLayout>
+      <DocsPageBody />
+    </PublicLayout>
   )
 }

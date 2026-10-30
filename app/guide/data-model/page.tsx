@@ -3,12 +3,12 @@
 export default function DataModelPage() {
   return (
     <>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
+      <div className="ds-section-label" style={{ marginBottom: 12 }}>
         GUIDE
       </div>
       <h1
         className="display display-lg"
-        style={{ margin: 0, marginBottom: 16, color: 'var(--text-primary)' }}
+        style={{ margin: 0, marginBottom: 16, color: 'var(--ds-text)' }}
       >
         Data model
       </h1>
@@ -16,7 +16,7 @@ export default function DataModelPage() {
         className="body"
         style={{
           fontSize: 15,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
@@ -28,9 +28,8 @@ export default function DataModelPage() {
       </p>
 
       <Section title="Project">
-        Top-level container. Owns a name, description, methodology default
-        (e.g. ISO 14040), valuation method (e.g. EPS or ReCiPe), status, and
-        members. Multiple cases live inside one project: typically one base
+        Top-level container. Owns a name, the study's goal, functional unit, boundary, method
+        (CML 2001, ReCiPe Midpoint (H) or TRACI 2.1), region, and members. Multiple cases live inside one project: typically one base
         case plus N comparatives sharing the same functional unit.
       </Section>
 
@@ -53,9 +52,7 @@ export default function DataModelPage() {
 
       <Section title="Five-tier process tree">
         Every case rolls up from a single Product node through Machine/Line,
-        Subprocess, Operation, and Elemental Task leaves. Quantities and
-        constraints below are the v1 defaults: v3 enforces them as soft
-        limits, not hard cut-offs.
+        Subprocess, Operation, and Elemental Task leaves. The counts below are typical sizes, not limits.
         <Table
           rows={[
             ['1. Product / System', 'Root', '1 per case', 'Painted Metal Box · Li-ion Battery Pack · Solar Panel'],
@@ -66,29 +63,13 @@ export default function DataModelPage() {
           ]}
           head={['Level', 'Position', 'Typical count', 'Examples']}
         />
-        <p
-          style={{
-            fontSize: 13,
-            color: 'var(--text-tertiary)',
-            marginTop: 12,
-            lineHeight: 1.6,
-          }}
-        >
-          Required fields tighten as you descend: a Product needs a functional
-          unit and reference flow; a Machine needs capacity and location; an
-          Operation needs parameters; and an Elemental Task needs a
-          direction, substance/resource, quantity, unit, and impact-category
-          mapping.
-        </p>
       </Section>
 
       <Section title="Driver / Flow">
-        Drivers are the inputs and outputs attached to an Elemental Task.
-        Each flow has a direction (input / output), a substance or resource
-        reference, a quantity and unit, and an optional <code>is_driver</code>{' '}
-        flag that promotes it to the primary impact driver for that task.
-        Flows are how the calculation engine knows what to multiply against
-        characterisation factors.
+        Flows are the inputs and outputs attached to a step, usually an
+        operation or an elemental task. Each flow has a direction (in or out),
+        a substance from the library, and an amount and unit. The engine
+        multiplies the amount by the substance&apos;s factor for each category.
       </Section>
 
       <Section title="Assessment run">
@@ -96,8 +77,7 @@ export default function DataModelPage() {
         engine freezes the current tree + flows + selected method + region
         into an immutable <code>assessment_runs</code> row, then writes one{' '}
         <code>assessment_results</code> row per (component × category). Past
-        runs stay forever: you can diff any two without re-running, and
-        every chart on the Results page is sourced from a specific run.
+        runs stay as they were made, and every number on Results comes from one specific run.
       </Section>
 
       <Section title="Mapping to the database">
@@ -109,7 +89,8 @@ export default function DataModelPage() {
             ['Project', 'project', 'projects'],
             ['Case', 'case_table', 'system_processes (Tier 1 was the case)'],
             ['Component (any tier)', 'component (typed by component_type)', 'system / main / sub / unit / elementary_flows'],
-            ['Driver / flow', 'component.drivers (JSON)', 'driver_factors + elementary_flows'],
+            ['Flow', 'flows', 'driver_factors + elementary_flows'],
+            ['Substance', 'substances', 'substances'],
             ['Assessment', 'assessment_runs', 'calculation_runs'],
             ['Per-component result', 'assessment_results', 'impact_results'],
             ['Impact category', 'impact_categories', 'impact_categories'],
@@ -137,7 +118,7 @@ function Section({
         className="body"
         style={{
           fontSize: 14,
-          color: 'var(--text-secondary)',
+          color: 'var(--ds-text-2)',
           lineHeight: 1.7,
         }}
       >
@@ -179,7 +160,7 @@ function Table({
     <div
       style={{
         marginTop: 14,
-        border: '1px solid var(--border-subtle)',
+        border: '1px solid var(--ds-line)',
         borderRadius: 8,
         overflow: 'hidden',
       }}
@@ -191,7 +172,7 @@ function Table({
           padding: '10px 14px',
           background: 'var(--surface-overlay)',
           fontSize: 11,
-          color: 'var(--text-tertiary)',
+          color: 'var(--ds-text-3)',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
           fontWeight: 600,
@@ -208,9 +189,9 @@ function Table({
             display: 'grid',
             gridTemplateColumns: `repeat(${head.length}, 1fr)`,
             padding: '10px 14px',
-            borderTop: '1px solid var(--border-subtle)',
+            borderTop: '1px solid var(--ds-line)',
             fontSize: 12.5,
-            color: 'var(--text-secondary)',
+            color: 'var(--ds-text-2)',
             gap: 8,
           }}
         >

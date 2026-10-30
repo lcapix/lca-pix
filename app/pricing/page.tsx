@@ -1,9 +1,9 @@
 'use client'
 
+import { PublicLayout } from '@/components/lcapix/landing/public-layout'
 import Link from 'next/link'
 import { useState } from 'react'
 import { Icon } from '@/components/lcapix'
-import { MarketingNav } from '@/components/lcapix/marketing-nav'
 
 type Cadence = 'monthly' | 'annual'
 
@@ -93,11 +93,10 @@ const MATRIX = [
   { feature: 'Support', free: 'Email', pro: 'Priority', ent: 'Dedicated' },
 ] as const
 
-export default function PricingPage() {
+function PricingPageBody() {
   const [cadence, setCadence] = useState<Cadence>('monthly')
   return (
     <div className="app-shell page-pricing" style={{ minHeight: '100%' }}>
-      <MarketingNav />
 
       <section
         style={{
@@ -108,13 +107,13 @@ export default function PricingPage() {
         <div
           style={{ maxWidth: 760, margin: '0 auto' }}
         >
-          <div className="eyebrow" style={{ marginBottom: 14 }}>
+          <div className="ds-section-label" style={{ marginBottom: 14 }}>
             Pricing
           </div>
           <h1
             style={{
               margin: 0,
-              color: 'var(--text-primary)',
+              color: 'var(--ds-text)',
               fontFamily: 'var(--font-display)',
               fontWeight: 700,
               letterSpacing: '-0.025em',
@@ -127,7 +126,7 @@ export default function PricingPage() {
           <p
             style={{
               fontSize: 16,
-              color: 'var(--text-secondary)',
+              color: 'var(--ds-text-2)',
               maxWidth: 560,
               margin: '20px auto 0',
               lineHeight: 1.55,
@@ -137,7 +136,7 @@ export default function PricingPage() {
             regional grid intensity, live cost data, and team collaboration.
           </p>
         </div>
-        {/* Billing toggle — wrapped in a relative anchor so the
+        {/* Billing toggle: wrapped in a relative anchor so the
             "Save 20%" hint can float off the right edge without pushing
             the toggle off-centre. */}
         <div
@@ -156,7 +155,7 @@ export default function PricingPage() {
             padding: 4,
             background: 'var(--surface-overlay)',
             borderRadius: 999,
-            border: '1px solid var(--border-subtle)',
+            border: '1px solid var(--ds-line)',
           }}
         >
           <span
@@ -167,7 +166,7 @@ export default function PricingPage() {
               bottom: 4,
               left: cadence === 'monthly' ? 4 : '50%',
               width: 'calc(50% - 4px)',
-              background: 'var(--surface-raised)',
+              background: 'var(--ds-card)',
               borderRadius: 999,
               boxShadow: '0 1px 3px rgba(15,23,42,0.10)',
               transition: 'left 280ms cubic-bezier(0.2, 0.8, 0.2, 1)',
@@ -188,7 +187,7 @@ export default function PricingPage() {
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
-                color: cadence === c ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                color: cadence === c ? 'var(--ds-text)' : 'var(--ds-text-3)',
                 fontSize: 13,
                 fontFamily: 'var(--font-ui)',
                 fontWeight: cadence === c ? 600 : 500,
@@ -200,7 +199,7 @@ export default function PricingPage() {
             </button>
           ))}
         </div>
-        {/* Save-20 hint — absolutely positioned off the right edge of
+        {/* Save-20 hint: absolutely positioned off the right edge of
             the toggle so it doesn't shift the toggle off-centre.
             Only nudges you when you're on Monthly. */}
         <span
@@ -218,7 +217,7 @@ export default function PricingPage() {
             gap: 6,
             fontSize: 13,
             fontFamily: 'var(--font-ui)',
-            color: 'var(--brand-primary)',
+            color: 'var(--ds-green)',
             fontWeight: 500,
             whiteSpace: 'nowrap',
             opacity: cadence === 'monthly' ? 1 : 0,
@@ -262,20 +261,20 @@ export default function PricingPage() {
                 padding: 28,
                 minWidth: 0,
                 background: t.highlight
-                  ? 'linear-gradient(180deg, var(--surface-raised) 0%, oklch(from var(--brand-primary) l c h / 0.04) 100%)'
-                  : 'var(--surface-raised)',
+                  ? 'linear-gradient(180deg, var(--ds-card) 0%, oklch(from var(--ds-green) l c h / 0.04) 100%)'
+                  : 'var(--ds-card)',
                 border: t.highlight
-                  ? '1.5px solid var(--brand-primary)'
-                  : '1px solid var(--border-subtle)',
+                  ? '1.5px solid var(--ds-green)'
+                  : '1px solid var(--ds-line)',
                 position: 'relative',
                 boxShadow: t.highlight
-                  ? '0 8px 28px -16px oklch(from var(--brand-primary) l c h / 0.45)'
+                  ? '0 8px 28px -16px oklch(from var(--ds-green) l c h / 0.45)'
                   : '0 1px 2px rgba(15,23,42,0.04)',
               }}
             >
               {t.highlight && (
                 <span
-                  className="mono"
+                  className="ds-mono"
                   style={{
                     position: 'absolute',
                     top: -14,
@@ -291,7 +290,7 @@ export default function PricingPage() {
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
                     boxShadow:
-                      '0 4px 12px -2px oklch(from var(--brand-primary) l c h / 0.35)',
+                      '0 4px 12px -2px oklch(from var(--ds-green) l c h / 0.35)',
                   }}
                 >
                   Most popular
@@ -301,13 +300,13 @@ export default function PricingPage() {
                 style={{
                   fontSize: 16,
                   fontWeight: 600,
-                  color: 'var(--text-primary)',
+                  color: 'var(--ds-text)',
                   marginBottom: 4,
                 }}
               >
                 {t.name}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 18 }}>
+              <div style={{ fontSize: 13, color: 'var(--ds-text-3)', marginBottom: 18 }}>
                 {t.blurb}
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
@@ -317,14 +316,14 @@ export default function PricingPage() {
                   style={{
                     fontSize: 40,
                     fontWeight: 600,
-                    color: 'var(--text-primary)',
+                    color: 'var(--ds-text)',
                     letterSpacing: '-0.025em',
                     lineHeight: 1,
                   }}
                 >
                   {typeof t[cadence] === 'number' ? `$${t[cadence]}` : t[cadence]}
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{t.cadenceLabel[cadence]}</span>
+                <span style={{ fontSize: 12, color: 'var(--ds-text-3)' }}>{t.cadenceLabel[cadence]}</span>
               </div>
               <Link
                 href={t.href}
@@ -333,7 +332,7 @@ export default function PricingPage() {
               >
                 {t.cta} {t.highlight && <Icon name="arrow-right" size={14} />}
               </Link>
-              <div style={{ height: 1, background: 'var(--border-subtle)', margin: '22px 0' }} />
+              <div style={{ height: 1, background: 'var(--ds-line)', margin: '22px 0' }} />
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {t.features.map((f) => (
                   <li
@@ -343,13 +342,13 @@ export default function PricingPage() {
                       alignItems: 'flex-start',
                       gap: 10,
                       fontSize: 13,
-                      color: 'var(--text-secondary)',
+                      color: 'var(--ds-text-2)',
                     }}
                   >
                     <Icon
                       name="check"
                       size={14}
-                      style={{ color: 'var(--brand-primary)', marginTop: 2, flexShrink: 0 }}
+                      style={{ color: 'var(--ds-green)', marginTop: 2, flexShrink: 0 }}
                     />
                     {f}
                   </li>
@@ -366,18 +365,18 @@ export default function PricingPage() {
         }}
       >
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <div className="eyebrow" style={{ marginBottom: 14 }}>
+          <div className="ds-section-label" style={{ marginBottom: 14 }}>
             Compare plans
           </div>
           <h2 className="display display-md" style={{ margin: 0, marginBottom: 32 }}>
             Every feature, side by side.
           </h2>
           <div
-            className="card"
+            className="ds-card"
             style={{
               padding: 0,
               overflow: 'hidden',
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid var(--ds-line)',
             }}
           >
             <div
@@ -387,16 +386,16 @@ export default function PricingPage() {
                 background: 'var(--surface-overlay)',
                 padding: '14px 24px',
                 fontSize: 11,
-                color: 'var(--text-tertiary)',
+                color: 'var(--ds-text-3)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.12em',
                 fontWeight: 600,
-                borderBottom: '1px solid var(--border-subtle)',
+                borderBottom: '1px solid var(--ds-line)',
               }}
             >
               <div>Feature</div>
               <div style={{ textAlign: 'center' }}>Free</div>
-              <div style={{ textAlign: 'center', color: 'var(--brand-primary)' }}>Pro</div>
+              <div style={{ textAlign: 'center', color: 'var(--ds-green)' }}>Pro</div>
               <div style={{ textAlign: 'center' }}>Enterprise</div>
             </div>
             {MATRIX.map((row) => (
@@ -406,29 +405,29 @@ export default function PricingPage() {
                   display: 'grid',
                   gridTemplateColumns: '2fr 1fr 1fr 1fr',
                   padding: '14px 24px',
-                  borderTop: '1px solid var(--border-subtle)',
+                  borderTop: '1px solid var(--ds-line)',
                   fontSize: 13,
                   alignItems: 'center',
                 }}
               >
-                <div style={{ color: 'var(--text-primary)' }}>{row.feature}</div>
+                <div style={{ color: 'var(--ds-text)' }}>{row.feature}</div>
                 {[row.free, row.pro, row.ent].map((v, i) => (
                   <div
                     key={i}
                     style={{
                       textAlign: 'center',
-                      color: i === 1 ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      color: i === 1 ? 'var(--ds-text)' : 'var(--ds-text-2)',
                       fontWeight: i === 1 ? 500 : 400,
                     }}
                   >
                     {v === true ? (
-                      <Icon name="check" size={14} style={{ color: 'var(--brand-primary)' }} />
+                      <Icon name="check" size={14} style={{ color: 'var(--ds-green)' }} />
                     ) : v === false ? (
-                      <span style={{ color: 'var(--text-disabled, var(--text-tertiary))', opacity: 0.4 }}>
+                      <span style={{ color: 'var(--text-disabled, var(--ds-text-3))', opacity: 0.4 }}>
                         –
                       </span>
                     ) : (
-                      <span className="mono" style={{ fontSize: 12 }}>{v}</span>
+                      <span className="ds-mono" style={{ fontSize: 12 }}>{v}</span>
                     )}
                   </div>
                 ))}
@@ -438,5 +437,14 @@ export default function PricingPage() {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Task 9: the public layout around the page. */
+export default function PricingPage() {
+  return (
+    <PublicLayout>
+      <PricingPageBody />
+    </PublicLayout>
   )
 }
