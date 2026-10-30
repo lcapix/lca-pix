@@ -6,10 +6,8 @@
  *     id "step-<component id>" and the name "<name>, <tier>".
  *   - The accessible names a guide tells people to press.
  *
- * The classic product tour (lib/lcapix-tour-steps.ts) and its data-tour
- * anchors belong to the classic pages, shown only with
- * NEXT_PUBLIC_LCAPIX_SHELL=classic; the education shell's guide is Guided
- * mode (the Docs button turns it on).
+ * The guide is Guided mode (the Docs button turns it on); the classic
+ * product tour was deleted with the classic pages (Task 12).
  */
 import type { Locator, Page } from '@playwright/test';
 import { openCase } from '../support/editor';

@@ -32,7 +32,7 @@ const TIERS: Tier[] = [
       '100 components per project',
       'Unlimited assessments',
       'CML 2001 · ReCiPe (H) · TRACI 2.1',
-      'openLCA bundled factor pack (5,234)',
+      'The cited factor library',
       'ISO-compliant PDF export',
       'Email support',
     ],
@@ -96,7 +96,7 @@ const MATRIX = [
 function PricingPageBody() {
   const [cadence, setCadence] = useState<Cadence>('monthly')
   return (
-    <div className="app-shell page-pricing" style={{ minHeight: '100%' }}>
+    <div className="page-pricing" style={{ minHeight: '100%' }}>
 
       <section
         style={{

@@ -95,7 +95,7 @@ function ChangelogPageBody() {
   )
 
   return (
-    <div className="app-shell page-changelog" style={{ minHeight: '100%' }}>
+    <div className="page-changelog" style={{ minHeight: '100%' }}>
 
       <section style={{ padding: '96px 64px 24px' }}>
         <div style={{ maxWidth: 880, margin: '0 auto' }}>

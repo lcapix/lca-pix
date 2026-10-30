@@ -28,6 +28,8 @@ Path keys: `WS/` = `components/lcapix/workspace/`, `CL/` = `components/lcapix/ca
 
 ## Summary (2026-10-27, H0)
 
+Note 2026-10-30: the classic screens, `lib/ui-flags.ts` and both flags named below were deleted in Task 12; mentions of them in this summary are history.
+
 Counted from the rows below by status word. "Missing in classic too" means the Note says so (not a
 regression).
 
@@ -104,8 +106,8 @@ such as assignments (C06, C07).
 | E14 | Override a factor | No | Only when a regional factor fell back to Global (`WS/step-panel.tsx:291-307`) | PUT/DELETE `flows/[flowId]/factor` | kept (new) |
 | E15 | Cost lines (six kinds) | `CL/inspector/costs-section.tsx` | `WS/cost-panel.tsx:245-262, 302, 338, 604` | PUT/DELETE `components/[componentId]/costs` | kept |
 | E16 | Scale the product (quantity) | Quantity and Apply, on the product step | `components/lcapix/workspace/step-panel.tsx` | POST `cases/[caseId]/scale` | kept |
-| E17 | Process library when adding a flow | `CL/environmental-flows-editor.tsx:104-119` | Shared add-flow form (`CL/flows/substance-picker.tsx:149-175`) | GET `process-templates` | kept |
-| E18 | Transport leg from mass × distance | Add-flow form | Shared add-flow form (inferred: same component; covered by the ported test) | POST flows | kept (to confirm by test) |
+| E17 | Process library when adding a flow | `CL/environmental-flows-editor.tsx:104-119` | `components/lcapix/workspace/add-flow/substance-picker.tsx` opens `add-flow/process-library.tsx` (Task 12, rebuilt in `ds-`) | GET `process-templates` | kept |
+| E18 | Transport leg from mass × distance | Add-flow form | `components/lcapix/workspace/add-flow/add-flow-form.tsx` TransportLeg (Task 12, rebuilt in `ds-`); journeys/case-editor.spec.ts E17 E18 | POST flows | kept |
 | E19 | Set a step's life-cycle stage (production, use, end of life) | Life-cycle stage select on the step panel | `components/lcapix/workspace/step-panel.tsx` | PUT `components/[componentId]` | kept |
 | E20 | Undo | No | No | None | missing in both |
 

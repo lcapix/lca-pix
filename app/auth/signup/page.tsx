@@ -10,9 +10,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
-import { AuthShell } from "@/components/lcapix/auth/auth-shell"
 import { EduAuthShell, EyeIcon, FieldError, GoogleMark } from "@/components/lcapix/auth/edu-auth-shell"
-import { EDU_SHELL } from "@/lib/ui-flags"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -170,5 +168,5 @@ export default function SignupPage() {
     </>
   )
 
-  return EDU_SHELL ? <EduAuthShell pane="account">{form}</EduAuthShell> : <AuthShell>{form}</AuthShell>
+  return <EduAuthShell pane="account">{form}</EduAuthShell>
 }

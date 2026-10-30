@@ -12,7 +12,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Button, ComingSoon, ConfirmDialog, EmptyState, ErrorCard, SavedLine, Segmented, Switch } from '@/components/lcapix/ds'
 import { initialsOf } from '@/lib/home/projects'
-import { LMS_NAME } from '@/lib/ui-flags'
+import { LMS_NAME } from '@/lib/lms-name'
 import { useShellData } from '@/lib/shell/use-shell'
 import { usePeople } from '@/lib/project/use-people'
 import {

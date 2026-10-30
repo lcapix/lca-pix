@@ -17,9 +17,6 @@ export type { MiniBarProps } from './mini-bar'
 export { Sparkline } from './sparkline'
 export type { SparklineProps } from './sparkline'
 
-export { AppTopBar } from './app-top-bar'
-export type { AppTopBarProps } from './app-top-bar'
-
 // — enfos-pass primitives —
 export { SectionHeader } from './section-header'
 export type { SectionHeaderProps } from './section-header'
@@ -39,26 +36,6 @@ export type { BreadcrumbProps, BreadcrumbItem } from './breadcrumb'
 export { MiniCanvas } from './project/mini-canvas'
 export type { MiniCanvasProps } from './project/mini-canvas'
 
-export {
-  TreeCanvas,
-  ListView,
-  GraphView,
-  NodeDetailsStrip,
-  MetricMini,
-  InspectorPanel,
-  InspectorSection,
-} from './case'
-export type {
-  TreeCanvasProps,
-  CanvasView,
-  ListViewProps,
-  GraphViewProps,
-  NodeDetailsStripProps,
-  InspectorPanelProps,
-  InspectorSectionProps,
-  InspectorEditFormData,
-  InspectorFlow,
-} from './case'
 
 export { GroupedBarChart } from './analytics'
 export type {
@@ -66,11 +43,3 @@ export type {
   GroupedBarChartGroup,
 } from './analytics'
 
-export { CategoryBarChart, RunTimeline } from './results'
-export type {
-  CategoryBarChartProps,
-  CategoryBarChartItem,
-  RunTimelineProps,
-  RunTimelineRun,
-  RunTimelineStatus,
-} from './results'

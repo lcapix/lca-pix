@@ -372,6 +372,36 @@
 .ds-option[aria-selected='true'] { border-color: var(--ds-green); }
 .ds-option[data-current='true'] { background: var(--ds-success-bg); }
 
+/* ── Add a flow (components/lcapix/workspace/add-flow/) ──────────────── */
+.af-form, .af-sub { padding: 12px; display: grid; gap: 10px; margin-top: 8px; }
+.af-sub { border-color: color-mix(in oklab, var(--ds-green) 35%, var(--ds-line)); }
+.af-full { width: 100%; }
+.af-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.af-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.af-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.af-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; }
+.af-small { display: block; font-size: 12px; color: var(--ds-text-2); margin-bottom: 4px; }
+.af-muted { margin: 0; font-size: 12px; color: var(--ds-text-3); line-height: 1.5; }
+.af-error { margin: 0; font-size: 13px; color: var(--ds-error); line-height: 1.45; }
+.af-options { margin-top: 6px; border: 1px solid var(--ds-line); border-radius: 10px; max-height: 220px; overflow-y: auto; }
+.af-options .af-muted { padding: 8px 10px; }
+.af-option { display: block; width: 100%; text-align: left; padding: 8px 10px; background: none; border: 0; border-bottom: 1px solid var(--ds-line-soft); cursor: pointer; font: inherit; color: var(--ds-text); }
+.af-option:last-child { border-bottom: 0; }
+.af-option:hover, .af-option:focus-visible { background: var(--ds-row-hover); }
+.af-option-name { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; font-weight: 500; }
+.af-option-meta { display: block; margin-top: 2px; font-size: 11px; color: var(--ds-text-3); }
+.af-tag-none { color: var(--ds-error); border-color: var(--ds-error-line); }
+.af-versions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--ds-text-2); }
+.af-links { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+.af-source { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 11px; color: var(--ds-text-2); }
+.af-leg { border: 1px solid var(--ds-line); border-radius: 10px; padding: 10px 12px; background: color-mix(in oklab, var(--ds-green) 4%, #fff); display: grid; gap: 8px; }
+.af-leg-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.af-tkm { font-size: 12px; color: var(--ds-text-2); padding-bottom: 10px; }
+.af-lines { display: grid; gap: 8px; }
+.af-line { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--ds-line-soft); font-size: 13px; }
+.af-line-amount { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 560px) { .af-grid3, .af-grid2, .af-leg-grid { grid-template-columns: 1fr; } }
+
 /* ── Command palette ────────────────────────────────────────────────────── */
 .cp-dialog { width: min(560px, 100%); padding: 12px; gap: 8px; max-height: 76vh; }
 .cp-list { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }

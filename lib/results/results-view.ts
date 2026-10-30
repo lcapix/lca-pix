@@ -2,9 +2,28 @@
 // the category list, the flow table rows and their provenance, the run
 // history, the stage panel input and the header/hero labels.
 
-import type { CategoryBarChartItem } from '@/components/lcapix/results/category-bar-chart'
-import type { RunTimelineRun, RunTimelineStatus } from '@/components/lcapix/results/run-timeline'
 import type { AssessmentResult, FilterDir } from './assessment'
+
+/** One category of a run, as the result screens list it. */
+export interface CategoryBarChartItem {
+  key: string
+  label: string
+  value: number
+  unit: string
+  /** How many of the run's inputs have a factor in this category; a partial category says so. */
+  coverage?: { covered: number; total: number; missing: string[] }
+}
+
+export type RunTimelineStatus = 'success' | 'partial' | 'error'
+
+/** One run on a timeline of the case's runs. */
+export interface RunTimelineRun {
+  id: string | number
+  /** Display label, e.g. "Apr 18". */
+  timestamp: string
+  totalImpact: number
+  status: RunTimelineStatus
+}
 
 export type { APIComponentBreakdown, AssessmentResult, FilterDir, FlowDetailRow } from './assessment'
 

@@ -8,7 +8,7 @@
 // Below 960px the dark pane folds away and the logo sits above the form.
 
 import type { ReactNode } from 'react'
-import { LMS_NAME } from '@/lib/ui-flags'
+import { LMS_NAME } from '@/lib/lms-name'
 
 const INK = '#C9D1CC'
 const DIM = '#6F7A75'

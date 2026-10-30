@@ -9,7 +9,7 @@
 import { useEffect, useRef } from 'react'
 import { useFlows, useSubstanceCatalog } from '@/lib/case-editor/use-flows'
 import { useAddFlowForm, useAddSubstance } from '@/lib/case-editor/use-add-flow-form'
-import { AddFlowForm } from '@/components/lcapix/case/flows/add-flow-form'
+import { AddFlowForm } from './add-flow/add-flow-form'
 
 export function AddFlowInPanel({ componentId, studyMethod, onDone }: { componentId: number; studyMethod?: string; onDone: () => void }) {
   const id = String(componentId)

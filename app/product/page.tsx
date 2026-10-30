@@ -18,51 +18,51 @@ interface Capability {
 const CAPABILITIES: Capability[] = [
   {
     eyebrow: 'Process hierarchy',
-    title: '5-tier model from Product → Elemental Task',
-    body: 'Mirror real-world process structure with a drag-to-restructure tree. Auto-save debounced. Pastel-coded by tier so deep trees stay readable.',
+    title: 'Five tiers, from Product to Elemental Task',
+    body: 'Build the case as a tree of steps. Add a step under any parent, move it from its menu, and colour by tier keeps deep trees readable.',
     icon: 'tree',
     facts: ['Product', 'Machine/Line', 'Subprocess', 'Operation', 'Elemental Task'],
   },
   {
-    eyebrow: 'Multi-method evaluation',
-    title: 'CML 2001 · ReCiPe (H) · TRACI 2.1 side by side',
-    body: 'Run the same bill of materials through three ISO-recognized methodologies in one click. Compare the variance, defend the number.',
+    eyebrow: 'Methods',
+    title: 'CML 2001 · ReCiPe Midpoint (H) · TRACI 2.1',
+    body: 'Each study picks its method, and every run records the method and region it used. Compare reads cases run the same way and says when they differ.',
     icon: 'layers',
-    facts: ['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1', 'CED (module)', 'IPCC GWP (module)'],
+    facts: ['CML 2001', 'ReCiPe Midpoint (H)', 'TRACI 2.1'],
   },
   {
-    eyebrow: 'Cost × impact tradeoffs',
-    title: 'ABC costing fused with environmental load',
-    body: 'Activity-Based Costing layered on every flow. The same canvas tells you what a 20% CO₂ cut costs, or what you save by switching aluminum to steel.',
+    eyebrow: 'Cost and impact',
+    title: 'Activity-based costing beside the environmental result',
+    body: 'Cost lines sit on the steps that cause them, so a run shows cost by kind and cost per unit of impact next to the footprint.',
     icon: 'dollar',
-    facts: ['Labor · Energy · Material', 'Equipment · Overhead', 'Transport · Capital', 'Per-flow attribution'],
+    facts: ['Labor · Energy · Material', 'Equipment · Overhead', 'Transportation', 'Per-step attribution'],
   },
   {
-    eyebrow: 'Region awareness',
-    title: 'Grid carbon + labor + materials by geography',
-    body: 'Electricity Maps for live grid intensity. BLS for labor rates. EIA for energy prices. Switch region and everything recomputes.',
+    eyebrow: 'Region',
+    title: 'Electricity by region, everything else Global',
+    body: 'Electricity has factors for the United States and Europe. Any other flow uses its Global factor, and Results marks where it did.',
     icon: 'globe',
-    facts: ['US-NY · US-CA · US-TX', 'France · Germany · UK', 'China · India', 'Global average'],
+    facts: ['Global', 'United States', 'Europe (EU-27)'],
   },
   {
-    eyebrow: 'ISO 14040/14044 reports',
-    title: 'Source-attributed PDFs your auditor will accept',
-    body: 'Goal & scope, system boundaries, data quality assessment, characterization factors: every claim traced back to its source.',
+    eyebrow: 'ISO 14040/14044 write-up',
+    title: 'Reports that show where every number comes from',
+    body: 'Goal and scope, the inventory, the impact assessment and the interpretation, with each factor named by its source, exported as PDF or slides.',
     icon: 'file',
     facts: ['Goal & scope', 'Inventory analysis', 'Impact assessment', 'Interpretation'],
   },
   {
-    eyebrow: 'Open data',
-    title: '5,234 factors · 1,842 PubChem substances',
-    body: 'CAS-mapped provenance, openLCA-sourced factor pack, free tier. Bring your own keys for live grid/cost data when you outgrow the basics.',
+    eyebrow: 'Cited data',
+    title: 'Every factor names its source',
+    body: 'TRACI 2.1 comes from the US EPA (public domain). Materials carry the industry source they were published by. A number you add yourself is marked as yours.',
     icon: 'database',
-    facts: ['openLCA factor pack', 'PubChem substances', 'Electricity Maps', 'BLS · EIA'],
+    facts: ['US EPA TRACI 2.1', 'CML 2001', 'ReCiPe Midpoint (H)', 'Your own factors, marked'],
   },
 ]
 
 function ProductPageBody() {
   return (
-    <div className="app-shell page-product" style={{ minHeight: '100%' }}>
+    <div className="page-product" style={{ minHeight: '100%' }}>
 
       <section
         style={{

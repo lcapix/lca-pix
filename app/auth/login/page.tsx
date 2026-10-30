@@ -13,10 +13,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
-import { AuthShell } from "@/components/lcapix/auth/auth-shell"
 import { EduAuthShell, EyeIcon, FieldError, GoogleMark } from "@/components/lcapix/auth/edu-auth-shell"
 import { ComingSoon, ErrorCard } from "@/components/lcapix/ds"
-import { EDU_SHELL } from "@/lib/ui-flags"
 
 type LoginError = { title: string; description: string }
 
@@ -209,5 +207,5 @@ export default function LoginPage() {
     </>
   )
 
-  return EDU_SHELL ? <EduAuthShell pane="account">{form}</EduAuthShell> : <AuthShell>{form}</AuthShell>
+  return <EduAuthShell pane="account">{form}</EduAuthShell>
 }

@@ -5,8 +5,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { Icon } from '@/components/lcapix'
-import { MarketingNav } from '@/components/lcapix/marketing-nav'
-import { EDU_SHELL } from '@/lib/ui-flags'
 import { turnOnGuidedMode } from '@/lib/shell/use-shell'
 
 // Every item links to a real guide page (no dead anchors). The professor's
@@ -111,19 +109,9 @@ function DocsPageBody() {
   const router = useRouter()
   const [query, setQuery] = useState('')
 
-  // Launch the in-app guided walkthrough. It's anchored to the dashboard, so
-  // set the start flag and route to /home where <GuidedTour> auto-opens (same
-  // mechanism the navbar "Tour" button uses).
+  // Guided mode is the app's guide (E02 to E06): turn it on, then go Home.
   const startTour = () => {
-    // The education shell has no product tour: Guided mode is its guide (E02 to E06).
-    if (EDU_SHELL) {
-      turnOnGuidedMode()
-      router.push('/home')
-      return
-    }
-    try {
-      sessionStorage.setItem('lcapix:start-tour', '1')
-    } catch {}
+    turnOnGuidedMode()
     router.push('/home')
   }
   const filtered = useMemo(() => {
@@ -143,7 +131,7 @@ function DocsPageBody() {
   }, [query])
 
   return (
-    <div className="app-shell page-docs" style={{ minHeight: '100%' }}>
+    <div className="page-docs" style={{ minHeight: '100%' }}>
 
       <section
         style={{
@@ -221,7 +209,7 @@ function DocsPageBody() {
                 ⌘K
               </span>
             </div>
-            {/* Guided walkthrough — opens the interactive product tour. */}
+            {/* Guided mode: a short guide at each step of a case. */}
             <button
               type="button"
               onClick={startTour}
@@ -235,9 +223,9 @@ function DocsPageBody() {
                 fontSize: 14,
                 whiteSpace: 'nowrap',
               }}
-              title={EDU_SHELL ? 'A short guide at each step of a case, on this device' : 'Take the interactive product walkthrough'}
+              title="A short guide at each step of a case, on this device"
             >
-              <Icon name="sparkle" size={16} /> {EDU_SHELL ? 'Turn on Guided mode' : 'Take the guided tour'}
+              <Icon name="sparkle" size={16} /> Turn on Guided mode
             </button>
           </div>
         </div>

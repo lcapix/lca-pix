@@ -10,7 +10,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 vi.mock('@/lib/api-client', () => ({ apiRequest: vi.fn() }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
 
-import { ProcessLibrary } from '@/components/lcapix/case/process-library'
+import { ProcessLibrary } from '@/components/lcapix/workspace/add-flow/process-library'
 import { apiRequest } from '@/lib/api-client'
 import { toast } from 'sonner'
 
@@ -48,13 +48,13 @@ describe('ProcessLibrary', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not load the process library: Failed to load the process library. Close it and try again.',
     )
-    expect(screen.queryByText(/The library is empty/)).toBeNull()
+    expect(screen.queryByText(/The process library is empty/)).toBeNull()
   })
 
   it('a database without the library still says it is empty', async () => {
     vi.mocked(apiRequest).mockResolvedValue(json({ success: true, templates: [] }))
     render(<ProcessLibrary componentId="4" onAdded={vi.fn()} onClose={vi.fn()} />)
-    expect(await screen.findByText(/The library is empty/)).toBeInTheDocument()
+    expect(await screen.findByText(/The process library is empty/)).toBeInTheDocument()
   })
 
   it('a dropped connection on one line names it and still reports the lines added', async () => {

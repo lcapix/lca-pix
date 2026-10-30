@@ -85,8 +85,8 @@ Home lists its projects; open a case and run it: the numbers are the ones it had
   Rollback. It runs the MySQL release against RDS, as before. Anything written on Neon after the
   switch is not on RDS: say so to anyone affected. This works only while RDS runs and its variables
   are still set.
-- **Only the screens:** `NEXT_PUBLIC_LCAPIX_SHELL=classic` (and `NEXT_PUBLIC_LCAPIX_WORKSPACE=classic`
-  for the case workspace), then redeploy. They are read at build time.
+- **Only the screens:** there is no screen switch any more. The classic screens and their two flags
+  were deleted in the V1 revamp (Task 12), so a screen rollback is the previous deployment above.
 
 ## After the release
 
