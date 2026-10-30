@@ -72,37 +72,44 @@ test('the V1 demo: every feature, start to finish', async ({ page, api, newUser 
     await caption(page, 'About you: what you will use it for, and Guided mode for this device.');
     await page.getByRole('radio', { name: 'Teaching a class' }).check();
     await page.getByRole('button', { name: 'Open the sample study' }).click();
-    await page.waitForURL(/\/project\/\d+/, { timeout: 90_000 });
-  });
-
-  await scene(page, 'The sample study', async () => {
-    await caption(page, 'A finished sample study to read first: a painted steel bracket in five tiers, run with TRACI 2.1.');
-    await page.mouse.wheel(0, 600);
-    await caption(page, 'Its Overview: the comparison line, the steps, the impact, the top contributors and the cost.');
-    await page.mouse.wheel(0, -600);
-    await page.getByRole('button', { name: 'Make my own copy' }).click();
-    await page.waitForURL(/\/project\/\d+/, { timeout: 90_000 });
-    await caption(page, 'Make my own copy: the sample is read-only, the copy is yours to change.');
-    projectId = Number(page.url().match(/\/project\/(\d+)/)?.[1] ?? 0);
+    await page.waitForURL(/\/home/, { timeout: 90_000 });
   });
 
   await scene(page, 'Home and the command palette', async () => {
-    await page.goto('/home');
-    await caption(page, 'Home: counts, your projects, filters, search, grid or list, and pins.');
-    await page.getByRole('combobox', { name: 'Find a project or case' }).fill('bracket');
-    await caption(page, 'Search matches project names and descriptions.', 1800);
-    await page.getByRole('combobox', { name: 'Find a project or case' }).fill('');
+    await caption(page, 'Home: the sample study first, then your projects, with counts, filters and search.');
+    const search = page.getByRole('combobox', { name: 'Find a project or case' });
+    if (await search.isVisible()) {
+      await search.fill('bracket');
+      await caption(page, 'Search matches project names and descriptions.', 1800);
+      await search.fill('');
+    }
     await page.keyboard.press('ControlOrMeta+k');
     await caption(page, 'Command K: places, recent projects, and your account.');
     await page.keyboard.press('Escape');
   });
 
-  await scene(page, 'The case editor', async () => {
-    if (!projectId) throw new Error('no project')
+  await scene(page, 'The sample study', async () => {
+    // The sample's id, from the projects this account can open.
+    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+    const res = await page.request.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } });
+    const sample = ((await res.json()).projects ?? []).find((p: any) => p.is_sample);
+    projectId = Number(sample?.project_id ?? 0);
     await page.goto(`/project/${projectId}`);
-    await page.getByRole('button', { name: 'Open editor' }).click();
-    await page.waitForURL(/\/case\/\d+/, { timeout: 60_000 });
+    await expect(page.getByRole('button', { name: 'Make my own copy' }).first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole('group', { name: 'Steps of the case' })).toBeVisible({ timeout: 60_000 });
+    await caption(page, 'A finished sample study to read first: a painted steel bracket in five tiers, run with TRACI 2.1.');
+    await page.mouse.wheel(0, 600);
+    await caption(page, 'Its Overview: the comparison line, the steps, the impact, the top contributors and the cost.');
+    await page.mouse.wheel(0, -600);
+    await page.getByRole('button', { name: 'Make my own copy' }).first().click();
+    await page.waitForURL(/\/case\/\d+/, { timeout: 90_000 });
     caseId = Number(page.url().match(/\/case\/(\d+)/)?.[1] ?? 0);
+    await caption(page, 'Make my own copy: the sample stays read-only; your copy of its case is yours to change.');
+  });
+
+  await scene(page, 'The case editor', async () => {
+    if (!caseId) throw new Error('no case')
+    await page.goto(`/project/${projectId}/case/${caseId}`);
     await expect(page.getByRole('tree')).toBeVisible({ timeout: 60_000 });
     await caption(page, 'The case: a tree from the product down to elemental tasks, coloured by tier.');
     await tree(page, 'Cutting').click({ button: 'right' });
@@ -156,9 +163,11 @@ test('the V1 demo: every feature, start to finish', async ({ page, api, newUser 
     await page.getByRole('radiogroup', { name: 'Chart' }).getByRole('radio', { name: 'Radar' }).click();
     await caption(page, 'Every category as a radar, or on a log scale.', 2000);
     await page.getByRole('radiogroup', { name: 'Chart' }).getByRole('radio', { name: 'Log scale' }).click();
-    await page.getByRole('radiogroup', { name: 'Category' }).getByRole('radio', { name: 'Human Health - Cancer' }).click();
+    await page.mouse.wheel(0, -2000);
+    await caption(page, 'What is not counted is named, never shown as zero: here TRACI 2.1 cancer and particulate matter, new in this release, have no flow with a factor.');
+    await page.getByRole('radiogroup', { name: 'Category' }).getByRole('radio', { name: 'Acidification' }).click();
     await page.getByRole('region', { name: 'Flows' }).scrollIntoViewIfNeeded();
-    await caption(page, 'TRACI 2.1 cancer and particulate matter from US EPA data. Materials with only a climate factor say "climate only".');
+    await caption(page, 'In Acidification, steel has a climate factor only, so it reads "climate only" instead of a silent zero.');
   });
 
   await scene(page, 'Magic Insights', async () => {
@@ -169,13 +178,21 @@ test('the V1 demo: every feature, start to finish', async ({ page, api, newUser 
 
   await scene(page, 'Compare', async () => {
     await page.goto(`/project/${projectId}/comparison`);
+    await expect(page.getByRole('group', { name: 'Cases to compare' })).toBeVisible({ timeout: 60_000 });
     await caption(page, 'Compare: pick any cases, read them against the first, ranked, with what differs and why.');
     await page.mouse.wheel(0, 700);
     await caption(page, 'Step by step and material by material.', 2000);
   });
 
-  await scene(page, 'Import a bill of materials', async () => {
-    await page.goto(`/project/${projectId}/import`);
+  let ownProjectId = 0;
+  await scene(page, 'New project and import a bill of materials', async () => {
+    await page.goto('/project/new');
+    await caption(page, 'Your own project starts with the study question: goal, functional unit, boundary, method, region.');
+    await page.getByLabel(/^Project name/).fill('Bracket redesign');
+    await page.getByRole('textbox', { name: 'Functional unit' }).fill('1 bracket, at the factory gate');
+    await page.getByRole('button', { name: 'Continue →' }).click();
+    await page.waitForURL(/\/project\/\d+\/import/, { timeout: 90_000 });
+    ownProjectId = Number(page.url().match(/\/project\/(\d+)/)?.[1] ?? 0);
     await page.getByRole('radio', { name: 'Bill of materials' }).click();
     await page.getByLabel(/Drop a file here/).setInputFiles(BOM);
     await caption(page, 'Import: a real bill of materials. Each line is matched to the library, with its score and factor.', 2000);
@@ -186,20 +203,24 @@ test('the V1 demo: every feature, start to finish', async ({ page, api, newUser 
 
   await scene(page, 'People and assignments', async () => {
     const student = await newUser('demo-student');
-    await page.goto(`/project/${projectId}/people`);
+    await page.goto(`/project/${ownProjectId || projectId}/people`);
+    await expect(page.getByRole('heading', { name: 'People', level: 1 })).toBeVisible({ timeout: 60_000 });
     await caption(page, 'People: add a class by email, one per row, and set what each person can do.');
-    await page.goto(`/project/${projectId}/assignments`);
+    await page.goto(`/project/${ownProjectId || projectId}/assignments`);
+    await expect(page.getByText('Loading the assignments…')).toHaveCount(0, { timeout: 60_000 });
     await caption(page, 'Assignments: instructions, a due date and a template case each student copies.');
     void student;
   });
 
   await scene(page, 'Reports', async () => {
     await page.goto(`/reports?project=${projectId}`);
+    await expect(page.getByText('Build a report')).toBeVisible({ timeout: 60_000 });
     await caption(page, 'Reports: export a run as a PDF, slides or a CSV, each number traced to its source.');
   });
 
   await scene(page, 'Guide', async () => {
     await page.goto('/guide');
+    await expect(page.getByRole('heading', { name: 'Getting started', level: 1 })).toBeVisible({ timeout: 60_000 });
     await caption(page, 'The guide, inside the app: your first assessment, the data model, a glossary and the FAQ.');
     await page.goto('/product');
     await caption(page, 'Public pages tell only what the app does.', 2000);
