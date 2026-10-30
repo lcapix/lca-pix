@@ -24,6 +24,7 @@ export function FlowsTable({
   picker,
   title,
   intro,
+  factorBasis = { method: 'CML 2001', region: 'Global' },
   onSearchLibrary,
 }: {
   flows: MappedFlow[]
@@ -34,6 +35,8 @@ export function FlowsTable({
   picker: StepPicker
   title?: string
   intro?: string
+  /** The method and region whose climate factor each candidate shows (I02). */
+  factorBasis?: { method: string; region: string }
   onSearchLibrary?: (index: number) => void
 }) {
   const [filter, setFilter] = useState<LineFilter>('all')
@@ -50,9 +53,9 @@ export function FlowsTable({
   const shown = rows.filter((r) => lineShows(filter, status(r), placed(r.i)))
   const ticked = rows.filter((r) => r.e.include).length
   const widen = async (flow: MappedFlow, index: number) => {
-    const r = await fetch('/api/substances?method=CML%202001', { headers: authHeaders() })
+    const r = await fetch(`/api/substances?method=${encodeURIComponent(factorBasis.method)}&region=${encodeURIComponent(factorBasis.region)}`, { headers: authHeaders() })
     const d = await r.json().catch(() => ({}))
-    const catalog: CatalogSubstance[] = (d.substances ?? []).map((s: CatalogSubstance & { climate_factor?: number; climate_unit?: string; variant_label?: string; data_source?: string }) => ({
+    const catalog: CatalogSubstance[] = (d.substances ?? []).map((s: CatalogSubstance & { climate_factor?: number; climate_unit?: string; climate_scope?: string; climate_source?: string }) => ({
       substance_id: s.substance_id,
       substance_name: s.substance_name,
       unit: s.unit,
@@ -60,8 +63,9 @@ export function FlowsTable({
       factor_count: s.factor_count,
       factor_value: s.climate_factor,
       factor_unit: s.climate_unit,
-      variant: s.variant_label,
-      factor_source: s.data_source,
+      // The same fields the preview gives its candidates: the factor's scope and its source.
+      variant: s.climate_scope,
+      factor_source: s.climate_source,
     }))
     const { candidates } = matchSubstance(flow.substance_text, catalog, catalog.length || 1)
     setWider((prev) => ({ ...prev, [index]: candidates }))
@@ -74,6 +78,9 @@ export function FlowsTable({
           {title ?? 'Lines we read'} <span className="ds-count">{rows.length}</span>
         </h2>
         {intro && <p className="np-sub" style={{ marginTop: 4 }}>{intro}</p>}
+        <p className="np-sub" style={{ marginTop: 4 }}>
+          Each match shows its climate factor in {factorBasis.method}, {factorBasis.region === 'Global' ? 'Global' : `${factorBasis.region} where the library has one, else Global`}.
+        </p>
         <div className="ws-pills" role="group" aria-label="Show lines" style={{ marginTop: 14 }}>
           {(['all', ...(appending ? ['need_step'] : []), 'need_match'] as LineFilter[]).map((k) => (
             <button key={k} type="button" className="ws-pill" aria-pressed={filter === k} onClick={() => setFilter(k)}>
@@ -94,6 +101,7 @@ export function FlowsTable({
                 <span className="ds-sr-only">Save as a material</span>
               </th>
               <th scope="col">What we read</th>
+              <th scope="col">In or out</th>
               <th scope="col">Matched to</th>
               <th scope="col" style={{ textAlign: 'right' }}>
                 Amount
@@ -118,7 +126,7 @@ export function FlowsTable({
             ))}
             {!shown.length && rows.length > 0 && (
               <tr>
-                <td colSpan={appending ? 6 : 5} style={{ color: 'var(--ds-text-3)' }}>
+                <td colSpan={appending ? 7 : 6} style={{ color: 'var(--ds-text-3)' }}>
                   No line here.
                 </td>
               </tr>

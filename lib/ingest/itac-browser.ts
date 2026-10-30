@@ -5,7 +5,8 @@ import type { WorkBook } from 'xlsx'
 
 export async function itacPlantWorkbook(file: File, plantId: string): Promise<File> {
   const XLSX = await import('xlsx')
-  const book = XLSX.read(await file.arrayBuffer(), { type: 'array' }) as WorkBook
+  // Only the ASSESS sheet is parsed: the workbook's other sheets are most of its 16 MB.
+  const book = XLSX.read(await file.arrayBuffer(), { type: 'array', sheets: ['ASSESS'] }) as WorkBook
   const sheet = book.Sheets.ASSESS
   if (!sheet) throw new Error('No ASSESS sheet found.')
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })

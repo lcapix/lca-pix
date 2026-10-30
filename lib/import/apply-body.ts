@@ -48,7 +48,11 @@ export function buildApplyFlows(args: {
   const { plan, edits, appending, placement, finalName } = args
   return plan.flows
     .map((f, i) => ({ f, e: edits[i], i }))
-    .filter(({ e }) => e?.include && e.substance_id !== null)
+    // A ticked line with a substance is saved. A line with no match goes too,
+    // with no substance, so the server keeps it as a held line (I07, E12): the
+    // review shows it as "held, not saved", and it must not vanish. An untick
+    // on a matched line is the reviewer's choice and sends nothing.
+    .filter(({ e }) => !!e && (e.substance_id === null || e.include))
     .map(({ f, e, i }) => {
       const corrected = correctedQuantity(f, e)
       return {

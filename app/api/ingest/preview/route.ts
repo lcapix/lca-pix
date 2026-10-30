@@ -11,7 +11,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
-import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
+import { caseAccessDenied, isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { canonicalMethod } from '@/lib/run-snapshot';
+import { canonicalizeRegion } from '@/lib/factor-selection';
 import { structureItac, listPlantIds } from '@/lib/ingest/itac';
 import { isBomHeader, structureBom } from '@/lib/ingest/bom';
 import { isRoutingHeader, structureRouting } from '@/lib/ingest/routing';
@@ -69,6 +71,24 @@ export async function POST(request: NextRequest) {
     const file = form.get('file');
     const connector = String(form.get('connector') ?? 'itac');
     const plantId = String(form.get('plant_id') ?? '').trim();
+    // I02: candidates show the factor of the project's own method and region.
+    // A preview with no project (an API caller) shows CML 2001, and says so.
+    let factorMethod = 'CML 2001';
+    let factorRegion = 'Global';
+    if (form.get('project_id') !== null) {
+      const projectId = parseId(form.get('project_id'));
+      if (!projectId) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
+      if (denied) return denied;
+      const project = await queryOne<any>(`SELECT lcia_method, region_code FROM project WHERE project_id = ?`, [projectId]);
+      factorMethod = canonicalMethod(project?.lcia_method) ?? factorMethod;
+      // The region a run would use: the target case's own, else the project's.
+      const caseId = form.get('target_case_id') !== null ? parseId(form.get('target_case_id')) : null;
+      const kase = caseId
+        ? await queryOne<any>(`SELECT region_code FROM case_table WHERE case_id = ? AND project_id = ?`, [caseId, projectId])
+        : null;
+      factorRegion = canonicalizeRegion(kase?.region_code || project?.region_code) ?? factorRegion;
+    }
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
@@ -307,33 +327,34 @@ export async function POST(request: NextRequest) {
          FROM driver_impact_factors dif
          JOIN impact_categories ic ON ic.category_id = dif.category_id
          WHERE dif.substance_id = s.substance_id
-           AND dif.method_name = 'CML 2001'
+           AND dif.method_name = ?
            AND dif.factor_value <> 0
            AND (
              lower(ic.category_name COLLATE "C") LIKE '%global warming%'
              OR lower(ic.category_name COLLATE "C") LIKE '%climate%'
            )
          ORDER BY CASE
-           WHEN lower(coalesce(dif.geographic_scope, '') COLLATE "C") IN ('global', 'glo', '') THEN 0
-           ELSE 1 END
+           WHEN lower(coalesce(dif.geographic_scope, '') COLLATE "C") = lower(?::text COLLATE "C") THEN 0
+           WHEN lower(coalesce(dif.geographic_scope, '') COLLATE "C") IN ('global', 'glo', '') THEN 1
+           ELSE 2 END
          LIMIT 1
        ) clim ON true
        ${scoped ? 'WHERE s.is_custom = 0 OR s.created_by = ?' : ''}
        ORDER BY s.substance_id`;
     let substances: any[];
     try {
-      substances = await query<any>(catalogSql(true), [userId]);
+      substances = await query<any>(catalogSql(true), [factorMethod, factorRegion, userId]);
     } catch (err: any) {
       // No migrate-020: there are no custom substances, so every row is library.
       if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
-      substances = await query<any>(catalogSql(false));
+      substances = await query<any>(catalogSql(false), [factorMethod, factorRegion]);
     }
     if (!pm) {
       return NextResponse.json({ error: 'Nothing could be read from this document.' }, { status: 400 });
     }
     const plan = mapModel(pm, substances as CatalogSubstance[]);
 
-    return NextResponse.json({ success: true, connector, plant_id: plantId, plan, reads_left: readsLeft });
+    return NextResponse.json({ success: true, connector, plant_id: plantId, plan, factor_method: factorMethod, factor_region: factorRegion, reads_left: readsLeft });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

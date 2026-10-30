@@ -86,6 +86,8 @@ export function useImport(projectId: string, router: ImportRouter) {
 
   const [phase, setPhase] = useState<ImportPhase>('pick')
   const [plan, setPlan] = useState<IngestPlan | null>(null)
+  // The method and region whose factors the candidates show (I02).
+  const [factorBasis, setFactorBasis] = useState<{ method: string; region: string }>({ method: 'CML 2001', region: 'Global' })
   const [caseName, setCaseName] = useState('')
   const [edits, setEdits] = useState<Record<number, FlowEdit>>({})
   // Edits to the step tree itself, keyed by each step's ORIGINAL name (how
@@ -413,7 +415,7 @@ export function useImport(projectId: string, router: ImportRouter) {
       }
       const fd = new FormData()
       fd.append('file', upload)
-      for (const [name, value] of previewFields({ connector, plantId, lotSize, targetCaseId })) {
+      for (const [name, value] of previewFields({ connector, plantId, lotSize, targetCaseId, projectId })) {
         fd.append(name, value)
       }
       const r = await fetch('/api/ingest/preview', {
@@ -441,6 +443,7 @@ export function useImport(projectId: string, router: ImportRouter) {
       }
       setReadsTick((t) => t + 1)
       const p: IngestPlan = d.plan
+      setFactorBasis({ method: d.factor_method ?? 'CML 2001', region: d.factor_region ?? 'Global' })
       setPlan(p)
       setCaseName(p.case_name)
       setEdits(initialEdits(p.flows))
@@ -638,7 +641,7 @@ export function useImport(projectId: string, router: ImportRouter) {
     // Samples: sampleView, loadSample, viewSample, downloadSample, downloadTemplate, copySample, closeSample.
     ...samples,
     // Phase and plan.
-    phase, plan, error, idHints, preview, readFailure, readsLeft, droppedSteps, toggleDropStep,
+    phase, plan, factorBasis, error, idHints, preview, readFailure, readsLeft, droppedSteps, toggleDropStep,
     // Review.
     caseName, setCaseName, edits, setFlowEdit, chooseStep, unplacedCount, appendWaiting,
     placement: lineSteps.placement, placementWhy: lineSteps.why, newStep: lineSteps.newStep,

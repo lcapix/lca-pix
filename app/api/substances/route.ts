@@ -48,11 +48,11 @@ export async function GET(request: NextRequest) {
     if (method) {
       sql = sql.replace(
         'SELECT s.*,',
-        'SELECT s.*, clim.factor_value AS climate_factor, clim.factor_unit AS climate_unit,',
+        'SELECT s.*, clim.factor_value AS climate_factor, clim.factor_unit AS climate_unit, clim.factor_scope AS climate_scope, clim.factor_source AS climate_source,',
       );
       sql += `
       LEFT JOIN LATERAL (
-        SELECT dif.factor_value, dif.unit AS factor_unit
+        SELECT dif.factor_value, dif.unit AS factor_unit, dif.geographic_scope AS factor_scope, dif.source_reference AS factor_source
         FROM driver_impact_factors dif
         JOIN impact_categories ic ON ic.category_id = dif.category_id
         WHERE dif.substance_id = s.substance_id

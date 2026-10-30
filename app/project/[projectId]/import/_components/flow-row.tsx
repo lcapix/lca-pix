@@ -58,11 +58,11 @@ export function FlowRow({
           {f.label && f.label !== f.substance_text ? `${f.label} · ` : ''}
           {f.substance_text}
         </strong>
-        <span className="ds-mono" style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
+        <span className="ds-mono" style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-2)', overflowWrap: 'anywhere' }}>
           {f.provenance || ''}
         </span>
-        <span>{f.direction === 'output' ? 'Out' : 'In'}</span>
       </td>
+      <td>{f.direction === 'output' ? 'Out' : 'In'}</td>
       <td>
         <select
           className="ds-input"

@@ -23,7 +23,7 @@ export function ReviewActions({
     <span style={{ display: 'inline-flex', gap: 10, alignItems: 'flex-start' }}>
       <Button onClick={onBack}>Back</Button>
       <Button variant="primary" onClick={onApply} busy={applying} disabled={!!blockedReason} disabledReason={blockedReason ?? undefined}>
-        ✓ {saveLabel}
+        <span aria-hidden>✓</span> {saveLabel}
       </Button>
     </span>
   )

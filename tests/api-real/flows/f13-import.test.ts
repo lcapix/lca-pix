@@ -4,11 +4,12 @@
  * Fixtures are built in the test: a small BOM as CSV and as XLSX, and an
  * equipment list for append mode.
  */
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { api } from '../support/api';
 import { rowCounts, sql, sqlOne } from '../support/db';
-import { buildWorld, type World } from '../support/world';
+import { buildWorld, createProject, type World } from '../support/world';
 
 let w: World;
 beforeAll(async () => {
@@ -75,6 +76,75 @@ describe('F13 document import', () => {
     expect(one.json.document.content).toContain('Clip\tSteel\t0.0004');
     const completeness = await api.get(`/api/cases/${caseId}/completeness`, { token: t });
     expect(completeness.status).toBe(200);
+  });
+
+  it('I02 I04 I06 British spellings match the real library, and candidates show the project method\'s factor', async () => {
+    // A spelling test made from the repo's BOM fixture: both of its lines respelled.
+    const csv = readFileSync('tests/e2e/fixtures/import/small-bom.csv', 'utf8')
+      .replace('Aluminum', 'Aluminium sheet')
+      .replace('Cardboard', 'Stainless steel 304');
+    const traci = await createProject(w.users.editor, `Spelling ${w.tag}`, { lcia_method: 'TRACI 2.1', region_code: 'US' });
+    const res = await api.post('/api/ingest/preview', {
+      token: w.users.editor.token,
+      form: upload(new File([csv], 'small-bom.csv', { type: 'text/csv' }), { connector: 'bom', project_id: String(traci) }),
+    });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json).toMatchObject({ factor_method: 'TRACI 2.1', factor_region: 'US' });
+    const flows = res.json.plan.flows;
+    // "Aluminium sheet" lands on the library's "Aluminum": the closest name once
+    // the spelling is American (0.727 against 0.632 for "Aluminum, recycled ingot").
+    const alu = flows.find((f: any) => f.substance_text === 'Aluminium sheet');
+    expect(alu).toMatchObject({ substance_name: 'Aluminum' });
+    expect(alu.match_score).toBeGreaterThanOrEqual(0.7);
+    const ss = flows.find((f: any) => f.substance_text === 'Stainless steel 304');
+    expect(ss).toMatchObject({ substance_name: 'Stainless Steel' });
+    expect(ss.match_score).toBeGreaterThanOrEqual(0.7);
+    // I02: each candidate carries the factor of the project's method, its unit, variant and source.
+    const top = alu.candidates.find((c: any) => c.substance_id === alu.substance_id);
+    const lib = await sqlOne(
+      `SELECT f.factor_value, f.unit, f.geographic_scope, f.source_reference FROM driver_impact_factors f JOIN impact_categories c ON c.category_id = f.category_id
+        WHERE f.substance_id = ? AND f.method_name = 'TRACI 2.1' AND c.category_name = 'Global Warming' AND f.factor_value <> 0
+        ORDER BY CASE WHEN f.geographic_scope = 'US' THEN 0 WHEN f.geographic_scope IN ('Global', 'GLO', '') THEN 1 ELSE 2 END LIMIT 1`,
+      [alu.substance_id],
+    );
+    expect(lib, 'the library has a TRACI 2.1 climate factor for Aluminum').toBeTruthy();
+    expect(Number(top.factor_value)).toBe(Number(lib.factor_value));
+    expect(top.factor_unit).toBe(lib.unit);
+    // The factor's own scope and cited source, not the substance's category.
+    expect(top.variant).toBe(lib.geographic_scope);
+    expect(top.source).toBe(lib.source_reference);
+    // I06: a match below 0.9 names the substance id in the review notes.
+    expect(res.json.plan.review.some((r: string) => r.includes(`(substance ${alu.substance_id})`))).toBe(true);
+  });
+
+  it('I03 the whole-library search shows the factor for the study\'s region, with its scope and source', async () => {
+    const res = await api.get(`/api/substances?method=${encodeURIComponent('TRACI 2.1')}&region=US`, { token: w.users.owner.token });
+    expect(res.status, res.text).toBe(200);
+    const elec = res.json.substances.find((s: any) => s.substance_name === 'Electricity');
+    const us = await sqlOne(
+      `SELECT f.factor_value, f.geographic_scope, f.source_reference FROM driver_impact_factors f JOIN impact_categories c ON c.category_id = f.category_id
+        WHERE f.substance_id = ? AND f.method_name = 'TRACI 2.1' AND c.category_name = 'Global Warming' AND f.geographic_scope = 'US' AND f.factor_value <> 0`,
+      [elec.substance_id],
+    );
+    expect(us, 'the library has a US TRACI 2.1 electricity factor').toBeTruthy();
+    expect(Number(elec.climate_factor)).toBe(Number(us.factor_value));
+    expect(elec.climate_scope).toBe('US');
+    expect(elec.climate_source).toBe(us.source_reference);
+  });
+
+  it('I02 a preview for a project answers only its members', async () => {
+    const csv = readFileSync('tests/e2e/fixtures/import/small-bom.csv', 'utf8');
+    const send = (token: string | null, projectId: string) =>
+      api.post('/api/ingest/preview', { token: token ?? undefined, form: upload(new File([csv], 'small-bom.csv'), { connector: 'bom', project_id: projectId }) });
+    expect((await send(w.users.owner.token, String(w.P.id))).status).toBe(200);
+    expect((await send(w.users.editor.token, String(w.P.id))).status).toBe(200);
+    expect((await send(w.users.viewer.token, String(w.P.id))).status).toBe(200);
+    expect((await send(w.users.adminm.token, String(w.P.id))).status).toBe(200);
+    expect((await send(w.users.nonmem.token, String(w.P.id))).status).toBe(404);
+    expect((await send(w.users.userB.token, String(w.P.id))).status).toBe(404);
+    expect((await send(null, String(w.P.id))).status).toBe(401);
+    expect((await send(w.users.editor.token, '999999999')).status).toBe(404);
+    expect((await send(w.users.editor.token, 'abc')).status).toBe(404);
   });
 
   it('previews the same BOM from an XLSX workbook', async () => {

@@ -145,13 +145,17 @@ classic page is full width up to 1440px (`components/lcapix/results/results-page
 | ID | Capability | Classic | Now (main) | Status |
 |---|---|---|---|---|
 | I01 | Candidate matches with % score | old `flow-row.tsx:115-129` | `flow-row.tsx:81-89` | kept |
-| I02 | Factor value, unit, variant and source per candidate | Never | `flow-row.tsx` option text; catalog join in `app/api/ingest/preview/route.ts` | kept |
-| I03 | More than the top 3 candidates, search the whole library | No (top 3, `lib/ingest/maplca.ts:165`) | Search the whole library on each line (`flows-table.tsx`) | kept |
-| I04 | British spellings match (Aluminium) | No | `lib/substances/spelling.ts` inside `matchSubstance` | kept |
-| I05 | Full provenance and a direction column | old `flow-row.tsx:46-50` | `flow-row.tsx` full provenance and In/Out | kept |
-| I06 | Substance id in review notes | old `maplca.ts:223-224` | `lib/ingest/maplca.ts` matched-name note | kept |
-| I07 | Held lines listed one by one after Save | old `done-card.tsx:33-36` | `done-card.tsx` lists `held_details` | kept |
-| I08 | Held line: pick a substance with candidates and scores | n/a (held lines are new) | `WS/held-lines.tsx` scores and factors over the whole library | kept |
+| I02 | Factor value, unit, variant and source per candidate | Never | `app/project/[projectId]/import/_components/flow-row.tsx` option text; factor of the project's method and region from `app/api/ingest/preview/route.ts` (`factor_method`) | kept |
+| I03 | More than the top 3 candidates, search the whole library | No (top 3, `lib/ingest/maplca.ts:165`) | "Search the whole library" in `app/project/[projectId]/import/_components/flows-table.tsx`, in the project's method | kept |
+| I04 | British spellings match (Aluminium) | No | `lib/substances/spelling.ts` inside `matchSubstance` (`lib/ingest/maplca.ts`); proven against the library in `tests/api-real/flows/f13-import.test.ts` | kept |
+| I05 | Full provenance and a direction column | old `flow-row.tsx:46-50` | `app/project/[projectId]/import/_components/flow-row.tsx` provenance under the line, and an "In or out" column | kept |
+| I06 | Substance id in review notes | old `maplca.ts:223-224` | `lib/ingest/maplca.ts` review note names the substance id | kept |
+| I07 | Held lines listed one by one after Save | old `done-card.tsx:33-36` | `app/project/[projectId]/import/_components/done-card.tsx` "Held lines" list | kept |
+| I08 | Held line: pick a substance with candidates and scores | n/a (held lines are new) | `components/lcapix/workspace/held-lines.tsx`: scores and factors in the study's method, the whole library | kept |
+| I09 | DOE's ITAC workbook imports as downloaded (16.8 MB): the browser sends only the plant's row (finding 3.2) | n/a (discovery run 3) | `lib/ingest/itac-browser.ts`; `app/project/[projectId]/import/_components/pick-form.tsx` takes an ITAC workbook of any size | kept |
+| I10 | The lines table fits its card at 1024 px (finding 3.6) | n/a (discovery run 3) | `.ip-lines-table` in `app/ds.css` | kept |
+| I11 | The saved screen does not say "and their hours" when none were read, and shows one step count (finding 3.8) | n/a (discovery run 3) | `app/project/[projectId]/import/_components/done-card.tsx` | kept |
+| I12 | "Into" starts on the project's case; the equipment list opens when that case has steps (finding 3.9) | n/a (discovery run 3) | `lib/import/use-import.ts`; `app/project/[projectId]/import/_components/pick-form.tsx` | kept |
 
 ## C. Class
 

@@ -229,6 +229,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                     connector={imp.connector}
                     appending={appending}
                     picker={stepPicker}
+                    factorBasis={imp.factorBasis}
                     title={imp.connector === 'bom' ? 'Materials from the bill of materials' : 'Lines we read'}
                     intro={
                       appending

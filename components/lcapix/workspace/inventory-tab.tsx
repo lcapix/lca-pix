@@ -215,7 +215,7 @@ export function InventoryTab({
             <SavedLine>{saved}</SavedLine>
           </div>
         )}
-        <HeldLines caseId={caseId} steps={steps} readOnly={readOnly} />
+        <HeldLines caseId={caseId} steps={steps} readOnly={readOnly} method={method} region={region} />
         {!readOnly && (
           <div style={{ padding: '14px 18px', borderTop: '1px solid var(--ds-line-soft)' }}>
             {adding && (stepId ?? addTo) != null ? (

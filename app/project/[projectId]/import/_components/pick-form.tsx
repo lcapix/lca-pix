@@ -81,7 +81,9 @@ export function PickForm(p: PickFormProps) {
       setFileError(`${f.name} is not a file this kind of document can be read from. Use ${p.doc?.accept.split(',').join(', ')}.`)
       return
     }
-    const tooLarge = uploadTooLargeMessage(f)
+    // An ITAC workbook is read here in the browser and only the chosen plant's
+    // row is sent (finding 3.2), so its size is checked after that, not now.
+    const tooLarge = p.connector === 'itac' ? null : uploadTooLargeMessage(f)
     if (tooLarge) {
       setFileError(tooLarge)
       return
@@ -123,7 +125,7 @@ export function PickForm(p: PickFormProps) {
         <p style={{ margin: '4px 0 0', fontSize: 15 }}>{EXPLAIN[p.connector] ?? p.doc?.provides}</p>
         {equipmentLocked && (
           <p className="ip-note">
-            <LockIcon /> Equipment list · Needs a case with steps first
+            <LockIcon /> Equipment list · Needs a case with steps below its product
           </p>
         )}
         {p.connector !== 'itac' && (
@@ -139,7 +141,7 @@ export function PickForm(p: PickFormProps) {
           <div className="np-grid" style={{ marginTop: 0 }}>
             <label className="np-field">
               <span className="edu-field-label">Into</span>
-              <select className="edu-input" value={p.targetCaseId ?? ''} onChange={(e) => p.onTargetCaseChange(e.target.value ? Number(e.target.value) : null)}>
+              <select className="edu-input" aria-label="Into" value={p.targetCaseId ?? ''} onChange={(e) => p.onTargetCaseChange(e.target.value ? Number(e.target.value) : null)}>
                 <option value="">A new case</option>
                 {p.projectCases.map((c) => (
                   <option key={c.case_id} value={c.case_id}>
@@ -198,7 +200,7 @@ export function PickForm(p: PickFormProps) {
             Drop a file here, or <span style={{ color: 'var(--ds-green)' }}>choose one</span>
           </span>
           <span id="drop-limits" style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>
-            {limitsLine(p.doc)} · up to {uploadLimitMb()} MB · no scanned PDFs or Word files
+            {limitsLine(p.doc)} · {p.connector === 'itac' ? 'the whole DOE workbook as downloaded: only your plant\'s row is sent' : `up to ${uploadLimitMb()} MB`} · no scanned PDFs or Word files
           </span>
         </label>
         {fileError && (

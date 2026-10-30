@@ -51,10 +51,13 @@ export function previewFields(args: {
   plantId: string
   lotSize: string
   targetCaseId: number | null
+  /** The project being imported into: candidates show its method's factors (I02). */
+  projectId?: string | number | null
 }): Array<[string, string]> {
-  const { connector, plantId, lotSize, targetCaseId } = args
+  const { connector, plantId, lotSize, targetCaseId, projectId } = args
   const fields: Array<[string, string]> = []
   fields.push(['connector', connector])
+  if (projectId !== undefined && projectId !== null && String(projectId) !== '') fields.push(['project_id', String(projectId)])
   fields.push(['plant_id', plantId.trim()])
   if (connector === 'routing' && Number(lotSize) > 0) fields.push(['lot_size', String(Number(lotSize))])
   if (targetCaseId !== null) fields.push(['target_case_id', String(targetCaseId)])

@@ -60,12 +60,14 @@ describe('unplacedError', () => {
 })
 
 describe('buildApplyFlows', () => {
-  it('sends only ticked flows with a substance, with the reviewer’s substance and trimmed unit override', () => {
+  it('sends ticked flows with a substance, and lines with no match to be held; with the reviewer’s substance and trimmed unit override', () => {
     const flows = buildApplyFlows({ plan, edits, appending: false, placement: {}, attachComponentId: 9 })
-    expect(flows.map((f) => f.substance_text)).toEqual(['Aluminum', 'Grease'])
+    expect(flows.map((f) => f.substance_text)).toEqual(['Aluminum', 'Goo', 'Grease'])
+    // I07: the line with no match goes with no substance, so the server holds it.
+    expect(flows[1]).toMatchObject({ substance_text: 'Goo', substance_id: null })
     expect(flows[0]).toMatchObject({ substance_id: 7, substance_name: 'Steel', unit: 'kg' })
     // A blank override keeps the flow's unit.
-    expect(flows[1].unit).toBe('kg')
+    expect(flows[2].unit).toBe('kg')
   })
 
   it('leaves attach_component_id undefined (but present) when creating', () => {
@@ -78,9 +80,9 @@ describe('buildApplyFlows', () => {
     // Folding the default into every line hid which step the reviewer picked,
     // so the server could not put a line on its document step first.
     const flows = buildApplyFlows({ plan, edits, appending: true, placement: { 'row 2': 3, 'flow-3': null }, attachComponentId: 9 })
-    expect(flows.map((f) => f.attach_component_id)).toEqual([3, null])
+    expect(flows.map((f) => f.attach_component_id)).toEqual([3, null, null])
     const none = buildApplyFlows({ plan, edits, appending: true, placement: {}, attachComponentId: null })
-    expect(none.map((f) => f.attach_component_id)).toEqual([null, null])
+    expect(none.map((f) => f.attach_component_id)).toEqual([null, null, null])
   })
 
   it('skips flows with no edit', () => {

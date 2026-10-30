@@ -77,7 +77,7 @@ async function reviewIntoCase7() {
   const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
   fireEvent.change(fileInput, { target: { files: [new File(['a'], 'r.csv', { type: 'text/csv' })] } })
   fireEvent.click(screen.getByRole('button', { name: /Check what we read/ }))
-  return screen.findByRole('button', { name: /^✓ Save/ })
+  return screen.findByRole('button', { name: /^Save/ })
 }
 
 describe('appending waits for the case', () => {
@@ -89,7 +89,7 @@ describe('appending waits for the case', () => {
     await act(async () => {
       releaseSteps(json(200, STEPS))
     })
-    expect(await screen.findByRole('button', { name: /^✓ Save/ })).toBeEnabled()
+    expect(await screen.findByRole('button', { name: /^Save/ })).toBeEnabled()
     expect((screen.getByLabelText('What happens to 10. Cut tube') as HTMLSelectElement).value).toBe('attach:2')
     // And the step's existing labour is shown, set to Keep.
     expect((screen.getByLabelText('What to do with the labor cost of 10. Cut tube') as HTMLSelectElement).value).toBe('keep')

@@ -30,11 +30,12 @@ interface HeldLine {
   provenance: string | null
 }
 
-export function HeldLines({ caseId, steps, readOnly }: { caseId: number; steps: WorkspaceStep[]; readOnly: boolean }) {
+export function HeldLines({ caseId, steps, readOnly, method, region }: { caseId: number; steps: WorkspaceStep[]; readOnly: boolean; method?: string; region?: string }) {
   const [lines, setLines] = useState<HeldLine[]>([])
   const [saved, setSaved] = useState<string | null>(null)
-  // The library list, loaded once for every row's substance picker.
-  const { substances } = useSubstanceCatalog('CML 2001')
+  // The library list, loaded once for every row's substance picker, with the
+  // study's own method's factors (I08).
+  const { substances } = useSubstanceCatalog(method || 'CML 2001', region)
   const load = useCallback(async () => {
     const r = await apiRequest(`/api/cases/${caseId}/held-lines`)
     const d = r.ok ? await r.json().catch(() => null) : null
@@ -107,8 +108,8 @@ function HeldRow({
       factor_count: s.factor_count,
       factor_value: s.climate_factor,
       factor_unit: s.climate_unit,
-      variant: s.variant_label,
-      factor_source: s.data_source,
+      variant: s.climate_scope,
+      factor_source: s.climate_source,
     }))
     return matchSubstance(text, catalog, 8).candidates
   }, [substance, substances])
