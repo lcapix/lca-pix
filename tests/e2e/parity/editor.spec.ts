@@ -5,6 +5,7 @@
 import { workedExample, openCase } from '../support/editor';
 import { expect, test } from '../support/fixtures';
 import { note, row } from '../support/parity';
+import { open } from '../support/ui';
 
 const step = (page: import('@playwright/test').Page, name: string) =>
   page.getByRole('treeitem', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, `) });
@@ -108,3 +109,68 @@ async function globalOnlySubstance(api: { get<T>(path: string): Promise<T> }): P
   }
   throw new Error('parity: no TRACI climate factor falls back to Global, so E14 has nothing to show');
 }
+
+// Task 13: discovery findings on the editor (research/v1-h1-findings.md 1.3, 1.4, 3.10, 3.12).
+test('1.3 1.4 1.10 3.12 the step menu renames over the old name and names the tier it adds; amount boxes have names', async ({ api, newUser, signIn }) => {
+  test.setTimeout(180_000);
+  const user = await newUser('parity-menu');
+  const { projectId, caseId } = await workedExample(api, user);
+  const { page } = await signIn(user);
+  await openCase(page, projectId, caseId);
+
+  // 1.3: Rename opens with the name selected, so typing replaces it.
+  await step(page, 'Cutting').click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Cutting menu' }).getByRole('menuitem', { name: 'Rename' }).click();
+  const rename = page.getByRole('dialog', { name: 'Rename step' });
+  await page.keyboard.type('Tube cutting');
+  await expect.soft(rename.getByLabel('Name'), note('1.3', 'typing replaces the old name')).toHaveValue('Tube cutting');
+  await rename.getByLabel('Name').press('ControlOrMeta+a');
+  await page.keyboard.type('Cutting');
+  await expect.soft(rename.getByLabel('Name'), note('1.3', 'select-all selects the box')).toHaveValue('Cutting');
+  await rename.getByRole('button', { name: 'Cancel' }).click();
+
+  // 1.4: a subprocess adds an operation, and the form opens on that parent; the lowest tier adds nothing.
+  await step(page, 'Cutting').click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Add an operation below' }).click();
+  const form = page.getByRole('dialog', { name: 'Add a step' });
+  await expect.soft(form.getByLabel('Parent').locator('option:checked'), note('1.4', 'the form opens on that parent')).toHaveText(/Cutting/);
+  await expect.soft(form.getByRole('radio', { name: 'Operation' }), note('1.4', 'the named tier is chosen')).toBeChecked();
+  await form.getByRole('button', { name: 'Cancel' }).click();
+  await step(page, 'Shear blank').click({ button: 'right' });
+  await expect.soft(page.getByRole('menuitem', { name: /below$/ }), note('1.4', 'an elemental task adds nothing below')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // 3.12: the Inventory amount box is named for its flow, not "–".
+  await page.getByRole('tab', { name: /^Inventory/ }).click();
+  await expect.soft(page.getByRole('textbox', { name: 'Steel, amount in kg', exact: true }), note('3.12', 'the amount box has a name')).toBeVisible();
+
+  // 1.10: Magic Insights sits below the tree card, not on its step list.
+  const tree = page.getByRole('navigation', { name: 'The tree' });
+  await expect.soft(tree.getByRole('button', { name: 'Magic Insights' }), note('1.10', 'not inside the step list')).toHaveCount(0);
+  const treeBox = await tree.boundingBox();
+  const magicBox = await page.getByRole('button', { name: 'Magic Insights' }).first().boundingBox();
+  expect.soft(treeBox && magicBox && magicBox.y >= treeBox.y + treeBox.height, note('1.10', 'below the tree card')).toBe(true);
+});
+
+test('3.10 an amount changed in another tab is not overwritten silently', async ({ api, newUser, signIn }) => {
+  test.setTimeout(180_000);
+  const user = await newUser('parity-tabs');
+  const { projectId, caseId } = await workedExample(api, user);
+  const { context, page: a } = await signIn(user);
+  const b = await context.newPage();
+  for (const p of [a, b]) {
+    await open(p, `/project/${projectId}/case/${caseId}?tab=inventory`);
+    await expect(p.getByRole('textbox', { name: 'Steel, amount in kg', exact: true })).toBeVisible();
+  }
+  const boxB = b.getByRole('textbox', { name: 'Steel, amount in kg', exact: true });
+  await boxB.fill('7.25');
+  await boxB.press('Enter');
+  await expect(b.getByText(/Saved · Steel 7.25 kg/)).toBeVisible();
+
+  const boxA = a.getByRole('textbox', { name: 'Steel, amount in kg', exact: true });
+  await boxA.fill('9.5');
+  await boxA.press('Enter');
+  await expect.soft(a.getByText(/This flow changed in another tab or by someone else: it is now 7.25 kg/), note('3.10', 'the second tab is told')).toBeVisible();
+  await boxA.press('Enter');
+  await expect.soft(a.getByText(/Saved · Steel 9\.50? kg/), note('3.10', 'saving again goes ahead')).toBeVisible();
+});

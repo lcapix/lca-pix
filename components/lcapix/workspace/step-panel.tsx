@@ -383,14 +383,19 @@ function FlowRowWs({
   const { substances } = useSubstanceCatalog(method)
   const found = useMemo(() => (swap ? searchSubstances(query, substances) : []), [swap, query, substances])
   useEffect(() => setValue(amountBox(row.amount)), [row.amount])
+  // The amount this tab last knew (3.10): a save checks it, and a conflict moves it to the amount now.
+  const [known, setKnown] = useState<number | null>(row.amount)
+  useEffect(() => setKnown(row.amount), [row.amount])
 
   // Saves what is in the box now: on Enter right after a change (a fast
   // typist, autofill, WebKit) React may not have re-rendered yet, so the
   // state still holds the old value and nothing would be sent.
   const save = async (typed: string = value) => {
-    const r = await saveFlowAmount(row, typed)
+    const r = await saveFlowAmount(row, typed, known)
+    if (r.current !== undefined) setKnown(r.current)
     if (r.error) return setError(r.error)
     setError(null)
+    if (r.saved) setKnown(r.amount)
     if (r.saved) onSaved(`Saved · ${row.substance} ${r.amount === null ? 'no amount' : `${amountBox(r.amount)} ${row.unit}`} on ${step.name}`)
   }
 

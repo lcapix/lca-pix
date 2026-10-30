@@ -16,18 +16,32 @@ import type { InventoryRow } from '@/lib/workspace/inventory'
  * number of 0 or more. Nothing is sent when it did not change.
  */
 export async function saveFlowAmount(
-  row: Pick<InventoryRow, 'flow_id' | 'amount'>,
+  row: Pick<InventoryRow, 'flow_id' | 'amount'> & { unit?: string },
   typed: string,
-): Promise<{ saved: boolean; amount: number | null; error: string | null }> {
+  /** The amount this tab last knew (3.10); a 409 hands back the amount now, which a second save sends. */
+  known: number | null = row.amount,
+): Promise<{ saved: boolean; amount: number | null; error: string | null; current?: number | null }> {
   const trimmed = typed.trim()
   const next = trimmed === '' ? null : Number(trimmed)
   if (next !== null && (!Number.isFinite(next) || next < 0)) {
     return { saved: false, amount: row.amount, error: 'Enter an amount of 0 or more, or leave it empty for now.' }
   }
-  if (next === row.amount) return { saved: false, amount: next, error: null }
-  const res = await apiRequest(`/api/flows/${row.flow_id}`, { method: 'PUT', body: JSON.stringify({ quantity: next }) })
+  if (next === known) return { saved: false, amount: next, error: null }
+  const res = await apiRequest(`/api/flows/${row.flow_id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ quantity: next, expected_quantity: known }),
+  })
   if (!res.ok) {
     const d = await res.json().catch(() => ({}))
+    if (res.status === 409 && d?.current) {
+      const now = d.current.quantity == null ? 'no amount' : `${d.current.quantity} ${d.current.unit ?? row.unit ?? ''}`.trim()
+      return {
+        saved: false,
+        amount: row.amount,
+        current: d.current.quantity ?? null,
+        error: `This flow changed in another tab or by someone else: it is now ${now}. Save again to replace it.`,
+      }
+    }
     return { saved: false, amount: row.amount, error: d?.error ?? `The amount was not saved (${res.status}).` }
   }
   announceComponentsChanged()

@@ -56,18 +56,18 @@ describe('the amount box', () => {
 
   it('Enter saves the cleared box (no amount), even before React saw the change', async () => {
     render(<InventoryTab caseId={5} steps={steps} inventory={inventory} readOnly={false} onOpenInsights={() => {}} />)
-    const box = screen.getByRole('textbox', { name: 'Electricity' }) as HTMLInputElement
+    const box = screen.getByRole('textbox', { name: /^Electricity/ }) as HTMLInputElement
     expect(box.value).toBe('0.0013')
     typeUnseen(box, '')
     fireEvent.keyDown(box, { key: 'Enter' })
-    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: null } }]))
+    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: null, expected_quantity: 0.0013 } }]))
   })
 
   it('blur saves a new amount the same way', async () => {
     render(<InventoryTab caseId={5} steps={steps} inventory={inventory} readOnly={false} onOpenInsights={() => {}} />)
-    const box = screen.getByRole('textbox', { name: 'Electricity' }) as HTMLInputElement
+    const box = screen.getByRole('textbox', { name: /^Electricity/ }) as HTMLInputElement
     typeUnseen(box, '0.002')
     fireEvent.blur(box)
-    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: 0.002 } }]))
+    await waitFor(() => expect(puts).toEqual([{ url: '/api/flows/41', body: { quantity: 0.002, expected_quantity: 0.0013 } }]))
   })
 })

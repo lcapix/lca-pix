@@ -32,9 +32,26 @@ export function TextDialog({
 }) {
   const [value, setValue] = useState(initial)
   const inputId = useId()
+  const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (open) setValue(initial)
   }, [open, initial])
+  // 1.3: the box opens with the current name selected, so typing replaces it.
+  // Selected once the box holds that name (the value arrives a render after
+  // open), then left alone so the person's own typing and selection stand.
+  const selectedFor = useRef(false)
+  useEffect(() => {
+    if (!open) {
+      selectedFor.current = false
+      return
+    }
+    if (selectedFor.current || value !== initial) return
+    const box = inputRef.current
+    if (!box) return
+    box.focus()
+    box.setSelectionRange(0, box.value.length)
+    selectedFor.current = true
+  }, [open, value, initial])
   return (
     <ConfirmDialog
       open={open}
@@ -51,6 +68,7 @@ export function TextDialog({
         {label}
       </label>
       <input
+        ref={inputRef}
         id={inputId}
         className="ds-input"
         value={value}

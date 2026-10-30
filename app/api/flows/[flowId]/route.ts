@@ -107,14 +107,23 @@ export async function PUT(
       }
     }
 
+    // 3.10: a tab that sends the amount it loaded (expected_quantity) saves
+    // only if nobody changed it since; otherwise 409 with the amount now.
+    const guarded = Object.prototype.hasOwnProperty.call(body, 'expected_quantity');
+    const expectedParsed = guarded ? parseOptionalFlowQuantity(body.expected_quantity) : null;
+    if (expectedParsed && !expectedParsed.ok) {
+      return NextResponse.json({ error: QUANTITY_ERROR }, { status: 400 });
+    }
+    const expected = expectedParsed?.ok ? expectedParsed.value : null;
+
     try {
-      await execute(
+      const changed = await execute(
         `UPDATE flows
          SET substance_id = COALESCE(?, substance_id),
              flow_type = COALESCE(?, flow_type),
              quantity = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, quantity) END,
              unit = COALESCE(?, unit)
-         WHERE flow_id = ?`,
+         WHERE flow_id = ?${guarded ? ' AND quantity IS NOT DISTINCT FROM ?::float8' : ''}`,
         [
           substance_id != null ? Number(substance_id) : null,
           flow_type ?? null,
@@ -122,8 +131,19 @@ export async function PUT(
           quantity,
           unit ?? null,
           flowId,
+          ...(guarded ? [expected] : []),
         ]
       );
+      if (guarded && changed === 0) {
+        const now = await queryOne<any>(`SELECT quantity, unit FROM flows WHERE flow_id = ?`, [flowId]);
+        return NextResponse.json(
+          {
+            error: 'This flow changed in another tab or by someone else.',
+            current: { quantity: now?.quantity == null ? null : Number(now.quantity), unit: now?.unit ?? null },
+          },
+          { status: 409 }
+        );
+      }
     } catch (updateErr: any) {
       // A database before migration 033 refuses a flow without an amount.
       if (clearQuantity && updateErr?.code === 'ER_BAD_NULL_ERROR') {

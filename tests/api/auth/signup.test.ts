@@ -111,15 +111,15 @@ describe('POST /api/auth/signup', () => {
     expect(res.status).toBe(409);
   });
 
-  it('allows 3 signups per IP per hour, then 429', async () => {
+  it('allows 60 signups per IP per hour, then 429 (3.1: a class on one network)', async () => {
     dbWith();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 60; i++) {
       const r = await POST(req({ ...GOOD, email: `u${i}@corp.com` }, '203.0.113.50') as any);
       expect(r.status).toBe(201);
     }
-    const fourth = await POST(req({ ...GOOD, email: 'u9@corp.com' }, '203.0.113.50') as any);
-    expect(fourth.status).toBe(429);
-    expect(fourth.headers.get('Retry-After')).toBeTruthy();
+    const over = await POST(req({ ...GOOD, email: 'u99@corp.com' }, '203.0.113.50') as any);
+    expect(over.status).toBe(429);
+    expect(over.headers.get('Retry-After')).toBeTruthy();
   });
 
   it('does not leak internal error text', async () => {

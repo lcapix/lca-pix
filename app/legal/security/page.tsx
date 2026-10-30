@@ -33,7 +33,7 @@ export default function SecurityPage() {
           A session is a signed token that lasts up to 7 days. It stops working when the password changes.
           Signing out removes it from this browser; a copy of the token kept elsewhere works until it expires.
         </li>
-        <li>Sign-in attempts are limited to 5 a minute, and new accounts to 3 an hour from one address.</li>
+        <li>Sign-in attempts are limited to 5 a minute, and new accounts to 60 an hour from one address, so a class on one network can sign up together.</li>
       </ul>
 
       <h2>3. Who can see your work</h2>

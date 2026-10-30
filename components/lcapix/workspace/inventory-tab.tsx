@@ -97,6 +97,7 @@ export function InventoryTab({
 
   return (
     <div className="ws-inv">
+      <div className="ws-inv-side">
       <nav className="ws-slimtree" aria-label="The tree">
         <div style={{ padding: '4px 8px 10px' }}>
           <span className="ds-section-label">The tree</span>
@@ -132,17 +133,17 @@ export function InventoryTab({
             </button>
           )
         })}
-        <div style={{ padding: '14px 8px 4px' }}>
-          <button type="button" className="ws-magic" onClick={onOpenInsights} style={{ width: 'auto' }}>
-            <span className="ws-magic-dot" aria-hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z" />
-              </svg>
-            </span>
-            Magic Insights
-          </button>
-        </div>
       </nav>
+      {/* 1.10: below the tree card, in the page's flow, so it never sits on the step list. */}
+      <button type="button" className="ds-btn ds-btn--small ws-inv-magic" onClick={onOpenInsights}>
+        <span className="ws-magic-dot" aria-hidden>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z" />
+          </svg>
+        </span>
+        Magic Insights
+      </button>
+      </div>
 
       <section className="ds-card" aria-label="Flows" style={{ overflow: 'hidden' }}>
         <ExerciseSlot
@@ -289,6 +290,9 @@ function InventoryRowView({
   const [own, setOwn] = useState(false)
   const [drop, setDrop] = useState(false)
   useEffect(() => setValue(amountBox(row.amount)), [row.amount])
+  // The amount this tab last knew (3.10): a save checks it, and a conflict moves it to the amount now.
+  const [known, setKnown] = useState<number | null>(row.amount)
+  useEffect(() => setKnown(row.amount), [row.amount])
   const warn = row.status === 'needs_amount' || row.status === 'left_out'
   const units = useMemo(() => {
     const list = compatibleUnits(row.substance_unit)
@@ -301,9 +305,11 @@ function InventoryRowView({
   // typist, autofill, WebKit) React may not have re-rendered yet, so the
   // state still holds the old value and nothing would be sent.
   const save = async (typed: string = value) => {
-    const r = await saveFlowAmount(row, typed)
+    const r = await saveFlowAmount(row, typed, known)
+    if (r.current !== undefined) setKnown(r.current)
     if (r.error) return setError(r.error)
     setError(null)
+    if (r.saved) setKnown(r.amount)
     if (r.saved) onSaved(`Saved · ${row.substance} ${r.amount === null ? 'no amount' : `${amountBox(r.amount)} ${row.unit}`} on ${stepName}`)
   }
 
@@ -350,6 +356,8 @@ function InventoryRowView({
             id={id}
             className="ds-input ws-amount"
             inputMode="decimal"
+            // 3.12: the name says what the box is; the placeholder is only a dash.
+            aria-label={`${row.substance}, amount in ${row.unit}`}
             value={value}
             placeholder="–"
             readOnly={readOnly}

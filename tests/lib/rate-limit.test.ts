@@ -123,6 +123,14 @@ describe('rateLimit / enforceRateLimit', () => {
     setRateLimitStore(new MemoryRateLimitStore());
     for (let i = 0; i < 30; i++) expect(await enforceRateLimit(RATE_LIMITS.signup, ['10.1.1.1'])).toBeNull();
   });
+
+  it('refuses the 61st sign-up from one address in the hour, and not another address', async () => {
+    setRateLimitStore(new MemoryRateLimitStore());
+    for (let i = 0; i < 60; i++) expect(await enforceRateLimit(RATE_LIMITS.signup, ['10.1.1.2'])).toBeNull();
+    const refused = await enforceRateLimit(RATE_LIMITS.signup, ['10.1.1.2']);
+    expect(refused?.status).toBe(429);
+    expect(await enforceRateLimit(RATE_LIMITS.signup, ['10.1.1.3'])).toBeNull();
+  });
 });
 
 describe('clientIp', () => {

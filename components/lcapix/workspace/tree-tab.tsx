@@ -550,7 +550,7 @@ function Legend() {
   )
 }
 
-/** The step menu (E03c): Rename, Move to…, Add a task below, Delete step. */
+/** The step menu (E03c): Rename, Move to…, Add a <next tier> below, Delete step. */
 function StepMenu({
   step,
   steps,
@@ -585,6 +585,8 @@ function StepMenu({
   }
   mark(step.id)
   const rank = TIERS.indexOf(step.tier)
+  // 1.4: the menu names the tier it adds (the next one down); the lowest tier adds none.
+  const next: Tier | undefined = TIERS[rank + 1]
   const targets = steps.filter((s) => TIERS.indexOf(s.tier) < rank && !below.has(s.id))
 
   useEffect(() => {
@@ -629,10 +631,11 @@ function StepMenu({
             onRename()
           })}
           {targets.length > 0 && item('Move to…', () => setMoving(true), { sub: true })}
-          {item('Add a task below', () => {
-            onClose()
-            onAddTask()
-          })}
+          {next &&
+            item(`Add ${/^[aeiou]/i.test(TIER_LABEL[next]) ? 'an' : 'a'} ${TIER_LABEL[next].toLowerCase()} below`, () => {
+              onClose()
+              onAddTask()
+            })}
           {step.parentId != null &&
             item(
               'Delete step',

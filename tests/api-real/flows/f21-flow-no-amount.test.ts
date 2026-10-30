@@ -76,4 +76,28 @@ describe('F21 a flow may have no amount yet', () => {
     expect(row).toMatchObject({ substance: 'Steel', amount: null });
     await api.delete(`/api/flows/${add.json.flow.flow_id}`, { token: t });
   });
+
+  it('3.10 a save that names the amount it loaded is refused, with the amount now, when another tab changed it', async () => {
+    const t = w.users.editor.token;
+    const add = await api.post(`/api/components/${w.P.base.task}/flows`, {
+      token: t,
+      json: { substance_id: w.substances.steel, flow_type: 'input', quantity: 2, unit: 'kg' },
+    });
+    const id = Number(add.json.flow.flow_id);
+    // Tab A and tab B both loaded 2 kg. B saves 5 first.
+    expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 5, expected_quantity: 2 } })).status).toBe(200);
+    // A saves 3, still thinking it was 2: refused, told it is 5 now, and nothing changed.
+    const stale = await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 3, expected_quantity: 2 } });
+    expect(stale.status, stale.text).toBe(409);
+    expect(stale.json.error).toBe('This flow changed in another tab or by someone else.');
+    expect(stale.json.current).toEqual({ quantity: 5, unit: 'kg' });
+    expect(Number((await sqlOne('SELECT quantity FROM flows WHERE flow_id = ?', [id])).quantity)).toBe(5);
+    // Saving again with the amount it now knows goes ahead.
+    expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 3, expected_quantity: 5 } })).status).toBe(200);
+    expect(Number((await sqlOne('SELECT quantity FROM flows WHERE flow_id = ?', [id])).quantity)).toBe(3);
+    // No amount yet counts as a known amount too, and a save without expected_quantity is unchanged.
+    expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: null } })).status).toBe(200);
+    expect((await api.put(`/api/flows/${id}`, { token: t, json: { quantity: 4, expected_quantity: null } })).status).toBe(200);
+    await api.delete(`/api/flows/${id}`, { token: t });
+  });
 });
