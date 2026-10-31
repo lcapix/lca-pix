@@ -51,13 +51,21 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
     return p
   })
   const others = cases.filter((c) => c.caseId !== baseId && hasComparableResults(c))
-  const deltaData = rows.map((r) => {
+  // A category with no change to compute (one side has no value, or the base is 0)
+  // gets no bar, never a 0% one; it is named under the chart instead.
+  const deltaRows = rows.map((r) => {
     const p: Record<string, number | string> = { category: r.category }
+    let drawn = 0
     r.cells.forEach((cell, i) => {
-      if (cases[i].caseId !== baseId) p[cases[i].name] = cell.deltaPct ?? 0
+      if (cases[i].caseId !== baseId && cell.deltaPct != null) {
+        p[cases[i].name] = cell.deltaPct
+        drawn++
+      }
     })
-    return p
+    return { p, drawn, category: r.category }
   })
+  const deltaData = deltaRows.filter((r) => r.drawn > 0).map((r) => r.p)
+  const notDrawn = deltaRows.filter((r) => r.drawn === 0).map((r) => r.category)
 
   return (
     <>
@@ -188,7 +196,7 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
 
       {others.length > 0 && (
         <Panel title="Change against the base, by category" help="Negative (green) is a smaller impact than the base case; positive (amber) is larger.">
-          <div style={{ width: '100%', height: Math.max(160, rows.length * 44 + 60) }}>
+          <div style={{ width: '100%', height: Math.max(160, deltaData.length * 44 + 60) }}>
             <ResponsiveContainer>
               <BarChart data={deltaData} layout="vertical" margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
                 <XAxis
@@ -219,6 +227,11 @@ export function ResultsPanel({ cases, baseId }: { cases: CompareCase[]; baseId: 
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {notDrawn.length > 0 && (
+            <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--ds-text-3)' }}>
+              Not drawn, no change to compute (not counted in a case, or zero in the base): {notDrawn.join(', ')}.
+            </p>
+          )}
         </Panel>
       )}
     </>
