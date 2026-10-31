@@ -78,7 +78,7 @@ such as assignments (C06, C07).
 
 | IDs | What | Pick |
 |---|---|---|
-| P51, P54 | Analytics verdict card and change-vs-baseline chart: never worked in classic (needed two loaded cases) | drop |
+| P51, P54 | Analytics verdict card and change-vs-baseline chart: never worked in classic (needed two loaded cases) | drop (reversed by Shreya 2026-10-30: restored on Compare, see P51 and P54) |
 | G31, G117 | Recent activity and the notifications bell: a browser-only store nothing in the new screens feeds | drop, and remove the dead bell from `/guide` and `/about` |
 | G04, G115, G146 | The guided Tour: no trigger in the shell, superseded by Guided mode | drop, unmount `GlobalTour` |
 | G88, G96 | "Welcome back" and "Account created" toasts | drop |
@@ -270,10 +270,10 @@ Path legend:
 | P48 | PDF export (window.print) | `analytics-header.tsx:60-65` | `@media print` in `app/ds.css:1284` on the full results page | none | kept |  |
 | P49 | Back to project button and breadcrumb | `analytics-header.tsx:31-37` | sidebar | none | moved | |
 | P50 | Case card: GWP, change vs base, total cost, tiles | ANc:103, `case-cards.tsx` | `components/lcapix/workspace/full-results.tsx:190` | as P45 | kept |  |
-| P51 | Verdict card | ANc:106-108 | MISSING | none | dropped | Dropped by Shreya 2026-10-27. Dead in classic too: only one case is loaded |
+| P51 | Verdict card | ANc:106-108 | `components/lcapix/compare/verdict-cards.tsx` VerdictCard on Compare, from `lib/compare/verdict.ts` caseVerdict: the case ahead in the selected category, % to one decimal, cost difference when both have cost; no number when any check fails (`whyNoNumber`, shared with the banner) | GET /api/projects/:id/compare | restored | Restored on Compare by Shreya's call 2026-10-30 (Compare loads both cases). compare.spec.ts P51 test; tests/lib/compare/verdict.test.ts |
 | P52 | Category comparison: Absolute / Radar / Log-scale toggle | ANc:111-115, `category-comparison-panel.tsx:110-120` | `components/lcapix/workspace/full-results.tsx:384` | as P45 | kept |  |
 | P53 | Cost analysis: cost by kind, cost per unit impact | ANc:119-121, `cost-analysis-panel.tsx:174` | `components/lcapix/workspace/full-results.tsx:214`, from the run's frozen costs | GET /api/cases/:id/assessments (run_steps) | kept |  |
-| P54 | Delta vs baseline chart | ANc:124-129 | MISSING | none | dropped | Dropped by Shreya 2026-10-27. Dead in classic (needs 2 loaded cases) |
+| P54 | Delta vs baseline chart | ANc:124-129 | `components/lcapix/compare/verdict-cards.tsx` DeltaCard on Compare, from `lib/compare/verdict.ts` deltaByCategory: one bar per category both runs computed, (B - A) / abs(A); one-sided categories listed as not counted, A = 0 named with no %; role="img" with a summary | GET /api/projects/:id/compare | restored | Restored on Compare by Shreya's call 2026-10-30. compare.spec.ts P54 test; tests/lib/compare/verdict.test.ts |
 | P55 | Component breakdown stacked bar | ANc:132-137 | `components/lcapix/workspace/full-results.tsx:446`, one bar per case | as P45 | kept |  |
 | P56 | Component diff table | ANc:140-146 | `components/lcapix/workspace/full-results.tsx:248`, steps matched by their path of names | as P45 | kept |  |
 | P57 | No-data card with Try again | ANc:98-99 | ANm:62-67 ErrorCard retry | none | kept | |
