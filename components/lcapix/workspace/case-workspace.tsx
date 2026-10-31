@@ -6,7 +6,8 @@
 // the run number, Write-up), Hide panel and Compare at the row's end. The tab
 // is in the URL (?tab=), an older run too (?run=). Run Assessment runs the
 // case with the study's method and region, counts the seconds, then opens
-// Results.
+// Results. Documents (E21), also at the row's end, opens the case's source
+// documents beside the tab; it starts closed.
 
 import { frozenStepCosts, runCosts, runLabel } from '@/lib/results/full-results-view'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -29,6 +30,7 @@ import { InventoryTab } from './inventory-tab'
 import { ResultsPanel } from './results-panel'
 import { TreeTab, type TreeView } from './tree-tab'
 import { WriteUpPanel } from './write-up-panel'
+import { DocumentsPanel } from './documents-panel'
 import { ExerciseProvider, exerciseFacts } from './exercise-card'
 import { usePhone } from '@/lib/shell/use-phone'
 
@@ -71,6 +73,13 @@ export function CaseWorkspace() {
   // 600 px and below: the read-only phone view (E16, E17).
   const phone = usePhone()
   const [insightsOpen, setInsightsOpen] = useState(false)
+  // The Documents panel: closed until asked for; closing it puts focus back on its button.
+  const [docsOpen, setDocsOpen] = useState(false)
+  const docsButton = useRef<HTMLButtonElement>(null)
+  const closeDocs = () => {
+    setDocsOpen(false)
+    docsButton.current?.focus()
+  }
 
   // Home's Continue card reads the case opened last on this device.
   const projectName = projects.find((p) => p.project_id === kase?.project_id)?.project_name ?? null
@@ -271,6 +280,16 @@ export function CaseWorkspace() {
         </div>
   )
 
+  // Closed, the tab's body is exactly as before; open, the panel sits beside it.
+  const body = docsOpen ? (
+    <div className="ws-split">
+      {tabBody}
+      <DocumentsPanel caseId={kase.case_id} readOnly={readOnly} onClose={closeDocs} />
+    </div>
+  ) : (
+    tabBody
+  )
+
   return (
     <div className="ws">
       <CaseHeader
@@ -324,6 +343,20 @@ export function CaseWorkspace() {
         ]}
         end={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 16 }}>
+            <button
+              ref={docsButton}
+              type="button"
+              className="ws-panel-toggle"
+              aria-expanded={docsOpen}
+              aria-controls={docsOpen ? 'ws-docs' : undefined}
+              onClick={() => (docsOpen ? closeDocs() : setDocsOpen(true))}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <path d="M7 3.5h7l4.5 4.5v12.5H7z" strokeLinejoin="round" />
+                <path d="M14 3.5V8h4.5M10 12.5h5.5M10 16h5.5" strokeLinecap="round" />
+              </svg>
+              Documents
+            </button>
             {hasPanel && (
               <button type="button" className="ws-panel-toggle" aria-pressed={panelHidden} onClick={() => setPanelHidden(!panelHidden)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
@@ -343,7 +376,7 @@ export function CaseWorkspace() {
         }
       />
       {readOnly ? (
-        tabBody
+        body
       ) : (
         <ExerciseProvider
           caseId={kase.case_id}
@@ -360,7 +393,7 @@ export function CaseWorkspace() {
           topStep={topStep}
           onSaved={reload}
         >
-          {tabBody}
+          {body}
         </ExerciseProvider>
       )}
 
