@@ -88,6 +88,15 @@ export function pickMaterialRate(nameOrSubstance?: string | null) {
   return MATERIAL_DEFAULT
 }
 
+/**
+ * The dated reference $/kg for a named material, or null when no row in
+ * MATERIAL_RATES matches. Never MATERIAL_DEFAULT: a metal price lookup with
+ * no reference says so rather than pricing lead as "Generic material (avg)".
+ */
+export function materialReferencePrice(name: string): { rate: number; label: string } | null {
+  return MATERIAL_RATES.find((m) => m.match.test(name)) ?? null
+}
+
 export function getLaborRate(nameOrType?: string | null) {
   const s = (nameOrType || '').toLowerCase()
   if (/weld/.test(s)) return LABOR_RATES.welder

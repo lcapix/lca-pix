@@ -44,3 +44,14 @@ export const METAL_SYMBOL_TO_SUBSTANCE: Record<string, string> = {
   TIN: 'Tin',
   STL: 'Steel, reinforced',
 };
+
+/** The metal each symbol names, as the step cost panel lists it. */
+export const METAL_NAME: Record<string, string> = {
+  ALU: 'Aluminum',
+  XCU: 'Copper',
+  ZNC: 'Zinc',
+  NIK: 'Nickel',
+  LEA: 'Lead',
+  TIN: 'Tin',
+  STL: 'Steel',
+};

@@ -35,6 +35,37 @@ test.describe('signed out', () => {
     }
   });
 
+  test('G151 docs: where the data comes from, only the sources the app calls, each with where it appears', async ({ page }) => {
+    await open(page, '/docs', { ready: 'Everything you need to ship a defensible LCA.' });
+    await row(page.getByRole('heading', { name: 'Where the data comes from', level: 2 }), 'G151', 'the data sources section');
+    const list = page.getByRole('list', { name: 'Data sources' });
+    const names = await list.getByRole('listitem').locator('strong').allInnerTexts();
+    expect.soft(names, note('G151', 'the sources, in order')).toEqual(['BLS', 'EIA', 'Metals-API', 'openLCA', 'PubChem', 'Factor sources']);
+    for (const [name, where] of [
+      ['BLS', "A step's Cost view: Labor"],
+      ['EIA', "A step's Cost view: Energy"],
+      ['Metals-API', "A step's Cost view: Material"],
+      ['openLCA', 'Integrations page'],
+      ['PubChem', 'Integrations page'],
+    ]) {
+      const item = list.getByRole('listitem').filter({ has: page.locator('strong', { hasText: new RegExp(`^${name}$`) }) });
+      await expect.soft(item, note('G151', `${name}: where it appears`)).toContainText(where);
+    }
+    const factors = list.getByRole('listitem').filter({ hasText: 'Factor sources' });
+    for (const src of ['TRACI 2.1', 'lciafmt', 'CML 2001', 'eGRID', 'worldsteel']) {
+      await expect.soft(factors, note('G151', `factor source ${src}`)).toContainText(src);
+    }
+    // Nothing the app does not call.
+    await expect.soft(page.locator('main'), note('G151', 'no Electricity Maps')).not.toContainText('Electricity Maps');
+    for (const [name, href] of [
+      ['How the data fits together', '/guide/data-model'],
+      ['API reference', '/guide/api-reference'],
+      ['Factor library', '/library/factors'],
+    ]) {
+      await expect.soft(page.getByRole('link', { name, exact: true }).last(), note('G151', `${name} link`)).toHaveAttribute('href', href);
+    }
+  });
+
   test('G121 signed out, the guide reads in the public layout, so the links from Docs work', async ({ page }) => {
     await open(page, '/guide/first-assessment', { ready: 'Your first assessment' });
     await expect.soft(page, note('G121', 'no sign-in wall')).toHaveURL(/\/guide\/first-assessment$/);

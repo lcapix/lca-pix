@@ -21,9 +21,12 @@ import {
   RateNotFound,
   energyReferenceRate,
   isEnergyCarrier,
+  isMetalSymbol,
   laborReferenceRate,
+  metalReferenceRate,
   resolveEnergyRate,
   resolveLaborRate,
+  resolveMetalRate,
   type ResolvedRate,
 } from '@/lib/costs/rate-resolve';
 
@@ -32,7 +35,7 @@ import {
 //           and from_flows: what the material and energy cost would be from
 //           the step's flows, with the flows no price applies to named
 //   PUT     set one cost: mode "lookup" (the server finds the rate: labor by
-//           BLS occupation, energy by carrier), mode "entered" (the
+//           BLS occupation, energy by carrier, material by metal), mode "entered" (the
 //           person's own rate, or an amount alone), or mode "flows" (material
 //           or energy, from the step's flows: the "Use it" the panels offer)
 //                                                            ("Can change")
@@ -153,17 +156,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const limited = await enforceRateLimit(RATE_LIMITS.costRates, [userId]);
         if (limited) return limited;
       }
-      if (!stateCode.safeParse(input.region).success) return bad('region: a US state code or US');
+      if (kind !== 'material' && !stateCode.safeParse(input.region).success) return bad('region: a US state code or US');
+      if (kind === 'material' && input.region !== undefined) return bad('region: a metal has one world price, send no region');
       let resolved: ResolvedRate;
       try {
-        if (kind === 'labor') {
+        if (kind === 'material') {
+          if (!isMetalSymbol(input.rate_code)) return bad('rate_code: a metal symbol (ALU, XCU, ZNC, NIK, LEA, TIN, STL)');
+          if (input.driver_unit && input.driver_unit.toLowerCase() !== 'kg') return bad('driver_unit: a metal is priced per kg');
+          resolved = referenceOnly ? metalReferenceRate(input.rate_code) : await resolveMetalRate(input.rate_code);
+        } else if (kind === 'labor') {
           if (!occupationCode.safeParse(input.rate_code).success) {
             return bad('rate_code: a BLS OEWS occupation code such as 51-4121');
           }
           if (input.driver_unit && !['h', 'hr', 'hour', 'hours'].includes(input.driver_unit.toLowerCase())) {
             return bad('driver_unit: labor is priced per hour (h)');
           }
-          resolved = referenceOnly ? laborReferenceRate(input.rate_code) : await resolveLaborRate(input.rate_code, input.region);
+          resolved = referenceOnly ? laborReferenceRate(input.rate_code) : await resolveLaborRate(input.rate_code, input.region!);
         } else {
           if (!isEnergyCarrier(input.rate_code)) return bad('rate_code: electricity or natural_gas');
           if (!input.driver_unit) return bad('driver_unit: the unit the energy amount is in (kWh, m3, MMBtu)');
@@ -171,7 +179,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           if (problem) return bad(`driver_unit: ${problem}`);
           resolved = referenceOnly
             ? energyReferenceRate(input.rate_code, input.driver_unit)
-            : await resolveEnergyRate(input.rate_code, input.region, input.driver_unit);
+            : await resolveEnergyRate(input.rate_code, input.region!, input.driver_unit);
         }
       } catch (lookupErr: any) {
         if (lookupErr instanceof RateNotFound) return bad(lookupErr.message);

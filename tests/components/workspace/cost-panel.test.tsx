@@ -6,6 +6,8 @@
  * editor; someone who can change opens the labor lookup with its five
  * reference occupations. The material cost offers the flows' number (the
  * steel the step uses) with one click; the looked-up energy price is left be.
+ * The material sheet looks up a metal's price per kg through the costs route
+ * (E21), and a metal with no price says so and leaves your own price to type.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -43,6 +45,9 @@ const puts: any[] = []
 vi.mock('@/lib/api-client', () => ({
   apiRequest: vi.fn(async (_url: string, init?: any) => {
     if (init?.method === 'PUT') puts.push(JSON.parse(init.body))
+    if (init?.method === 'PUT' && JSON.parse(init.body).rate_code === 'LEA') {
+      return { ok: false, status: 400, json: async () => ({ error: 'No price for lead: there is no live Metals-API price and no reference price for it. Enter your own price per kg.' }) }
+    }
     return { ok: true, status: 200, json: async () => COSTS }
   }),
 }))
@@ -114,5 +119,31 @@ describe('Cost panel (E14)', () => {
   it('opens on the kind it is sent to ("add its cost" from the step panel)', async () => {
     render(<CostPanel step={step} kase={kase} readOnly={false} initialOpen="material" />)
     expect(await screen.findByText('Set the material cost')).toBeTruthy()
+  })
+
+  it('E21 the material sheet looks up a metal by kg through the costs route, like energy', async () => {
+    render(<CostPanel step={step} kase={kase} readOnly={false} initialOpen="material" />)
+    await screen.findByText('Set the material cost')
+    const metal = screen.getByLabelText('Metal') as HTMLSelectElement
+    expect(Array.from(metal.options).map((o) => o.text)).toEqual(['Aluminum', 'Copper', 'Zinc', 'Nickel', 'Lead', 'Tin', 'Steel'])
+    fireEvent.change(metal, { target: { value: 'XCU' } })
+    fireEvent.change(screen.getByLabelText('Kilograms per unit'), { target: { value: '0.8' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Look up the price of copper' }))
+    await waitFor(() => expect(puts).toEqual([{ kind: 'material', mode: 'lookup', rate_code: 'XCU', driver_quantity: 0.8, driver_unit: 'kg' }]))
+    expect(await screen.findByText('Saved · material on 20. Weld tab')).toBeTruthy()
+  })
+
+  it('E21 a metal with no price says so, and your own price per kg is saved as entered', async () => {
+    render(<CostPanel step={step} kase={kase} readOnly={false} initialOpen="material" />)
+    await screen.findByText('Set the material cost')
+    fireEvent.change(screen.getByLabelText('Metal'), { target: { value: 'LEA' } })
+    fireEvent.change(screen.getByLabelText('Kilograms per unit'), { target: { value: '0.2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Look up the price of lead' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/No price for lead.*Enter your own price per kg/)
+    expect(screen.queryByText(/Generic material/)).toBeNull()
+    fireEvent.change(screen.getByLabelText('Your price for lead in dollars per kg'), { target: { value: '2.2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Use your price for lead' }))
+    await waitFor(() => expect(puts).toHaveLength(2))
+    expect(puts[1]).toEqual({ kind: 'material', mode: 'entered', driver_quantity: 0.2, driver_unit: 'kg', rate: 2.2, rate_unit: '$/kg', rate_label: 'Lead, own price' })
   })
 })

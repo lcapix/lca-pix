@@ -28,7 +28,10 @@ describe('CostBasisInput', () => {
   it('a lookup names the driver, the code and the region; no rate is accepted from the caller', () => {
     expect(ok({ kind: 'labor', mode: 'lookup', driver_quantity: 0.015, rate_code: '51-4121', region: 'MI' })).toBe(true)
     expect(ok({ kind: 'labor', mode: 'lookup', driver_quantity: 0.015, rate_code: '51-4121', region: 'MI', rate: 99 })).toBe(false)
-    expect(ok({ kind: 'material', mode: 'lookup', driver_quantity: 1, rate_code: 'x', region: 'US' })).toBe(false)
+    // A metal is looked up by symbol and kg, with no region (E21); which symbols exist is the route's check.
+    expect(ok({ kind: 'material', mode: 'lookup', driver_quantity: 0.8, rate_code: 'ALU', driver_unit: 'kg' })).toBe(true)
+    expect(ok({ kind: 'material', mode: 'lookup', driver_quantity: 0.8, rate_code: 'ALU', rate: 2 })).toBe(false)
+    expect(ok({ kind: 'transportation', mode: 'lookup', driver_quantity: 1, rate_code: 'x', region: 'US' })).toBe(false)
   })
   it('an own rate is driver x rate, or an amount alone, never both or half', () => {
     expect(ok({ kind: 'labor', mode: 'entered', driver_quantity: 0.015, rate: 30 })).toBe(true)

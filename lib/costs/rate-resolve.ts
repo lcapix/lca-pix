@@ -1,10 +1,10 @@
 /**
  * Server-side rate lookups for a step cost (migrate-035, E14). The caller names
- * what to price (an occupation code and hours, or an energy carrier and an
- * amount in its unit) and a region; the rate, its source and its vintage come
- * from here, never from the request. A live answer (BLS, EIA, or the cached
- * copy of one) is tagged live; otherwise the dated reference table is used and
- * tagged reference.
+ * what to price (an occupation code and hours, an energy carrier and an amount
+ * in its unit, or a metal and its kilograms) and a region; the rate, its source
+ * and its vintage come from here, never from the request. A live answer (BLS,
+ * EIA, Metals-API, or the cached copy of one) is tagged live; otherwise the
+ * dated reference table is used and tagged reference.
  *
  * Energy is priced in the unit the amount is in: a live $/Mcf gas price is
  * turned into $/m3 for an amount in m3. Where no rate can apply to that unit,
@@ -14,10 +14,12 @@
 import { getOrFetchRate, type CostRate } from '@/lib/integrations/cost-rates'
 import { fetchMedianHourlyWage } from '@/lib/integrations/bls/client'
 import { fetchElectricityPrice, fetchNaturalGasPrice } from '@/lib/integrations/eia/client'
+import { METAL_NAME, METAL_SYMBOL_TO_SUBSTANCE, fetchMetalPrice } from '@/lib/integrations/metals/client'
 import {
   LABOR_RATES,
   REFERENCE_VINTAGE,
   energyReferencePrice,
+  materialReferencePrice,
 } from '@/lib/integrations/reference-rates'
 import { convertQuantity, splitFactorUnit } from '@/lib/units'
 import { vintageOf, type CostSourceKind } from './cost-basis'
@@ -29,7 +31,8 @@ export interface ResolvedRate {
   driver_unit: string
   rate_label: string
   rate_code: string
-  region: string
+  /** Null for a reference price that names no place (a metal's). */
+  region: string | null
   source_kind: CostSourceKind
   source_name: string
   vintage: string | null
@@ -195,6 +198,66 @@ export function energyReferenceRate(carrier: EnergyCarrier, driverUnit: string):
     rate_label: CARRIERS[carrier].label,
     rate_code: carrier,
     region: 'US',
+    source_kind: 'reference',
+    source_name: 'Reference',
+    vintage: REFERENCE_VINTAGE,
+  }
+}
+
+export const isMetalSymbol = (v: string): boolean => Object.prototype.hasOwnProperty.call(METAL_NAME, v)
+
+/**
+ * USD per kg of a metal: live from Metals-API (a world market price, cached a
+ * day) when it answers, else the dated reference price for that metal, else
+ * RateNotFound. Never the generic material average.
+ */
+export async function resolveMetalRate(symbol: string): Promise<ResolvedRate> {
+  if (!isMetalSymbol(symbol)) throw new RateNotFound(`No metal price for '${symbol}'.`)
+  const live = await lookup({
+    type: 'material',
+    key: symbol,
+    region: 'Global',
+    maxAgeDays: 1, // metal prices move daily
+    fetcher: async () => {
+      const p = await fetchMetalPrice(symbol)
+      if (!p) throw new Error(`Metals-API returned no data for ${symbol}`)
+      const today = new Date().toISOString().slice(0, 10)
+      return { rateValue: p.pricePerKg, unit: '$/kg', source: `Metals-API ${today}`, effectiveDate: today }
+    },
+  }).catch(() => null)
+
+  if (live && !live.reference && live.rate.unit === '$/kg') {
+    return {
+      rate: live.rate.rateValue,
+      rate_unit: '$/kg',
+      driver_unit: 'kg',
+      rate_label: METAL_NAME[symbol],
+      rate_code: symbol,
+      region: 'Global',
+      source_kind: 'live',
+      source_name: live.rate.source,
+      vintage: vintageOf(live.rate.effectiveDate),
+    }
+  }
+  return metalReferenceRate(symbol)
+}
+
+/** The dated reference price of a metal per kg; no outside call. RateNotFound when there is none. */
+export function metalReferenceRate(symbol: string): ResolvedRate {
+  const name = METAL_NAME[symbol]
+  const ref = name ? materialReferencePrice(METAL_SYMBOL_TO_SUBSTANCE[symbol] ?? name) : null
+  if (!ref) {
+    throw new RateNotFound(
+      `No price for ${name ? name.toLowerCase() : `'${symbol}'`}: there is no live Metals-API price and no reference price for it. Enter your own price per kg.`,
+    )
+  }
+  return {
+    rate: ref.rate,
+    rate_unit: '$/kg',
+    driver_unit: 'kg',
+    rate_label: ref.label,
+    rate_code: symbol,
+    region: null,
     source_kind: 'reference',
     source_name: 'Reference',
     vintage: REFERENCE_VINTAGE,

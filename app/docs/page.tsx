@@ -75,6 +75,49 @@ const SECTIONS = [
   },
 ]
 
+// Where the data comes from: only what the app calls or ships, each checked
+// against its caller (the step cost panel, the admin Integrations page, the
+// factor rows' source references), with where a person meets it.
+const SOURCES = [
+  {
+    name: 'BLS',
+    full: 'US Bureau of Labor Statistics',
+    what: 'Hourly wages by occupation, for the whole US or one state.',
+    where: "A step's Cost view: Labor, Look up a labor rate.",
+  },
+  {
+    name: 'EIA',
+    full: 'US Energy Information Administration',
+    what: 'Electricity and natural gas prices, for the whole US or one state.',
+    where: "A step's Cost view: Energy, Price the energy.",
+  },
+  {
+    name: 'Metals-API',
+    full: 'Metal market prices',
+    what: 'Prices per kg for aluminum, copper, zinc, nickel, lead, tin and steel.',
+    where: "A step's Cost view: Material, Look up the price.",
+  },
+  {
+    name: 'openLCA',
+    full: 'CML 2001 factor set',
+    what: 'The CML 2001 characterization factors, imported into the factor library.',
+    where: 'Admins import it on the Integrations page.',
+  },
+  {
+    name: 'PubChem',
+    full: 'US National Library of Medicine',
+    what: 'Molecular formula, molecular weight and chemical name for substances.',
+    where: 'Admins run it on the Integrations page.',
+  },
+  {
+    name: 'Factor sources',
+    full: 'Behind every impact number',
+    what:
+      'TRACI 2.1 from the US EPA (its lciafmt tool); CML 2001, ReCiPe Midpoint (H) and TRACI 2.1 factors from openLCA; US grid electricity from EPA eGRID 2023; steel from worldsteel.',
+    where: 'The factor library names the source of each factor.',
+  },
+]
+
 function highlight(text: string, query: string) {
   const q = query.trim()
   if (!q) return text
@@ -319,6 +362,59 @@ function DocsPageBody() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="docs-sources" style={{ padding: '0 64px 100px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <div className="ds-section-label" style={{ marginBottom: 10 }}>
+            Data sources
+          </div>
+          <h2 id="docs-sources" style={{ fontSize: 24, fontWeight: 600, margin: 0, color: 'var(--ds-text)' }}>
+            Where the data comes from
+          </h2>
+          <p style={{ marginTop: 10, fontSize: 14, color: 'var(--ds-text-2)', maxWidth: 680, lineHeight: 1.55 }}>
+            Only the sources the app really calls or ships. Prices are live when the service answers. If it does not, the
+            app uses a dated reference rate and tags it Reference.
+          </p>
+          <ul
+            aria-label="Data sources"
+            style={{
+              listStyle: 'none',
+              padding: 0,
+              margin: '24px 0 0',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: 16,
+            }}
+          >
+            {SOURCES.map((src) => (
+              <li
+                key={src.name}
+                style={{ padding: 20, background: 'var(--ds-card)', border: '1px solid var(--ds-line)', borderRadius: 10 }}
+              >
+                <strong style={{ display: 'block', fontSize: 15, color: 'var(--ds-text)' }}>{src.name}</strong>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-3)', marginTop: 2 }}>{src.full}</span>
+                <p style={{ fontSize: 13, color: 'var(--ds-text-2)', margin: '10px 0 6px', lineHeight: 1.5 }}>{src.what}</p>
+                <p style={{ fontSize: 13, color: 'var(--ds-text-2)', margin: 0, lineHeight: 1.5 }}>
+                  <span style={{ color: 'var(--ds-text-3)' }}>In the app: </span>
+                  {src.where}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <p style={{ marginTop: 20, fontSize: 13, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {[
+              ['How the data fits together', '/guide/data-model'],
+              ['API reference', '/guide/api-reference'],
+              ['Factor library', '/library/factors'],
+            ].map(([l, href]) => (
+              <Link key={href} href={href} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 24, color: 'var(--ds-green)' }}>
+                <Icon name="arrow-right" size={11} />
+                {l}
+              </Link>
+            ))}
+          </p>
         </div>
       </section>
     </div>

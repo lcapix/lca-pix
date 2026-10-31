@@ -33,6 +33,11 @@ describe('landing', () => {
     for (const claim of ['Book a demo', 'templates', 'Free for students', 'approval', 'Published v', 'Portfolio', 'organisation library', 'never see edit controls', 'snapshot time']) {
       expect(text.includes(claim), claim).toBe(false)
     }
+    // Data sources: each is called by a screen or named in the factor data. No
+    // screen calls Electricity Maps (only an admin route nothing links to).
+    const sources = [...container.querySelectorAll('.lp-sources span')].map((s) => s.textContent).slice(1)
+    expect(sources).toEqual(['openLCA', 'PubChem', 'EPA eGRID', 'worldsteel', 'EIA', 'BLS', 'Metals-API'])
+    expect(text.includes('Electricity Maps')).toBe(false)
     // The sample study's own run: the numbers on the page are its numbers.
     expect(text).toContain('1.72')
     expect(text).toContain('89.4%')

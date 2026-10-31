@@ -277,7 +277,8 @@ export function EduLanding() {
           </ul>
           <p className="lp-sources">
             <span className="ds-mono">Data sources</span>
-            {['openLCA', 'PubChem', 'Electricity Maps', 'EPA eGRID', 'worldsteel', 'EIA', 'BLS', 'Metals-API'].map((s) => (
+            {/* Each one is called by a screen or named in the factor data; /docs says where. */}
+            {['openLCA', 'PubChem', 'EPA eGRID', 'worldsteel', 'EIA', 'BLS', 'Metals-API'].map((s) => (
               <span key={s} className="ds-mono">
                 {s}
               </span>

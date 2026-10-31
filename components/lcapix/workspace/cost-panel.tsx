@@ -3,8 +3,8 @@
 // The step panel in Cost view (E14): the step's cost per reference unit, "N of
 // 6 set", and each of the six kinds with how it was built (hours × rate, its
 // source tag). Labor opens "Look up a labor rate": a reference occupation, a
-// state's live BLS wage, or your own rate. Energy looks up a carrier's price.
-// The other kinds take an amount. Every save goes through the costs route,
+// state's live BLS wage, or your own rate. Energy looks up a carrier's price,
+// material a metal's price per kg (Metals-API). The other kinds take an amount. Every save goes through the costs route,
 // which stores the amount and the basis together. Material and energy also
 // offer the cost from the step's flows (one click, never on its own).
 
@@ -15,6 +15,7 @@ import { apiRequest } from '@/lib/api-client'
 import { announceComponentsChanged } from '@/lib/case-editor/use-flows'
 import { US_STATES } from '@/lib/case-editor/use-labor-rate'
 import { LABOR_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates'
+import { METAL_NAME } from '@/lib/integrations/metals/client'
 import { COST_BASIS_KINDS, type CostBasisKind } from '@/lib/costs/cost-basis'
 import type { FlowCostSuggestion } from '@/lib/costs/from-flows'
 import { amount, money } from '@/lib/ui/format'
@@ -581,6 +582,86 @@ function EnergyLookup({ step, cost, fromFlows, elsewhere = [], onDone, onClose }
   )
 }
 
+const METALS = Object.entries(METAL_NAME).map(([symbol, name]) => ({ symbol, name }))
+
+/**
+ * Material: kilograms of a metal, priced live by Metals-API when it answers,
+ * else the metal's dated reference price. A metal with neither (lead, tin) is
+ * refused by the server with a reason, and your own price per kg is the way on.
+ */
+function MetalLookup({ step, cost, onDone }: EditProps) {
+  const b = cost.basis
+  const [metal, setMetal] = useState(b?.rate_code && METAL_NAME[b.rate_code] ? b.rate_code : METALS[0].symbol)
+  const [qty, setQty] = useState(b?.driver_unit === 'kg' && b.driver_quantity != null ? amount(b.driver_quantity) : '')
+  const [own, setOwn] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const name = METAL_NAME[metal]
+  const q = num(qty)
+
+  const submit = async (mode: 'lookup' | 'entered') => {
+    if (!Number.isFinite(q) || q < 0) return setError(`Enter the kilograms of ${name.toLowerCase()} this step uses per unit.`)
+    const r = num(own)
+    if (mode === 'entered' && (!Number.isFinite(r) || r < 0)) return setError('Enter your price in dollars per kg.')
+    setBusy(mode)
+    setError(null)
+    const err = await putCost(
+      step.id,
+      mode === 'lookup'
+        ? { kind: 'material', mode, rate_code: metal, driver_quantity: q, driver_unit: 'kg' }
+        : { kind: 'material', mode, driver_quantity: q, driver_unit: 'kg', rate: r, rate_unit: '$/kg', rate_label: `${name}, own price` },
+    )
+    setBusy(null)
+    if (err) return setError(err)
+    onDone(`Saved · material on ${step.name}`)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <label className="ds-label" style={{ marginBottom: 0 }}>
+          Metal
+          <select className="ds-input" style={{ width: '100%', marginTop: 4 }} value={metal} onChange={(e) => setMetal(e.target.value)}>
+            {METALS.map((m) => (
+              <option key={m.symbol} value={m.symbol}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="ds-label" style={{ marginBottom: 0, flex: 1, minWidth: 120 }}>
+          Kilograms per unit
+          <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={qty} placeholder="0.8" onChange={(e) => setQty(e.target.value)} />
+        </label>
+        <Button variant="dark" onClick={() => submit('lookup')} busy={busy === 'lookup'} aria-label={`Look up the price of ${name.toLowerCase()}`}>
+          Look up the price
+        </Button>
+      </span>
+      <div>
+        <span className="ds-label">Or enter your own price</span>
+        <span style={{ display: 'flex', gap: 8 }}>
+          <span className="ws-money-input">
+            <span aria-hidden>$</span>
+            <input aria-label={`Your price for ${name.toLowerCase()} in dollars per kg`} inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => setOwn(e.target.value)} />
+            <span aria-hidden>/ kg</span>
+          </span>
+          <Button onClick={() => submit('entered')} busy={busy === 'entered'} aria-label={`Use your price for ${name.toLowerCase()}`}>
+            Use
+          </Button>
+        </span>
+      </div>
+      {error && (
+        <span role="alert" style={{ fontSize: 13, color: 'var(--ds-error)' }}>
+          {error}
+        </span>
+      )}
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--ds-text-2)' }}>
+        Live from Metals-API when it answers. If not, the dated reference price is used and tagged Reference.
+      </p>
+    </div>
+  )
+}
+
 /** Material, transport, equipment, overhead: the amount, and where it comes from. */
 function AmountEntry({
   step,
@@ -610,6 +691,8 @@ function AmountEntry({
     <div className="ws-lookup">
       <SheetHead title={`Set the ${label} cost`} sub={`For ${step.name}, per unit`} onClose={onClose} />
       {kind === 'material' && <FromFlowsInSheet step={step} kind="material" s={fromFlows} elsewhere={elsewhere} onDone={onDone} />}
+      {kind === 'material' && <MetalLookup step={step} cost={cost} onDone={onDone} onClose={onClose} />}
+      {kind === 'material' && <span className="ds-label" style={{ marginBottom: 0 }}>Or enter the whole material cost</span>}
       <span className="ws-money-input">
         <span aria-hidden>$</span>
         <input aria-label={`${COST_KIND_LABEL[kind]} cost in dollars`} inputMode="decimal" value={value} placeholder="0.00" onChange={(e) => setValue(e.target.value)} />

@@ -5,6 +5,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { api } from '../support/api';
+import { outbound } from '../support/outbound';
 import { snapshotOf, sql, sqlOne } from '../support/db';
 import { buildWorld, type World } from '../support/world';
 
@@ -111,6 +112,58 @@ describe('F23 step costs', () => {
     // Anything else in 'prefer' is refused.
     const bad = await api.put(url(), { token: w.users.editor.token, json: { ...weld, prefer: 'live' } });
     expect(bad.status).toBe(400);
+  });
+
+  it('E21 a metal lookup: no key gives that metal\'s reference price, a key gives Metals-API live; no price is never the generic average', async () => {
+    const t = w.users.editor.token;
+    const metalUrl = `/api/components/${w.P.base.task}/costs`;
+    const nickel = { kind: 'material', mode: 'lookup', driver_quantity: 0.5, rate_code: 'NIK', driver_unit: 'kg' };
+
+    // No METALS_API_KEY: MATERIAL_RATES' nickel row, tagged reference, and nothing outside is asked.
+    const calls = outbound.calls.length;
+    const ref = await api.put(metalUrl, { token: t, json: nickel });
+    expect(ref.status, ref.text).toBe(200);
+    expect(kind(ref.json, 'material')).toMatchObject({
+      amount: 9, // 0.5 kg x $18.00/kg
+      basis: {
+        driver_quantity: 0.5, driver_unit: 'kg', rate: 18, rate_unit: '$/kg', rate_label: 'Nickel', rate_code: 'NIK',
+        region: null, source_kind: 'reference', source_name: 'Reference', vintage: '2026-06',
+      },
+    });
+    expect(outbound.calls.length).toBe(calls);
+
+    // Lead has no reference and no live price: refused with the reason, the cost left as it was.
+    const lead = await api.put(metalUrl, { token: t, json: { ...nickel, rate_code: 'LEA' } });
+    expect(lead.status, lead.text).toBe(400);
+    expect(lead.json.error).toMatch(/^No price for lead: .*Enter your own price per kg\.$/);
+    expect(await sqlOne('SELECT material_cost FROM component WHERE component_id = ?', [w.P.base.task])).toEqual({ material_cost: '9.00' });
+    expect(await sqlOne(`SELECT source_kind, rate_code FROM component_cost_basis WHERE component_id = ? AND cost_kind = 'material'`, [w.P.base.task]))
+      .toEqual({ source_kind: 'reference', rate_code: 'NIK' });
+
+    // With a key, the (mocked) Metals-API price: $2385.50 a tonne is $2.3855/kg, tagged live.
+    process.env.METALS_API_KEY = 'test-key';
+    try {
+      const live = await api.put(metalUrl, { token: t, json: { ...nickel, rate_code: 'ZNC', driver_quantity: 2 } });
+      expect(live.status, live.text).toBe(200);
+      expect(kind(live.json, 'material')).toMatchObject({
+        amount: 4.77, // 2 x 2.3855 = 4.771, stored in cents
+        basis: { rate: 2.3855, rate_label: 'Zinc', rate_code: 'ZNC', region: 'Global', source_kind: 'live', source_name: expect.stringMatching(/^Metals-API \d{4}-\d{2}-\d{2}$/) },
+      });
+      expect(outbound.calls.some((c) => c.url.startsWith('https://metals-api.com/') && c.url.includes('symbols=ZNC'))).toBe(true);
+    } finally {
+      delete process.env.METALS_API_KEY;
+    }
+
+    // Refused: a symbol not on the list, a region (a metal has one world price), a unit other than kg.
+    for (const json of [
+      { ...nickel, rate_code: 'XAU' },
+      { ...nickel, rate_code: 'Generic material (avg)' },
+      { ...nickel, region: 'US' },
+      { ...nickel, driver_unit: 'lb' },
+    ]) {
+      const res = await api.put(metalUrl, { token: t, json });
+      expect(res.status, `${JSON.stringify(json)} ${res.text}`).toBe(400);
+    }
   });
 
   it("own rates: energy as driver x rate, overhead as an amount alone, both tagged entered; 'N of 6 set' counts them", async () => {

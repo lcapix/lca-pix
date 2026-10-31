@@ -5,7 +5,7 @@
  *
  * Source kinds:
  *   reference  the app's dated reference table (REFERENCE_VINTAGE)
- *   live       a public API answered (BLS, EIA)
+ *   live       a public API answered (BLS, EIA, Metals-API)
  *   entered    a person typed the rate or the amount
  * Only the server writes reference and live, after looking the rate up itself.
  */
@@ -98,17 +98,17 @@ const finite = z
   .max(COST_BASIS_MAX)
 const short = (max: number) => z.string().trim().min(1).max(max)
 
-/** PUT body, mode "lookup": the server finds the rate (labor or energy). */
+/** PUT body, mode "lookup": the server finds the rate (labor, energy or a metal). */
 export const LookupInput = z
   .object({
-    kind: z.enum(['labor', 'energy']),
+    kind: z.enum(['labor', 'energy', 'material']),
     mode: z.literal('lookup'),
     driver_quantity: finite,
-    /** Labor: a BLS OEWS code (51-4121). Energy: electricity or natural_gas. */
+    /** Labor: a BLS OEWS code (51-4121). Energy: electricity or natural_gas. Material: a Metals-API symbol (ALU). */
     rate_code: short(20),
-    /** 'US' or a state code. */
-    region: z.string().regex(/^[A-Z]{2}$/),
-    /** Energy only: the unit the driver is in (kWh, m3, MMBtu). Labor is hours. */
+    /** 'US' or a state code. Labor and energy only: a metal has one world price. */
+    region: z.string().regex(/^[A-Z]{2}$/).optional(),
+    /** Energy: the unit the driver is in (kWh, m3, MMBtu). Labor is hours, a metal kg. */
     driver_unit: short(20).optional(),
     /**
      * 'reference': the dated reference rate the list shows, no live call
