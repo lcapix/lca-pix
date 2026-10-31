@@ -93,7 +93,7 @@ test('E22 the material cost looks up a metal price per kg: reference with no key
   await page.getByRole('button', { name: /^Material/ }).click();
 
   // The test server has no METALS_API_KEY: steel's dated reference price, tagged Reference.
-  await page.getByLabel('Metal', { exact: true }).selectOption({ label: 'Steel' });
+  await page.getByRole('combobox', { name: 'Metal', exact: true }).selectOption({ label: 'Steel' });
   await page.getByLabel('Kilograms per unit').fill('0.8');
   let put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Look up the price of steel' }).click();
@@ -103,12 +103,12 @@ test('E22 the material cost looks up a metal price per kg: reference with no key
 
   // Lead has no live price and no reference: it says so, and nothing is saved.
   await page.getByRole('button', { name: /^Material/ }).click();
-  await page.getByLabel('Metal', { exact: true }).selectOption({ label: 'Lead' });
+  await page.getByRole('combobox', { name: 'Metal', exact: true }).selectOption({ label: 'Lead' });
   await page.getByLabel('Kilograms per unit').fill('0.2');
   put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Look up the price of lead' }).click();
   expect((await put).status()).toBe(400);
-  await expect.soft(page.getByRole('alert'), note('E22', 'no price for lead, enter your own')).toContainText('No price for lead');
+  await expect.soft(page.getByRole('alert').filter({ hasText: 'No price for lead' }), note('E22', 'no price for lead, enter your own')).toBeVisible();
   await expect.soft(page.getByText(/Generic material/), note('E22', 'never the generic average')).toHaveCount(0);
 });
 
