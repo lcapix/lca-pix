@@ -197,7 +197,7 @@ export interface CostView {
   byKind: Record<CostKey, number>
 }
 
-export function costView(c: CaseResult): CostView {
+export function costView(c: Pick<CaseResult, 'caseId' | 'costs'>): CostView {
   const byKind = Object.fromEntries(COST_KEYS.map((k) => [k, 0])) as Record<CostKey, number>
   for (const row of c.costs) for (const k of COST_KEYS) byKind[k] += row[k] > 0 ? row[k] : 0
   return { caseId: c.caseId, total: COST_KEYS.reduce((s, k) => s + byKind[k], 0), byKind }
@@ -263,7 +263,7 @@ export function hasComparableResults(c: { run?: unknown; status?: CompareStatus 
 }
 
 /** The case's total in a category, or null when the run computed none. */
-function rankValue(c: CaseResult, category: string): number | null {
+export function rankValue(c: Pick<CaseResult, 'totals'>, category: string): number | null {
   const rows = c.totals.filter((t) => t.category === category)
   if (!rows.length || rows.every((t) => t.flowCount === 0)) return null
   return rows.reduce((s, t) => s + t.value, 0)

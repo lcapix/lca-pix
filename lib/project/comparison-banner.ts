@@ -35,10 +35,17 @@ const climateOf = (c: BannerCase) => c.totals.find((t) => CLIMATE.test(t.categor
 const costOf = (c: BannerCase) =>
   c.costs.reduce((t, row) => t + COST_KEYS.reduce((s, k) => s + (Number(row[k]) || 0), 0), 0)
 
-export function comparisonBanner(cases: BannerCase[]): ComparisonBanner | null {
-  const base = cases.find((c) => c.isBase) ?? cases[0]
-  const other = cases.find((c) => c !== base)
-  if (!base || !other) return null
+/** The fields the comparability rule reads from a case. */
+export type CheckedCase = Pick<BannerCase, 'caseId' | 'name' | 'status' | 'run'>
+
+/**
+ * Why two cases give no number side by side, or null when they may. One rule
+ * for every headline number: this line, and Compare's verdict and change by
+ * category (lib/compare/verdict.ts). A headline: a region difference, which
+ * Compare shows as a warning beside its totals, stops the number here, and so
+ * does an incomplete run.
+ */
+export function whyNoNumber(base: CheckedCase, other: CheckedCase): string | null {
   const checks = comparability(
     [base, other].map((c) => ({
       caseId: c.caseId,
@@ -47,19 +54,22 @@ export function comparisonBanner(cases: BannerCase[]): ComparisonBanner | null {
       editedSinceRun: c.status === 'stale' || !!c.run?.stale,
     })),
   )
-  // The Overview's one line is a headline: a region difference, which Compare
-  // shows as a warning beside its numbers, stops the number here.
   const failed = checks.checks.find((k) => !k.ok)
+  if (failed) return failed.label
   const incomplete = [base, other].find((c) => c.status === 'incomplete')
+  if (incomplete) return `${incomplete.name} has no complete run yet.`
+  return checks.fair ? null : 'Run both cases to compare them.'
+}
+
+export function comparisonBanner(cases: BannerCase[]): ComparisonBanner | null {
+  const base = cases.find((c) => c.isBase) ?? cases[0]
+  const other = cases.find((c) => c !== base)
+  if (!base || !other) return null
+  const blocked = whyNoNumber(base, other)
   const a = climateOf(base)
   const b = climateOf(other)
-  if (!checks.fair || failed || incomplete || a === undefined || b === undefined) {
-    const why = failed
-      ? failed.label
-      : incomplete
-        ? `${incomplete.name} has no complete run yet.`
-        : 'Run both cases to compare them.'
-    return { base: base.name, other: other.name, line: null, why }
+  if (blocked || a === undefined || b === undefined) {
+    return { base: base.name, other: other.name, line: null, why: blocked ?? 'Run both cases to compare them.' }
   }
   const parts: string[] = []
   const da = Math.abs(b - a)

@@ -5,7 +5,9 @@
 // functional unit; every run current). When they pass: the totals, change by
 // step, and what changed in the copy. When one fails: the totals greyed,
 // change by step held back with the reason, and the run that fixes it, under
-// the base case's method and region. The fuller views (every category,
+// the base case's method and region. Under the totals, the verdict and the
+// change by category for A against B; any check that is not ok, a region
+// difference included, holds their numbers back. The fuller views (every category,
 // hotspots, cost, where the change comes from by step or material, what
 // differs in every copy, data quality) are tabs below; when the checks fail,
 // each says why. ?tab=saved lists the project's saved comparisons.
@@ -39,6 +41,7 @@ import {
 import { caseTotal, amountBox, co2Unit, fixed, result3, share } from '@/lib/ui/format'
 import { sourceKindOf } from '@/lib/workspace/inventory'
 import type { CompareCase } from './types'
+import { DeltaCard, VerdictCard } from './verdict-cards'
 // The fuller views load only when "More ways to compare" opens: they carry the chart code.
 const ResultsPanel = dynamic(() => import('./results-panel').then((m) => m.ResultsPanel))
 const HotspotPanel = dynamic(() => import('./hotspot-panel').then((m) => m.HotspotPanel))
@@ -422,6 +425,14 @@ export function ComparePage() {
                 : 'Not comparable yet. The totals are greyed until every check passes.'}
             </p>
           </section>
+
+          {/* P51, P54: A against the case "Change by step" reads (B, or the one picked there). */}
+          {other && (
+            <div className="cmp-vd">
+              <VerdictCard a={base} b={other} letterB={letterOf(other.caseId)} category={category} />
+              <DeltaCard a={base} b={other} letterB={letterOf(other.caseId)} />
+            </div>
+          )}
 
           {fair ? (
             <div className="cmp-main">
