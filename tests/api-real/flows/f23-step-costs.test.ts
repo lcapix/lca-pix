@@ -114,7 +114,7 @@ describe('F23 step costs', () => {
     expect(bad.status).toBe(400);
   });
 
-  it('E21 a metal lookup: no key gives that metal\'s reference price, a key gives Metals-API live; no price is never the generic average', async () => {
+  it('E22 a metal lookup: no key gives that metal\'s reference price, a key gives Metals-API live; no price is never the generic average', async () => {
     const t = w.users.editor.token;
     const metalUrl = `/api/components/${w.P.base.task}/costs`;
     const nickel = { kind: 'material', mode: 'lookup', driver_quantity: 0.5, rate_code: 'NIK', driver_unit: 'kg' };

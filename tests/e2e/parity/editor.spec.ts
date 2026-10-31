@@ -83,7 +83,7 @@ test('E10 E14 change a flow amount, and use your own factor when the region fell
   await row(page.getByRole('button', { name: 'Use my own number' }), 'E14', 'Override a factor');
 });
 
-test('E21 the material cost looks up a metal price per kg: reference with no key, and no price for lead', async ({ api, newUser, signIn }) => {
+test('E22 the material cost looks up a metal price per kg: reference with no key, and no price for lead', async ({ api, newUser, signIn }) => {
   const user = await newUser('parity-metal');
   const { projectId, caseId } = await workedExample(api, user);
   const { page } = await signIn(user);
@@ -98,8 +98,8 @@ test('E21 the material cost looks up a metal price per kg: reference with no key
   let put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Look up the price of steel' }).click();
   expect((await put).request().postDataJSON()).toEqual({ kind: 'material', mode: 'lookup', rate_code: 'STL', driver_quantity: 0.8, driver_unit: 'kg' });
-  await row(page.getByText('0.8 kg × $0.95/kg · Steel, hot-rolled'), 'E21', 'Look up a metal price for the material cost');
-  await expect.soft(page.getByRole('button', { name: /^Material/ }), note('E21', 'tagged Reference')).toContainText('Reference 2026-06');
+  await row(page.getByText('0.8 kg × $0.95/kg · Steel, hot-rolled'), 'E22', 'Look up a metal price for the material cost');
+  await expect.soft(page.getByRole('button', { name: /^Material/ }), note('E22', 'tagged Reference')).toContainText('Reference 2026-06');
 
   // Lead has no live price and no reference: it says so, and nothing is saved.
   await page.getByRole('button', { name: /^Material/ }).click();
@@ -108,8 +108,8 @@ test('E21 the material cost looks up a metal price per kg: reference with no key
   put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Look up the price of lead' }).click();
   expect((await put).status()).toBe(400);
-  await expect.soft(page.getByRole('alert'), note('E21', 'no price for lead, enter your own')).toContainText('No price for lead');
-  await expect.soft(page.getByText(/Generic material/), note('E21', 'never the generic average')).toHaveCount(0);
+  await expect.soft(page.getByRole('alert'), note('E22', 'no price for lead, enter your own')).toContainText('No price for lead');
+  await expect.soft(page.getByText(/Generic material/), note('E22', 'never the generic average')).toHaveCount(0);
 });
 
 type Substance = { substance_id: number; substance_name: string; unit?: string };
