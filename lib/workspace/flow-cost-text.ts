@@ -17,9 +17,10 @@
  */
 
 import { FROM_FLOWS, differsFromStored, type FlowCostSuggestion } from '@/lib/costs/from-flows'
-import type { CostBasis, CostBasisKind } from '@/lib/costs/cost-basis'
-import { money } from '@/lib/ui/format'
-import { COST_KIND_LABEL } from './cost-text'
+import { costAmount, type CostBasis, type CostBasisKind, type CostLine } from '@/lib/costs/cost-basis'
+import { classifyEnergyCarrier } from '@/lib/integrations/reference-rates'
+import { amount, money } from '@/lib/ui/format'
+import { COST_KIND_LABEL, rateText } from './cost-text'
 
 export type FlowCostKind = 'material' | 'energy'
 export const FLOW_COST_KINDS: FlowCostKind[] = ['material', 'energy']
@@ -73,6 +74,36 @@ export function offerText(note: Pick<FlowCostNote, 'kind' | 'offer' | 'stored'>,
 export function noPriceText(names: string[]): string {
   const list = names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
   return `No price for ${list}: add ${names.length < 2 ? 'its' : 'their'} cost`
+}
+
+/**
+ * A flow's cost on its Inventory row (E4): "0.2 kg × $0.60/kg = $0.12" when
+ * the step's cost of that kind was built from its flows (that line is what is
+ * counted); "In the step's material cost" when the step carries an amount of
+ * its own; the reference price the flow would come to when nothing is
+ * stored yet ("not in the cost yet"); outputs are not costs.
+ */
+export function flowCostCell(
+  flow: { substance: string; direction: 'input' | 'output' },
+  costs: Stored[] | null | undefined,
+  fromFlows: FromFlows | null | undefined,
+): { text: string; counted: boolean; kind: FlowCostKind | null } {
+  if (flow.direction !== 'input') return { text: 'An output: no cost', counted: false, kind: null }
+  const kind: FlowCostKind = classifyEnergyCarrier(flow.substance) ? 'energy' : 'material'
+  const word = COST_KIND_LABEL[kind].toLowerCase()
+  const c = costs?.find((x) => x.kind === kind)
+  const lineText = (l: CostLine) => `${amount(l.quantity)} ${l.unit} × ${rateText(l.rate, l.rate_unit)} = ${money(costAmount(l.quantity, l.rate))}`
+  const stored = (c?.basis as (Partial<CostBasis> & { lines?: CostLine[] | null }) | null | undefined) ?? null
+  if (stored?.rate_code === FROM_FLOWS && stored.lines?.length) {
+    const l = stored.lines.find((x) => x.label === flow.substance)
+    if (l) return { text: lineText(l), counted: true, kind }
+    return { text: `Not in the ${word} cost: no price on file`, counted: false, kind }
+  }
+  if (c && c.amount !== null) return { text: `In the step's ${word} cost`, counted: false, kind }
+  const s = fromFlows?.[kind]
+  const l = s?.lines.find((x) => x.label === flow.substance)
+  if (l) return { text: `${lineText(l)} · not in the cost yet`, counted: false, kind }
+  return { text: 'No price on file', counted: false, kind }
 }
 
 type LineStep = { id: number; parentId: number | null; name: string; costs: Partial<Record<CostBasisKind, number | null>> }

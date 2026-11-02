@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiRequest } from '@/lib/api-client'
-import type { CostBasis, CostBasisKind } from '@/lib/costs/cost-basis'
+import type { CostBasis, CostBasisKind, CostLine } from '@/lib/costs/cost-basis'
 import type { FromFlows } from './flow-cost-text'
 
 export interface StepCosts {
@@ -53,10 +53,68 @@ export function useStepCosts(componentId: number, enabled = true) {
   return { data, error, load }
 }
 
+/**
+ * Every listed step's costs at once, for the Inventory's cost cells and step
+ * cost rows (E4). Reloads on the same announcements; only the newest load lands.
+ */
+export function useCaseStepCosts(componentIds: number[]) {
+  const [data, setData] = useState<Map<number, StepCosts>>(new Map())
+  const seq = useRef(0)
+  const key = componentIds.join(',')
+  const load = useCallback(async () => {
+    const ids = key ? key.split(',').map(Number) : []
+    const mine = ++seq.current
+    const got = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const res = await apiRequest(`/api/components/${id}/costs`)
+          if (!res.ok) return null
+          return [id, (await res.json()) as StepCosts] as const
+        } catch {
+          return null
+        }
+      }),
+    )
+    if (mine === seq.current) setData(new Map(got.filter((x): x is readonly [number, StepCosts] => !!x)))
+  }, [key])
+  useEffect(() => {
+    load()
+    const onChange = () => load()
+    window.addEventListener('lcapix:components-changed', onChange)
+    window.addEventListener('lcapix:flows-changed', onChange)
+    return () => {
+      window.removeEventListener('lcapix:components-changed', onChange)
+      window.removeEventListener('lcapix:flows-changed', onChange)
+    }
+  }, [load])
+  return data
+}
+
 /** PUT one cost; resolves to the server's error text, or null when saved. */
 export async function putCost(componentId: number, body: Record<string, unknown>): Promise<string | null> {
   const res = await apiRequest(`/api/components/${componentId}/costs`, { method: 'PUT', body: JSON.stringify(body) })
   if (res.ok) return null
   const d = await res.json().catch(() => ({}))
   return d?.error ?? `Not saved (${res.status}).`
+}
+
+export interface CostPreview {
+  kind: CostBasisKind
+  amount: number
+  basis?: CostBasis | null
+  lines?: CostLine[] | null
+}
+
+/**
+ * Work a cost out without storing it (B1): the panels show the number beside
+ * Save, and only Save stores it. Resolves to the preview, or the server's error.
+ */
+export async function previewCost(
+  componentId: number,
+  body: Record<string, unknown>,
+): Promise<{ preview: CostPreview | null; error: string | null }> {
+  const res = await apiRequest(`/api/components/${componentId}/costs`, { method: 'PUT', body: JSON.stringify({ ...body, preview: true }) })
+  const d = await res.json().catch(() => ({}))
+  if (!res.ok) return { preview: null, error: d?.error ?? `Not worked out (${res.status}).` }
+  return { preview: (d?.preview ?? null) as CostPreview | null, error: null }
 }

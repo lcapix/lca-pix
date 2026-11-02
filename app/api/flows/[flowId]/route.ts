@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { COLUMN_LIMITS, lengthError } from '@/lib/field-limits';
-import { queryOne, execute } from '@/lib/db-helpers';
+import { query, queryOne, execute, transaction } from '@/lib/db-helpers';
 import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
-import { convertQuantity, compatibleUnits } from '@/lib/units';
+import { convertQuantity, compatibleUnits, sameUnit } from '@/lib/units';
+import { convertForUnitChange, convertOwnFactor } from '@/lib/workspace/flow-edit';
 import {
   QUANTITY_ERROR,
   parseOptionalFlowQuantity,
@@ -58,12 +59,25 @@ export async function PUT(
     }
     const quantity = parsedQuantity.value;
     const clearQuantity = quantityProvided && quantity === null;
-    const unit = body.unit;
+    const unit = typeof body.unit === 'string' && body.unit.trim() ? body.unit.trim() : body.unit;
     if (flow_type != null && !['input', 'output'].includes(flow_type)) {
       return NextResponse.json({ error: 'Invalid flow_type (must be input or output)' }, { status: 400 });
     }
     const unitTooLong = lengthError('Unit', unit, COLUMN_LIMITS.flows.unit);
     if (unitTooLong) return NextResponse.json({ error: unitTooLong }, { status: 400 });
+
+    // E1: a flow can move to another step of the same case, never out of it.
+    const moveRaw = body.component_id;
+    let moveTo: number | null = null;
+    if (moveRaw !== undefined && moveRaw !== null) {
+      moveTo = parseId(String(moveRaw));
+      const target = Number.isNaN(moveTo)
+        ? null
+        : await queryOne<any>(`SELECT case_id FROM component WHERE component_id = ?`, [moveTo]);
+      if (!target || Number(target.case_id) !== Number(existing.case_id)) {
+        return NextResponse.json({ error: 'component_id: pick a step of this case.' }, { status: 400 });
+      }
+    }
 
     // L3: a swap may only go to a library substance or the caller's own one.
     let swappedTo: { default_unit?: string | null; substance_name?: string } | null = null;
@@ -107,6 +121,42 @@ export async function PUT(
       }
     }
 
+    // A1: a unit sent alone converts the amount (0.035 kg is 35 g), never
+    // relabels it; units that measure different things are refused. An amount
+    // sent with the unit is taken as typed, in that unit. A2: an own factor is
+    // restated per the new unit, so the impact stays the same physical number.
+    let convertedQuantity: number | null | undefined;
+    let ownFactors: Array<{ category_id: number; factor_value: number }> = [];
+    // A swap to another substance restates the flow (its amount stays as sent
+    // or as stored); only the same substance's amount is converted.
+    if (unit) {
+      const now = await queryOne<any>(`SELECT quantity, unit, substance_id FROM flows WHERE flow_id = ?`, [flowId]);
+      const swapping = substance_id != null && now?.substance_id != null && Number(substance_id) !== Number(now.substance_id);
+      if (now?.unit && !swapping && !sameUnit(now.unit, unit)) {
+        if (!quantityProvided) {
+          const change = convertForUnitChange(now.quantity == null ? null : Number(now.quantity), String(now.unit), unit);
+          if (!change.ok) return NextResponse.json({ error: change.reason }, { status: 400 });
+          convertedQuantity = change.amount;
+        }
+        let overrides: any[] = [];
+        try {
+          overrides = (await query<any>(`SELECT category_id, factor_value, per_unit FROM flow_factor_overrides WHERE flow_id = ?`, [flowId])) ?? [];
+        } catch (ovErr: any) {
+          if (ovErr?.code !== 'ER_NO_SUCH_TABLE') throw ovErr; // no migrate-034
+        }
+        for (const o of overrides) {
+          const v = convertOwnFactor(Number(o.factor_value), String(o.per_unit), unit);
+          if (v === null) {
+            return NextResponse.json(
+              { error: `Your own factor is stated per ${o.per_unit}, and ${unit} does not convert to it. Use the library factor again first, or pick a unit like ${o.per_unit}.` },
+              { status: 400 },
+            );
+          }
+          ownFactors.push({ category_id: Number(o.category_id), factor_value: v });
+        }
+      }
+    }
+
     // 3.10: a tab that sends the amount it loaded (expected_quantity) saves
     // only if nobody changed it since; otherwise 409 with the amount now.
     const guarded = Object.prototype.hasOwnProperty.call(body, 'expected_quantity');
@@ -119,24 +169,42 @@ export async function PUT(
     const expectedUnit = guarded && typeof body.expected_unit === 'string' && body.expected_unit.trim() ? body.expected_unit.trim() : null;
 
     try {
-      const changed = await execute(
-        `UPDATE flows
+      const updateSql = `UPDATE flows
          SET substance_id = COALESCE(?, substance_id),
              flow_type = COALESCE(?, flow_type),
              quantity = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, quantity) END,
-             unit = COALESCE(?, unit)
-         WHERE flow_id = ?${guarded ? ' AND quantity IS NOT DISTINCT FROM ?::float8' : ''}${expectedUnit ? ' AND unit = ?' : ''}`,
-        [
-          substance_id != null ? Number(substance_id) : null,
-          flow_type ?? null,
-          clearQuantity ? 1 : 0,
-          quantity,
-          unit ?? null,
-          flowId,
-          ...(guarded ? [expected] : []),
-          ...(expectedUnit ? [expectedUnit] : []),
-        ]
-      );
+             unit = COALESCE(?, unit),
+             component_id = COALESCE(?, component_id)
+         WHERE flow_id = ?${guarded ? ' AND quantity IS NOT DISTINCT FROM ?::float8' : ''}${expectedUnit ? ' AND unit = ?' : ''}`;
+      const updateParams = [
+        substance_id != null ? Number(substance_id) : null,
+        flow_type ?? null,
+        clearQuantity ? 1 : 0,
+        convertedQuantity !== undefined ? convertedQuantity : quantity,
+        unit ?? null,
+        moveTo,
+        flowId,
+        ...(guarded ? [expected] : []),
+        ...(expectedUnit ? [expectedUnit] : []),
+      ];
+      let changed: number;
+      if (ownFactors.length) {
+        // The flow and its own factors change together, or neither does.
+        changed = await transaction(async (conn) => {
+          const [res] = await conn.query<any>(updateSql, updateParams);
+          const n = Number(res?.affectedRows ?? 0);
+          if (n === 0) return 0;
+          for (const o of ownFactors) {
+            await conn.query(
+              `UPDATE flow_factor_overrides SET factor_value = ?, per_unit = ? WHERE flow_id = ? AND category_id = ?`,
+              [o.factor_value, unit, flowId, o.category_id],
+            );
+          }
+          return n;
+        });
+      } else {
+        changed = await execute(updateSql, updateParams);
+      }
       if (guarded && changed === 0) {
         const now = await queryOne<any>(`SELECT quantity, unit FROM flows WHERE flow_id = ?`, [flowId]);
         return NextResponse.json(

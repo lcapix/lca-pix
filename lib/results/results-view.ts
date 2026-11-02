@@ -145,9 +145,32 @@ export function factorTitle(source: string | null, sourceTier: string | null): s
       : undefined
 }
 
-/** A factor with no recorded or only a legacy source gets a warning mark. */
-export function isWeakFactorSource(sourceTier: string | null): boolean {
+/** "Entered by hand: <source>": a person's own factor, which always names its source (E2). */
+export function isHandEnteredSource(source: string | null | undefined): boolean {
+  return /^entered by hand\b/i.test(String(source ?? '').trim())
+}
+
+/**
+ * A factor with no recorded or only a legacy source gets a warning mark. A
+ * hand-entered factor is not weak for want of a library source: it carries
+ * the source the person gave (A2).
+ */
+export function isWeakFactorSource(sourceTier: string | null, source?: string | null): boolean {
+  if (isHandEnteredSource(source)) return false
   return sourceTier === 'unverified' || sourceTier === 'unknown'
+}
+
+/**
+ * The words after a factor in the results rows: " · Hand-entered: the
+ * supplier's EPD, 2024" for your own number, " (source not on record)" for a
+ * factor with no source, nothing otherwise.
+ */
+export function factorSourceNote(sourceTier: string | null, source: string | null | undefined): string {
+  if (isHandEnteredSource(source)) {
+    const given = String(source).replace(/^entered by hand:?\s*/i, '').trim()
+    return ` · Hand-entered${given ? `: ${given}` : ''}`
+  }
+  return isWeakFactorSource(sourceTier, source) ? ' (source not on record)' : ''
 }
 
 /** The engine fell back to the Global factor although the run was for another region. */

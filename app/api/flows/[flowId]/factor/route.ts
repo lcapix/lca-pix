@@ -5,6 +5,7 @@ import { requireAuth } from '@/lib/auth';
 import { caseAccessDenied, isAuthError } from '@/lib/route-guard';
 import { parseId } from '@/lib/ids';
 import { toFactorBasis } from '@/lib/units';
+import { isClimate } from '@/lib/workspace/inventory';
 import {
   FactorOverrideInput,
   methodCategoryUnit,
@@ -13,7 +14,8 @@ import {
 
 // A person's own factor for one flow (migrate-034, E03 "Use my own number").
 //   GET     the flow's own factors, one per impact category (any member)
-//   PUT     set or replace the one for a category ("Can change")
+//   PUT     set or replace the one for a category ("Can change"); category
+//           "climate" in place of category_id names the method's climate one
 //   DELETE  ?category_id=N goes back to the library factor ("Can change")
 // The number is stated in the unit the project's method reports the category
 // in, per one per_unit of the flow (default: the flow's own unit).
@@ -79,7 +81,27 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const json = await readJson(request);
     if (!json.ok) return json.response;
-    const parsed = FactorOverrideInput.safeParse(json.body);
+    // E2: a flow with no climate factor has no category id to send: it asks for
+    // "the method's climate category" by name, and the server finds it.
+    let body: any = json.body;
+    if (body && typeof body === 'object' && body.category === 'climate' && body.category_id === undefined) {
+      const { category: _ask, ...rest } = body;
+      const method = String(flow.lcia_method || 'CML 2001');
+      const cats = await query<any>(
+        `SELECT DISTINCT ic.category_id, ic.category_name
+           FROM impact_categories ic
+           JOIN driver_impact_factors d ON d.category_id = ic.category_id
+          WHERE d.method_name = ?
+          ORDER BY ic.category_id`,
+        [method],
+      );
+      const climate = (cats ?? []).find((c) => isClimate(c.category_name));
+      if (!climate) {
+        return NextResponse.json({ error: `category: ${method} has no climate category to set a factor in.` }, { status: 400 });
+      }
+      body = { ...rest, category_id: Number(climate.category_id) };
+    }
+    const parsed = FactorOverrideInput.safeParse(body);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const field = issue?.path?.join('.') || 'body';

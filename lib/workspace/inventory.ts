@@ -6,6 +6,7 @@
  */
 
 import { convertQuantity } from '@/lib/units'
+import { basisUnitOf } from './flow-edit'
 import type { FlowStatus, SourceKind } from '@/lib/ui/words'
 import type { FlowContribution, LCAResult } from '@/lib/lca-engine'
 
@@ -46,6 +47,8 @@ export interface InventoryRow {
     impact: number
     /** "1 g = 0.001 kg" when the amount was converted. */
     conversion: string | null
+    /** The unit the factor is stated per ("kg": 1.9 kg CO2 eq per kg); absent from an older server. */
+    per?: string
     scope: string | null
     source: string | null
     tag: SourceKind
@@ -116,6 +119,7 @@ export function buildInventory(flows: CaseFlowRow[], result: Pick<LCAResult, 'co
             unit: unitOf(climateUnitOf(result, c)),
             impact: c.impact_contribution,
             conversion: c.unit_conversion ?? null,
+            per: basisUnitOf(f.unit, c.unit_conversion),
             scope: c.geographic_scope ?? null,
             source: c.factor_source ?? null,
             tag: sourceKindOf({ scope: c.geographic_scope, source: c.factor_source, origin: c.factor_origin }),

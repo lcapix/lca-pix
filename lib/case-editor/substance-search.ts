@@ -14,11 +14,70 @@ const named = (s: Substance) => americanize((s.substance_name ?? '').toLowerCase
  * "switch to recycled" is something you can see rather than something you
  * have to know exists.
  */
-/** Every match in the library. No cut-off. Spelling is read on both sides. */
+/**
+ * The materials a student reaches for first, shown before anything is typed
+ * (E7): the library's own rows for them, never a guess. A name that is not in
+ * the library is simply not shown.
+ */
+export const COMMON_MATERIALS = [
+  'steel',
+  'aluminum',
+  'electricity',
+  'natural gas',
+  'copper',
+  'water',
+  'polyethylene',
+  'polypropylene',
+  'glass',
+  'cardboard',
+  'paper',
+  'diesel',
+] as const
+
+/** Rank of a name for a query: 0 the name itself, 1 starts with it, 2 a word starts with it, 3 anywhere. */
+function matchRank(name: string, q: string): number {
+  if (name === q) return 0
+  if (name.startsWith(q)) return 1
+  if (new RegExp(`(^|[^a-z0-9])${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(name)) return 2
+  return name.includes(q) ? 3 : -1
+}
+
+/** A chemical-style name (".alpha.-Cypermethrin", "1,2-Dichloro...") sorts after plain words. */
+const odd = (name: string) => (/^[^a-z]/.test(name) ? 1 : 0)
+const hasFactors = (s: Substance) => ((s.factor_count ?? 0) > 0 || s.climate_factor != null ? 0 : 1)
+
+function byRelevance(a: { s: Substance; r: number; n: string }, b: { s: Substance; r: number; n: string }): number {
+  return a.r - b.r || odd(a.n) - odd(b.n) || hasFactors(a.s) - hasFactors(b.s) || a.n.length - b.n.length || a.n.localeCompare(b.n)
+}
+
+/**
+ * Matches for the search box, most relevant first (E7): the name itself,
+ * then names that start with what was typed, then a word that does, then the
+ * rest; plain words before chemical-style names, substances with factors
+ * before ones with none, shorter names first. Spelling is read on both sides
+ * (aluminium finds Aluminum). With nothing typed: the common materials only.
+ */
 export function searchSubstances(search: string, substances: Substance[]): Substance[] {
   const q = americanize(search.trim().toLowerCase())
-  if (!q) return substances
-  return substances.filter((s) => named(s).includes(q))
+  if (!q) return commonMaterials(substances)
+  return substances
+    .map((s) => ({ s, n: named(s), r: matchRank(named(s), q) }))
+    .filter((x) => x.r >= 0)
+    .sort(byRelevance)
+    .map((x) => x.s)
+}
+
+/** The library's rows for the common materials, one each, in the list's order. */
+export function commonMaterials(substances: Substance[]): Substance[] {
+  const out: Substance[] = []
+  for (const word of COMMON_MATERIALS) {
+    const hit = substances
+      .map((s) => ({ s, n: named(s), r: matchRank(named(s), word) }))
+      .filter((x) => x.r >= 0 && x.r <= 1 && !x.s.variant_of)
+      .sort(byRelevance)[0]
+    if (hit && !out.includes(hit.s)) out.push(hit.s)
+  }
+  return out
 }
 
 export function matchSubstances(search: string, substances: Substance[]): Substance[] {

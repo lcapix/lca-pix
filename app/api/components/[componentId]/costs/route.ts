@@ -39,6 +39,8 @@ import {
 //           person's own rate, or an amount alone), or mode "flows" (material
 //           or energy, from the step's flows: the "Use it" the panels offer)
 //                                                            ("Can change")
+//           preview: true with any mode returns the amount and its basis
+//           and stores nothing (the panels' preview before Save)
 //   DELETE  ?kind=labor clears that cost and its basis      ("Can change")
 // The amount stays in its component column; the basis row explains it.
 
@@ -121,11 +123,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const json = await readJson(request);
     if (!json.ok) return json.response;
-    if ((json.body as any)?.mode === 'flows') return useFlows(componentId, json.body, userId);
-    const parsed = CostBasisInput.safeParse(json.body);
+    // B1: preview: true works the number out and returns it, and stores nothing
+    // (the panels show it beside Save; only Save stores it).
+    const { preview: previewRaw, ...rawBody } = (json.body ?? {}) as any;
+    const preview = previewRaw === true;
+    if (rawBody?.mode === 'flows') return useFlows(componentId, rawBody, userId, preview);
+    const parsed = CostBasisInput.safeParse(rawBody);
     if (!parsed.success) {
       // A union reports every branch; the branch the mode names is the one to explain.
-      const mode = (json.body as any)?.mode;
+      const mode = rawBody?.mode;
       const issues = parsed.error.issues.flatMap((i: any) => (i.code === 'invalid_union' ? i.unionErrors.flatMap((e: any) => e.issues) : [i]));
       const issue = issues.find((i: any) => i.path?.[0] !== 'mode') ?? issues[0];
       if (mode !== 'lookup' && mode !== 'entered') return bad('mode: must be "lookup", "entered" or "flows"');
@@ -215,6 +221,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       };
     }
 
+    if (preview) {
+      return NextResponse.json({ success: true, preview: { kind, amount, basis: { kind, amount, ...basis, lines: null } } });
+    }
+
     // The amount, the labor driver and the basis change together.
     const sets: Array<[string, unknown]> = [[COST_COLUMN[kind], amount]];
     if (kind === 'labor' && basis.driver_quantity !== null) sets.push(['labor_hours', basis.driver_quantity]);
@@ -253,7 +263,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
  * out here, never taken from the request, and kept with one line per priced
  * flow; flows no price applies to stay out and are named in from_flows.
  */
-async function useFlows(componentId: number, body: any, userId: number) {
+async function useFlows(componentId: number, body: any, userId: number, preview = false) {
   const kind = body?.kind;
   if (kind !== 'material' && kind !== 'energy') return bad('kind: material or energy, for mode "flows"');
   const suggestion = costsFromFlows(await flowsOf(componentId))[kind as 'material' | 'energy'];
@@ -265,6 +275,7 @@ async function useFlows(componentId: number, body: any, userId: number) {
     );
   }
   const amount = suggestion.amount;
+  if (preview) return NextResponse.json({ success: true, preview: { kind, amount, lines: suggestion.lines } });
   await transaction(async (conn) => {
     await conn.query(`UPDATE component SET ${COST_COLUMN[kind as CostBasisKind]} = ? WHERE component_id = ?`, [amount, componentId]);
     await conn.query(
