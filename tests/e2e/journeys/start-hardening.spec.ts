@@ -93,9 +93,10 @@ test.describe('journey 1, hardened: the sample, my copy, the Cases board', () =>
     await expect(page).toHaveURL(new RegExp(`/case/${copyId}$`), NAV);
     // A second copy is its own, named choice.
     await open(page, '/home', { ready: 'Read-only · made for you when you signed up' });
-    const second = answered(page, /^\/api\/cases\/\d+\/duplicate$/);
+    // The first name is hers already (409), so the copy is "<name> 2".
+    const second = page.waitForResponse((r) => /\/api\/cases\/\d+\/duplicate$/.test(new URL(r.url()).pathname) && r.status() === 201, NAV);
     await page.locator('header').getByRole('button', { name: 'Make another copy' }).click();
-    expect((await second).status()).toBe(201);
+    expect((await (await second).json()).case_id).toBeGreaterThan(0);
     await expect(page).toHaveURL(/\/case\/\d+$/, NAV);
     const secondId = Number(/\/case\/(\d+)$/.exec(new URL(page.url()).pathname)![1]);
     expect(secondId).not.toBe(copyId);
