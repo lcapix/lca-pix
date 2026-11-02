@@ -127,10 +127,17 @@ async function readStatus(): Promise<NextResponse> {
     };
   });
 
+  // What the factors cite, for the Data sources screen (grouped there by dataset).
+  const factorSources = await safeQuery<any>(`
+    SELECT source_reference, COUNT(*) AS n
+      FROM driver_impact_factors
+     GROUP BY source_reference`);
+
   return NextResponse.json({
     success: true,
     substances: substances || { total: 0, enriched: 0 },
     factorsByMethod,
+    factorSources,
     rateCache,
     sources,
   });

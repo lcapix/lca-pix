@@ -375,7 +375,11 @@ function DocsPageBody() {
           </h2>
           <p style={{ marginTop: 10, fontSize: 14, color: 'var(--ds-text-2)', maxWidth: 680, lineHeight: 1.55 }}>
             Only the sources the app really calls or ships. Prices are live when the service answers. If it does not, the
-            app uses a dated reference rate and tags it Reference.
+            app uses a dated reference rate and tags it Reference. Signed in, the{' '}
+            <Link className="ds-link" href="/library/sources">
+              Data sources
+            </Link>{' '}
+            page shows which of them answer live right now.
           </p>
           <ul
             aria-label="Data sources"

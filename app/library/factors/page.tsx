@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { TitleBlock } from '@/components/lcapix/ds'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -169,10 +170,17 @@ export default function FactorsLibraryPage() {
             as="h1"
             eyebrow="LIBRARY"
             title="Factor library"
-            sub={`${totalFactors.toLocaleString()} impact factors across ${
-              groups.length ||
-              new Set(factors.map((f) => f.method_name ?? '')).size
-            } methodologies.`}
+            sub={
+              <>
+                {`${totalFactors.toLocaleString()} impact factors across ${
+                  groups.length || new Set(factors.map((f) => f.method_name ?? '')).size
+                } methodologies. `}
+                <Link className="ds-link" href="/library/sources">
+                  Data sources
+                </Link>{' '}
+                says which datasets they come from.
+              </>
+            }
             style={{ marginBottom: 28 }}
           />
 

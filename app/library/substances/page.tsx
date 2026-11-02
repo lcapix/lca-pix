@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { TitleBlock } from '@/components/lcapix/ds'
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -157,7 +158,15 @@ export default function SubstancesLibraryPage() {
             as="h1"
             eyebrow="LIBRARY"
             title="Substance catalog"
-            sub={`${rows.length.toLocaleString()} substances across ${groupCounts.length} categories.`}
+            sub={
+              <>
+                {`${rows.length.toLocaleString()} substances across ${groupCounts.length} categories. `}
+                <Link className="ds-link" href="/library/sources">
+                  Data sources
+                </Link>{' '}
+                says where they and their factors come from.
+              </>
+            }
             style={{ marginBottom: 28 }}
           />
 
