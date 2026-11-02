@@ -9,6 +9,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => '/home',
+  useSearchParams: () => new URLSearchParams(),
 }))
 
 import { EduHome } from '@/components/lcapix/home/edu-home'

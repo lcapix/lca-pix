@@ -214,7 +214,8 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
       )}
 
       <div className="ds-nav" style={{ marginTop: 10 }}>
-        <Link href="/home" className="ds-nav-item" onClick={go}>
+        {/* C3: the list of projects, also when the sample is all there is (Home is then the sample). */}
+        <Link href="/home?view=all" className="ds-nav-item" onClick={go}>
           <ShellIcon name="grid" />
           All projects
           <CountPill n={projects.length} plain label={`${projects.length} projects`} />
@@ -246,6 +247,9 @@ export function Sidebar({ open, onNavigate }: { open?: boolean; onNavigate?: () 
       </Link>
       <Link href="/library/substances" className="ds-nav-item" onClick={go}>
         Substances
+      </Link>
+      <Link href="/library/sources" className="ds-nav-item" onClick={go}>
+        Data sources
       </Link>
       <Link href="/guide" className="ds-nav-item" onClick={go}>
         <ShellIcon name="help" />

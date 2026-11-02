@@ -196,7 +196,7 @@ export function ProjectSwitcher({
         ) : (
           <span />
         )}
-        <a className="ds-link" href="/home" style={{ color: 'var(--ds-text)', fontWeight: 500 }}>
+        <a className="ds-link" href="/home?view=all" style={{ color: 'var(--ds-text)', fontWeight: 500 }}>
           All projects <ShellIcon name="chevron" size={16} />
         </a>
       </div>

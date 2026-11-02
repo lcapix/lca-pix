@@ -7,7 +7,11 @@
 // is in the URL (?tab=), an older run too (?run=). Run Assessment runs the
 // case with the study's method and region, counts the seconds, then opens
 // Results. Documents (E21), also at the row's end, opens the case's source
-// documents beside the tab; it starts closed.
+// documents beside the tab; it starts closed. C5: each tab is its own history
+// entry, so browser back returns to the tab before, not out of the case. D5:
+// an assignment case reads only for anyone but the student who owns it (an
+// instructor reads a student's hand-in or working case, never edits it). D4:
+// after a run on an assignment case the next step is "Write up, then hand in".
 
 import { frozenStepCosts, runCosts, runLabel } from '@/lib/results/full-results-view'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -61,8 +65,13 @@ export function CaseWorkspace() {
   const router = useRouter()
   const search = useSearchParams()
   const caseId = Number(params.caseId)
-  const { kase, steps, inventory, siblings, layout, status, error, reload, readOnly } = useCaseWorkspace(caseId)
+  const { kase, steps, inventory, siblings, layout, status, error, reload, readOnly: caseReadOnly } = useCaseWorkspace(caseId)
   const { profile, projects } = useShellData()
+  // D5: someone else's assignment case (a student's working case or hand-in)
+  // reads only, until the case list says whose it is.
+  const ownerOfCase = siblings.find((s) => s.case_id === caseId)?.created_by
+  const othersAssignment = !!kase?.assignment_id && (ownerOfCase === undefined || ownerOfCase !== profile?.id)
+  const readOnly = caseReadOnly || othersAssignment
   const ownName = profile?.fullName?.trim() || null
 
   const asked = search.get('tab')
@@ -108,7 +117,12 @@ export function CaseWorkspace() {
       if (next !== 'tree') q.set('tab', next)
       if (next === 'results' && runId) q.set('run', String(runId))
       const qs = q.toString()
-      router.replace(`/project/${params.projectId}/case/${caseId}${qs ? `?${qs}` : ''}`, { scroll: false })
+      const to = `/project/${params.projectId}/case/${caseId}${qs ? `?${qs}` : ''}`
+      // C5: a new tab is a new history entry (back returns to the tab before);
+      // the same tab with another run, or the same address, replaces it.
+      const here = typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('tab') ?? 'tree'
+      if (here === next) router.replace(to, { scroll: false })
+      else router.push(to, { scroll: false })
     },
     [router, params.projectId, caseId],
   )
@@ -243,6 +257,29 @@ export function CaseWorkspace() {
     startAdd: search.get('add') === 'step',
   }
 
+  // D4: an assignment case that has an answer: write it up, then hand it in.
+  const handInNext =
+    !!kase.assignment_id && !readOnly && !!run && tab === 'results' ? (
+      <div className="pc-next">
+        <Callout
+          tone="info"
+          lead="Next: write up, then hand in."
+          action={
+            <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Button size="small" variant="primary" onClick={() => go('writeup')}>
+                Write up
+              </Button>
+              <Link className="ds-btn ds-btn--small" href={`/project/${kase.project_id}/assignments`}>
+                Hand in on Assignments
+              </Link>
+            </span>
+          }
+        >
+          Say what the answer means in the write-up. Hand in sends your instructor a read-only copy with this run and your write-up.
+        </Callout>
+      </div>
+    ) : null
+
   const latestBuild = run ? whatBuilds(run, kase.case_type)[0] : null
   const topStep = latestBuild && latestBuild.value > 0 ? { name: latestBuild.name, share: latestBuild.share } : null
   const tabBody = (
@@ -312,6 +349,14 @@ export function CaseWorkspace() {
         noSteps={!steps.length}
       />
       <LearnOffer asked={search.get('learn') === '1'} />
+      {othersAssignment && ownerOfCase !== undefined && !caseReadOnly && (
+        <div className="pc-next">
+          <Callout tone="info" lead="A student's case.">
+            You read it here; only the student who owns it changes it.
+          </Callout>
+        </div>
+      )}
+      {handInNext}
       {error && status === 'ready' && (
         <div style={{ padding: '12px 24px 0' }}>
           <ErrorCard title="The case did not refresh" cause={error} fix="What you see may be a moment old." onRetry={reload} />

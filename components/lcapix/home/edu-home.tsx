@@ -4,11 +4,12 @@
 // in; the sample alone → the sample study's Overview; later → Continue (the
 // case opened last on this device), Needs attention, your projects with their
 // latest result, the sample as a small row with Remove, and Recent findings as
-// Coming soon. Search finds a project or a case.
+// Coming soon. Search finds a project or a case. /home?view=all is "All
+// projects": the list, even when the sample is all there is (C3).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, ComingSoon, ConfirmDialog, CountPill, EmptyState, ErrorCard, Segmented } from '@/components/lcapix/ds'
 import { runLabel } from '@/lib/results/full-results-view'
 import { apiRequest } from '@/lib/api-client'
@@ -34,6 +35,7 @@ export function EduHome() {
   const projects = useMemo(() => (raw as any[]).map(toHomeProject), [raw])
   const userId = profile?.id ?? -1
   const mode = homeMode(projects)
+  const allProjects = useSearchParams()?.get('view') === 'all'
 
   if (status === 'error' && !projects.length) {
     return (
@@ -51,13 +53,13 @@ export function EduHome() {
   }
   const ownName = profile?.fullName?.trim() || null
   const owns = projects.some((p) => !p.is_sample && p.owner_id === userId)
-  if (mode === 'sample') {
+  if (mode === 'sample' && !allProjects) {
     const sample = projects.find((p) => p.is_sample)!
     return <SampleOverview projectId={sample.project_id} ownName={ownName} ownsProject={owns} />
   }
   if (mode === 'empty') return <EmptyHome teaching={profile?.useCase === 'teaching'} />
   // Projects shared with them and none they run: the student's Home (E13, E15).
-  if (isStudentHome(projects, userId)) return <StudentHome projects={projects} userId={userId} fullName={ownName} />
+  if (isStudentHome(projects, userId) && !allProjects) return <StudentHome projects={projects} userId={userId} fullName={ownName} />
   return <HomeLater projects={projects} userId={userId} firstName={ownName?.split(/\s+/)[0] ?? null} teaching={profile?.useCase === 'teaching'} />
 }
 
@@ -73,8 +75,10 @@ function useAddSample() {
       const d = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(d?.error ?? `error ${res.status}`)
       await useShellStore.getState().refresh()
+      return Number(d?.project_id) || null
     } catch (e: any) {
       setError(e?.message ?? 'the sample was not built')
+      return null
     } finally {
       setBusy(false)
     }
@@ -86,6 +90,11 @@ function useAddSample() {
 function EmptyHome({ teaching }: { teaching: boolean }) {
   const router = useRouter()
   const { busy, error, build } = useAddSample()
+  // C3: the button goes to the study, not back to Home.
+  const openSample = async () => {
+    const id = await build()
+    if (id) router.push(`/project/${id}`)
+  }
   return (
     <div className="home">
       <header className="home-head">
@@ -116,11 +125,11 @@ function EmptyHome({ teaching }: { teaching: boolean }) {
           </span>
           <h2>Open the sample study</h2>
           <p>A finished study of a painted steel bracket, built for you in a few seconds: the question, the tree, what goes in, the answer.</p>
-          <Button variant="primary" onClick={build} busy={busy}>
+          <Button variant="primary" onClick={() => void openSample()} busy={busy}>
             Open the sample study
           </Button>
           {error && (
-            <ErrorCard title="We couldn't build the sample study. Nothing was lost." cause={error} onRetry={build} />
+            <ErrorCard title="We couldn't build the sample study. Nothing was lost." cause={error} onRetry={() => void openSample()} />
           )}
         </div>
         <div className="so-next-card">

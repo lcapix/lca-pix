@@ -4,15 +4,17 @@
 // Overview. Seven sections in the order research is done, each with a door to
 // its screen: 01 the question, 02 how it is made, 03 what goes in, 04 the
 // answer, 05 a what-if, 06 the write-up (an example, not saved), 07 what to do
-// next. Read-only, with Make my own copy. With Guided mode on, the guide walks
-// the seven sections from a card in the sidebar (Next section, Skip the walk).
+// next. Read-only, with Make my own copy; once the person has a copy, the main
+// action opens it ("Open my copy") and another copy is its own named choice
+// (C3). With Guided mode on, the guide walks the seven sections from a card in
+// the sidebar (Next section, Skip the walk).
 
 import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button, ErrorCard, Flag, SourceTag } from '@/components/lcapix/ds'
-import { useGuidedMode } from '@/lib/shell/use-shell'
+import { useGuidedMode, useShellData } from '@/lib/shell/use-shell'
 import { useSidebarGuide } from '@/lib/shell/guide-slot'
 import { useSampleStudy } from '@/lib/home/use-sample-study'
 import { exampleWriteUp, howSureLong, whatChanged, whatGoesIn, type FlowAmount } from '@/lib/home/sample-view'
@@ -53,7 +55,10 @@ function useWalk() {
 
 export function SampleOverview({ projectId, ownName, ownsProject }: { projectId: number; ownName: string | null; ownsProject: boolean }) {
   const router = useRouter()
-  const s = useSampleStudy(projectId)
+  const { profile } = useShellData()
+  const s = useSampleStudy(projectId, profile?.id ?? null)
+  const myCopy = s.copies[0] ?? null
+  const copyHref = myCopy ? `/project/${projectId}/case/${myCopy.case_id}` : null
   const [guided] = useGuidedMode()
   const walk = useWalk()
   const [section, setSection] = useState(0)
@@ -396,10 +401,31 @@ export function SampleOverview({ projectId, ownName, ownsProject }: { projectId:
           <span style={{ flex: 1, textAlign: 'left' }}>Search…</span>
           <kbd>⌘K</kbd>
         </button>
-        <Button variant="primary" onClick={copy} busy={copying}>
-          Make my own copy
-        </Button>
+        {copyHref ? (
+          <>
+            <Button onClick={copy} busy={copying}>
+              Make another copy
+            </Button>
+            <Link href={copyHref} className="ds-btn ds-btn--primary">
+              Open my copy
+            </Link>
+          </>
+        ) : (
+          <Button variant="primary" onClick={copy} busy={copying}>
+            Make my own copy
+          </Button>
+        )}
       </header>
+      {myCopy && copyHref && (
+        <p className="so-mine">
+          Your copy is <strong>{myCopy.case_name}</strong>
+          {myCopy.run_count ? `, run ${myCopy.run_count === 1 ? 'once' : `${myCopy.run_count} times`}` : ', not run yet'}
+          {s.copies.length > 1 ? `. You have ${s.copies.length} copies; the Cases page lists them all.` : '.'}{' '}
+          <Link className="ds-link" href={`/project/${projectId}/cases`}>
+            See the cases
+          </Link>
+        </p>
+      )}
       {copyError && (
         <div style={{ padding: '0 24px' }}>
           <ErrorCard title="The copy was not made" cause={copyError} onRetry={copy} />
@@ -457,11 +483,21 @@ export function SampleOverview({ projectId, ownName, ownsProject }: { projectId:
               <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
                 Next · Try it
               </span>
-              <h3>Make my own copy</h3>
-              <p>The base case, named after you, with no runs. The six exercises happen there, and the fourth asks you to predict before you run.</p>
-              <Button onClick={copy} busy={copying}>
-                Make my own copy
-              </Button>
+              <h3>{myCopy ? 'Open my copy' : 'Make my own copy'}</h3>
+              <p>
+                {myCopy
+                  ? `${myCopy.case_name} is yours to change. The six exercises happen there, and the fourth asks you to predict before you run.`
+                  : 'The base case, named after you, with no runs. The six exercises happen there, and the fourth asks you to predict before you run.'}
+              </p>
+              {copyHref ? (
+                <Link href={copyHref} className="ds-btn" style={{ alignSelf: 'flex-start' }}>
+                  Open my copy
+                </Link>
+              ) : (
+                <Button onClick={copy} busy={copying}>
+                  Make my own copy
+                </Button>
+              )}
             </div>
             <div className="so-next-card">
               <span className="ds-section-label">Then</span>

@@ -2,9 +2,11 @@
 
 // The sample study for its Overview (E02): the project's question, the Base
 // case's tree, inventory and newest run, and the what-if's inventory and
-// newest run. Every number the Overview shows comes from these answers.
+// newest run. Every number the Overview shows comes from these answers. Also
+// the person's own copies (C3), newest first, so Home opens the copy they have
+// instead of offering to make another.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiRequest } from '@/lib/api-client'
 import { toAssessmentResult } from '@/lib/results/assessment'
 import type { WorkspaceRun } from '@/lib/workspace/use-runs'
@@ -29,6 +31,22 @@ export interface SampleCase {
   reference_flow_unit: string | null
 }
 
+/** A copy the person made of the sample (editable, theirs). */
+export interface SampleCopy {
+  case_id: number
+  case_name: string
+  run_count: number
+}
+
+/** Their own copies: cases in the sample they made, not its read-only two. Newest first. */
+export function ownCopies(cases: any[], userId: number | null): SampleCopy[] {
+  if (userId == null) return []
+  return cases
+    .filter((x) => Number(x.created_by) === userId && !Number(x.read_only))
+    .map((x) => ({ case_id: Number(x.case_id), case_name: String(x.case_name), run_count: Number(x.run_count ?? 0) }))
+    .sort((a, b) => b.case_id - a.case_id)
+}
+
 const json = async (path: string) => {
   const r = await apiRequest(path)
   if (!r.ok) throw new Error(`${path.split('?')[0]} answered ${r.status}`)
@@ -36,7 +54,7 @@ const json = async (path: string) => {
 }
 const toRun = (a: any): WorkspaceRun | null => (a ? { ...toAssessmentResult(a), run_steps: Array.isArray(a.run_steps) ? a.run_steps : undefined } : null)
 
-export function useSampleStudy(projectId: number | null) {
+export function useSampleStudy(projectId: number | null, userId: number | null = null) {
   const [project, setProject] = useState<SampleProject | null>(null)
   const [base, setBase] = useState<SampleCase | null>(null)
   const [whatIf, setWhatIf] = useState<SampleCase | null>(null)
@@ -45,6 +63,9 @@ export function useSampleStudy(projectId: number | null) {
   const [run, setRun] = useState<WorkspaceRun | null>(null)
   const [whatIfInventory, setWhatIfInventory] = useState<WorkspaceInventory | null>(null)
   const [whatIfRun, setWhatIfRun] = useState<WorkspaceRun | null>(null)
+  // The raw case list; the copies are read from it once the person is known, so a late
+  // profile never starts a second load (C3).
+  const [cases, setCases] = useState<any[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const seq = useRef(0)
@@ -67,8 +88,10 @@ export function useSampleStudy(projectId: number | null) {
               reference_flow_unit: x.reference_flow_unit ?? null,
             }
           : null
-      const b = toCase(cases.find((x) => x.case_type === 'base'))
-      const w = toCase(cases.find((x) => x.case_type === 'comparative'))
+      // The sample's own two are read-only; a copy someone made never is.
+      const own = cases.filter((x) => Number(x.read_only) === 1)
+      const b = toCase(own.find((x) => x.case_type === 'base') ?? cases.find((x) => x.case_type === 'base'))
+      const w = toCase(own.find((x) => x.case_type === 'comparative') ?? cases.find((x) => x.case_type === 'comparative'))
       const [comps, inv, runs, wInv, wRuns] = await Promise.all([
         b ? json(`/api/cases/${b.case_id}/components`) : null,
         b ? json(`/api/cases/${b.case_id}/inventory`) : null,
@@ -96,6 +119,7 @@ export function useSampleStudy(projectId: number | null) {
       setRun(toRun(runs?.assessments?.[0]))
       setWhatIfInventory(wInv as WorkspaceInventory | null)
       setWhatIfRun(toRun(wRuns?.assessments?.[0]))
+      setCases(cases)
       setStatus('ready')
       setError(null)
     } catch (e: any) {
@@ -109,5 +133,7 @@ export function useSampleStudy(projectId: number | null) {
     load()
   }, [load])
 
-  return { project, base, whatIf, steps, inventory, run, whatIfInventory, whatIfRun, status, error, reload: load }
+  const copies = useMemo(() => ownCopies(cases, userId), [cases, userId])
+
+  return { project, base, whatIf, steps, inventory, run, whatIfInventory, whatIfRun, copies, status, error, reload: load }
 }

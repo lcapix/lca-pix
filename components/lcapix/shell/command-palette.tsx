@@ -64,7 +64,7 @@ export function CommandPalette() {
     const userId = profile?.id ?? null
     const list: Command[] = [
       { id: 'home', group: 'Go to', label: 'Home', icon: 'home', go: to('/home') },
-      { id: 'projects', group: 'Go to', label: 'Projects', icon: 'grid', go: to('/home') },
+      { id: 'projects', group: 'Go to', label: 'Projects', icon: 'grid', go: to('/home?view=all') },
       { id: 'findings', group: 'Go to', label: 'Findings', icon: 'pin', go: to('/findings') },
       { id: 'reports', group: 'Go to', label: 'Reports', icon: 'report', go: to('/reports') },
       { id: 'guide', group: 'Go to', label: 'Guide', icon: 'help', go: to('/guide') },
