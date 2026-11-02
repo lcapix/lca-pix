@@ -5,7 +5,7 @@ import { Button } from './button'
 
 /**
  * A one-field dialog (Rename): label, the current value, Save and Cancel.
- * Same focus rules as the confirm; Enter saves.
+ * Same focus rules as the confirm. Enter does not save (her rule: Save only).
  */
 export function TextDialog({
   open,
@@ -75,10 +75,8 @@ export function TextDialog({
         maxLength={maxLength}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && value.trim()) {
-            e.preventDefault()
-            onSubmit(value.trim())
-          }
+          // Enter never saves or submits; the Save button does.
+          if (e.key === 'Enter') e.preventDefault()
         }}
       />
     </ConfirmDialog>

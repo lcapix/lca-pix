@@ -1,7 +1,8 @@
 'use client'
 
 // Add a step: parent, a tier below that parent (skipping a level is allowed),
-// and a name. Nothing is created until Add the step.
+// and a name. Nothing is created until Add the step is pressed; Enter in the
+// name box adds nothing (B2).
 
 import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/lcapix/ds'
@@ -51,16 +52,7 @@ export function AddStepForm({
   const canAdd = parentId != null && tier != null && name.trim().length > 0 && !busy
   return (
     <div className="ds-scrim" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <form
-        className="ds-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (canAdd && parentId != null && tier) onAdd({ parentId, tier, name: name.trim() })
-        }}
-      >
+      <div className="ds-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <h2 id={titleId} className="ds-dialog-title">
           Add a step
         </h2>
@@ -103,7 +95,15 @@ export function AddStepForm({
         </div>
         <label style={{ display: 'block', margin: '12px 0' }}>
           <span className="ds-section-label">Name</span>
-          <input className="ds-input" aria-label="Name" value={name} required onChange={(e) => setName(e.target.value)} style={{ width: '100%', marginTop: 6 }} />
+          <input
+            className="ds-input"
+            aria-label="Name"
+            value={name}
+            required
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
+            style={{ width: '100%', marginTop: 6 }}
+          />
         </label>
         {error && (
           <p role="alert" className="ds-dialog-body" style={{ color: 'var(--ds-error)' }}>
@@ -114,11 +114,19 @@ export function AddStepForm({
           <Button type="button" onClick={onCancel}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" busy={busy} disabled={!canAdd}>
+          <Button
+            type="button"
+            variant="primary"
+            busy={busy}
+            disabled={!canAdd}
+            onClick={() => {
+              if (canAdd && parentId != null && tier) onAdd({ parentId, tier, name: name.trim() })
+            }}
+          >
             Add the step
           </Button>
         </div>
-      </form>
+      </div>
     </div>
   )
 }

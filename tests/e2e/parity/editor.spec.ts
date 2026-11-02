@@ -9,6 +9,8 @@ import { open } from '../support/ui';
 
 const step = (page: import('@playwright/test').Page, name: string) =>
   page.getByRole('treeitem', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}, `) });
+/** E7 (2026-11-01): the step's own fields sit in "Step details", closed below the flows. */
+const openDetails = (page: import('@playwright/test').Page) => page.locator('summary', { hasText: 'Step details' }).click();
 
 test('E01 E02 E03 E04 E06 E07 E16 E19 the add-step form and the step panel', async ({ api, newUser, signIn }) => {
   const user = await newUser('parity-add');
@@ -23,11 +25,15 @@ test('E01 E02 E03 E04 E06 E07 E16 E19 the add-step form and the step panel', asy
   await expect.soft(form.getByRole('radio', { name: 'Machine / line' }), note('E01', 'Tier')).toBeVisible();
   await expect.soft(form.getByLabel('Name'), note('E01', 'Name')).toBeVisible();
   await form.getByRole('button', { name: 'Cancel' }).click();
+  await openDetails(page);
   await row(page.getByLabel('Step name'), 'E03', 'Rename a step');
   await row(page.getByLabel('Life-cycle stage'), 'E19', 'Set a life-cycle stage');
   await row(page.getByLabel('Quantity'), 'E16', 'Scale the product');
   await step(page, '10. Cut blank').click();
-  await row(page.getByLabel('Move under'), 'E04', 'Move a step under another parent');
+  await openDetails(page);
+  // E6: "Step under", opened on the current parent.
+  await row(page.getByLabel('Step under'), 'E04', 'Move a step under another parent');
+  await expect.soft(page.getByLabel('Step under').locator('option:checked'), note('E04', 'the current parent')).toHaveText('Cutting (now)');
   await row(page.getByRole('button', { name: 'Delete step' }), 'E06', 'Delete a step and its children');
   await page.getByRole('button', { name: 'Delete step' }).click();
   await row(page.getByRole('button', { name: 'Delete it, keep its steps' }), 'E07', 'Delete a step but keep its children');
@@ -79,7 +85,7 @@ test('E10 E14 change a flow amount, and use your own factor when the region fell
   await openCase(page, projectId, caseId);
   await step(page, '10. Cut blank').click();
 
-  await expect.soft(page.getByRole('textbox', { name: 'Steel', exact: true }), note('E10', "Change a flow's quantity")).toBeEnabled();
+  await expect.soft(page.getByRole('textbox', { name: 'Steel, amount in kg', exact: true }), note('E10', "Change a flow's quantity")).toBeEnabled();
   await row(page.getByRole('button', { name: 'Use my own number' }), 'E14', 'Override a factor');
 });
 
@@ -97,6 +103,11 @@ test('E22 the material cost looks up a metal price per kg: reference with no key
   await page.getByLabel('Kilograms per unit').fill('0.8');
   let put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Look up the price of steel' }).click();
+  // B1: the lookup shows the number first and stores nothing; Save stores it.
+  expect((await put).request().postDataJSON()).toEqual({ kind: 'material', mode: 'lookup', rate_code: 'STL', driver_quantity: 0.8, driver_unit: 'kg', preview: true });
+  await expect.soft(page.getByText('0.8 kg × $0.95/kg = $0.76 · Steel, hot-rolled'), note('E22', 'the looked-up price, before Save')).toBeVisible();
+  put = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT');
+  await page.getByRole('button', { name: 'Save the price of steel' }).click();
   expect((await put).request().postDataJSON()).toEqual({ kind: 'material', mode: 'lookup', rate_code: 'STL', driver_quantity: 0.8, driver_unit: 'kg' });
   await row(page.getByText('0.8 kg × $0.95/kg · Steel, hot-rolled'), 'E22', 'Look up a metal price for the material cost');
   await expect.soft(page.getByRole('button', { name: /^Material/ }), note('E22', 'tagged Reference')).toContainText('Reference 2026-06');
@@ -191,16 +202,18 @@ test('3.10 an amount changed in another tab is not overwritten silently', async 
     await open(p, `/project/${projectId}/case/${caseId}?tab=inventory`);
     await expect(p.getByRole('textbox', { name: 'Steel, amount in kg', exact: true })).toBeVisible();
   }
+  // Save only (B1, 2026-11-01): Enter no longer saves.
+  const save = (p: import('@playwright/test').Page) => p.getByRole('button', { name: 'Save Steel on 10. Cut blank' }).click();
   const boxB = b.getByRole('textbox', { name: 'Steel, amount in kg', exact: true });
   await boxB.fill('7.25');
-  await boxB.press('Enter');
+  await save(b);
   await expect(b.getByText(/Saved · Steel 7.25 kg/)).toBeVisible();
 
   const boxA = a.getByRole('textbox', { name: 'Steel, amount in kg', exact: true });
   await boxA.fill('9.5');
-  await boxA.press('Enter');
+  await save(a);
   await expect.soft(a.getByText(/This flow changed in another tab or by someone else: it is now 7.25 kg/), note('3.10', 'the second tab is told')).toBeVisible();
-  await boxA.press('Enter');
+  await save(a);
   await expect.soft(a.getByText(/Saved · Steel 9\.50? kg/), note('3.10', 'saving again goes ahead')).toBeVisible();
 });
 
@@ -210,11 +223,12 @@ test('E23 E24 a step keeps its description and its allocation', async ({ api, ne
   const { page } = await signIn(user);
   await openCase(page, projectId, caseId);
   await step(page, '10. Cut blank').click();
+  await openDetails(page);
 
   const desc = page.getByLabel('Step description');
   await row(desc, 'E23', 'Edit a step description');
   await desc.fill('Shear cut from coil');
-  await desc.locator('xpath=..').getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save the description' }).click();
   await expect.soft(page.getByText('Saved · 10. Cut blank').first(), note('E23', 'saved line')).toBeVisible();
 
   const alloc = page.getByRole('group', { name: 'Allocation' });

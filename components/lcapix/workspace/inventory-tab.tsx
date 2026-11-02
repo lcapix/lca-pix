@@ -2,29 +2,57 @@
 
 // The Inventory tab (E04, behaviour spec "Inventory tab"): a slim indented
 // tree on the left (pick a step to see only its flows; a row marks its step),
-// and on the right the status tabs with counts, then the table: Flow (step,
-// IN/OUT) · Amount · Unit · Factor · source · Status. Rows that need an amount
-// or are left out are marked; an electricity row that needs an amount gets the
-// machine calculator; a left-out row says "Pick kg or g"; a factor that fell
-// back to the Global average offers "Keep the Global average · Use my own
-// number". Add a flow at the foot.
+// and on the right the status tabs with counts, then one table grouped by
+// step (E4): each flow on one row with its impact (amount × factor = impact)
+// and its cost (amount × price = cost), and under the step its own costs
+// (labor, energy, material, transport, equipment, overhead not tied to a
+// flow), each editable. A cost on a step with no flow says it adds no impact
+// (E3).
+//
+// Every flow is fully editable here (E1): substance, amount, unit, direction,
+// the step it is on, your own factor, delete. Nothing saves until Save (B1),
+// and the Saved line shows on the row (B4). A read-only case shows the same
+// numbers as plain text, with one line saying why (C4).
 
-import { useEffect, useMemo, useState } from 'react'
-import { Button, Flag, FlowStatusPill, SavedLine, SourceTag, ConfirmDialog } from '@/components/lcapix/ds'
+import { Fragment, useMemo, useState } from 'react'
+import { Button, Flag, FlowStatusPill, SavedLine, ConfirmDialog } from '@/components/lcapix/ds'
 import { FLOW_STATUS_WORD, type FlowStatus } from '@/lib/ui/words'
-import { amount, amountBox, fixed } from '@/lib/ui/format'
-import { compatibleUnits, convertQuantity } from '@/lib/units'
+import { amount, amountBox, co2Unit, money, result3 } from '@/lib/ui/format'
+import { convertQuantity } from '@/lib/units'
 import { useGuidedMode } from '@/lib/shell/use-shell'
+import type { CostBasisKind } from '@/lib/costs/cost-basis'
+import { FROM_FLOWS } from '@/lib/costs/from-flows'
+import { COST_KIND_LABEL, basisLine, basisTag } from '@/lib/workspace/cost-text'
+import { flowCostCell } from '@/lib/workspace/flow-cost-text'
+import { factorText, perUnitText } from '@/lib/workspace/flow-edit'
 import { calculatorFits, machineKwh, type InventoryRow } from '@/lib/workspace/inventory'
 import { TIER_COLOURS } from '@/lib/workspace/tier-layout'
+import { guard } from '@/lib/workspace/unsaved'
+import { useCaseStepCosts, type StepCosts } from '@/lib/workspace/use-step-costs'
 import type { WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
 import { AddFlowInPanel } from './add-flow-in-panel'
-import { OwnFactorForm, deleteFlow, saveFlowAmount, saveFlowFields, saveFlowUnit, sourceText } from './flow-bits'
+import { CostKindEditor, NO_IMPACT_LINE } from './cost-panel'
+import {
+  BackToLibrary,
+  DraftActions,
+  FactorTag,
+  OwnFactorForm,
+  READ_ONLY_LINE,
+  StepSelect,
+  SubstanceSwap,
+  deleteFlow,
+  perOf,
+  sourceLine,
+  sourceText,
+  useFlowDraft,
+} from './flow-bits'
 import { ExerciseSlot } from './exercise-card'
 import { HeldLines } from './held-lines'
+import { UnsavedBar } from './floating-panel'
 
 type Filter = 'all' | FlowStatus
 const FILTERS: Filter[] = ['all', 'needs_amount', 'left_out', 'counted', 'no_factor']
+const COLS = 5
 
 /** Steps in tree order with their depth, for the slim tree. */
 function flatTree(steps: WorkspaceStep[]): Array<WorkspaceStep & { depth: number }> {
@@ -59,6 +87,12 @@ function subtree(steps: WorkspaceStep[], id: number): Set<number> {
   return out
 }
 
+/** The step's costs that sit on the step, not on a flow (a cost built from the flows shows on their rows). */
+function stepLevelCosts(c: StepCosts | undefined): StepCosts['costs'] {
+  if (!c || !Array.isArray(c.costs)) return []
+  return c.costs.filter((x) => x.amount !== null && !(x.basis?.rate_code === FROM_FLOWS && (x.basis as any)?.lines?.length))
+}
+
 export function InventoryTab({
   caseId,
   steps,
@@ -79,8 +113,10 @@ export function InventoryTab({
   const [saved, setSaved] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
   const [addTo, setAddTo] = useState<number | null>(null)
+  void guided
   const rows = inventory?.rows ?? []
   const tree = useMemo(() => flatTree(steps), [steps])
+  const stepOptions = useMemo(() => tree.map((s) => ({ id: s.id, name: s.name, depth: s.depth })), [tree])
   const byId = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps])
   const inStep = useMemo(() => (stepId == null ? null : subtree(steps, stepId)), [steps, stepId])
   const scoped = inStep ? rows.filter((r) => inStep.has(r.component_id)) : rows
@@ -95,79 +131,102 @@ export function InventoryTab({
   const method = inventory?.method ?? ''
   const region = inventory?.region ?? 'Global'
 
+  // Costs for the steps with a flow or a cost of their own (E4).
+  const costIds = useMemo(() => tree.filter((s) => ownCount(s.id) > 0 || Object.values(s.costs).some((v) => v != null)).map((s) => s.id), [tree, rows]) // eslint-disable-line react-hooks/exhaustive-deps
+  const costs = useCaseStepCosts(costIds)
+
+  // One group per step, in tree order: its flows, then its own costs.
+  const groups = tree
+    .filter((s) => !inStep || inStep.has(s.id))
+    .map((s) => ({
+      step: s,
+      flows: shown.filter((r) => r.component_id === s.id),
+      own: filter === 'all' ? stepLevelCosts(costs.get(s.id)) : [],
+      hasFlows: ownCount(s.id) > 0,
+    }))
+    .filter((g) => g.flows.length || g.own.length)
+
+  // Changing what is shown would drop a row's unsaved draft: ask first (B3).
+  const show = (fn: () => void) => guard(fn)
+
   return (
     <div className="ws-inv">
       <div className="ws-inv-side">
-      <nav className="ws-slimtree" aria-label="The tree">
-        <div style={{ padding: '4px 8px 10px' }}>
-          <span className="ds-section-label">The tree</span>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>Pick a step to see only its flows.</p>
-        </div>
-        <button type="button" aria-pressed={stepId == null} onClick={() => setStepId(null)}>
-          <span style={{ flex: 1, fontWeight: 600 }}>All flows</span>
-          <span className="ds-mono">{rows.length}</span>
+        <nav className="ws-slimtree" aria-label="The tree">
+          <div style={{ padding: '4px 8px 10px' }}>
+            <span className="ds-section-label">The tree</span>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>Pick a step to see only its flows.</p>
+          </div>
+          <button type="button" aria-pressed={stepId == null} onClick={() => show(() => setStepId(null))}>
+            <span style={{ flex: 1, fontWeight: 600 }}>All flows</span>
+            <span className="ds-mono">{rows.length}</span>
+          </button>
+          {tree.map((s) => {
+            const c = TIER_COLOURS[s.tier]
+            const warn = needsAt(s.id)
+            return (
+              <button
+                key={s.id}
+                type="button"
+                aria-pressed={stepId === s.id}
+                aria-current={marked === s.id ? 'true' : undefined}
+                style={{ paddingLeft: 8 + s.depth * 16, outline: marked === s.id ? '1px dashed var(--ds-green)' : undefined }}
+                onClick={() => show(() => setStepId(s.id))}
+              >
+                <span className="ws-swatch" style={{ background: c.fill, borderColor: c.border }} aria-hidden />
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                {warn && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F5B00" strokeWidth="2" role="img" aria-label="Needs attention">
+                    <path d="M12 4 2.5 20h19z" strokeLinejoin="round" />
+                    <path d="M12 10v4.5M12 17.5v.5" strokeLinecap="round" />
+                  </svg>
+                )}
+                <span className="ds-mono" style={{ color: 'var(--ds-text-3)', minWidth: 14, textAlign: 'right' }}>
+                  {ownCount(s.id)}
+                </span>
+              </button>
+            )
+          })}
+        </nav>
+        {/* 1.10: below the tree card, in the page's flow, so it never sits on the step list. */}
+        <button type="button" className="ds-btn ds-btn--small ws-inv-magic" onClick={onOpenInsights}>
+          <span className="ws-magic-dot" aria-hidden>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z" />
+            </svg>
+          </span>
+          Magic Insights
         </button>
-        {tree.map((s) => {
-          const c = TIER_COLOURS[s.tier]
-          const warn = needsAt(s.id)
-          return (
-            <button
-              key={s.id}
-              type="button"
-              aria-pressed={stepId === s.id}
-              aria-current={marked === s.id ? 'true' : undefined}
-              style={{ paddingLeft: 8 + s.depth * 16, outline: marked === s.id ? '1px dashed var(--ds-green)' : undefined }}
-              onClick={() => setStepId(s.id)}
-            >
-              <span className="ws-swatch" style={{ background: c.fill, borderColor: c.border }} aria-hidden />
-              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-              {warn && (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F5B00" strokeWidth="2" role="img" aria-label="Needs attention">
-                  <path d="M12 4 2.5 20h19z" strokeLinejoin="round" />
-                  <path d="M12 10v4.5M12 17.5v.5" strokeLinecap="round" />
-                </svg>
-              )}
-              <span className="ds-mono" style={{ color: 'var(--ds-text-3)', minWidth: 14, textAlign: 'right' }}>
-                {ownCount(s.id)}
-              </span>
-            </button>
-          )
-        })}
-      </nav>
-      {/* 1.10: below the tree card, in the page's flow, so it never sits on the step list. */}
-      <button type="button" className="ds-btn ds-btn--small ws-inv-magic" onClick={onOpenInsights}>
-        <span className="ws-magic-dot" aria-hidden>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z" />
-          </svg>
-        </span>
-        Magic Insights
-      </button>
       </div>
 
       <section className="ds-card" aria-label="Flows" style={{ overflow: 'hidden' }}>
         <ExerciseSlot
           fallback={
-          <div className="ws-guide">
-            <span style={{ flex: 1 }}>
-              <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
-                Guided mode · Inventory
+            <div className="ws-guide">
+              <span style={{ flex: 1 }}>
+                <span className="ds-section-label" style={{ color: 'var(--ds-green)' }}>
+                  Guided mode · Inventory
+                </span>
+                <br />
+                {inventoryGuide(rows, byId)}
               </span>
-              <br />
-              {inventoryGuide(rows, byId)}
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-              <Flag kind="beta" />
-              <button type="button" className="ds-link" onClick={() => setGuided(false)}>
-                Turn off
-              </button>
-            </span>
-          </div>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                <Flag kind="beta" />
+                <button type="button" className="ds-link" onClick={() => setGuided(false)}>
+                  Turn off
+                </button>
+              </span>
+            </div>
           }
         />
+        {readOnly && (
+          <div className="ws-readonly-line" role="note">
+            {READ_ONLY_LINE}
+          </div>
+        )}
         <div className="ws-pills" role="group" aria-label="Show flows" style={{ padding: '14px 18px' }}>
           {FILTERS.map((f) => (
-            <button key={f} type="button" className="ws-pill" aria-pressed={filter === f} onClick={() => setFilter(f)}>
+            <button key={f} type="button" className="ws-pill" aria-pressed={filter === f} onClick={() => show(() => setFilter(f))}>
               {f === 'all' ? 'All' : FLOW_STATUS_WORD[f]}
               <span className="ds-mono" style={{ fontWeight: 500 }}>
                 {counts[f]}
@@ -175,42 +234,53 @@ export function InventoryTab({
             </button>
           ))}
         </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ds-table ws-inv-table">
-            <thead>
-              <tr>
-                <th scope="col">Flow</th>
-                <th scope="col" style={{ textAlign: 'right' }}>
-                  Amount
-                </th>
-                <th scope="col">Unit</th>
-                <th scope="col">Factor · source</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => (
-                <InventoryRowView
-                  key={r.flow_id}
-                  row={r}
-                  stepName={byId.get(r.component_id)?.name ?? ''}
-                  method={method}
-                  region={region}
-                  readOnly={readOnly}
-                  onMark={() => setMarked(r.component_id)}
-                  onSaved={setSaved}
-                />
-              ))}
-              {!shown.length && (
-                <tr>
-                  <td colSpan={5} style={{ color: 'var(--ds-text-3)' }}>
-                    {rows.length ? 'No flow here has that status.' : 'No flows yet. Add one to a step.'}
-                  </td>
+        <table className="ds-table ws-inv-table">
+          <thead>
+            <tr>
+              <th scope="col">Flow</th>
+              <th scope="col">Amount</th>
+              <th scope="col">Impact: amount × factor</th>
+              <th scope="col">Cost: amount × price</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <Fragment key={g.step.id}>
+                <tr className="ws-inv-steprow">
+                  <th scope="rowgroup" colSpan={COLS}>
+                    {g.step.name}
+                    {!g.hasFlows && g.own.length > 0 && <span className="ws-noimpact">{NO_IMPACT_LINE}</span>}
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                {g.flows.map((r) => (
+                  <InventoryRowView
+                    key={r.flow_id}
+                    row={r}
+                    stepName={g.step.name}
+                    steps={stepOptions}
+                    stepCosts={costs.get(g.step.id)}
+                    method={method}
+                    region={region}
+                    readOnly={readOnly}
+                    onMark={() => setMarked(r.component_id)}
+                    onSaved={setSaved}
+                  />
+                ))}
+                {g.own.map((c) => (
+                  <StepCostRow key={c.kind} step={byId.get(g.step.id)!} steps={steps} kind={c.kind} data={costs.get(g.step.id)!} hasFlows={g.hasFlows} readOnly={readOnly} />
+                ))}
+              </Fragment>
+            ))}
+            {!groups.length && (
+              <tr>
+                <td colSpan={COLS} style={{ color: 'var(--ds-text-3)' }}>
+                  {rows.length ? 'No flow here has that status.' : 'No flows yet. Add one to a step.'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
         {saved && (
           <div style={{ padding: '10px 18px' }}>
             <SavedLine>{saved}</SavedLine>
@@ -231,12 +301,7 @@ export function InventoryTab({
             ) : adding ? (
               <label className="ds-label" style={{ marginBottom: 0 }}>
                 Add the flow to which step?
-                <select
-                  className="ds-input"
-                  style={{ width: '100%', marginTop: 4 }}
-                  value=""
-                  onChange={(e) => setAddTo(Number(e.target.value) || null)}
-                >
+                <select className="ds-input" style={{ width: '100%', marginTop: 4 }} value="" onChange={(e) => setAddTo(Number(e.target.value) || null)}>
                   <option value="">Pick a step</option>
                   {tree.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -254,6 +319,7 @@ export function InventoryTab({
           </div>
         )}
       </section>
+      <UnsavedBar />
     </div>
   )
 }
@@ -267,9 +333,30 @@ function inventoryGuide(rows: InventoryRow[], byId: Map<number, WorkspaceStep>):
   return 'Every flow has an amount. Run the case to see the answer.'
 }
 
+/** The impact cell: "× 1.9 kg CO₂-eq per kg = 1.520 kg CO₂-eq", its tag and source. */
+function ImpactCell({ row, method }: { row: InventoryRow; method: string }) {
+  if (row.status === 'needs_amount') return <span className="ws-inv-math">Needs an amount</span>
+  if (row.status === 'left_out') return <span className="ws-inv-math">Left out: unit can&apos;t convert</span>
+  return (
+    <>
+      <span className="ds-mono ws-inv-math">
+        {row.climate
+          ? `${amountBox(row.amount)} ${row.unit}${row.climate.conversion ? ` (${row.climate.conversion})` : ''} × ${factorText(row.climate.factor)} ${perUnitText(row.climate.unit, perOf(row))} = ${result3(row.climate.impact)} ${co2Unit(row.climate.unit)}`
+          : `${amountBox(row.amount)} ${row.unit} × no climate factor = 0`}
+      </span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+        <FactorTag row={row} />
+        <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>{sourceLine(row, method)}</span>
+      </span>
+    </>
+  )
+}
+
 function InventoryRowView({
   row,
   stepName,
+  steps,
+  stepCosts,
   method,
   region,
   readOnly,
@@ -278,166 +365,94 @@ function InventoryRowView({
 }: {
   row: InventoryRow
   stepName: string
+  steps: Array<{ id: number; name: string; depth: number }>
+  stepCosts: StepCosts | undefined
   method: string
   region: string
   readOnly: boolean
   onMark: () => void
   onSaved: (line: string) => void
 }) {
-  const [value, setValue] = useState(amountBox(row.amount))
-  const [error, setError] = useState<string | null>(null)
+  const draft = useFlowDraft(row, stepName, steps)
   const [kept, setKept] = useState(false)
   const [own, setOwn] = useState(false)
+  const [more, setMore] = useState(false)
+  const [swap, setSwap] = useState(false)
   const [drop, setDrop] = useState(false)
-  useEffect(() => setValue(amountBox(row.amount)), [row.amount])
-  // The amount this tab last knew (3.10): a save checks it, and a conflict moves it to the amount now.
-  const [known, setKnown] = useState<number | null>(row.amount)
-  useEffect(() => setKnown(row.amount), [row.amount])
+  const [error, setError] = useState<string | null>(null)
   const warn = row.status === 'needs_amount' || row.status === 'left_out'
-  const units = useMemo(() => {
-    const list = compatibleUnits(row.substance_unit)
-    return list.includes(row.unit) ? list : [row.unit, ...list]
-  }, [row.substance_unit, row.unit])
   const id = `inv-amount-${row.flow_id}`
   const fallback = !!row.climate && row.climate.tag === 'global' && region.toLowerCase() !== 'global'
-
-  // Saves what is in the box now: on Enter right after a change (a fast
-  // typist, autofill, WebKit) React may not have re-rendered yet, so the
-  // state still holds the old value and nothing would be sent.
-  const save = async (typed: string = value) => {
-    const r = await saveFlowAmount(row, typed, known)
-    if (r.current !== undefined) setKnown(r.current)
-    if (r.error) return setError(r.error)
-    setError(null)
-    if (r.saved) setKnown(r.amount)
-    if (r.saved) onSaved(`Saved · ${row.substance} ${r.amount === null ? 'no amount' : `${amountBox(r.amount)} ${row.unit}`} on ${stepName}`)
-  }
-
-  const pickUnit = async (u: string) => {
-    if (u === row.unit) return
-    const err = await saveFlowUnit(row, u)
-    if (err) return setError(err)
-    setError(null)
-    onSaved(`Saved · ${row.substance} in ${u} on ${stepName}`)
-  }
-
+  const cost = flowCostCell(row, stepCosts?.costs, stepCosts?.from_flows)
   const showCalc = !readOnly && row.status === 'needs_amount' && calculatorFits(row)
-  const showChoice = !readOnly && fallback && !kept
+  const showChoice = !readOnly && fallback && !kept && !own
+
   return (
     <>
-      <tr className={warn ? 'ws-row-warn' : undefined} onClick={onMark} onFocusCapture={onMark}>
+      <tr className={warn ? 'ws-row-warn' : undefined} data-dirty={draft.dirty || undefined} onClick={onMark} onFocusCapture={onMark}>
         <td>
           <label htmlFor={id} style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>
-            {row.substance}
+            {draft.substance ? `${draft.substance.name} (was ${row.substance})` : row.substance}
           </label>
-          <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
+          <span style={{ fontSize: 12, color: 'var(--ds-text-2)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             {stepName} ·{' '}
             {readOnly ? (
-              row.direction === 'input' ? 'IN' : 'OUT'
+              <span className="ws-ro-value">{row.direction === 'input' ? 'IN' : 'OUT'}</span>
             ) : (
-              <select
-                className="ds-input"
-                aria-label={`Direction for ${row.substance}`}
-                value={row.direction}
-                onChange={async (e) => {
-                  const err = await saveFlowFields(row.flow_id, { flow_type: e.target.value })
-                  if (err) setError(err)
-                  else onSaved(`Saved · ${row.substance} is ${e.target.value === 'input' ? 'in' : 'out'} on ${stepName}`)
-                }}
-              >
+              <select className="ds-input" aria-label={`Direction for ${row.substance}`} value={draft.direction} onChange={(e) => draft.setDirection(e.target.value as 'input' | 'output')}>
                 <option value="input">In</option>
                 <option value="output">Out</option>
               </select>
             )}
           </span>
         </td>
-        <td style={{ textAlign: 'right' }}>
-          <input
-            id={id}
-            className="ds-input ws-amount"
-            inputMode="decimal"
-            // 3.12: the name says what the box is; the placeholder is only a dash.
-            aria-label={`${row.substance}, amount in ${row.unit}`}
-            value={value}
-            placeholder="–"
-            readOnly={readOnly}
-            aria-invalid={!!error || undefined}
-            onChange={(e) => setValue(e.target.value)}
-            onBlur={(e) => !readOnly && save(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !readOnly) {
-                e.preventDefault()
-                save(e.currentTarget.value)
-              }
-            }}
-          />
-        </td>
         <td>
-          <select
-            className="ds-input"
-            aria-label={`Unit for ${row.substance}`}
-            value={row.unit}
-            disabled={readOnly}
-            onChange={(e) => pickUnit(e.target.value)}
-          >
-            {units.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-          {!readOnly && (
-            <>
-              <button type="button" className="ds-link" onClick={() => setDrop(true)}>
-                Delete flow
-              </button>
-              <ConfirmDialog
-                open={drop}
-                title="Delete this flow?"
-                consequence={`${row.substance} is removed from ${stepName}. Cancel deletes nothing.`}
-                confirmLabel="Delete flow"
-                onCancel={() => setDrop(false)}
-                onConfirm={async () => {
-                  const err = await deleteFlow(row.flow_id)
-                  if (err) setError(err)
-                  else onSaved(`Deleted · ${row.substance} on ${stepName}`)
-                  setDrop(false)
-                }}
-              />
-            </>
-          )}
-          {row.status === 'left_out' && (
-            <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-warn)', fontWeight: 600, marginTop: 4 }}>
-              Pick {row.substance_unit === 'kg' ? 'kg or g' : row.substance_unit ?? 'a unit'}
-            </span>
-          )}
-        </td>
-        <td>
-          {row.climate ? (
-            <>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="ds-mono">{fixed(row.climate.factor, 3)}</span>
-                <SourceTag kind={row.climate.tag} />
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
-                {sourceText(row.climate.source)}
-                {row.climate.scope && row.climate.tag !== 'hand' ? ` · ${row.climate.scope}` : ''}
-              </span>
-            </>
+          {readOnly ? (
+            <span className="ws-ro-value ds-mono">{row.amount === null ? 'no amount' : `${amountBox(row.amount)} ${row.unit}`}</span>
           ) : (
             <>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="ds-mono">–</span>
-                <span className="ds-tag ds-tag--reference">No factor</span>
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  id={id}
+                  className="ds-input ws-amount"
+                  inputMode="decimal"
+                  // 3.12: the name says what the box is; the placeholder is only a dash.
+                  aria-label={`${row.substance}, amount in ${draft.unit}`}
+                  value={draft.amount}
+                  placeholder="–"
+                  aria-invalid={!!draft.error || !!draft.unitProblem || undefined}
+                  onChange={(e) => draft.setAmount(e.target.value)}
+                />
+                <select className="ds-input" aria-label={`Unit for ${row.substance}`} value={draft.unit} onChange={(e) => draft.setUnit(e.target.value)}>
+                  {draft.units.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
               </span>
-              <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>
-                {row.direction === 'output' ? 'An output, no climate factor' : `None in ${method}`}
-              </span>
+              <DraftActions draft={draft} what={`${row.substance} on ${stepName}`} />
+              {row.status === 'left_out' && (
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-warn)', fontWeight: 600, marginTop: 4 }}>
+                  Pick {row.substance_unit === 'kg' ? 'kg or g' : row.substance_unit ?? 'a unit'}
+                </span>
+              )}
             </>
           )}
+        </td>
+        <td>
+          <ImpactCell row={row} method={method} />
+        </td>
+        <td>
+          <span className={`ds-mono ws-inv-math${cost.counted ? '' : ' ws-inv-muted'}`}>{cost.text}</span>
         </td>
         <td>
           <FlowStatusPill status={row.status} />
+          {!readOnly && (
+            <button type="button" className="ds-link ws-inv-more" aria-expanded={more} aria-label={`Edit more of ${row.substance}`} onClick={() => setMore((v) => !v)}>
+              {more ? 'Less' : 'Edit more'}
+            </button>
+          )}
           {error && (
             <span role="alert" style={{ display: 'block', fontSize: 12, color: 'var(--ds-error)', marginTop: 4 }}>
               {error}
@@ -447,14 +462,14 @@ function InventoryRowView({
       </tr>
       {showCalc && (
         <tr className="ws-row-warn">
-          <td colSpan={5}>
-            <MachineCalculator row={row} onUse={(v) => (setValue(amountBox(v)), saveAmountValue(row, v, stepName, onSaved, setError))} />
+          <td colSpan={COLS}>
+            <MachineCalculator row={row} onUse={(v) => draft.setAmount(amount(v))} />
           </td>
         </tr>
       )}
       {showChoice && (
         <tr>
-          <td colSpan={5}>
+          <td colSpan={COLS}>
             <div className="ws-choice">
               <span>
                 No {region} factor for {row.substance.split(',')[0].toLowerCase()}. This uses the Global average from {sourceText(row.climate!.source)}.
@@ -467,8 +482,66 @@ function InventoryRowView({
                   Use my own number
                 </Button>
               </span>
-              {own && <OwnFactorForm row={row} onDone={(line) => (setOwn(false), line && onSaved(line))} />}
             </div>
+          </td>
+        </tr>
+      )}
+      {(more || own) && !readOnly && (
+        <tr className="ws-inv-edit">
+          <td colSpan={COLS}>
+            <div className="ws-inv-edit-grid">
+              <div>
+                <span className="ds-label" style={{ marginBottom: 4 }}>
+                  Substance
+                </span>
+                <span style={{ display: 'block', fontSize: 13 }}>
+                  {draft.substance ? `${draft.substance.name} (was ${row.substance})` : row.substance}{' '}
+                  <button type="button" className="ds-link" aria-expanded={swap} onClick={() => setSwap((v) => !v)}>
+                    Change substance
+                  </button>
+                </span>
+                {swap && <SubstanceSwap row={row} method={method} draft={draft} onClose={() => setSwap(false)} />}
+              </div>
+              <StepSelect row={row} steps={steps} draft={draft} />
+              <div>
+                <span className="ds-label" style={{ marginBottom: 4 }}>
+                  Factor
+                </span>
+                {own ? (
+                  <OwnFactorForm row={row} method={method} onDone={(line) => (setOwn(false), line && onSaved(line))} />
+                ) : row.climate?.tag === 'hand' ? (
+                  <>
+                    <BackToLibrary row={row} onSaved={onSaved} />
+                    <button type="button" className="ds-link" onClick={() => setOwn(true)}>
+                      Change my own factor
+                    </button>
+                  </>
+                ) : (
+                  <button type="button" className="ds-link" onClick={() => setOwn(true)}>
+                    Use my own factor
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'flex-end' }}>
+                {draft.dirty && <span className="ws-draft-note">A new substance or step saves with the Save on the row above.</span>}
+                <button type="button" className="ds-link" style={{ alignSelf: 'flex-start' }} onClick={() => setDrop(true)}>
+                  Delete flow
+                </button>
+              </div>
+            </div>
+            <ConfirmDialog
+              open={drop}
+              title="Delete this flow?"
+              consequence={`${row.substance} is removed from ${stepName}. Cancel deletes nothing.`}
+              confirmLabel="Delete flow"
+              onCancel={() => setDrop(false)}
+              onConfirm={async () => {
+                const err = await deleteFlow(row.flow_id)
+                if (err) setError(err)
+                else onSaved(`Deleted · ${row.substance} on ${stepName}`)
+                setDrop(false)
+              }}
+            />
           </td>
         </tr>
       )}
@@ -476,26 +549,89 @@ function InventoryRowView({
   )
 }
 
-async function saveAmountValue(
-  row: InventoryRow,
-  v: number,
-  stepName: string,
-  onSaved: (line: string) => void,
-  setError: (e: string | null) => void,
-) {
-  const r = await saveFlowAmount(row, String(v))
-  if (r.error) return setError(r.error)
-  setError(null)
-  if (r.saved) onSaved(`Saved · ${row.substance} ${amountBox(v)} ${row.unit} on ${stepName}`)
+/** A cost that sits on the step, not on a flow (E4): its math, its tag, and Edit with the same editor as the Cost view. */
+function StepCostRow({
+  step,
+  steps,
+  kind,
+  data,
+  hasFlows,
+  readOnly,
+}: {
+  step: WorkspaceStep
+  steps: WorkspaceStep[]
+  kind: CostBasisKind
+  data: StepCosts
+  hasFlows: boolean
+  readOnly: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [saved, setSaved] = useState<string | null>(null)
+  const c = data.costs.find((x) => x.kind === kind)!
+  const line = c.basis ? basisLine(c.basis) : null
+  const tag = c.basis ? basisTag(c.basis) : null
+  return (
+    <>
+      <tr className="ws-inv-costrow">
+        <td>
+          <span style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>{COST_KIND_LABEL[kind]}</span>
+          <span style={{ fontSize: 12, color: 'var(--ds-text-2)' }}>{step.name} · a step cost</span>
+        </td>
+        <td>
+          <span className="ds-mono ws-inv-math">{c.basis?.driver_quantity != null ? `${amount(c.basis.driver_quantity)} ${c.basis.driver_unit ?? ''}`.trim() : '–'}</span>
+        </td>
+        <td>
+          <span className="ws-inv-math ws-inv-muted">{hasFlows ? 'Not a flow: no impact of its own' : NO_IMPACT_LINE}</span>
+        </td>
+        <td>
+          <span className="ds-mono ws-inv-math">
+            {line ? `${line} = ` : ''}
+            {money(c.amount, data.currency)}
+          </span>
+          {tag && (
+            <span className={`ds-tag ds-tag--${tag.kind}`} style={{ marginTop: 2, display: 'inline-block' }}>
+              {tag.text}
+            </span>
+          )}
+        </td>
+        <td>
+          {!readOnly && (
+            <button type="button" className="ds-link" aria-expanded={open} aria-label={`Edit the ${COST_KIND_LABEL[kind].toLowerCase()} cost on ${step.name}`} onClick={() => setOpen((v) => !v)}>
+              {open ? 'Close' : 'Edit'}
+            </button>
+          )}
+          {saved && !open && <SavedLine>{saved}</SavedLine>}
+        </td>
+      </tr>
+      {open && !readOnly && (
+        <tr className="ws-inv-edit">
+          <td colSpan={COLS}>
+            <CostKindEditor
+              step={step}
+              kind={kind}
+              cost={c}
+              data={data}
+              steps={steps}
+              onDone={(l) => {
+                setSaved(l)
+                setOpen(false)
+              }}
+              onClose={() => setOpen(false)}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  )
 }
 
-/** Power × time × load = kWh, with the button saying exactly what it saves. */
+/** Power × time × load = kWh; Use puts it in the amount box, and Save stores it. */
 function MachineCalculator({ row, onUse }: { row: InventoryRow; onUse: (v: number) => void }) {
   const [kw, setKw] = useState('')
   const [s, setS] = useState('')
   const [load, setLoad] = useState('100')
   const kwh = kw && s ? machineKwh(Number(kw), Number(s), Number(load)) : null
-  // In the flow's own unit, rounded as shown: the button saves what it says.
+  // In the flow's own unit, rounded as shown: the box gets what the button says.
   const inUnit = kwh === null ? null : convertQuantity(kwh, 'kWh', row.unit)?.quantity ?? null
   const shown = inUnit === null ? null : Number(amount(inUnit))
   return (
@@ -524,6 +660,7 @@ function MachineCalculator({ row, onUse }: { row: InventoryRow; onUse: (v: numbe
       <Button variant="dark" disabled={shown === null || shown <= 0} onClick={() => shown !== null && onUse(shown)}>
         {shown === null ? 'Use' : `Use ${amount(shown)} ${row.unit}`}
       </Button>
+      <span style={{ fontSize: 12, color: 'var(--ds-text-3)' }}>Use puts it in the amount box. Save stores it.</span>
     </div>
   )
 }

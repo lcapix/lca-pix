@@ -5,9 +5,12 @@
  * with its source once, and a kind not set yet. A "Can read" member gets no
  * editor; someone who can change opens the labor lookup with its five
  * reference occupations. The material cost offers the flows' number (the
- * steel the step uses) with one click; the looked-up energy price is left be.
- * The material sheet looks up a metal's price per kg through the costs route
- * (E21), and a metal with no price says so and leaves your own price to type.
+ * steel the step uses), but never replaces a stored cost in one click (E5):
+ * you pick it over the stored one, then Save. The looked-up energy price is
+ * left be. The material sheet looks up a metal's price per kg through the
+ * costs route (E21) as a preview, and only Save stores it (B1); a metal with
+ * no price says so and leaves your own price to type. A cost on a step with
+ * no flow says it adds no impact (E3).
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -44,9 +47,14 @@ const COSTS = {
 const puts: any[] = []
 vi.mock('@/lib/api-client', () => ({
   apiRequest: vi.fn(async (_url: string, init?: any) => {
-    if (init?.method === 'PUT') puts.push(JSON.parse(init.body))
-    if (init?.method === 'PUT' && JSON.parse(init.body).rate_code === 'LEA') {
+    const body = init?.body ? JSON.parse(init.body) : null
+    if (init?.method === 'PUT') puts.push(body)
+    if (init?.method === 'PUT' && body.rate_code === 'LEA') {
       return { ok: false, status: 400, json: async () => ({ error: 'No price for lead: there is no live Metals-API price and no reference price for it. Enter your own price per kg.' }) }
+    }
+    if (init?.method === 'PUT' && body.preview && body.rate_code === 'XCU') {
+      const basis = { kind: 'material', amount: 7.6, driver_quantity: 0.8, driver_unit: 'kg', rate: 9.5, rate_unit: '$/kg', rate_label: 'Copper', rate_code: 'XCU', region: null, source_kind: 'reference', source_name: 'Reference', vintage: '2026-06', lines: null }
+      return { ok: true, status: 200, json: async () => ({ success: true, preview: { kind: 'material', amount: 7.6, basis } }) }
     }
     return { ok: true, status: 200, json: async () => COSTS }
   }),
@@ -95,15 +103,30 @@ describe('Cost panel (E14)', () => {
     expect(screen.queryByText(/cost from these flows/)).toBeNull()
   })
 
-  it('material offers the flows\' number with Use it; energy, looked up, is left be; Use it sends mode "flows" only', async () => {
+  it('E5 the flows\' number never replaces a stored cost in one click: pick it, then Save sends mode "flows" only', async () => {
     render(<CostPanel step={step} kase={kase} readOnly={false} />)
     expect(await screen.findByText('Material cost from these flows: $0.76 (now $0.03)')).toBeTruthy()
     expect(screen.queryByText(/Energy cost from these flows/)).toBeNull()
     // A material amount with no basis is not "from the flows": the unpriced argon is taken as in it.
     expect(screen.queryByText(/No price for Argon/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Use the material cost from these flows' }))
+    // Both numbers show; the stored one is picked, and Save cannot replace it yet.
+    const keep = screen.getByRole('radio', { name: 'Keep $0.03 (what is stored)' }) as HTMLInputElement
+    expect(keep.checked).toBe(true)
+    const save = screen.getByRole('button', { name: 'Save the material cost from these flows' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    fireEvent.click(save)
+    expect(puts).toEqual([])
+    fireEvent.click(screen.getByRole('radio', { name: 'Use $0.76 from these flows' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save the material cost from these flows' }))
     await waitFor(() => expect(puts).toEqual([{ kind: 'material', mode: 'flows' }]))
-    expect(await screen.findByText('Saved · material from the flows on 20. Weld tab')).toBeTruthy()
+    expect(await screen.findByText('Saved · material from the flows on 20. Weld tab: $0.76')).toBeTruthy()
+  })
+
+  it('E3 a cost on a step with no flow says it adds no impact, on that cost', async () => {
+    render(<CostPanel step={step} kase={kase} readOnly={false} flowCount={0} />)
+    await screen.findByText('$0.55')
+    // Labor, energy, material and overhead are set: four costs, each flagged.
+    expect(screen.getAllByText('Adds no impact: no flow on this step')).toHaveLength(4)
   })
 
   it('the material sheet shows the flows line by line and names the one with no price', async () => {
@@ -129,8 +152,13 @@ describe('Cost panel (E14)', () => {
     fireEvent.change(metal, { target: { value: 'XCU' } })
     fireEvent.change(screen.getByLabelText('Kilograms per unit'), { target: { value: '0.8' } })
     fireEvent.click(screen.getByRole('button', { name: 'Look up the price of copper' }))
-    await waitFor(() => expect(puts).toEqual([{ kind: 'material', mode: 'lookup', rate_code: 'XCU', driver_quantity: 0.8, driver_unit: 'kg' }]))
-    expect(await screen.findByText('Saved · material on 20. Weld tab')).toBeTruthy()
+    // B1: the lookup shows the number and stores nothing.
+    await waitFor(() => expect(puts).toEqual([{ kind: 'material', mode: 'lookup', rate_code: 'XCU', driver_quantity: 0.8, driver_unit: 'kg', preview: true }]))
+    expect(await screen.findByText('0.8 kg × $9.50/kg = $7.60 · Copper')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Save the price of copper' }))
+    await waitFor(() => expect(puts).toHaveLength(2))
+    expect(puts[1]).toEqual({ kind: 'material', mode: 'lookup', rate_code: 'XCU', driver_quantity: 0.8, driver_unit: 'kg' })
+    expect(await screen.findByText('Saved · material $0.03 on 20. Weld tab')).toBeTruthy()
   })
 
   it('E21 a metal with no price says so, and your own price per kg is saved as entered', async () => {
@@ -142,7 +170,7 @@ describe('Cost panel (E14)', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/No price for lead.*Enter your own price per kg/)
     expect(screen.queryByText(/Generic material/)).toBeNull()
     fireEvent.change(screen.getByLabelText('Your price for lead in dollars per kg'), { target: { value: '2.2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Use your price for lead' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save your price for lead' }))
     await waitFor(() => expect(puts).toHaveLength(2))
     expect(puts[1]).toEqual({ kind: 'material', mode: 'entered', driver_quantity: 0.2, driver_unit: 'kg', rate: 2.2, rate_unit: '$/kg', rate_label: 'Lead, own price' })
   })

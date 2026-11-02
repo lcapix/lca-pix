@@ -17,7 +17,7 @@ import { categoryNumber, headlineNumber } from '@/lib/results/number-view'
 import { howSure } from '@/lib/workspace/results-view'
 import { HowSure } from './results-panel'
 import { isCompletedRun } from '@/lib/results/run-math'
-import { factorTitle, isGlobalFallback, isWeakFactorSource, safeRunDate } from '@/lib/results/results-view'
+import { factorTitle, isGlobalFallback, factorSourceNote, safeRunDate } from '@/lib/results/results-view'
 import { caseRunNumber, changeWords, CLIMATE, climateOnlyFlows, comparableRun, frozenStepCosts, previousComparable, runCosts, stepDiffRows } from '@/lib/results/full-results-view'
 import { notCounted } from '@/lib/runs/method-categories-view'
 import { useCaseRuns } from '@/lib/workspace/use-runs'
@@ -709,7 +709,7 @@ function FlowTable({ run, category, stepHref }: { run: WorkspaceRun; category: s
                   </td>
                   <td className="ds-num" title={factorTitle(f.source ?? null, f.source_tier ?? null)}>
                     {grouped(amount(f.factor))}
-                    {isWeakFactorSource(f.source_tier ?? null) ? ' (source not on record)' : ''}
+                    {factorSourceNote(f.source_tier ?? null, f.source ?? null)}
                   </td>
                   <td>
                     {f.scope ? (

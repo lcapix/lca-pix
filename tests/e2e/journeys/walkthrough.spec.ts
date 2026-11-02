@@ -222,7 +222,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await expect(box).toHaveValue('0.0013', NAV);
     const cleared = posted(page, /^\/api\/flows\/\d+$/, 'PUT');
     await box.fill('');
-    await box.press('Enter');
+    // Save only (B1, 2026-11-01): Enter no longer saves.
+    await deburr.getByRole('button', { name: 'Save Electricity on Deburr edges' }).click();
     expect((await cleared).status()).toBe(200);
     const calc = page.getByRole('group', { name: 'Machine calculator for Electricity' });
     await calc.getByLabel('Power in kW').fill('0.75');
@@ -230,7 +231,9 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await calc.getByLabel('Load in percent').fill('80');
     await shot(page, 'E04-case-inventory');
     const used = posted(page, /^\/api\/flows\/\d+$/, 'PUT');
+    // Use puts the number in the box; Save stores it.
     await calc.getByRole('button', { name: 'Use 0.0013 kWh' }).click();
+    await page.getByRole('button', { name: 'Save Electricity on Deburr edges' }).click();
     expect((await used).status()).toBe(200);
     await expect(box).toHaveValue('0.0013');
 
@@ -260,7 +263,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
 
     // One addition reaches every place it touches: a box on Fold and tape
     // offers its material cost (0.2 kg × $0.60 = $0.12) and names the tape,
-    // which has no price. Nothing changes until Use it; then the step, the
+    // which has no price. Nothing changes until Save; then the step, the
     // tree's sums and the Cost view all carry it.
     await page.getByRole('radio', { name: 'Impact' }).click();
     // The panel sits over the packing steps: hide it, pick the step, bring it back.
@@ -282,7 +285,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await expect(page.getByText('Flow added')).toBeHidden(NAV);
     await shot(page, 'E14b-cost-from-flows');
     const priced = posted(page, /^\/api\/components\/\d+\/costs$/, 'PUT');
-    await fold.getByRole('button', { name: 'Use the material cost from these flows' }).click();
+    await fold.getByRole('button', { name: 'Save the material cost from these flows' }).click();
     const pricedRes = await priced;
     expect(pricedRes.status()).toBe(200);
     expect(pricedRes.request().postDataJSON()).toEqual({ kind: 'material', mode: 'flows' });
@@ -474,7 +477,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     const cure = page.getByRole('complementary', { name: /30\. Powder coat and cure/ }).getByRole('textbox', { name: 'Electricity' });
     const changed = posted(page, /^\/api\/flows\/\d+$/, 'PUT');
     await cure.fill('0.25');
-    await cure.press('Enter');
+    await page.getByRole('button', { name: 'Save Electricity on 30. Powder coat and cure' }).click();
     expect((await changed).status()).toBe(200);
     const ranWhatIf = posted(page, /^\/api\/cases\/\d+\/assessments$/);
     await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
@@ -527,7 +530,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     const steel = desk.getByRole('complementary', { name: /10\. Cut blank/ }).getByRole('textbox', { name: 'Steel' });
     const lighter = posted(desk, /^\/api\/flows\/\d+$/, 'PUT');
     await steel.fill('0.78');
-    await steel.press('Enter');
+    await desk.getByRole('button', { name: 'Save Steel on 10. Cut blank' }).click();
     expect((await lighter).status()).toBe(200);
     const ran = posted(desk, /^\/api\/cases\/\d+\/assessments$/);
     await desk.getByRole('button', { name: 'Run Assessment', exact: true }).click();

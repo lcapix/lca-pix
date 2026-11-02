@@ -7,12 +7,16 @@
 // flow is saved.
 
 import { substanceSource } from '@/lib/substance-source'
+import { factorText } from '@/lib/workspace/flow-edit'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
 import type { Substance } from '@/lib/case-editor/flow-types'
 import type { AddFlowForm, AddSubstanceForm as AddSubstanceState } from '@/lib/case-editor/use-add-flow-form'
 import { HelpTip } from '../help-tip'
 import { AddSubstanceForm } from './add-substance-form'
 import { ProcessLibrary } from './process-library'
+
+/** The most matches the list shows at once, most relevant first. */
+const MAX_SHOWN = 30
 
 export function SubstancePicker({
   componentId,
@@ -49,10 +53,11 @@ export function SubstancePicker({
 
       {!substanceId && (
         <div className="af-options" aria-label="Matching substances" role="group">
+          {!search.trim() && matches.length > 0 && <p className="af-muted">Common materials. Type a name to search the whole library.</p>}
           {matches.length === 0 ? (
-            <p className="af-muted">{substances.length === 0 ? 'The substance library is empty.' : 'No match.'}</p>
+            <p className="af-muted">{substances.length === 0 ? 'The substance library is empty.' : search.trim() ? 'No match.' : 'Type a name to search the library.'}</p>
           ) : (
-            matches.map((s) => (
+            matches.slice(0, MAX_SHOWN).map((s) => (
               <button key={s.substance_id} type="button" className="af-option" onClick={() => pickSubstance(s)}>
                 <span className="af-option-name">
                   {s.variant_of ? '↳ ' : ''}
@@ -62,7 +67,7 @@ export function SubstancePicker({
                   {s.category ? <span className="af-muted"> · {s.category}</span> : null}
                 </span>
                 <span className="ds-mono af-option-meta">
-                  {s.climate_factor != null ? `${s.climate_factor} ${s.climate_unit ?? ''}`.trim() : 'no climate factor'}
+                  {s.climate_factor != null ? `${factorText(s.climate_factor)} ${s.climate_unit ?? ''}`.trim() : 'no climate factor'}
                   {' · '}
                   {s.unit ?? 'unit not set'}
                   {' · '}
@@ -70,6 +75,11 @@ export function SubstancePicker({
                 </span>
               </button>
             ))
+          )}
+          {matches.length > MAX_SHOWN && (
+            <p className="af-muted">
+              {matches.length - MAX_SHOWN} more match. Type more of the name to narrow it.
+            </p>
           )}
         </div>
       )}

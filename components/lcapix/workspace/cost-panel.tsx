@@ -4,27 +4,33 @@
 // 6 set", and each of the six kinds with how it was built (hours × rate, its
 // source tag). Labor opens "Look up a labor rate": a reference occupation, a
 // state's live BLS wage, or your own rate. Energy looks up a carrier's price,
-// material a metal's price per kg (Metals-API). The other kinds take an amount. Every save goes through the costs route,
-// which stores the amount and the basis together. Material and energy also
-// offer the cost from the step's flows (one click, never on its own).
+// material a metal's price per kg (Metals-API). The other kinds take an amount.
+//
+// Nothing is stored until Save (B1): a lookup or a picked rate shows its
+// number first ("0.8 kg × $0.95/kg = $0.76"), and Save stores it through the
+// costs route, which keeps the amount and the basis together. The Saved line
+// shows on that cost, in view (B4). A cost on a step with no flow says it adds
+// no impact (E3). The flows' number never replaces a stored cost in one click
+// (E5). The kind editors are shared with the Inventory (E4).
 
 import { perUnit } from '@/lib/workspace/per-unit'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, ErrorCard, IconButton, SavedLine } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { announceComponentsChanged } from '@/lib/case-editor/use-flows'
 import { US_STATES } from '@/lib/case-editor/use-labor-rate'
 import { LABOR_RATES, REFERENCE_VINTAGE } from '@/lib/integrations/reference-rates'
 import { METAL_NAME } from '@/lib/integrations/metals/client'
-import { COST_BASIS_KINDS, type CostBasisKind } from '@/lib/costs/cost-basis'
+import { COST_BASIS_KINDS, costAmount, type CostBasisKind } from '@/lib/costs/cost-basis'
 import type { FlowCostSuggestion } from '@/lib/costs/from-flows'
 import { amount, money } from '@/lib/ui/format'
 import { stateName } from '@/lib/ui/us-states'
 import { COST_KIND_LABEL, basisLine, basisTag, costLinesText, rateText, setLine } from '@/lib/workspace/cost-text'
 import { costedInLine, flowCostNotes, type FlowCostKind } from '@/lib/workspace/flow-cost-text'
-import { putCost, useStepCosts, type StepCosts } from '@/lib/workspace/use-step-costs'
+import { useUnsavedEdit } from '@/lib/workspace/unsaved'
+import { previewCost, putCost, useStepCosts, type CostPreview, type StepCosts } from '@/lib/workspace/use-step-costs'
 import type { WorkspaceCase, WorkspaceStep } from '@/lib/workspace/use-workspace'
-import { FlowCostNotes, applyFlowsCost } from './flow-cost-notes'
+import { FlowCostNotes, FlowsCostChoice } from './flow-cost-notes'
 
 const KIND_ICON: Record<CostBasisKind, string> = {
   labor: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
@@ -35,39 +41,41 @@ const KIND_ICON: Record<CostBasisKind, string> = {
   overhead: 'M4 20V9l8-5 8 5v11zM9 20v-6h6v6',
 }
 
+/** E3: what a cost on a step with no flow says, on that cost. */
+export const NO_IMPACT_LINE = 'Adds no impact: no flow on this step'
+
 export function CostPanel({
   step,
   kase,
   readOnly,
-  aside,
   initialOpen = null,
   steps = [],
+  flowCount,
 }: {
   step: WorkspaceStep
   kase: WorkspaceCase
   /** The case's steps, to see which kinds a step above or below already carries. */
   steps?: WorkspaceStep[]
   readOnly: boolean
-  /** The Flows · Cost switch, at the end of the header line (E14). */
-  aside?: ReactNode
   /** A kind to open on arrival ("No price for Argon: add its cost" opens Material). */
   initialOpen?: CostBasisKind | null
+  /** How many flows sit on this step; 0 flags each cost "adds no impact" (E3). Unknown when left out. */
+  flowCount?: number
 }) {
   const { data, error, load } = useStepCosts(step.id)
   const [open, setOpen] = useState<CostBasisKind | null>(readOnly ? null : initialOpen)
-  const [saved, setSaved] = useState<string | null>(null)
+  const [saved, setSaved] = useState<{ kind: CostBasisKind | null; line: string } | null>(null)
   const total = data ? data.costs.reduce((s, c) => s + (c.amount ?? 0), 0) : null
   const unit = perUnit(kase)
   const inLine = (kind: CostBasisKind) => costedInLine(step.id, steps, kind)
   const notes = data && !readOnly ? flowCostNotes(data.costs, data.from_flows, inLine) : []
 
   // The page reloads on the announcement, this panel with it (useStepCosts).
-  const done = (line: string) => {
-    setSaved(line)
+  const done = (kind: CostBasisKind | null) => (line: string) => {
+    setSaved({ kind, line })
     setOpen(null)
     announceComponentsChanged()
   }
-  const flowsOf = (kind: CostBasisKind) => (kind === 'material' || kind === 'energy' ? data?.from_flows?.[kind] : undefined)
 
   if (error) {
     return (
@@ -98,7 +106,6 @@ export function CostPanel({
           </span>
           <span style={{ display: 'block', fontSize: 12, color: 'var(--ds-text-3)', marginTop: 2 }}>{setLine(data.set, data.of)}</span>
         </span>
-        {aside}
       </div>
       {COST_BASIS_KINDS.map((kind) => {
         const c = data.costs.find((x) => x.kind === kind)!
@@ -125,31 +132,31 @@ export function CostPanel({
                 {line && <span className="ds-mono ws-cost-line">{line}</span>}
                 {tag && <span className={`ds-tag ds-tag--${tag.kind}`} style={{ marginTop: 4, display: 'inline-block' }}>{tag.text}</span>}
                 {c.amount === null && <span className="ws-cost-line">{readOnly ? 'Not set' : 'Not set · add it'}</span>}
+                {c.amount !== null && flowCount === 0 && <span className="ws-noimpact">{NO_IMPACT_LINE}</span>}
               </span>
               <span className="ds-mono" style={{ fontWeight: 600 }}>
                 {c.amount === null ? '–' : money(c.amount, data.currency)}
               </span>
             </button>
+            {saved && saved.kind === kind && !isOpen && (
+              <div style={{ padding: '0 18px 10px' }}>
+                <SavedLine>{saved.line}</SavedLine>
+              </div>
+            )}
             {!isOpen && note.length > 0 && (
-              <FlowCostNotes step={step} notes={note} currency={data.currency} onSaved={done} onAddCost={(k) => setOpen(k)} />
+              <FlowCostNotes step={step} notes={note} currency={data.currency} onSaved={done(kind)} onAddCost={(k) => setOpen(k)} />
             )}
             {isOpen && !readOnly && (
               <div className="ws-cost-edit">
-                {kind === 'labor' ? (
-                  <LaborLookup step={step} cost={c} onDone={done} onClose={() => setOpen(null)} />
-                ) : kind === 'energy' ? (
-                  <EnergyLookup step={step} cost={c} fromFlows={flowsOf(kind)} elsewhere={inLine(kind)} onDone={done} onClose={() => setOpen(null)} />
-                ) : (
-                  <AmountEntry step={step} kind={kind} cost={c} fromFlows={flowsOf(kind)} elsewhere={inLine(kind)} onDone={done} onClose={() => setOpen(null)} />
-                )}
+                <CostKindEditor step={step} kind={kind} cost={c} data={data} steps={steps} onDone={done(kind)} onClose={() => setOpen(null)} />
               </div>
             )}
           </div>
         )
       })}
-      {saved && (
+      {saved && saved.kind === null && (
         <div style={{ padding: '10px 18px' }}>
-          <SavedLine>{saved}</SavedLine>
+          <SavedLine>{saved.line}</SavedLine>
         </div>
       )}
     </div>
@@ -159,55 +166,120 @@ export function CostPanel({
 type Cost = StepCosts['costs'][number]
 type EditProps = { step: WorkspaceStep; cost: Cost; onDone: (line: string) => void; onClose: () => void }
 
+/** The editor for one kind of cost: shared by the Cost view and the Inventory's step-cost rows (E4). */
+export function CostKindEditor({
+  step,
+  kind,
+  cost,
+  data,
+  steps = [],
+  onDone,
+  onClose,
+}: {
+  step: WorkspaceStep
+  kind: CostBasisKind
+  cost: Cost
+  data: StepCosts
+  steps?: WorkspaceStep[]
+  onDone: (line: string) => void
+  onClose: () => void
+}) {
+  const elsewhere = costedInLine(step.id, steps, kind)
+  const fromFlows = kind === 'material' || kind === 'energy' ? data.from_flows?.[kind] : undefined
+  if (kind === 'labor') return <LaborLookup step={step} cost={cost} onDone={onDone} onClose={onClose} />
+  if (kind === 'energy') return <EnergyLookup step={step} cost={cost} fromFlows={fromFlows} elsewhere={elsewhere} onDone={onDone} onClose={onClose} />
+  return <AmountEntry step={step} kind={kind} cost={cost} fromFlows={fromFlows} elsewhere={elsewhere} onDone={onDone} onClose={onClose} />
+}
+
+/** "0.8 kg × $0.95/kg = $0.76 · Steel, hot-rolled", from a preview's basis. */
+export function previewText(p: CostPreview): string {
+  const b = p.basis
+  if (b && b.driver_quantity != null && b.rate != null) {
+    const label = b.rate_label ? ` · ${b.rate_label}` : ''
+    return `${amount(b.driver_quantity)}${b.driver_unit ? ` ${b.driver_unit}` : ''} × ${rateText(b.rate, b.rate_unit)} = ${money(p.amount)}${label}`
+  }
+  if (p.lines?.length) return `${costLinesText(p.lines)} = ${money(p.amount)}`
+  return money(p.amount)
+}
+
+/** A worked-out cost waiting for Save, with its source tag; Save stores it, Cancel drops it. */
+function PreviewSave({
+  text,
+  tag,
+  saveLabel,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  text: string
+  tag?: { kind: string; text: string } | null
+  saveLabel: string
+  busy: boolean
+  onSave: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="ws-preview" role="group" aria-label="Not saved yet">
+      <span className="ds-mono" style={{ fontSize: 13, overflowWrap: 'anywhere' }}>
+        {text}
+      </span>
+      {tag && <span className={`ds-tag ds-tag--${tag.kind}`}>{tag.text}</span>}
+      <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Button variant="dark" size="small" onClick={onSave} busy={busy} aria-label={saveLabel}>
+          Save
+        </Button>
+        <Button size="small" onClick={onCancel}>
+          Cancel
+        </Button>
+        <span className="ws-draft-note">Not saved yet</span>
+      </span>
+    </div>
+  )
+}
+
+/** Save one cost; the line says what was stored ("Saved · labor $0.39 on 20. Weld tab"). */
+async function saveCost(step: WorkspaceStep, kind: CostBasisKind, body: Record<string, unknown>, what?: string): Promise<{ line: string | null; error: string | null }> {
+  const res = await apiRequest(`/api/components/${step.id}/costs`, { method: 'PUT', body: JSON.stringify(body) })
+  const d = await res.json().catch(() => ({}))
+  if (!res.ok) return { line: null, error: d?.error ?? `Not saved (${res.status}).` }
+  const stored = (d?.costs as Cost[] | undefined)?.find((c) => c.kind === kind)?.amount
+  const label = what ?? COST_KIND_LABEL[kind].toLowerCase()
+  return { line: `Saved · ${label}${stored != null ? ` ${money(stored)}` : ''} on ${step.name}`, error: null }
+}
+
 /**
  * Inside the material or energy sheet: what the step's flows come to, line by
- * line, with Use it, and the flows with no price ("add them to the total
- * below"). Shown whatever the cost is now, so a number entered by hand can
- * still be swapped for the flows' one; not offered when a step above or
+ * line, with Save (E5 asks first when a cost is stored), and the flows with no
+ * price ("add them to the total below"). Not offered when a step above or
  * below carries this kind already, which would count it twice.
  */
 function FromFlowsInSheet({
   step,
   kind,
   s,
+  stored,
   elsewhere,
   onDone,
 }: {
   step: WorkspaceStep
   kind: FlowCostKind
   s?: FlowCostSuggestion
+  stored: number | null
   elsewhere: string[]
   onDone: (line: string) => void
 }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   if (!s || (s.amount === null && !s.noPrice.length)) return null
-  const use = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      onDone(await applyFlowsCost(step, kind))
-    } catch (e: any) {
-      setError(e?.message ?? 'Not saved.')
-    } finally {
-      setBusy(false)
-    }
-  }
   return (
     <div className="ws-sheet-flows">
-      <span className="ds-label" style={{ marginBottom: 0 }}>From this step's flows</span>
-      {s.amount !== null && (
-        <span className="ws-flowcost-offer">
+      <span className="ds-label" style={{ marginBottom: 0 }}>From this step&apos;s flows</span>
+      {s.amount !== null &&
+        (elsewhere.length ? (
           <span className="ds-mono" style={{ fontSize: 12, overflowWrap: 'anywhere' }}>
             {costLinesText(s.lines)} = {money(s.amount)}
           </span>
-          {!elsewhere.length && (
-            <Button size="small" onClick={use} busy={busy} aria-label={`Use the ${COST_KIND_LABEL[kind].toLowerCase()} cost from these flows`}>
-              Use it
-            </Button>
-          )}
-        </span>
-      )}
+        ) : (
+          <FlowsCostChoice step={step} kind={kind} offer={s.amount} stored={stored} text={`${costLinesText(s.lines)} = ${money(s.amount)}`} onSaved={onDone} />
+        ))}
       {elsewhere.length > 0 && (
         <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
           {COST_KIND_LABEL[kind]} is costed on {elsewhere.join(', ')}. Costing these flows here too would count it twice.
@@ -216,11 +288,6 @@ function FromFlowsInSheet({
       {s.noPrice.length > 0 && !elsewhere.length && (
         <span className="ws-flowcost-noprice">
           No price for {s.noPrice.join(', ')}. {s.amount === null ? 'Enter the cost below.' : 'To count it, enter the whole cost below.'}
-        </span>
-      )}
-      {error && (
-        <span role="alert" style={{ fontSize: 13, color: 'var(--ds-error)' }}>
-          {error}
         </span>
       )}
     </div>
@@ -264,7 +331,7 @@ function ClearCost({ step, kind, onDone }: { step: WorkspaceStep; kind: CostBasi
 
 const num = (v: string) => (v.trim() === '' ? NaN : Number(v))
 
-/** "Look up a labor rate" (E14): hours, then a reference occupation, a state's live wage, or your own rate. */
+/** "Look up a labor rate" (E14): hours, then a reference occupation, a state's live wage, or your own rate; Save stores the one picked. */
 function LaborLookup({ step, cost, onDone, onClose }: EditProps) {
   const b = cost.basis
   // The hours a rate was used with, else the step's own (a routing gives them).
@@ -272,7 +339,8 @@ function LaborLookup({ step, cost, onDone, onClose }: EditProps) {
   const [hours, setHours] = useState(startHours != null ? amount(startHours) : '')
   const [q, setQ] = useState('')
   const [state, setState] = useState('US')
-  const [preview, setPreview] = useState<{ soc: string; state: string; rate: number; source: string; live: boolean } | null>(null)
+  const [stateRate, setStateRate] = useState<{ soc: string; state: string; rate: number; source: string; live: boolean } | null>(null)
+  const [picked, setPicked] = useState<{ soc: string; region: string; title: string; preview: CostPreview } | null>(null)
   const [own, setOwn] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -295,28 +363,39 @@ function LaborLookup({ step, cost, onDone, onClose }: EditProps) {
     setError(null)
     return true
   }
+  const body = (soc: string, region: string) => ({
+    kind: 'labor',
+    mode: 'lookup',
+    rate_code: soc,
+    region,
+    driver_quantity: h,
+    driver_unit: 'h',
+    ...(region === 'US' ? { prefer: 'reference' } : {}),
+  })
 
-  // A US row is the dated reference it shows; a state row is the live wage it previewed.
-  const use = async (soc: string, region: string) => {
+  // Pick a rate: the server works the cost out, and nothing is stored until Save.
+  const pick = async (soc: string, region: string, title: string) => {
     if (!need()) return
     setBusy(`${soc}-${region}`)
-    const err = await putCost(step.id, {
-      kind: 'labor',
-      mode: 'lookup',
-      rate_code: soc,
-      region,
-      driver_quantity: h,
-      driver_unit: 'h',
-      ...(region === 'US' ? { prefer: 'reference' } : {}),
-    })
+    const r = await previewCost(step.id, body(soc, region))
     setBusy(null)
-    if (err) return setError(err)
-    onDone(`Saved · labor on ${step.name}`)
+    if (r.error || !r.preview) return setError(r.error ?? 'The rate did not work out.')
+    setPicked({ soc, region, title, preview: r.preview })
+  }
+
+  const savePicked = async (): Promise<boolean> => {
+    if (!picked || !need()) return false
+    setBusy('save')
+    const r = await saveCost(step, 'labor', body(picked.soc, picked.region))
+    setBusy(null)
+    if (r.error) return setError(r.error), false
+    onDone(r.line!)
+    return true
   }
 
   const look = async (st: string) => {
     setState(st)
-    setPreview(null)
+    setStateRate(null)
     if (st === 'US' || !forState) return
     setBusy('preview')
     setError(null)
@@ -328,34 +407,34 @@ function LaborLookup({ step, cost, onDone, onClose }: EditProps) {
     setBusy(null)
     if (!res.ok) return setError(d?.error ?? `The wage lookup failed (${res.status}).`)
     const source = String(d?.rate?.source ?? '')
-    setPreview({ soc: forState.soc, state: st, rate: Number(d?.rate?.rateValue), source, live: !/reference/i.test(source) })
+    setStateRate({ soc: forState.soc, state: st, rate: Number(d?.rate?.rateValue), source, live: !/reference/i.test(source) })
   }
 
-  const useOwn = async () => {
-    const r = num(own)
-    if (!need()) return
-    if (!Number.isFinite(r) || r < 0) return setError('Enter your rate in dollars per hour, for example 24.50.')
+  const r = num(own)
+  const ownOk = own.trim() !== '' && Number.isFinite(r) && r >= 0
+  const saveOwn = async (): Promise<boolean> => {
+    if (!need()) return false
+    if (!ownOk) return setError('Enter your rate in dollars per hour, for example 24.50.'), false
     setBusy('own')
-    const err = await putCost(step.id, {
-      kind: 'labor',
-      mode: 'entered',
-      driver_quantity: h,
-      driver_unit: 'h',
-      rate: r,
-      rate_unit: '$/h',
-      rate_label: 'Own rate',
-    })
+    const res = await saveCost(step, 'labor', { kind: 'labor', mode: 'entered', driver_quantity: h, driver_unit: 'h', rate: r, rate_unit: '$/h', rate_label: 'Own rate' }, 'your own labor rate')
     setBusy(null)
-    if (err) return setError(err)
-    onDone(`Saved · your own labor rate on ${step.name}`)
+    if (res.error) return setError(res.error), false
+    onDone(res.line!)
+    return true
   }
+
+  useUnsavedEdit(`labor-${step.id}`, !!picked || ownOk, {
+    label: `the labor cost on ${step.name}`,
+    save: () => (picked ? savePicked() : saveOwn()),
+    discard: () => (setPicked(null), setOwn('')),
+  })
 
   return (
     <div className="ws-lookup">
       <SheetHead title="Look up a labor rate" sub={`For ${step.name}${hoursOk ? ` · ${amount(h)} h` : ''}`} onClose={onClose} />
       <label className="ds-label" style={{ marginBottom: 0 }}>
         Hours per unit
-        <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={hours} placeholder="0.015" onChange={(e) => setHours(e.target.value)} />
+        <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={hours} placeholder="0.015" onChange={(e) => (setHours(e.target.value), setPicked(null))} />
       </label>
       <div className="ws-lookup-search">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -374,23 +453,35 @@ function LaborLookup({ step, cost, onDone, onClose }: EditProps) {
             tag={{ kind: 'reference', text: `Reference ${REFERENCE_VINTAGE}` }}
             rate={rateText(o.rate, '$/h')}
             inUse={inUse(o.soc, 'US')}
+            picked={picked?.soc === o.soc && picked.region === 'US'}
             busy={busy === `${o.soc}-US`}
-            onUse={() => use(o.soc, 'US')}
+            onPick={() => pick(o.soc, 'US', `${name(o.label)} · US`)}
           />
         ))}
-        {preview && forState && (
+        {stateRate && forState && (
           <RateRow
-            title={`${name(forState.label)} · ${stateName(preview.state)}`}
-            code={preview.soc}
-            tag={preview.live ? { kind: 'regional', text: `${preview.source} · live` } : { kind: 'reference', text: `Reference ${REFERENCE_VINTAGE}, no state figure` }}
-            rate={rateText(preview.rate, '$/h')}
-            inUse={inUse(preview.soc, preview.state)}
-            busy={busy === `${preview.soc}-${preview.state}`}
-            onUse={() => use(preview.soc, preview.state)}
+            title={`${name(forState.label)} · ${stateName(stateRate.state)}`}
+            code={stateRate.soc}
+            tag={stateRate.live ? { kind: 'regional', text: `${stateRate.source} · live` } : { kind: 'reference', text: `Reference ${REFERENCE_VINTAGE}, no state figure` }}
+            rate={rateText(stateRate.rate, '$/h')}
+            inUse={inUse(stateRate.soc, stateRate.state)}
+            picked={picked?.soc === stateRate.soc && picked.region === stateRate.state}
+            busy={busy === `${stateRate.soc}-${stateRate.state}`}
+            onPick={() => pick(stateRate.soc, stateRate.state, `${name(forState.label)} · ${stateName(stateRate.state)}`)}
           />
         )}
         {!list.length && <li style={{ fontSize: 13, color: 'var(--ds-text-3)', padding: '8px 0' }}>No occupation matches. Enter your own rate below.</li>}
       </ul>
+      {picked && (
+        <PreviewSave
+          text={previewText(picked.preview)}
+          tag={picked.preview.basis ? basisTag(picked.preview.basis) : null}
+          saveLabel={`Save the labor cost: ${picked.title}`}
+          busy={busy === 'save'}
+          onSave={() => void savePicked()}
+          onCancel={() => setPicked(null)}
+        />
+      )}
       {forState && (
         <label className="ds-label" style={{ marginBottom: 0 }}>
           Wages for {name(forState.label).toLowerCase()} in
@@ -411,16 +502,21 @@ function LaborLookup({ step, cost, onDone, onClose }: EditProps) {
       )}
       <div>
         <span className="ds-label">Or enter your own rate</span>
-        <span style={{ display: 'flex', gap: 8 }}>
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="ws-money-input">
             <span aria-hidden>$</span>
-            <input aria-label="Your rate in dollars per hour" inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => setOwn(e.target.value)} />
+            <input aria-label="Your rate in dollars per hour" inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => (setOwn(e.target.value), setPicked(null))} />
             <span aria-hidden>/ h</span>
           </span>
-          <Button onClick={useOwn} busy={busy === 'own'}>
-            Use
+          <Button onClick={() => void saveOwn()} busy={busy === 'own'} disabled={!ownOk} aria-label="Save your own labor rate">
+            Save
           </Button>
         </span>
+        {ownOk && hoursOk && (
+          <span className="ds-mono ws-preview-line">
+            {amount(h)} h × {rateText(r, '$/h')} = {money(costAmount(h, r))} · not saved yet
+          </span>
+        )}
       </div>
       {error && (
         <span role="alert" style={{ fontSize: 13, color: 'var(--ds-error)' }}>
@@ -441,19 +537,21 @@ function RateRow({
   tag,
   rate,
   inUse,
+  picked,
   busy,
-  onUse,
+  onPick,
 }: {
   title: string
   code: string
   tag: { kind: string; text: string }
   rate: string
   inUse: boolean
+  picked: boolean
   busy: boolean
-  onUse: () => void
+  onPick: () => void
 }) {
   return (
-    <li className={`ws-rate${inUse ? ' ws-rate--in-use' : ''}`}>
+    <li className={`ws-rate${inUse ? ' ws-rate--in-use' : ''}${picked ? ' ws-rate--picked' : ''}`}>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontWeight: 600 }}>{title}</span>
         <span className="ds-mono" style={{ fontSize: 12, color: 'var(--ds-text-2)', marginRight: 8 }}>
@@ -466,9 +564,11 @@ function RateRow({
       </span>
       {inUse ? (
         <span style={{ color: 'var(--ds-green)', fontWeight: 600, fontSize: 13, minWidth: 64 }}>✓ In use</span>
+      ) : picked ? (
+        <span style={{ color: 'var(--ds-text-2)', fontWeight: 600, fontSize: 13, minWidth: 64 }}>Picked</span>
       ) : (
-        <Button size="small" onClick={onUse} busy={busy} aria-label={`Use ${title}`}>
-          Use
+        <Button size="small" onClick={onPick} busy={busy} aria-label={`Pick ${title}`}>
+          Pick
         </Button>
       )}
     </li>
@@ -480,7 +580,7 @@ const ENERGY_UNITS: Record<'electricity' | 'natural_gas', string[]> = {
   natural_gas: ['m3', 'MMBtu', 'kWh'],
 }
 
-/** Energy: an amount of a carrier, priced live by EIA when it answers, else the dated reference. */
+/** Energy: an amount of a carrier, priced live by EIA when it answers, else the dated reference; Save stores it. */
 function EnergyLookup({ step, cost, fromFlows, elsewhere = [], onDone, onClose }: EditProps & { fromFlows?: FlowCostSuggestion; elsewhere?: string[] }) {
   const b = cost.basis
   const [carrier, setCarrier] = useState<'electricity' | 'natural_gas'>(b?.rate_code === 'natural_gas' ? 'natural_gas' : 'electricity')
@@ -488,31 +588,65 @@ function EnergyLookup({ step, cost, fromFlows, elsewhere = [], onDone, onClose }
   const [unit, setUnit] = useState(b?.driver_unit && ENERGY_UNITS[carrier].includes(b.driver_unit) ? b.driver_unit : ENERGY_UNITS[carrier][0])
   const [region, setRegion] = useState(b?.region ?? 'US')
   const [own, setOwn] = useState('')
+  const [preview, setPreview] = useState<CostPreview | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const q = num(qty)
+  const lookupBody = { kind: 'energy', mode: 'lookup', rate_code: carrier, region, driver_quantity: q, driver_unit: unit }
+  const r = num(own)
+  const ownOk = own.trim() !== '' && Number.isFinite(r) && r >= 0
+  const qtyOk = Number.isFinite(q) && q >= 0
+  const needQty = () => (qtyOk ? true : (setError(`Enter the ${carrier === 'electricity' ? 'electricity' : 'gas'} this step uses per unit.`), false))
 
-  const submit = async (mode: 'lookup' | 'entered') => {
-    if (!Number.isFinite(q) || q < 0) return setError(`Enter the ${carrier === 'electricity' ? 'electricity' : 'gas'} this step uses per unit.`)
-    const r = num(own)
-    if (mode === 'entered' && (!Number.isFinite(r) || r < 0)) return setError(`Enter your price in dollars per ${unit}.`)
-    setBusy(mode)
+  const look = async () => {
+    if (!needQty()) return
+    setBusy('lookup')
     setError(null)
-    const err = await putCost(
-      step.id,
-      mode === 'lookup'
-        ? { kind: 'energy', mode, rate_code: carrier, region, driver_quantity: q, driver_unit: unit }
-        : { kind: 'energy', mode, driver_quantity: q, driver_unit: unit, rate: r, rate_unit: `$/${unit}`, rate_label: carrier === 'electricity' ? 'Electricity, own price' : 'Natural gas, own price' },
-    )
+    const res = await previewCost(step.id, lookupBody)
     setBusy(null)
-    if (err) return setError(err)
-    onDone(`Saved · energy on ${step.name}`)
+    if (res.error || !res.preview) return setError(res.error ?? 'The price did not work out.')
+    setPreview(res.preview)
   }
+  const saveLookup = async (): Promise<boolean> => {
+    if (!needQty()) return false
+    setBusy('save')
+    const res = await saveCost(step, 'energy', lookupBody)
+    setBusy(null)
+    if (res.error) return setError(res.error), false
+    onDone(res.line!)
+    return true
+  }
+  const saveOwn = async (): Promise<boolean> => {
+    if (!needQty()) return false
+    if (!ownOk) return setError(`Enter your price in dollars per ${unit}.`), false
+    setBusy('entered')
+    setError(null)
+    const res = await saveCost(step, 'energy', {
+      kind: 'energy',
+      mode: 'entered',
+      driver_quantity: q,
+      driver_unit: unit,
+      rate: r,
+      rate_unit: `$/${unit}`,
+      rate_label: carrier === 'electricity' ? 'Electricity, own price' : 'Natural gas, own price',
+    })
+    setBusy(null)
+    if (res.error) return setError(res.error), false
+    onDone(res.line!)
+    return true
+  }
+  const changed = () => setPreview(null)
+
+  useUnsavedEdit(`energy-${step.id}`, !!preview || ownOk, {
+    label: `the energy cost on ${step.name}`,
+    save: () => (preview ? saveLookup() : saveOwn()),
+    discard: () => (setPreview(null), setOwn('')),
+  })
 
   return (
     <div className="ws-lookup">
       <SheetHead title="Price the energy" sub={`For ${step.name}`} onClose={onClose} />
-      <FromFlowsInSheet step={step} kind="energy" s={fromFlows} elsewhere={elsewhere} onDone={onDone} />
+      <FromFlowsInSheet step={step} kind="energy" s={fromFlows} stored={cost.amount} elsewhere={elsewhere} onDone={onDone} />
       <span style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <label className="ds-label" style={{ marginBottom: 0 }}>
           Carrier
@@ -524,6 +658,7 @@ function EnergyLookup({ step, cost, fromFlows, elsewhere = [], onDone, onClose }
               const c = e.target.value as 'electricity' | 'natural_gas'
               setCarrier(c)
               setUnit(ENERGY_UNITS[c][0])
+              changed()
             }}
           >
             <option value="electricity">Electricity</option>
@@ -532,7 +667,7 @@ function EnergyLookup({ step, cost, fromFlows, elsewhere = [], onDone, onClose }
         </label>
         <label className="ds-label" style={{ marginBottom: 0 }}>
           Where
-          <select className="ds-input" style={{ width: '100%', marginTop: 4 }} value={region} onChange={(e) => setRegion(e.target.value)}>
+          <select className="ds-input" style={{ width: '100%', marginTop: 4 }} value={region} onChange={(e) => (setRegion(e.target.value), changed())}>
             <option value="US">The whole US</option>
             {US_STATES.map((s) => (
               <option key={s} value={s}>
@@ -545,29 +680,44 @@ function EnergyLookup({ step, cost, fromFlows, elsewhere = [], onDone, onClose }
       <span style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
         <label className="ds-label" style={{ marginBottom: 0, flex: 1 }}>
           Amount per unit
-          <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} />
+          <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={qty} onChange={(e) => (setQty(e.target.value), changed())} />
         </label>
-        <select className="ds-input" aria-label="Energy unit" value={unit} onChange={(e) => setUnit(e.target.value)}>
+        <select className="ds-input" aria-label="Energy unit" value={unit} onChange={(e) => (setUnit(e.target.value), changed())}>
           {ENERGY_UNITS[carrier].map((u) => (
             <option key={u}>{u}</option>
           ))}
         </select>
-        <Button variant="dark" onClick={() => submit('lookup')} busy={busy === 'lookup'}>
+        <Button variant="dark" onClick={look} busy={busy === 'lookup'}>
           Look up the price
         </Button>
       </span>
+      {preview && (
+        <PreviewSave
+          text={previewText(preview)}
+          tag={preview.basis ? basisTag(preview.basis) : null}
+          saveLabel="Save the energy cost"
+          busy={busy === 'save'}
+          onSave={() => void saveLookup()}
+          onCancel={() => setPreview(null)}
+        />
+      )}
       <div>
         <span className="ds-label">Or enter your own price</span>
-        <span style={{ display: 'flex', gap: 8 }}>
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="ws-money-input">
             <span aria-hidden>$</span>
-            <input aria-label={`Your price in dollars per ${unit}`} inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => setOwn(e.target.value)} />
+            <input aria-label={`Your price in dollars per ${unit}`} inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => (setOwn(e.target.value), changed())} />
             <span aria-hidden>/ {unit}</span>
           </span>
-          <Button onClick={() => submit('entered')} busy={busy === 'entered'}>
-            Use
+          <Button onClick={() => void saveOwn()} busy={busy === 'entered'} disabled={!ownOk} aria-label="Save your own energy price">
+            Save
           </Button>
         </span>
+        {ownOk && qtyOk && (
+          <span className="ds-mono ws-preview-line">
+            {amount(q)} {unit} × {rateText(r, `$/${unit}`)} = {money(costAmount(q, r))} · not saved yet
+          </span>
+        )}
       </div>
       {error && (
         <span role="alert" style={{ fontSize: 13, color: 'var(--ds-error)' }}>
@@ -588,40 +738,66 @@ const METALS = Object.entries(METAL_NAME).map(([symbol, name]) => ({ symbol, nam
  * Material: kilograms of a metal, priced live by Metals-API when it answers,
  * else the metal's dated reference price. A metal with neither (lead, tin) is
  * refused by the server with a reason, and your own price per kg is the way on.
+ * Looking it up shows the number; Save stores it.
  */
 function MetalLookup({ step, cost, onDone }: EditProps) {
   const b = cost.basis
   const [metal, setMetal] = useState(b?.rate_code && METAL_NAME[b.rate_code] ? b.rate_code : METALS[0].symbol)
   const [qty, setQty] = useState(b?.driver_unit === 'kg' && b.driver_quantity != null ? amount(b.driver_quantity) : '')
   const [own, setOwn] = useState('')
+  const [preview, setPreview] = useState<CostPreview | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const name = METAL_NAME[metal]
   const q = num(qty)
+  const qtyOk = Number.isFinite(q) && q >= 0
+  const r = num(own)
+  const ownOk = own.trim() !== '' && Number.isFinite(r) && r >= 0
+  const lookupBody = { kind: 'material', mode: 'lookup', rate_code: metal, driver_quantity: q, driver_unit: 'kg' }
+  const needQty = () => (qtyOk ? true : (setError(`Enter the kilograms of ${name.toLowerCase()} this step uses per unit.`), false))
 
-  const submit = async (mode: 'lookup' | 'entered') => {
-    if (!Number.isFinite(q) || q < 0) return setError(`Enter the kilograms of ${name.toLowerCase()} this step uses per unit.`)
-    const r = num(own)
-    if (mode === 'entered' && (!Number.isFinite(r) || r < 0)) return setError('Enter your price in dollars per kg.')
-    setBusy(mode)
+  const look = async () => {
+    if (!needQty()) return
+    setBusy('lookup')
     setError(null)
-    const err = await putCost(
-      step.id,
-      mode === 'lookup'
-        ? { kind: 'material', mode, rate_code: metal, driver_quantity: q, driver_unit: 'kg' }
-        : { kind: 'material', mode, driver_quantity: q, driver_unit: 'kg', rate: r, rate_unit: '$/kg', rate_label: `${name}, own price` },
-    )
+    const res = await previewCost(step.id, lookupBody)
     setBusy(null)
-    if (err) return setError(err)
-    onDone(`Saved · material on ${step.name}`)
+    if (res.error || !res.preview) return setError(res.error ?? 'The price did not work out.')
+    setPreview(res.preview)
   }
+  const saveLookup = async (): Promise<boolean> => {
+    if (!needQty()) return false
+    setBusy('save')
+    const res = await saveCost(step, 'material', lookupBody)
+    setBusy(null)
+    if (res.error) return setError(res.error), false
+    onDone(res.line!)
+    return true
+  }
+  const saveOwn = async (): Promise<boolean> => {
+    if (!needQty()) return false
+    if (!ownOk) return setError('Enter your price in dollars per kg.'), false
+    setBusy('entered')
+    setError(null)
+    const res = await saveCost(step, 'material', { kind: 'material', mode: 'entered', driver_quantity: q, driver_unit: 'kg', rate: r, rate_unit: '$/kg', rate_label: `${name}, own price` })
+    setBusy(null)
+    if (res.error) return setError(res.error), false
+    onDone(res.line!)
+    return true
+  }
+
+  useUnsavedEdit(`metal-${step.id}`, !!preview || ownOk, {
+    label: `the material cost on ${step.name}`,
+    save: () => (preview ? saveLookup() : saveOwn()),
+    discard: () => (setPreview(null), setOwn('')),
+  })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <span style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <label className="ds-label" style={{ marginBottom: 0 }}>
           Metal
-          <select className="ds-input" style={{ width: '100%', marginTop: 4 }} value={metal} onChange={(e) => setMetal(e.target.value)}>
+          <select className="ds-input" style={{ width: '100%', marginTop: 4 }} value={metal} onChange={(e) => (setMetal(e.target.value), setPreview(null), setError(null))}>
             {METALS.map((m) => (
               <option key={m.symbol} value={m.symbol}>
                 {m.name}
@@ -631,24 +807,39 @@ function MetalLookup({ step, cost, onDone }: EditProps) {
         </label>
         <label className="ds-label" style={{ marginBottom: 0, flex: 1, minWidth: 120 }}>
           Kilograms per unit
-          <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={qty} placeholder="0.8" onChange={(e) => setQty(e.target.value)} />
+          <input className="ds-input" style={{ width: '100%', marginTop: 4 }} inputMode="decimal" value={qty} placeholder="0.8" onChange={(e) => (setQty(e.target.value), setPreview(null))} />
         </label>
-        <Button variant="dark" onClick={() => submit('lookup')} busy={busy === 'lookup'} aria-label={`Look up the price of ${name.toLowerCase()}`}>
+        <Button variant="dark" onClick={look} busy={busy === 'lookup'} aria-label={`Look up the price of ${name.toLowerCase()}`}>
           Look up the price
         </Button>
       </span>
+      {preview && (
+        <PreviewSave
+          text={previewText(preview)}
+          tag={preview.basis ? basisTag(preview.basis) : null}
+          saveLabel={`Save the price of ${name.toLowerCase()}`}
+          busy={busy === 'save'}
+          onSave={() => void saveLookup()}
+          onCancel={() => setPreview(null)}
+        />
+      )}
       <div>
         <span className="ds-label">Or enter your own price</span>
-        <span style={{ display: 'flex', gap: 8 }}>
+        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="ws-money-input">
             <span aria-hidden>$</span>
-            <input aria-label={`Your price for ${name.toLowerCase()} in dollars per kg`} inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => setOwn(e.target.value)} />
+            <input aria-label={`Your price for ${name.toLowerCase()} in dollars per kg`} inputMode="decimal" value={own} placeholder="0.00" onChange={(e) => (setOwn(e.target.value), setPreview(null))} />
             <span aria-hidden>/ kg</span>
           </span>
-          <Button onClick={() => submit('entered')} busy={busy === 'entered'} aria-label={`Use your price for ${name.toLowerCase()}`}>
-            Use
+          <Button onClick={() => void saveOwn()} busy={busy === 'entered'} disabled={!ownOk} aria-label={`Save your price for ${name.toLowerCase()}`}>
+            Save
           </Button>
         </span>
+        {ownOk && qtyOk && (
+          <span className="ds-mono ws-preview-line">
+            {amount(q)} kg × {rateText(r, '$/kg')} = {money(costAmount(q, r))} · not saved yet
+          </span>
+        )}
       </div>
       {error && (
         <span role="alert" style={{ fontSize: 13, color: 'var(--ds-error)' }}>
@@ -672,25 +863,33 @@ function AmountEntry({
   onDone,
   onClose,
 }: EditProps & { kind: CostBasisKind; fromFlows?: FlowCostSuggestion; elsewhere?: string[] }) {
-  const [value, setValue] = useState(cost.amount != null ? amount(cost.amount) : '')
-  const [source, setSource] = useState(cost.basis?.source_name ?? '')
+  const start = cost.amount != null ? amount(cost.amount) : ''
+  const startSource = cost.basis?.source_name ?? ''
+  const [value, setValue] = useState(start)
+  const [source, setSource] = useState(startSource)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const label = COST_KIND_LABEL[kind].toLowerCase()
-  const submit = async () => {
+  const submit = async (): Promise<boolean> => {
     const v = num(value)
-    if (!Number.isFinite(v) || v < 0) return setError(`Enter the ${label} cost per unit in dollars, for example 0.12.`)
+    if (!Number.isFinite(v) || v < 0) return setError(`Enter the ${label} cost per unit in dollars, for example 0.12.`), false
     setBusy(true)
     setError(null)
     const err = await putCost(step.id, { kind, mode: 'entered', amount: v, ...(source.trim() ? { source_name: source.trim() } : {}) })
     setBusy(false)
-    if (err) return setError(err)
-    onDone(`Saved · ${label} on ${step.name}`)
+    if (err) return setError(err), false
+    onDone(`Saved · ${label} on ${step.name}: ${money(v)}`)
+    return true
   }
+  useUnsavedEdit(`amount-${step.id}-${kind}`, value !== start || source !== startSource, {
+    label: `the ${label} cost on ${step.name}`,
+    save: submit,
+    discard: () => (setValue(start), setSource(startSource)),
+  })
   return (
     <div className="ws-lookup">
       <SheetHead title={`Set the ${label} cost`} sub={`For ${step.name}, per unit`} onClose={onClose} />
-      {kind === 'material' && <FromFlowsInSheet step={step} kind="material" s={fromFlows} elsewhere={elsewhere} onDone={onDone} />}
+      {kind === 'material' && <FromFlowsInSheet step={step} kind="material" s={fromFlows} stored={cost.amount} elsewhere={elsewhere} onDone={onDone} />}
       {kind === 'material' && <MetalLookup step={step} cost={cost} onDone={onDone} onClose={onClose} />}
       {kind === 'material' && <span className="ds-label" style={{ marginBottom: 0 }}>Or enter the whole material cost</span>}
       <span className="ws-money-input">
@@ -707,7 +906,7 @@ function AmountEntry({
         </span>
       )}
       <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Button variant="dark" onClick={submit} busy={busy}>
+        <Button variant="dark" onClick={() => void submit()} busy={busy}>
           Save
         </Button>
         {cost.amount !== null && <ClearCost step={step} kind={kind} onDone={onDone} />}

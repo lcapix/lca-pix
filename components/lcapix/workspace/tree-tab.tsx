@@ -14,6 +14,8 @@ import { stepKicker, stepSubLine } from '@/lib/workspace/step-text'
 import type { WorkspaceCase, WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
 import type { TierLayout } from '@/lib/workspace/tier-layout'
 import { StepPanel } from './step-panel'
+import { UnsavedBar, useDock } from './floating-panel'
+import { guard } from '@/lib/workspace/unsaved'
 import { useStepActions } from './step-actions'
 import { EmptyTree } from './empty-tree'
 import { AddStepForm } from './add-step-form'
@@ -120,6 +122,7 @@ export function TreeTab({
   const [addOpen, setAddOpen] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const [dock] = useDock()
 
   // Select the product (or the first step) once the tree is there.
   useEffect(() => {
@@ -160,11 +163,13 @@ export function TreeTab({
       const vp = viewportRef.current
       if (!p || !vp) return
       // The panel sits on the side it is docked to; the free space is the rest.
-      const dockLeft = !panelHidden && canvasRef.current?.querySelector('.ws-panel')?.getAttribute('data-dock') === 'left'
+      const dockLeft = !panelHidden && dock === 'left'
       const freeLeft = dockLeft ? PANEL_W + PANEL_GAP : 0
       const freeRight = panelHidden || dockLeft ? vp.clientWidth : vp.clientWidth - PANEL_W - PANEL_GAP
-      const left = p.x * zoom
-      const right = (p.x + p.w) * zoom
+      // The stage sits after the room on the left when the panel is docked there.
+      const shift = dockLeft ? PANEL_W + PANEL_GAP : 0
+      const left = p.x * zoom + shift
+      const right = (p.x + p.w) * zoom + shift
       if (right - vp.scrollLeft > freeRight - 16) vp.scrollLeft = right - freeRight + 32
       else if (left - vp.scrollLeft < freeLeft + 16) vp.scrollLeft = Math.max(0, left - freeLeft - 32)
       const top = p.y * zoom
@@ -172,7 +177,7 @@ export function TreeTab({
       if (bottom - vp.scrollTop > vp.clientHeight - 16) vp.scrollTop = bottom - vp.clientHeight + 32
       else if (top - vp.scrollTop < 56) vp.scrollTop = Math.max(0, top - 72)
     },
-    [layout.steps, panelHidden, zoom],
+    [layout.steps, panelHidden, zoom, dock],
   )
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -181,8 +186,11 @@ export function TreeTab({
     if (e.key === 'Enter' || e.key === ' ') {
       if (from != null) {
         e.preventDefault()
-        setSelected(from)
-        say(from)
+        // Opening another step leaves the open one's unsaved edits: ask first (B3).
+        guard(() => {
+          setSelected(from)
+          say(from)
+        })
       }
       return
     }
@@ -225,7 +233,10 @@ export function TreeTab({
     )
   }
 
-  const stageW = layout.width * zoom
+  // E7: room beside the tree on the panel's side, so a step under the panel
+  // scrolls clear of it and can be clicked.
+  const room = panelHidden ? 0 : PANEL_W + PANEL_GAP
+  const stageW = layout.width * zoom + room
   const stageH = layout.height * zoom
   const flowCount = rows.length
   const edited = steps.reduce<string | null>((t, s) => (s.updated_at && (!t || s.updated_at > t) ? s.updated_at : t), null)
@@ -308,7 +319,7 @@ export function TreeTab({
         onFocus={() => focused == null && selected != null && setFocused(selected)}
       >
         <div style={{ width: stageW, height: stageH, position: 'relative' }}>
-          <div className="ws-stage" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})` }}>
+          <div className="ws-stage" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})`, left: dock === 'left' ? room : 0 }}>
             {layout.lanes.map((l, i) => (
               <div key={i} className="ws-lane" style={{ top: l.y, height: l.h }} aria-hidden>
                 <span className="ws-lane-label">
@@ -360,16 +371,22 @@ export function TreeTab({
                   data-focus={focused === p.id || undefined}
                   style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H, borderColor: sub.needs ? undefined : c.border }}
                   onClick={() => {
-                    setSelected(p.id)
-                    setFocused(p.id)
-                    say(p.id)
-                    viewportRef.current?.focus()
+                    if (p.id === selected) return
+                    // Opening another step leaves the open one's unsaved edits: ask first (B3).
+                    guard(() => {
+                      setSelected(p.id)
+                      setFocused(p.id)
+                      say(p.id)
+                      viewportRef.current?.focus()
+                    })
                   }}
                   onContextMenu={(e) => {
                     if (readOnly) return
                     e.preventDefault()
-                    setSelected(p.id)
-                    setMenuFor(p.id)
+                    guard(() => {
+                      setSelected(p.id)
+                      setMenuFor(p.id)
+                    })
                   }}
                 >
                   <div className="ws-step-row">
@@ -401,6 +418,7 @@ export function TreeTab({
           steps={steps}
           anchor={layout.steps.find((s) => s.id === menuFor)!}
           zoom={zoom}
+          offsetX={dock === 'left' ? room : 0}
           viewport={viewportRef.current}
           onClose={() => {
             setMenuFor(null)
@@ -461,6 +479,7 @@ export function TreeTab({
         />
       )}
 
+      <UnsavedBar />
       <TextDialog
         open={renameFor != null}
         title="Rename step"
@@ -556,6 +575,7 @@ function StepMenu({
   steps,
   anchor,
   zoom,
+  offsetX = 0,
   viewport,
   onClose,
   onRename,
@@ -567,6 +587,7 @@ function StepMenu({
   steps: WorkspaceStep[]
   anchor: { x: number; y: number; w: number; h: number }
   zoom: number
+  offsetX?: number
   viewport: HTMLDivElement | null
   onClose: () => void
   onRename: () => void
@@ -614,7 +635,7 @@ function StepMenu({
     }
   }, [moving, onClose])
 
-  const left = anchor.x * zoom - (viewport?.scrollLeft ?? 0) + anchor.w * zoom + 8
+  const left = anchor.x * zoom + offsetX - (viewport?.scrollLeft ?? 0) + anchor.w * zoom + 8
   const top = anchor.y * zoom - (viewport?.scrollTop ?? 0) + 8
   const item = (label: string, onClick: () => void, opts: { danger?: boolean; sub?: boolean } = {}) => (
     <button type="button" role="menuitem" className={opts.danger ? 'danger' : undefined} aria-haspopup={opts.sub ? 'menu' : undefined} onClick={onClick}>
