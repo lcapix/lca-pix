@@ -17,11 +17,22 @@ import { generateAssessmentPDF, type ReportData } from '@/lib/pdf-generator';
 import { generateAssessmentPPTX } from '@/lib/pptx-generator';
 import {
   buildInventoryCsv,
+  hasFrozenResults,
   LEGACY_RESULTS_SOURCE,
   parseRunSnapshot,
   snapshotReportParts,
+  type RunSnapshot,
 } from '@/lib/run-snapshot';
 import { parseId } from '@/lib/ids';
+import { caseRunNumbers, inRunOrder, newestRunIds, placeholders } from '@/lib/runs/newest-first';
+import { caseChangedAfterRun } from '@/lib/runs/stale';
+import {
+  preparedBy,
+  reportComparison,
+  withoutReadOnlyNote,
+  type ReportComparison,
+  type ReportRunSide,
+} from '@/lib/results/report-text';
 
 const FORMATS = new Set(['pdf', 'pptx', 'ppt', 'csv']);
 
@@ -60,14 +71,18 @@ export async function GET(
     // 1. Get assessment run with case and project info
     const assessment = await queryOne<any>(
       `SELECT ar.*, ct.case_name, ct.case_type, ct.description as case_description,
+              ct.read_only AS case_read_only, ct.parent_case_id,
               p.project_id, p.project_name, p.description as project_description,
-              a.username as executed_by_username,
+              p.functional_unit AS project_functional_unit,
+              a.username as executed_by_username, a.full_name AS executed_by_name,
+              creator.full_name AS creator_name,
               owner.username as owner_username,
               p.created_at as project_created_at
        FROM assessment_runs ar
        JOIN case_table ct ON ar.case_id = ct.case_id
        JOIN project p ON ct.project_id = p.project_id
        LEFT JOIN account a ON ar.executed_by = a.id
+       LEFT JOIN account creator ON ct.created_by = creator.id
        LEFT JOIN account owner ON p.owner_id = owner.id
        WHERE ar.run_id = ?`,
       [runId]
@@ -214,6 +229,26 @@ export async function GET(
     } catch (err: any) {
       if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
     }
+    // The write-up's Limits (migrate-045), asked for on its own for the same reason.
+    let limitations: string | null = null;
+    try {
+      limitations =
+        (await queryOne<any>('SELECT limitations FROM case_table WHERE case_id = ?', [assessment.case_id]))?.limitations ?? null;
+    } catch (err: any) {
+      if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
+    }
+
+    // G1: the run as the app numbers it ("Run 3"), and, for a comparative
+    // case, its comparison against the base case under the shared rule.
+    const caseRunNumber = (await caseRunNumbers(Number(assessment.case_id))).get(Number(runId)) ?? null;
+    const editable = Number(assessment.case_read_only ?? 0) !== 1;
+    let comparison: ReportComparison | null = null;
+    let comparisonNote: string | null = null;
+    if (assessment.case_type === 'comparative') {
+      const built = await baseComparison(userId, assessment, snapshot, totalImpacts, caseRunNumber);
+      comparison = built.comparison;
+      comparisonNote = built.note;
+    }
 
     // 7. Build report data
     const reportData: ReportData = {
@@ -221,10 +256,16 @@ export async function GET(
       data_quality: snapshot?.data_quality ?? null,
       interpretation: writeup.interpretation ?? null,
       assumptions: writeup.assumptions ?? null,
+      limitations,
+      comparison,
+      comparison_note: comparisonNote,
+      // C2: the person's name, never a username slug.
+      prepared_by: preparedBy(assessment.creator_name, assessment.executed_by_name),
       project: {
         project_id: assessment.project_id,
         project_name: assessment.project_name,
-        description: assessment.project_description,
+        // C2: the sample's "make your own copy" sentence never prints for a case that can be changed.
+        description: withoutReadOnlyNote(assessment.project_description, editable),
         owner_username: assessment.owner_username ?? 'Removed account',
         created_at: assessment.project_created_at,
       },
@@ -232,7 +273,7 @@ export async function GET(
         case_id: assessment.case_id,
         case_name: assessment.case_name,
         case_type: assessment.case_type,
-        case_description: assessment.case_description,
+        case_description: withoutReadOnlyNote(assessment.case_description, editable),
       },
       assessment: {
         run_id: assessment.run_id,
@@ -242,6 +283,7 @@ export async function GET(
         run_at: assessment.run_at ?? assessment.run_date,
         calculation_method: assessment.calculation_method || 'CML 2001',
         executed_by_username: assessment.executed_by_username ?? 'Removed account',
+        case_run_number: caseRunNumber,
       },
       components,
       results,
@@ -351,4 +393,78 @@ export async function GET(
     console.error('PDF export error:', error);
     return NextResponse.json({ error: 'Failed to generate the report' }, { status: 500 });
   }
+}
+
+/** One run's totals per functional unit: frozen ones from its snapshot, older ones from its stored rows. */
+async function totalsPerFu(runId: number, snapshot: RunSnapshot | null): Promise<ReportRunSide['totals']> {
+  const scale = Number(snapshot?.goal_scope?.per_fu_scale) > 0 ? Number(snapshot!.goal_scope!.per_fu_scale) : 1;
+  if (hasFrozenResults(snapshot)) {
+    return snapshot.totals.map((t) => ({ category: t.category_name, unit: t.unit, value: Number(t.value) * scale }));
+  }
+  const rows = await query<any>(
+    `SELECT ic.category_name, ar.unit, SUM(ar.impact_value) AS value
+       FROM assessment_results ar JOIN impact_categories ic ON ic.category_id = ar.category_id
+      WHERE ar.run_id = ? GROUP BY ic.category_name, ar.unit`,
+    [runId],
+  );
+  return rows.map((r: any) => ({ category: r.category_name, unit: r.unit, value: Number(r.value) * scale }));
+}
+
+/**
+ * G1: a comparative case against the project's base case (its own parent when
+ * that is the base). The base run is the one Compare would read: the newest on
+ * this run's method and region, else the newest. Both totals are per
+ * functional unit; the percentage follows the shared rule (report-text.ts).
+ */
+async function baseComparison(
+  userId: number,
+  assessment: any,
+  snapshot: RunSnapshot | null,
+  totalImpacts: Array<{ category_name: string; total_value: number; unit: string }>,
+  caseRunNumber: number | null,
+): Promise<{ comparison: ReportComparison | null; note: string | null }> {
+  const bases = await query<any>(
+    `SELECT case_id, case_name FROM case_table WHERE project_id = ? AND case_type = 'base' AND case_id <> ? ORDER BY case_id`,
+    [assessment.project_id, assessment.case_id],
+  );
+  const base = bases.find((b: any) => Number(b.case_id) === Number(assessment.parent_case_id)) ?? bases[0];
+  if (!base) return { comparison: null, note: 'This project has no base case, so there is nothing to compare with.' };
+  if (await caseAccessDenied(userId, Number(base.case_id))) {
+    return { comparison: null, note: 'The base case is not shared with you, so this report carries no comparison.' };
+  }
+  const ids = await newestRunIds(Number(base.case_id), { status: 'completed-or-unset' });
+  if (!ids.length) return { comparison: null, note: `${base.case_name} has no run yet, so there is nothing to compare with.` };
+  const runs = inRunOrder(
+    ids,
+    await query<any>(
+      `SELECT run_id, calculation_method, region_code, run_snapshot FROM assessment_runs WHERE run_id IN (${placeholders(ids.length)})`,
+      ids,
+    ),
+  );
+  const key = (r: any) => `${r.calculation_method ?? ''}|${r.region_code ?? 'Global'}`;
+  const want = key(assessment);
+  const baseRun = runs.find((r: any) => key(r) === want) ?? runs[0];
+  const baseSnap = parseRunSnapshot(baseRun.run_snapshot);
+  const scale = Number(snapshot?.goal_scope?.per_fu_scale) > 0 ? Number(snapshot!.goal_scope!.per_fu_scale) : 1;
+  const mine: ReportRunSide = {
+    caseName: assessment.case_name,
+    runId: Number(assessment.run_id),
+    caseRunNumber,
+    method: assessment.calculation_method ?? null,
+    region: assessment.region_code ?? 'Global',
+    functionalUnit: snapshot?.goal_scope?.functional_unit ?? assessment.project_functional_unit ?? null,
+    stale: await caseChangedAfterRun(Number(assessment.case_id), Number(assessment.run_id)),
+    totals: totalImpacts.map((t) => ({ category: t.category_name, unit: t.unit, value: Number(t.total_value) * scale })),
+  };
+  const theirs: ReportRunSide = {
+    caseName: base.case_name,
+    runId: Number(baseRun.run_id),
+    caseRunNumber: (await caseRunNumbers(Number(base.case_id))).get(Number(baseRun.run_id)) ?? null,
+    method: baseRun.calculation_method ?? null,
+    region: baseRun.region_code ?? 'Global',
+    functionalUnit: baseSnap?.goal_scope?.functional_unit ?? assessment.project_functional_unit ?? null,
+    stale: await caseChangedAfterRun(Number(base.case_id), Number(baseRun.run_id)),
+    totals: await totalsPerFu(Number(baseRun.run_id), baseSnap),
+  };
+  return { comparison: reportComparison(mine, theirs), note: null };
 }

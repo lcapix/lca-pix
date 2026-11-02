@@ -14,6 +14,8 @@ import PDFDocument from 'pdfkit';
 import type { GoalScope } from './run-snapshot';
 import { boundaryGaps, groupByStage, STAGE_IDS, stageLabel, stageOf } from './life-cycle';
 import type { DataQualitySummary } from './lca-engine';
+import { changeText, reportRunLabel, type ReportComparison } from './results/report-text';
+import { fixed } from './ui/format';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -39,7 +41,17 @@ export interface ReportData {
     run_at: string;
     calculation_method: string;
     executed_by_username: string;
+    /** The run's place in its case ("Run 3"), as the app numbers it. */
+    case_run_number?: number | null;
   };
+  /** The person's name for "Prepared by" (never a username). */
+  prepared_by?: string;
+  /** The author's own limits of the study (write-up, migrate-045). */
+  limitations?: string | null;
+  /** A comparative case against its base case's run (G1); null for a base case. */
+  comparison?: ReportComparison | null;
+  /** Why a comparative case carries no comparison ("The base case has no run yet."). */
+  comparison_note?: string | null;
   components: Array<{
     component_id: number;
     component_name: string;
@@ -229,9 +241,13 @@ export function generateAssessmentPDF(data: ReportData): PDFKit.PDFDocument {
   section('4', 'Inventory: every flow', (h) => drawEnvironmentalFlows(doc, data, h));
   section('5', 'Impact assessment: totals', (h) => drawImpactSummary(doc, data, h));
   section('6', 'Impact assessment: by process step', (h) => drawComponentBreakdown(doc, data, h));
-  section('7', 'Interpretation', (h) => drawInterpretation(doc, data, h));
-  section('8', 'Assumptions and limitations', (h) => drawAssumptionsAndLimits(doc, data, h));
-  if (data.dataSources) section('9', 'Sources', (h) => drawDataSources(doc, data, h));
+  // G1: a comparative case reads against its base case, before what it means.
+  let n = 7;
+  const comparing = !!data.comparison || !!data.comparison_note;
+  if (comparing) section(String(n++), 'Comparison with the base case', (h) => drawComparison(doc, data, h));
+  section(String(n++), 'Interpretation', (h) => drawInterpretation(doc, data, h));
+  section(String(n++), 'Assumptions and limitations', (h) => drawAssumptionsAndLimits(doc, data, h));
+  if (data.dataSources) section(String(n++), 'Sources', (h) => drawDataSources(doc, data, h));
 
   doc.switchToPage(tocPageIndex);
   drawTableOfContents(doc, contents);
@@ -292,11 +308,11 @@ function drawCoverPage(doc: PDFKit.PDFDocument, data: ReportData) {
   y = 480;
   const assessDate = fmtDate(data.assessment.run_at);
   const items = [
-    ['Assessment Run', data.assessment.run_name || `Run #${data.assessment.run_id}`],
+    ['Run', reportRunLabel(data.assessment)],
     ['Method', data.assessment.calculation_method],
+    ['Region', data.dataSources?.region_code || 'Global'],
     ['Date', assessDate],
-    ['Executed By', data.assessment.executed_by_username],
-    ['Prepared By', data.project.owner_username],
+    ['Prepared By', data.prepared_by || 'Name not given'],
   ];
 
   for (const [label, value] of items) {
@@ -363,8 +379,8 @@ function drawGeneralInformation(doc: PDFKit.PDFDocument, data: ReportData, headi
     ['Study description', data.project.description || 'Not recorded'],
     ['Case assessed', data.case_info.case_name],
     ['Case type', data.case_info.case_type.charAt(0).toUpperCase() + data.case_info.case_type.slice(1)],
-    ['Prepared by', data.assessment.executed_by_username || data.project.owner_username],
-    ['Run', `#${data.assessment.run_id}, ${fmtDate(data.assessment.run_at)}`],
+    ['Prepared by', data.prepared_by || 'Name not given'],
+    ['Run', `${reportRunLabel(data.assessment)}, ${fmtDate(data.assessment.run_at)}`],
     ['Impact method', data.assessment.calculation_method],
     ['Region', data.dataSources?.region_code || 'Global'],
     ['Software', 'LCAPIX v3'],
@@ -1135,6 +1151,23 @@ function drawAssumptionsAndLimits(doc: PDFKit.PDFDocument, data: ReportData, hea
         { muted: true },
       );
 
+  y += 6;
+  if (y > 700) {
+    doc.addPage();
+    y = 50;
+  }
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.primary);
+  doc.text("The author's limits", 50, y);
+  y += 20;
+  y = data.limitations?.trim()
+    ? drawParagraph(doc, data.limitations.trim(), y)
+    : drawParagraph(
+        doc,
+        'Not written yet. Say what this study cannot tell a reader: what is left out, which numbers are weakest, and what would change the answer.',
+        y,
+        { muted: true },
+      );
+
   const limits: string[] = [];
   const gs = data.goal_scope;
   if (gs) limits.push(`Boundary: ${BOUNDARY_LABEL[gs.system_boundary] ?? gs.system_boundary}. Anything outside it is not counted.`);
@@ -1178,6 +1211,70 @@ function drawAssumptionsAndLimits(doc: PDFKit.PDFDocument, data: ReportData, hea
   doc.text('What the model itself reports', 50, y);
   y += 20;
   drawBullets(doc, limits, y);
+}
+
+// ============================================================================
+// COMPARISON WITH THE BASE CASE (G1)
+// ============================================================================
+
+/** A comparison value: three decimals as the app shows them, four figures when smaller. */
+function cmpNum(v: number): string {
+  return v !== 0 && Math.abs(v) < 0.0005 ? num(v) : fixed(v, 3);
+}
+
+function drawComparison(doc: PDFKit.PDFDocument, data: ReportData, heading: string) {
+  drawSectionHeader(doc, heading, 50);
+  let y = 130;
+  const c = data.comparison;
+  if (!c) {
+    drawParagraph(doc, data.comparison_note || 'There is no base case run to compare with.', y, { muted: true });
+    return;
+  }
+  y = drawParagraph(
+    doc,
+    `${data.case_info.case_name}, ${reportRunLabel(data.assessment)} (${data.assessment.calculation_method}, ${data.dataSources?.region_code || 'Global'}), against ${c.baseCase}, ${c.baseRun} (${c.baseMethod}, ${c.baseRegion}). Per functional unit.`,
+    y,
+    { muted: true },
+  );
+  doc.font('Helvetica-Bold').fontSize(12).fillColor(c.comparable ? COLORS.primary : COLORS.text);
+  doc.text(c.comparable ? 'Comparable' : 'Not comparable', 50, y);
+  y += 20;
+  y = drawParagraph(doc, c.verdict, y);
+
+  const cols = [150, 95, 95, 155];
+  const heads = ['Impact category', c.baseCase, data.case_info.case_name, 'Change'];
+  if (y > 680) {
+    doc.addPage();
+    y = 50;
+  }
+  doc.rect(50, y, 495, 25).fill(COLORS.primary);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.white);
+  let x = 60;
+  heads.forEach((h, i) => {
+    doc.text(h, x, y + 8, { width: cols[i] - 8, lineBreak: false, ellipsis: true });
+    x += cols[i];
+  });
+  y += 25;
+  c.rows.forEach((r, i) => {
+    if (y > 720) {
+      doc.addPage();
+      y = 50;
+    }
+    doc.rect(50, y, 495, 22).fill(i % 2 === 0 ? COLORS.lightGray : COLORS.white);
+    const cells = [
+      `${r.category} (${r.unit})`,
+      r.base === null ? 'not counted' : cmpNum(r.base),
+      r.mine === null ? 'not counted' : cmpNum(r.mine),
+      changeText(r, cmpNum),
+    ];
+    let cx = 60;
+    cells.forEach((t, j) => {
+      doc.font(j === 0 ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor(COLORS.text);
+      doc.text(t, cx, y + 6, { width: cols[j] - 8, lineBreak: false, ellipsis: true });
+      cx += cols[j];
+    });
+    y += 22;
+  });
 }
 
 function addPageNumbers(doc: PDFKit.PDFDocument) {

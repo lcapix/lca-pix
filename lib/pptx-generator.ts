@@ -17,6 +17,8 @@
 
 import PptxGenJS from 'pptxgenjs';
 import { goalScopeRows, headlineSteps, type ReportData } from './pdf-generator';
+import { changeText, reportRunLabel } from './results/report-text';
+import { fixed } from './ui/format';
 
 const BRAND = {
   primary: '1A5632',
@@ -106,11 +108,11 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
     { x: 0.6, y: 3.4, w: 12.1, h: 0.5, fontSize: 18 },
   )
   title.addText(
-    `Method: ${data.assessment.calculation_method}   ·   Run: ${data.assessment.run_name ?? `#${data.assessment.run_id}`}   ·   ${runDate}`,
+    `Method: ${data.assessment.calculation_method}   ·   ${data.dataSources?.region_code || 'Global'}   ·   ${reportRunLabel(data.assessment)}   ·   ${runDate}`,
     { x: 0.6, y: 4.0, w: 12.1, h: 0.5, fontSize: 14, color: BRAND.textLight },
   )
   title.addText(
-    `Prepared by ${data.assessment.executed_by_username}  ·  Generated with LCAPIX`,
+    `Prepared by ${data.prepared_by || 'Name not given'}  ·  Generated with LCAPIX`,
     { x: 0.6, y: 6.7, w: 12.1, h: 0.4, fontSize: 11, color: BRAND.textLight, italic: true },
   )
 
@@ -228,6 +230,44 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
     { x: 0.6, y: 4.2, w: 12.1, h: 0.8, fontSize: 12, color: BRAND.textLight, italic: true },
   )
 
+  // ─── G1: a comparative case against its base case ───────────────────────────
+  if (data.comparison || data.comparison_note) {
+    const cmpSlide = pptx.addSlide()
+    slideHeader(cmpSlide, 'Comparison with the base case')
+    const c = data.comparison
+    if (!c) {
+      cmpSlide.addText(data.comparison_note ?? 'There is no base case run to compare with.', {
+        x: 0.6, y: 1.5, w: 12.1, h: 1.0, fontSize: 15, color: BRAND.textLight,
+      })
+    } else {
+      cmpSlide.addText(
+        [
+          { text: c.comparable ? 'Comparable. ' : 'Not comparable. ', options: { bold: true, color: BRAND.text } },
+          { text: c.verdict, options: { color: BRAND.textLight } },
+        ],
+        { x: 0.6, y: 1.3, w: 12.1, h: 0.9, fontSize: 13, valign: 'top', fit: 'shrink' },
+      )
+      const v = (x: number | null) => (x === null ? 'not counted' : x !== 0 && Math.abs(x) < 0.0005 ? fmtNum(x) : fixed(x, 3))
+      const head = ['Impact category', `${c.baseCase}, ${c.baseRun}`, `${data.case_info.case_name}, ${reportRunLabel(data.assessment)}`, 'Change']
+      cmpSlide.addTable(
+        [
+          head.map((h) => cell(h, { bold: true, color: BRAND.primary }, 0)),
+          ...c.rows.map((r, i) => [
+            cell(`${r.category} (${r.unit})`, { bold: true }, i + 1),
+            cell(v(r.base), {}, i + 1),
+            cell(v(r.mine), {}, i + 1),
+            cell(changeText(r, (n) => v(n)), {}, i + 1),
+          ]),
+        ],
+        {
+          x: 0.6, y: 2.4, w: 12.1, colW: [3.6, 2.6, 2.6, 3.3],
+          border: { type: 'solid', color: BRAND.border, pt: 0.5 },
+          fontSize: 12, valign: 'middle', autoPage: true, autoPageSlideStartY: 1.2,
+        },
+      )
+    }
+  }
+
   // ─── Interpretation: the author's reading, then what the run itself says ────
   const interpSlide = pptx.addSlide()
   slideHeader(interpSlide, 'Interpretation')
@@ -256,6 +296,7 @@ export async function generateAssessmentPPTX(data: ReportData): Promise<Buffer> 
   // ─── Assumptions and limitations ────────────────────────────────────────────
   const limitLines: string[] = []
   if (data.assumptions?.trim()) limitLines.push(data.assumptions.trim())
+  if (data.limitations?.trim()) limitLines.push(data.limitations.trim())
   if (data.goal_scope?.system_boundary) {
     limitLines.push(`Boundary: ${data.goal_scope.system_boundary}. Anything outside it is not counted.`)
   }
