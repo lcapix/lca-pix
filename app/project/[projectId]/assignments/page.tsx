@@ -4,14 +4,17 @@
 // a title, instructions, a due date and the template case students copy, and
 // reads who started and who handed in, opening each frozen hand-in. A student
 // with Can change starts their own copy, works in it, and hands it in: Hand in
-// freezes a read-only copy with its write-up, and can be repeated until the
-// due date. Someone who can only read is told how to get started.
+// freezes a read-only copy with its write-up and the run it was handed in
+// with, and can be repeated until the due date. Someone who can only read is
+// told how to get started. Only the form's button creates or saves (Enter in
+// a box never does), and a save says "Saved".
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { Button, Callout, Card, ConfirmDialog, EmptyState, ErrorCard, SectionLabel } from '@/components/lcapix/ds'
+import { Button, Callout, Card, ConfirmDialog, EmptyState, ErrorCard, SavedLine, SectionLabel } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
+import { enterNeverSubmits } from '@/lib/project/enter-never-submits'
 import { isProjectRole, projectCapabilities } from '@/lib/project-role'
 import { useProjectCases } from '@/lib/project/use-project-cases'
 import { useShellStore } from '@/lib/shell/use-shell'
@@ -55,6 +58,7 @@ export default function AssignmentsPage() {
   const [rows, setRows] = useState<Assignment[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState<Assignment | 'new' | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const r = await apiRequest(`/api/projects/${projectId}/assignments`)
@@ -86,7 +90,7 @@ export default function AssignmentsPage() {
           </h1>
         </div>
         {caps.canManage && editing === null && (
-          <Button variant="primary" onClick={() => setEditing('new')}>
+          <Button variant="primary" onClick={() => (setSaved(null), setEditing('new'))}>
             + New assignment
           </Button>
         )}
@@ -103,13 +107,15 @@ export default function AssignmentsPage() {
           projectId={projectId}
           initial={editing === 'new' ? null : editing}
           templates={templates.map((c) => ({ id: c.case_id, name: c.case_name, type: c.case_type }))}
-          onDone={() => {
+          onDone={(title, created) => {
             setEditing(null)
+            setSaved(created ? `Saved. "${title}" is set for your students.` : `Saved. "${title}" is changed.`)
             void load()
           }}
           onCancel={() => setEditing(null)}
         />
       )}
+      {saved && editing === null && <SavedLine>{saved}</SavedLine>}
 
       {rows.length === 0 ? (
         <EmptyState line={caps.canManage ? 'No assignments yet. Make one: a title, what to do, a due date and the case students start from.' : 'No assignments in this project yet.'} />
@@ -123,7 +129,7 @@ export default function AssignmentsPage() {
                 projectId={projectId}
                 manage={caps.canManage}
                 canStart={caps.canEdit}
-                onEdit={() => setEditing(a)}
+                onEdit={() => (setSaved(null), setEditing(a))}
                 onChanged={() => void load()}
                 openCase={(id) => router.push(`/project/${projectId}/case/${id}`)}
               />
@@ -145,7 +151,7 @@ function AssignmentForm({
   projectId: number
   initial: Assignment | null
   templates: Array<{ id: number; name: string; type: string }>
-  onDone: () => void
+  onDone: (title: string, created: boolean) => void
   onCancel: () => void
 }) {
   const [title, setTitle] = useState(initial?.title ?? '')
@@ -172,11 +178,17 @@ function AssignmentForm({
     const d = await res.json().catch(() => ({}))
     setBusy(false)
     if (!res.ok) return setError(d?.error ?? `Not saved (${res.status}).`)
-    onDone()
+    onDone(body.title, !initial)
   }
 
   return (
-    <form className="ds-card ds-card-pad" onSubmit={(e) => void save(e)} aria-labelledby="assign-form-h" style={{ display: 'grid', gap: 10, maxWidth: 720 }}>
+    <form
+      className="ds-card ds-card-pad"
+      onSubmit={(e) => void save(e)}
+      onKeyDown={enterNeverSubmits}
+      aria-labelledby="assign-form-h"
+      style={{ display: 'grid', gap: 10, maxWidth: 720 }}
+    >
       <SectionLabel as="h2" id="assign-form-h">
         {initial ? 'Change the assignment' : 'New assignment'}
       </SectionLabel>
@@ -289,6 +301,11 @@ function AssignmentCard({
       {a.instructions ? <p style={{ whiteSpace: 'pre-wrap' }}>{a.instructions}</p> : <p className="np-sub">No instructions written.</p>}
       <p className="np-sub" style={{ margin: 0 }}>Starts from: {templateName ?? 'no case chosen yet'}</p>
 
+      {!manage && !canStart && (
+        <p className="np-sub" style={{ marginTop: 12 }}>
+          You can read this project, so there is no Start for you. Ask its owner for Can change to start this assignment.
+        </p>
+      )}
       {!manage && canStart && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
           {a.my_case_id ? (
@@ -304,6 +321,9 @@ function AssignmentCard({
             <Button variant="primary" busy={busy} disabledReason={a.my_submitted_at && past ? 'The due date has passed' : undefined} onClick={() => setConfirm('handin')}>
               {a.my_submitted_at ? 'Hand in again' : 'Hand in'}
             </Button>
+          )}
+          {a.my_case_id && !a.my_submitted_at && (
+            <span className="np-sub">Run your case and write it up first: the hand-in keeps your latest run and your write-up.</span>
           )}
           {a.my_submitted_at && (
             <span>
@@ -339,7 +359,7 @@ function AssignmentCard({
       <ConfirmDialog
         open={confirm === 'handin'}
         title="Hand in this case?"
-        consequence={`A read-only copy of your case and its write-up goes to your instructor.${a.due_at ? ` You can hand in again until ${safeRunDate(a.due_at)}.` : ''}`}
+        consequence={`A read-only copy of your case, its latest run and its write-up goes to your instructor.${a.due_at ? ` You can hand in again until ${safeRunDate(a.due_at)}.` : ''}`}
         confirmLabel="Hand in"
         danger={false}
         onCancel={() => setConfirm(null)}
@@ -384,8 +404,8 @@ function Submissions({ assignmentId, projectId }: { assignmentId: number; projec
           <tr>
             <th scope="col">Student</th>
             <th scope="col">Status</th>
+            <th scope="col">Hand-in</th>
             <th scope="col">Working case</th>
-            <th scope="col">Handed in</th>
           </tr>
         </thead>
         <tbody>
@@ -398,32 +418,35 @@ function Submissions({ assignmentId, projectId }: { assignmentId: number; projec
               </td>
               <td>{s.status}</td>
               <td>
-                {s.working_case_id ? (
-                  <Link className="ds-link" href={`/project/${projectId}/case/${s.working_case_id}`}>
-                    Open
-                  </Link>
+                {/* D2: the hand-in is the frozen copy, with the run it was handed in with. */}
+                {s.frozen_case_id ? (
+                  <>
+                    <Link className="ds-link" href={`/project/${projectId}/case/${s.frozen_case_id}`}>
+                      {s.submitted_at ? `Handed in ${safeRunDate(s.submitted_at)}` : 'Open the hand-in'}
+                      <span className="ds-sr-only">, {s.full_name || s.email}</span>
+                    </Link>
+                    {s.run_id ? (
+                      <>
+                        {' · '}
+                        <Link className="ds-link" href={`/project/${projectId}/case/${s.frozen_case_id}/results?run=${s.run_id}`}>
+                          Its run
+                          <span className="ds-sr-only">, {s.full_name || s.email}</span>
+                        </Link>
+                      </>
+                    ) : (
+                      <span style={{ color: 'var(--ds-text-2)' }}> · Handed in without a run</span>
+                    )}
+                  </>
                 ) : (
                   '–'
                 )}
               </td>
               <td>
-                {s.frozen_case_id ? (
-                  <>
-                    <Link className="ds-link" href={`/project/${projectId}/case/${s.frozen_case_id}`}>
-                      {s.submitted_at ? safeRunDate(s.submitted_at) : 'Open'}
-                    </Link>
-                    {/* The run the student handed in with: it belongs to their working case. */}
-                    {s.run_id && s.working_case_id ? (
-                      <>
-                        {' · '}
-                        <Link className="ds-link" href={`/project/${projectId}/case/${s.working_case_id}/results?run=${s.run_id}`}>
-                          Its run
-                        </Link>
-                      </>
-                    ) : (
-                      <span style={{ color: 'var(--ds-text-2)' }}> · no run when handed in</span>
-                    )}
-                  </>
+                {s.working_case_id ? (
+                  <Link className="ds-link" href={`/project/${projectId}/case/${s.working_case_id}`}>
+                    Working case (still changing)
+                    <span className="ds-sr-only">, {s.full_name || s.email}</span>
+                  </Link>
                 ) : (
                   '–'
                 )}

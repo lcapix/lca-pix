@@ -271,6 +271,16 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await page.getByRole('treeitem', { name: /^Fold and tape, / }).click();
     await page.getByRole('button', { name: 'Show panel' }).click();
     const fold = page.getByRole('complementary', { name: /Fold and tape/ });
+    // C6: the sample no longer carries the tape (it was "1 roll", a unit that cannot
+    // convert), so she adds it here, in kg, as a line with no price.
+    await fold.getByRole('button', { name: '+ Add a flow to this step' }).click();
+    await fold.getByPlaceholder('Search substances…').fill('Packaging tape');
+    await fold.getByRole('button', { name: /^Packaging tape\b/ }).first().click();
+    await fold.getByPlaceholder('0.0').fill('0.004');
+    await fold.getByPlaceholder('kg').fill('kg');
+    const tapeAdded = posted(page, /^\/api\/components\/\d+\/flows$/);
+    await fold.getByRole('button', { name: 'Save flow' }).click();
+    expect((await tapeAdded).status()).toBe(201);
     await fold.getByRole('button', { name: '+ Add a flow to this step' }).click();
     await fold.getByPlaceholder('Search substances…').fill('Cardboard');
     await fold.getByRole('button', { name: /^Cardboard\b/ }).first().click();
@@ -452,7 +462,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await expect(page.getByText("Ben's case").first()).toBeVisible();
     await shot(page, 'E07-cases-pipeline');
     await page.getByRole('radio', { name: 'Table' }).click();
-    await expect(page.getByRole('row', { name: /Ben's case/ })).toContainText('Not ticked');
+    await expect(page.getByRole('row', { name: /Ben's case/ })).toContainText('Not handed in');
     await shot(page, 'E07b-cases-table');
 
     // A new case is a what-if: copy the base case, and change one thing.

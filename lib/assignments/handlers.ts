@@ -5,6 +5,7 @@ import { isAuthError, projectAccessDenied } from '@/lib/route-guard'
 import { parseId } from '@/lib/ids'
 import { readJson } from '@/lib/http'
 import { copyCaseInventory, copyCaseReferenceFields } from '@/lib/case-copy'
+import { parentFirstOrder } from '@/lib/component-tree'
 
 // Assignments (C06, C07): an instructor names a task and a template case; each
 // student starts their own working copy, and Hand in freezes a read-only copy
@@ -141,6 +142,134 @@ async function copyInto(conn: any, userId: number, projectId: number, source: an
   return id
 }
 
+/** Pairs two equal-length id lists in order; null when they do not line up. */
+function zipIds(from: number[], to: number[]): Map<number, number> | null {
+  if (from.length !== to.length) return null
+  return new Map(from.map((id, i) => [id, to[i]]))
+}
+
+/**
+ * D1: the frozen copy carries the run it was handed in with. After copyInto,
+ * the copy's steps and flows are the working case's in the same order
+ * (copyCaseInventory inserts steps parent first and flows by id), so the two
+ * line up one to one. The run row, its frozen snapshot and its stored results
+ * are copied onto the copy with the ids moved across, and each copied step,
+ * flow and own factor keeps the working row's last-edited time, so "Edited
+ * after this run" reads on the copy exactly as it read on the working case
+ * when it was handed in. Returns the copy's run id.
+ */
+async function copyRunInto(conn: any, workingCaseId: number, frozenCaseId: number, runId: number): Promise<number | null> {
+  const [runs]: any = await conn.query(`SELECT * FROM assessment_runs WHERE run_id = ? AND case_id = ?`, [runId, workingCaseId])
+  const run = runs?.[0]
+  if (!run) return null
+  const [srcSteps]: any = await conn.query(`SELECT * FROM component WHERE case_id = ? ORDER BY component_id`, [workingCaseId])
+  const [dstSteps]: any = await conn.query(`SELECT component_id FROM component WHERE case_id = ? ORDER BY component_id`, [frozenCaseId])
+  const stepMap = zipIds(
+    parentFirstOrder(srcSteps as any[]).map((r: any) => Number(r.component_id)),
+    (dstSteps as any[]).map((r) => Number(r.component_id)),
+  )
+  if (!stepMap) return null
+  const srcIds = [...stepMap.keys()]
+  const dstIds = [...stepMap.values()]
+  const flowsOf = async (ids: number[]) =>
+    ids.length
+      ? ((await conn.query(`SELECT flow_id, updated_at FROM flows WHERE component_id IN (${ids.map(() => '?').join(', ')}) ORDER BY flow_id`, ids))[0] as any[])
+      : []
+  const srcFlows = await flowsOf(srcIds)
+  const dstFlows = await flowsOf(dstIds)
+  const flowMap = zipIds(
+    srcFlows.map((f) => Number(f.flow_id)),
+    dstFlows.map((f) => Number(f.flow_id)),
+  )
+  if (!flowMap) return null
+
+  // The last-edited times, step by step and flow by flow.
+  const stepEdited = new Map((srcSteps as any[]).map((r) => [Number(r.component_id), r.updated_at]))
+  for (const [from, to] of stepMap) {
+    if (stepEdited.get(from)) await conn.query(`UPDATE component SET updated_at = ? WHERE component_id = ?`, [stepEdited.get(from), to])
+  }
+  for (const f of srcFlows) {
+    const to = flowMap.get(Number(f.flow_id))
+    if (to && f.updated_at) await conn.query(`UPDATE flows SET updated_at = ? WHERE flow_id = ?`, [f.updated_at, to])
+  }
+  try {
+    for (const [from, to] of flowMap) {
+      await conn.query(
+        `UPDATE flow_factor_overrides SET updated_at = (SELECT MAX(o.updated_at) FROM flow_factor_overrides o WHERE o.flow_id = ?)
+          WHERE flow_id = ? AND EXISTS (SELECT 1 FROM flow_factor_overrides o2 WHERE o2.flow_id = ?)`,
+        [from, to, from],
+      )
+    }
+  } catch (err: any) {
+    // A database without own factors (migrate-034) has nothing to carry.
+    if (err?.code !== 'ER_NO_SUCH_TABLE') throw err
+  }
+
+  const step = (id: unknown) => (id == null ? id : stepMap.get(Number(id)) ?? id)
+  const flow = (id: unknown) => (id == null ? id : flowMap.get(Number(id)) ?? id)
+  const snap = run.run_snapshot == null ? null : typeof run.run_snapshot === 'string' ? JSON.parse(run.run_snapshot) : run.run_snapshot
+  if (snap && typeof snap === 'object') {
+    for (const s of Array.isArray(snap.steps) ? snap.steps : []) {
+      s.component_id = step(s.component_id)
+      s.parent_id = step(s.parent_id)
+    }
+    for (const r of Array.isArray(snap.flow_detail) ? snap.flow_detail : []) {
+      r.flow_id = flow(r.flow_id)
+      if ('component_id' in r) r.component_id = step(r.component_id)
+    }
+    for (const r of Array.isArray(snap.inventory) ? snap.inventory : []) {
+      r.flow_id = flow(r.flow_id)
+      r.component_id = step(r.component_id)
+    }
+  }
+  const [ins]: any = await conn.query(
+    `INSERT INTO assessment_runs (case_id, run_name, run_date, calculation_method, region_code, status, error_log, executed_by, run_snapshot)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      frozenCaseId,
+      run.run_name ?? null,
+      run.run_date,
+      run.calculation_method ?? null,
+      run.region_code ?? null,
+      run.status ?? 'completed',
+      run.error_log ?? null,
+      run.executed_by,
+      snap ? JSON.stringify(snap) : null,
+    ],
+  )
+  const newRunId = Number(ins.insertId)
+  const [results]: any = await conn.query(
+    `SELECT component_id, category_id, impact_value, unit, contribution_percentage, calculated_at FROM assessment_results WHERE run_id = ? ORDER BY result_id`,
+    [runId],
+  )
+  const rows = (results as any[]) ?? []
+  for (let i = 0; i < rows.length; i += 200) {
+    const chunk = rows.slice(i, i + 200)
+    await conn.query(
+      `INSERT INTO assessment_results (run_id, component_id, category_id, impact_value, unit, contribution_percentage, calculated_at)
+       VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+      chunk.flatMap((r) => [
+        newRunId,
+        // A step the working case no longer had when it was handed in has no copy: its row keeps no step.
+        r.component_id == null ? null : stepMap.get(Number(r.component_id)) ?? null,
+        r.category_id,
+        r.impact_value,
+        r.unit,
+        r.contribution_percentage ?? null,
+        r.calculated_at ?? null,
+      ]),
+    )
+  }
+  return newRunId
+}
+
+/** "Week 1: lighter blank · Ana Ruiz": the assignment and whose case it is (D5). */
+export function assignmentCaseName(title: string, person: { full_name?: string | null; username?: string | null; email?: string | null } | null): string {
+  const who = String(person?.full_name ?? '').trim() || String(person?.username ?? '').trim() || String(person?.email ?? '').split('@')[0]
+  const name = who ? `${title} · ${who}` : title
+  return name.slice(0, 100)
+}
+
 export async function startAssignment(request: NextRequest, assignmentId: number) {
   const userId = await requireAuth(request)
   const row = await loadAssignment(assignmentId)
@@ -159,7 +288,8 @@ export async function startAssignment(request: NextRequest, assignmentId: number
     const [had]: any = await conn.query(`SELECT working_case_id FROM submission WHERE assignment_id = ? AND account_id = ?`, [assignmentId, userId])
     const existing = had?.[0]?.working_case_id
     if (existing) return { caseId: Number(existing), created: false }
-    const caseId = await copyInto(conn, userId, row.project_id, template, row.title, assignmentId, false)
+    const [who]: any = await conn.query(`SELECT full_name, username, email FROM account WHERE id = ?`, [userId])
+    const caseId = await copyInto(conn, userId, row.project_id, template, assignmentCaseName(row.title, who?.[0] ?? null), assignmentId, false)
     await conn.query(
       `INSERT INTO submission (assignment_id, account_id, working_case_id) VALUES (?, ?, ?)
        ON CONFLICT (assignment_id, account_id) DO UPDATE SET working_case_id = EXCLUDED.working_case_id`,
@@ -192,12 +322,15 @@ export async function submitAssignment(request: NextRequest, assignmentId: numbe
     const [locked]: any = await conn.query(`SELECT frozen_case_id FROM submission WHERE submission_id = ? FOR UPDATE`, [sub.submission_id])
     const earlier = locked?.[0]?.frozen_case_id ?? null
     const id = await copyInto(conn, userId, row.project_id, working, `${working.case_name} (handed in)`, assignmentId, true)
-    await conn.query(`UPDATE submission SET frozen_case_id = ?, run_id = ?, submitted_at = now() WHERE submission_id = ?`, [id, run?.run_id ?? null, sub.submission_id])
+    // D1: the copy carries its run; submission.run_id is that copy's run, so the
+    // instructor opens the answer as it was handed in, never the live case's.
+    const frozenRun = run?.run_id ? await copyRunInto(conn, Number(working.case_id), id, Number(run.run_id)) : null
+    await conn.query(`UPDATE submission SET frozen_case_id = ?, run_id = ?, submitted_at = now() WHERE submission_id = ?`, [id, frozenRun, sub.submission_id])
     // A second hand-in replaces the first: the old frozen copy goes.
     if (earlier) await conn.query(`DELETE FROM case_table WHERE case_id = ? AND assignment_id = ? AND read_only = 1`, [earlier, assignmentId])
-    return id
+    return { caseId: id, runId: frozenRun }
   })
-  return NextResponse.json({ success: true, case_id: frozen })
+  return NextResponse.json({ success: true, case_id: frozen.caseId, run_id: frozen.runId })
 }
 
 export async function listSubmissions(request: NextRequest, assignmentId: number) {

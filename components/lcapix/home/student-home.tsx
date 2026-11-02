@@ -4,15 +4,18 @@
 // who it is from and what they may do, the owner's cases with their answers,
 // and their own case: open it, or make it (a copy of the owner's base case,
 // named after them, with no runs). The sample as a small row. On a phone
-// everything reads only, with the bar that says so.
+// everything reads only, with the bar that says so. D5: in a project with
+// assignments, the one way in is the assignment's Start (above), so the card
+// does not offer a second, untied "Make your own case".
 
 import { runLabel } from '@/lib/results/full-results-view'
-import { AssignedToYou } from './assigned-to-you'
+import { AssignedToYou, useAssigned, type AssignedRow } from './assigned-to-you'
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
+import { enterNeverSubmits } from '@/lib/project/enter-never-submits'
 import { LMS_NAME } from '@/lib/lms-name'
 import { useShellStore } from '@/lib/shell/use-shell'
 import { usePhone } from '@/lib/shell/use-phone'
@@ -27,15 +30,23 @@ export function StudentHome({ projects, userId, fullName }: { projects: HomeProj
   const shared = projects.filter((p) => !p.is_sample)
   const sample = projects.find((p) => p.is_sample) ?? null
   const first = fullName?.trim().split(/\s+/)[0] ?? null
+  const assigned = useAssigned(projects, userId)
   return (
     <div className="home st" data-phone={phone || undefined}>
       <header className="home-head">
         <h1 className="ds-title">{first ? `Hi, ${first}.` : 'Hi.'}</h1>
         <p className="home-sub">{sharedLine(shared.length, LMS_NAME)}</p>
       </header>
-      <AssignedToYou projects={projects} userId={userId} />
+      <AssignedToYou projects={projects} userId={userId} rows={assigned} />
       {shared.map((p) => (
-        <SharedCard key={p.project_id} project={p} userId={userId} fullName={fullName} phone={phone} />
+        <SharedCard
+          key={p.project_id}
+          project={p}
+          userId={userId}
+          fullName={fullName}
+          phone={phone}
+          assigned={(assigned ?? []).filter((a) => a.projectId === p.project_id)}
+        />
       ))}
       <div className="st-foot">
         {sample && (
@@ -58,7 +69,19 @@ export function StudentHome({ projects, userId, fullName }: { projects: HomeProj
   )
 }
 
-function SharedCard({ project, userId, fullName, phone }: { project: HomeProject; userId: number; fullName: string | null; phone: boolean }) {
+function SharedCard({
+  project,
+  userId,
+  fullName,
+  phone,
+  assigned,
+}: {
+  project: HomeProject
+  userId: number
+  fullName: string | null
+  phone: boolean
+  assigned: AssignedRow[]
+}) {
   const { data, error, reload } = useProjectCases(project.project_id)
   const owner = project.owner_name ?? null
   const whose = ownerPossessive(owner)
@@ -104,6 +127,10 @@ function SharedCard({ project, userId, fullName, phone }: { project: HomeProject
         </span>
         {!data ? null : mine ? (
           <YourCase projectId={project.project_id} kase={mine} />
+        ) : assigned.length && role !== 'viewer' ? (
+          <p style={{ margin: '10px 0 0', fontSize: 16 }}>
+            Your case here starts from {assigned.length === 1 ? 'the assignment' : 'an assignment'}: press Start under Assigned to you.
+          </p>
         ) : role === 'viewer' ? (
           <p style={{ margin: '10px 0 0', fontSize: 16 }}>
             You can read this project. To make your own case, ask {owner ?? 'its owner'} for Can change.
@@ -161,7 +188,14 @@ function YourCase({
   kase,
 }: {
   projectId: number
-  kase: { case_id: number; case_name: string; case_type: string; is_final?: boolean; latest_run: { run_id: number; headline: { value: number; unit: string } | null } | null }
+  kase: {
+    case_id: number
+    case_name: string
+    case_type: string
+    is_final?: boolean
+    assignment_id?: number | null
+    latest_run: { run_id: number; headline: { value: number; unit: string } | null } | null
+  }
 }) {
   const v = kase.latest_run?.headline
   return (
@@ -184,7 +218,16 @@ function YourCase({
           </span>
         )}
       </div>
-      {kase.is_final ? (
+      {kase.assignment_id ? (
+        // D4: one hand-in, the one Assignments makes.
+        <p className="st-tick" data-off>
+          Run it, write it up, then{' '}
+          <Link className="ds-link" href={`/project/${projectId}/assignments`}>
+            hand it in on Assignments
+          </Link>
+          .
+        </p>
+      ) : kase.is_final ? (
         <p className="st-tick">
           <span aria-hidden>✓</span> <strong>Ticked as hand-in</strong>
           <span>A tick only. It locks nothing.</span>
@@ -223,7 +266,8 @@ function MakeCase({ projectId, baseId, baseName, whose, defaultName }: { project
     }
   }
   return (
-    <form onSubmit={make} noValidate>
+    // Enter in the name box never makes the case (B2): only the button does.
+    <form onSubmit={make} onKeyDown={enterNeverSubmits} noValidate>
       <p className="st-none">You have no case here yet.</p>
       <p style={{ margin: '0 0 18px', fontSize: 16 }}>
         Make a copy of {whose} {baseName}. It is named after you and starts with no runs, so your first answer is your own.

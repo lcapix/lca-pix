@@ -55,6 +55,8 @@ export function PeoplePage() {
   const [confirmOn, setConfirmOn] = useState(false)
   const [switchBusy, setSwitchBusy] = useState(false)
   const [switchError, setSwitchError] = useState<string | null>(null)
+  // B1: a new access waits for its Save; choosing it alone changes nothing.
+  const [pending, setPending] = useState<Record<number, Access>>({})
 
   const by = useMemo(() => (data ? casesBy(data.cases) : new Map<number, number>()), [data])
 
@@ -114,7 +116,12 @@ export function PeoplePage() {
     setRowError(null)
     try {
       await changeAccess(p, role)
-      setSaved({ text: `${nameOf(p)} ${role === 'viewer' ? 'can now read only' : role === 'editor' ? 'can now change cases' : 'can now share this project'}` })
+      setPending((cur) => {
+        const next = { ...cur }
+        delete next[p.user_id]
+        return next
+      })
+      setSaved({ text: `Saved. ${nameOf(p)} ${role === 'viewer' ? 'can now read only' : role === 'editor' ? 'can now change cases' : 'can now share this project'}` })
     } catch (e: any) {
       setRowError(e?.message ?? 'Their access did not change.')
     } finally {
@@ -235,17 +242,47 @@ export function PeoplePage() {
                         {owner ? (
                           'Owner'
                         ) : canEdit(p) ? (
-                          <select
-                            className="ds-input pp-access"
-                            aria-label={`Access for ${name}`}
-                            value={p.permission_name ?? 'viewer'}
-                            disabled={busyRow === p.user_id}
-                            onChange={(e) => void onAccess(p, e.target.value as Access)}
-                          >
-                            <option value="editor">{ACCESS_LABEL.editor}</option>
-                            <option value="viewer">{ACCESS_LABEL.viewer}</option>
-                            {(data.canManageAdmins || p.permission_name === 'admin') && <option value="admin">{ACCESS_LABEL.admin}</option>}
-                          </select>
+                          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <select
+                              className="ds-input pp-access"
+                              aria-label={`Access for ${name}`}
+                              value={pending[p.user_id] ?? p.permission_name ?? 'viewer'}
+                              disabled={busyRow === p.user_id}
+                              onChange={(e) => {
+                                const next = e.target.value as Access
+                                setSaved(null)
+                                setPending((cur) => {
+                                  const out = { ...cur }
+                                  if (next === (p.permission_name ?? 'viewer')) delete out[p.user_id]
+                                  else out[p.user_id] = next
+                                  return out
+                                })
+                              }}
+                            >
+                              <option value="editor">{ACCESS_LABEL.editor}</option>
+                              <option value="viewer">{ACCESS_LABEL.viewer}</option>
+                              {(data.canManageAdmins || p.permission_name === 'admin') && <option value="admin">{ACCESS_LABEL.admin}</option>}
+                            </select>
+                            {pending[p.user_id] && (
+                              <>
+                                <Button size="small" variant="primary" busy={busyRow === p.user_id} onClick={() => void onAccess(p, pending[p.user_id])}>
+                                  Save<span className="ds-sr-only"> access for {name}</span>
+                                </Button>
+                                <Button
+                                  size="small"
+                                  onClick={() =>
+                                    setPending((cur) => {
+                                      const out = { ...cur }
+                                      delete out[p.user_id]
+                                      return out
+                                    })
+                                  }
+                                >
+                                  Cancel<span className="ds-sr-only"> the access change for {name}</span>
+                                </Button>
+                              </>
+                            )}
+                          </span>
                         ) : (
                           ACCESS_LABEL[(p.permission_name ?? 'viewer') as Access] ?? p.permission_name
                         )}

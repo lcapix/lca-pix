@@ -35,12 +35,13 @@ test('C01 C02 C04 C10 P32 P33 P34 P35 P36 P42 P44 P128 P132 people, access, and 
   await page.keyboard.press('Escape');
   await row(page.getByRole('switch', { name: /see only their own case/ }), 'C02', 'Students see only their own case');
   await row(page.getByRole('switch', { name: /see only their own case/ }), 'P36', '"Students see only their own case" switch');
-  await row(page.getByRole('link', { name: 'Overview' }), 'P44', 'Back to the project');
+  // C1: the project is its Cases page now; the sidebar's Cases is the way back.
+  await row(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Cases/ }), 'P44', 'Back to the project');
 
   await open(page, `/project/${projectId}/cases`, { ready: 'Cases' });
   await page.getByRole('radio', { name: 'Table' }).click();
   await row(page.getByRole('columnheader', { name: 'Hand-in' }), 'C04', 'Hand-in tick, visible to the instructor');
-  await row(page.getByText('Not ticked').first(), 'P42', 'Hand-in column');
+  await row(page.getByText('Not handed in').first(), 'P42', 'Hand-in column');
 
   const studentSession = await signIn(student);
   const studentCase = (
@@ -100,6 +101,11 @@ test('C03 C05 C06 C07 C08 C09 C11 P31 P37 P38 P39 P40 P41 an assignment from set
   await row(handins.getByRole('row').filter({ hasText: ana.email }).getByText('handed in'), 'C07', 'Instructor\'s submissions list');
   await row(handins.getByRole('row').filter({ hasText: ben.email }).getByText('not started'), 'C07', 'and who has not started');
 
+  // G4: lessons show once one is taken; Ana answers the first.
+  const anaCase = (await api.as(ana.token).get<{ cases: Array<{ case_id: number; created_by: number; read_only: number }> }>(`/api/projects/${projectId}/cases`)).cases.find(
+    (c) => c.created_by === ana.id && !Number(c.read_only),
+  )!;
+  await api.as(ana.token).put(`/api/cases/${anaCase.case_id}`, { learning_state: { version: 1, lessons: { scope: { correct: true } } } });
   // P31: the old address lands on Cases. P38 to P41, C03: progress on the board.
   await o.page.goto(`/project/${projectId}/class`);
   await o.page.waitForURL(/\/cases$/, { timeout: 90_000 });

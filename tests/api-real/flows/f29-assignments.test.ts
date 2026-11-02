@@ -77,6 +77,47 @@ describe('assignments', () => {
     expect((await api.get(`/api/assignments/${id}/submissions`, { token: w.users.editor.token })).status).toBe(403)
   })
 
+  it('D1 D5 the working case is named for the student; the hand-in carries the run it was handed in with, its ids moved to the copy and not out of date', async () => {
+    const id = Number((await make({ title: 'Week 4', template_case_id: w.P.base.id })).json.assignment_id)
+    const started = await api.post(`/api/assignments/${id}/start`, { token: w.users.editor.token })
+    const working = Number(started.json.case_id)
+    const who = await sqlOne<any>('SELECT full_name, username FROM account WHERE id = ?', [w.users.editor.id])
+    expect((await sqlOne<any>('SELECT case_name FROM case_table WHERE case_id = ?', [working])).case_name).toBe(`Week 4 · ${String(who.full_name ?? '').trim() || who.username}`)
+
+    // No run yet: the hand-in says so (run_id null).
+    const none = await api.post(`/api/assignments/${id}/submit`, { token: w.users.editor.token })
+    expect(none.status, none.text).toBe(200)
+    expect(none.json.run_id).toBeNull()
+
+    expect((await api.post(`/api/cases/${working}/assessments`, { token: w.users.editor.token, json: {} })).status).toBe(201)
+    const handed = await api.post(`/api/assignments/${id}/submit`, { token: w.users.editor.token })
+    expect(handed.status, handed.text).toBe(200)
+    const frozen = Number(handed.json.case_id)
+    const runId = Number(handed.json.run_id)
+    const run = await sqlOne<any>('SELECT case_id, status, run_snapshot FROM assessment_runs WHERE run_id = ?', [runId])
+    expect(Number(run.case_id)).toBe(frozen)
+    expect(run.status).toBe('completed')
+    expect(Number((await sqlOne<any>('SELECT run_id FROM submission WHERE assignment_id = ?', [id])).run_id)).toBe(runId)
+    // Its snapshot names the copy's own steps and flows.
+    const steps = (await sql<any>('SELECT component_id FROM component WHERE case_id = ?', [frozen])).map((r) => Number(r.component_id)).sort()
+    const snap = typeof run.run_snapshot === 'string' ? JSON.parse(run.run_snapshot) : run.run_snapshot
+    expect(snap.steps.map((s: any) => Number(s.component_id)).sort()).toEqual(steps)
+    const flows = (await sql<any>('SELECT f.flow_id FROM flows f JOIN component c ON c.component_id = f.component_id WHERE c.case_id = ?', [frozen])).map((r) => Number(r.flow_id))
+    for (const f of snap.inventory ?? []) expect(flows).toContain(Number(f.flow_id))
+    // Its stored results are the working run's, on the copy's steps.
+    const [workingRun] = await sql<any>(`SELECT run_id FROM assessment_runs WHERE case_id = ? AND status = 'completed' ORDER BY run_id DESC LIMIT 1`, [working])
+    const count = async (r: number) => Number((await sqlOne<any>('SELECT COUNT(*) AS n FROM assessment_results WHERE run_id = ?', [r])).n)
+    expect(await count(runId)).toBe(await count(Number(workingRun.run_id)))
+    const placed = await sql<any>('SELECT DISTINCT component_id FROM assessment_results WHERE run_id = ? AND component_id IS NOT NULL', [runId])
+    for (const p of placed) expect(steps).toContain(Number(p.component_id))
+    // The teacher reads it as handed in: the copy's run is not "edited after this run".
+    const inv = await api.get(`/api/cases/${frozen}/inventory`, { token: w.users.owner.token })
+    expect(inv.status).toBe(200)
+    expect(inv.json.latest_run).toMatchObject({ run_id: runId, changed_after_run: false })
+    // And its report exports.
+    expect((await api.get(`/api/assessments/${runId}/export?format=csv`, { token: w.users.owner.token })).status).toBe(200)
+  })
+
   it('C07 a student\'s copy cannot be a template; two hand-ins at once leave one copy; deleting the assignment removes its hand-ins', async () => {
     const id = Number((await make({ title: 'Week 3', template_case_id: w.P.base.id })).json.assignment_id)
     const working = Number((await api.post(`/api/assignments/${id}/start`, { token: w.users.editor.token })).json.case_id)

@@ -49,6 +49,8 @@ interface ListedCase {
   case_type: string
   created_by: number | null
   is_final?: boolean
+  /** D3: a read-only copy Hand in made; never "your case" to work in. */
+  handed_in?: boolean
   latest_run: { run_id: number; headline: { value: number; unit: string } | null } | null
 }
 
@@ -70,8 +72,8 @@ export function staffCases<C extends ListedCase>(cases: C[], staff: Set<number>)
   })
 }
 
-/** Their own case: the one ticked as hand-in, else the newest. */
+/** Their own case: the one ticked as hand-in, else the newest. Never a frozen hand-in (D3). */
 export function ownCase<C extends ListedCase>(cases: C[], userId: number): C | null {
-  const mine = cases.filter((c) => c.created_by === userId).sort((a, b) => b.case_id - a.case_id)
+  const mine = cases.filter((c) => c.created_by === userId && !c.handed_in).sort((a, b) => b.case_id - a.case_id)
   return mine.find((c) => c.is_final) ?? mine[0] ?? null
 }
