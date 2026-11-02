@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
 import { EduAuthShell, EyeIcon, FieldError, GoogleMark } from "@/components/lcapix/auth/edu-auth-shell"
+import { useSignedInRedirect } from "@/components/lcapix/auth/use-signed-in-redirect"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -23,6 +24,8 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
+  // Signed in already (browser back from Home): go Home, not to a blank form (C5).
+  const checkingSession = useSignedInRedirect()
 
   const validate = () => {
     const next: typeof errors = {}
@@ -168,5 +171,14 @@ export default function SignupPage() {
     </>
   )
 
+  if (checkingSession) {
+    return (
+      <EduAuthShell pane="account">
+        <p role="status" className="edu-sub">
+          You are signed in. Going to Home…
+        </p>
+      </EduAuthShell>
+    )
+  }
   return <EduAuthShell pane="account">{form}</EduAuthShell>
 }

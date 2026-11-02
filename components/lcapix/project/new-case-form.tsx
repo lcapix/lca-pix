@@ -6,7 +6,7 @@
 // from a file. The preview shows what is copied: the tree, its steps and
 // flows. Nothing is computed until the new case is run.
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Button, ErrorCard } from '@/components/lcapix/ds'
@@ -17,6 +17,7 @@ import { casesHeader } from '@/lib/project/cases-view'
 import { perNoun } from '@/lib/compare/compare-view'
 import { runLabel } from '@/lib/results/full-results-view'
 import { layoutOnLanes, TIER_COLOURS, TIER_LABEL, type TierLayout } from '@/lib/workspace/tier-layout'
+import { blockEnterSubmit } from '@/components/lcapix/auth/no-enter-submit'
 
 type Kind = 'whatif' | 'base' | 'emptycomp'
 type Start = 'empty' | 'file'
@@ -38,24 +39,39 @@ export function NewCaseForm() {
   const [busy, setBusy] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  // One save at a time: a second press while the first is out would make two cases.
+  const inFlight = useRef(false)
+  const readOnlyIds = useReadOnlyCases(projectId)
 
-  // Copy from: the asked-for case, else the base case; base cases first, then yours, then the rest.
+  // Copy from: the asked-for case, else your own base case (C3). The order is
+  // yours first (your base case, then your other cases), then other people's
+  // base cases, then the rest, and a read-only case last: the sample's base
+  // case cannot be changed, so a copy of it is rarely what a student means
+  // once they have their own copy.
   const sources = useMemo(() => {
     if (!data) return []
-    const rank = (c: (typeof data.cases)[number]) => (c.case_type === 'base' ? 0 : c.created_by === me ? 1 : 2)
+    const rank = (c: (typeof data.cases)[number]) => {
+      if (readOnlyIds.has(c.case_id)) return 4
+      const mine = c.created_by === me
+      if (mine) return c.case_type === 'base' ? 0 : 1
+      return c.case_type === 'base' ? 2 : 3
+    }
     return [...data.cases].sort((a, b) => rank(a) - rank(b) || a.case_id - b.case_id)
-  }, [data, me])
+  }, [data, me, readOnlyIds])
   useEffect(() => {
     const asked = search?.get('kind')
     if (asked === 'base' || asked === 'hand') setKind('base')
     if (asked === 'whatif' || asked === 'comparative') setKind('whatif')
     if (asked === 'emptycomp') setKind('emptycomp')
   }, [search])
+  // The default waits for the read-only flags, so it is not set to the sample
+  // a moment before they arrive. A case the person picked is kept.
+  const [picked, setPicked] = useState(false)
   useEffect(() => {
-    if (sourceId != null || !sources.length) return
+    if (picked || !sources.length || readOnlyIds === LOADING) return
     const asked = Number(search?.get('from'))
     setSourceId((sources.find((c) => c.case_id === asked) ?? sources[0]).case_id)
-  }, [sources, sourceId, search])
+  }, [sources, picked, search, readOnlyIds])
   useEffect(() => {
     if (data && !sources.length) setKind('base')
   }, [data, sources.length])
@@ -87,10 +103,13 @@ export function NewCaseForm() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (inFlight.current) return
     if (toFile) return router.push(`/project/${projectId}/import?first=1`)
     const caseName = name.trim()
     if (!caseName) return setNameError('Name the case first.')
+    inFlight.current = true
     setBusy(true)
+    let leaving = false
     setNameError(null)
     setFormError(null)
     try {
@@ -116,11 +135,16 @@ export function NewCaseForm() {
       const id = Number(d.case_id ?? d.case?.case_id)
       void useShellStore.getState().refresh()
       const learn = byHand ? '?learn=1' : ''
+      // On the way to the case the button stays busy, so it cannot make a second one.
+      leaving = true
       router.push(`/project/${projectId}/case/${id}${learn}`)
     } catch (err: any) {
       setFormError(err?.message ?? 'The case was not made.')
     } finally {
-      setBusy(false)
+      if (!leaving) {
+        setBusy(false)
+        inFlight.current = false
+      }
     }
   }
 
@@ -143,7 +167,8 @@ export function NewCaseForm() {
         </div>
       </header>
 
-      <form className="nc-card" onSubmit={submit} noValidate>
+      {/* Enter never makes the case (B2): only Make the case does. */}
+      <form className="nc-card" onSubmit={submit} onKeyDown={blockEnterSubmit} noValidate>
         <fieldset className="nc-section" disabled={readOnly}>
           <legend className="nc-legend">
             <span className="pp-card-h" style={{ fontSize: 20, display: 'block' }}>
@@ -170,7 +195,7 @@ export function NewCaseForm() {
               <div className="nc-from">
                 <label style={{ display: 'grid', gap: 8, flex: '1 1 300px' }}>
                   <span className="edu-field-label">Copy from</span>
-                  <select className="ds-input rp-select" value={sourceId ?? ''} onChange={(e) => setSourceId(Number(e.target.value))}>
+                  <select className="ds-input rp-select" value={sourceId ?? ''} onChange={(e) => (setSourceId(Number(e.target.value)), setPicked(true))}>
                     {sources.map((c) => (
                       <option key={c.case_id} value={c.case_id}>
                         {c.case_name}
@@ -315,6 +340,32 @@ export function NewCaseForm() {
       </form>
     </div>
   )
+}
+
+const LOADING: ReadonlySet<number> = new Set<number>()
+
+/**
+ * The project's read-only cases (the sample's base case), from the cases list,
+ * which carries the flag. LOADING until it answers; an empty set if it fails,
+ * so the form still works with the plain order.
+ */
+function useReadOnlyCases(projectId: number): ReadonlySet<number> {
+  const [ids, setIds] = useState<ReadonlySet<number>>(LOADING)
+  useEffect(() => {
+    let live = true
+    apiRequest(`/api/projects/${projectId}/cases`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!live) return
+        const list: any[] = d?.cases ?? []
+        setIds(new Set(list.filter((c) => Number(c.read_only ?? 0) === 1 || c.read_only === true).map((c) => Number(c.case_id))))
+      })
+      .catch(() => live && setIds(new Set()))
+    return () => {
+      live = false
+    }
+  }, [projectId])
+  return ids
 }
 
 /** The source case's steps, laid out on the five tier lanes, for the preview. */

@@ -7,7 +7,7 @@
 // question. If the second fails the project still exists, and the page says
 // so on the page with a way on, never in a toast.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button, ErrorCard } from '@/components/lcapix/ds'
@@ -17,6 +17,7 @@ import { startEmptyCase } from '@/lib/project/start-empty'
 import { BOUNDARIES, METHODS, REGIONS } from '@/lib/project/study-options'
 import { ISO_HELP } from '@/components/lcapix/iso-help'
 import { HelpTip } from '@/components/lcapix/workspace/help-tip'
+import { blockEnterSubmit } from '@/components/lcapix/auth/no-enter-submit'
 
 
 type Start = 'file' | 'empty'
@@ -48,6 +49,9 @@ export function NewProjectForm() {
   const [fromSample, setFromSample] = useState(false)
   const [start, setStart] = useState<Start>('file')
   const [busy, setBusy] = useState(false)
+  // A second press while the first is still saving would make the project
+  // twice (the second answers 409): one save at a time.
+  const inFlight = useRef(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [partial, setPartial] = useState<{ projectId: number; cause: string } | null>(null)
@@ -88,11 +92,14 @@ export function NewProjectForm() {
     } catch (e: any) {
       setError(`The project was made, but its first case was not: ${e?.message ?? 'the request failed'}.`)
       setPartial({ projectId, cause: '' })
+      setBusy(false)
+      inFlight.current = false
     }
   }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (inFlight.current) return
     if (!name.trim()) {
       setNameError('Give the project a name.')
       return
@@ -100,6 +107,9 @@ export function NewProjectForm() {
     setNameError(null)
     setError(null)
     setBusy(true)
+    inFlight.current = true
+    // On the way to the next page the button stays busy, so it cannot be pressed again.
+    let leaving = false
     try {
       const res = await apiRequest('/api/projects', { method: 'POST', body: JSON.stringify({ project_name: name.trim(), description: goal.trim() }) })
       const data = await res.json().catch(() => ({}))
@@ -129,11 +139,15 @@ export function NewProjectForm() {
         setPartial({ projectId, cause })
         return
       }
+      leaving = true
       await next(projectId)
     } catch (err: any) {
       setError(err?.message ?? 'The project was not made.')
     } finally {
-      setBusy(false)
+      if (!leaving) {
+        setBusy(false)
+        inFlight.current = false
+      }
     }
   }
 
@@ -151,7 +165,8 @@ export function NewProjectForm() {
         </h1>
       </header>
 
-      <form className="np-card" onSubmit={submit} noValidate aria-busy={busy || undefined}>
+      {/* Enter never makes the project (B2): only Continue does. */}
+      <form className="np-card" onSubmit={submit} onKeyDown={blockEnterSubmit} noValidate aria-busy={busy || undefined}>
         <section className="np-section">
           <label htmlFor="np-name" className="edu-field-label">
             Project name <span className="np-req">Required</span>

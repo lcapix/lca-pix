@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
 import { EduAuthShell, EyeIcon, FieldError, GoogleMark } from "@/components/lcapix/auth/edu-auth-shell"
+import { useSignedInRedirect } from "@/components/lcapix/auth/use-signed-in-redirect"
 import { ComingSoon, ErrorCard } from "@/components/lcapix/ds"
 
 type LoginError = { title: string; description: string }
@@ -78,6 +79,8 @@ export default function LoginPage() {
   const [resetAsked, setResetAsked] = useState(false)
   const router = useRouter()
   const login = useAuthStore((state) => state.login)
+  // Signed in already (browser back from Home): go Home, not to a blank form (C5).
+  const checkingSession = useSignedInRedirect()
 
   // The Google route and the API client come back here with ?error=<code>.
   // Only known codes are shown; anything else gets the generic words, so a
@@ -207,5 +210,14 @@ export default function LoginPage() {
     </>
   )
 
+  if (checkingSession) {
+    return (
+      <EduAuthShell pane="account">
+        <p role="status" className="edu-sub">
+          You are signed in. Going to Home…
+        </p>
+      </EduAuthShell>
+    )
+  }
   return <EduAuthShell pane="account">{form}</EduAuthShell>
 }

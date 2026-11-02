@@ -16,6 +16,7 @@ import { USE_CASES, USE_CASE_IN_DEVELOPMENT, isAcceptedUseCase } from "@/lib/onb
 import { useGuidedMode, useShellStore } from "@/lib/shell/use-shell"
 import { Button, Flag, Switch } from "@/components/lcapix/ds"
 import { EduAuthShell, FieldError } from "@/components/lcapix/auth/edu-auth-shell"
+import { blockEnterSubmit } from "@/components/lcapix/auth/no-enter-submit"
 
 type Phase = "form" | "saving" | "building" | "failed"
 
@@ -141,7 +142,8 @@ export default function OnboardingPage() {
   return (
     <AuthGuard>
       <EduAuthShell pane="setup">
-        <form className="edu-setup-card" onSubmit={submit} aria-busy={loading || busy || undefined}>
+        {/* Enter in a field never submits (B2): only the button does. */}
+        <form className="edu-setup-card" onSubmit={submit} onKeyDown={blockEnterSubmit} aria-busy={loading || busy || undefined}>
           <p className="edu-eyebrow">Step 1 of 1 · Quick setup</p>
           <h1 className="edu-h1">Tell us a little about you.</h1>
           <p className="edu-sub" style={{ marginBottom: 22 }}>
