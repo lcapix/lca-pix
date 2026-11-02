@@ -46,7 +46,7 @@ export interface CatalogSubstance {
  * name that merely looks alike ("Argon" ~ "Acrolein") must not turn a gas
  * input into a toxic air emission. Outputs may be either.
  */
-function candidatesFor(direction: string, substances: CatalogSubstance[]): CatalogSubstance[] {
+export function candidatesFor(direction: string, substances: CatalogSubstance[]): CatalogSubstance[] {
   if (direction !== 'input') return substances;
   return substances.filter((s) => !/^(emission|waste)/i.test(s.category ?? ''));
 }
@@ -201,6 +201,40 @@ export function matchSubstance(
     return { best: null, score: scored.length ? scored[0].score : 0, candidates };
   }
   return { best: scored[0].s, score: scored[0].score, candidates };
+}
+
+/**
+ * The matches worth offering when a person names the substance for a line by
+ * hand (a held line in the Inventory). Plain similarity offered pesticides for
+ * "Cardboard" (Carbaryl 71%, Carbofuran 63%), so three rules cut the list to
+ * what a person could mean:
+ *
+ *   1. Kind: an input is never an emission or a waste (candidatesFor), which
+ *      is what those pesticides are in the library ("emission_air").
+ *   2. A floor: nothing under MATCH_ACCEPT (0.70), the import's own bar for a
+ *      match. Below it two names merely share letters.
+ *   3. Near an exact name: when the best is 0.90 or more, anything more than
+ *      0.15 under it is a different substance, not another spelling.
+ *
+ * What is left is ranked by score, then by having a factor (one that counts
+ * before one that adds nothing), then by id, so the order is stable.
+ */
+export function plausibleMatches(
+  text: string,
+  direction: string | null | undefined,
+  substances: CatalogSubstance[],
+  topN = 8
+): SubstanceCandidate[] {
+  if (!text.trim()) return [];
+  const pool = candidatesFor(direction ?? 'input', substances);
+  const { candidates } = matchSubstance(text, pool, pool.length || 1);
+  const kept = candidates.filter((c) => c.score >= MATCH_ACCEPT);
+  const best = kept[0]?.score ?? 0;
+  const near = best >= 0.9 ? kept.filter((c) => c.score >= best - 0.15) : kept;
+  const hasFactor = (c: SubstanceCandidate) => (c.factor_value != null || (c.factor_count ?? 0) > 0 ? 0 : 1);
+  return near
+    .sort((a, b) => b.score - a.score || hasFactor(a) - hasFactor(b) || a.substance_id - b.substance_id)
+    .slice(0, topN);
 }
 
 export function mapModel(pm: ProcessModel, substances: CatalogSubstance[]): IngestPlan {

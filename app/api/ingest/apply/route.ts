@@ -27,6 +27,7 @@ import { nodeDepths, validateProcessModel } from '@/lib/ingest/schema';
 
 import { costColumn } from '@/lib/ingest/cost-columns';
 import { recordHeldLines, type HeldLine } from '@/lib/import/held-lines';
+import { importStages, type StageChange, type StageLine } from '@/lib/import/stages';
 
 // ── Body validation ──────────────────────────────────────────────────────────
 // Every value that reaches SQL is checked for type here. mysql2's .query()
@@ -98,6 +99,9 @@ const bodySchema = z.object({
   notes: z.array(z.string().max(5000)).max(1000).optional().default([]),
   target_case_id: optionalId,
   attach_component_id: optionalId,
+  // The kind of file (routing, bom, equipment, itac, ...): it decides the
+  // life-cycle stage the import gives the steps it touches (lib/import/stages.ts).
+  doc_type: z.string().max(40).nullable().optional(),
   // Append mode: the reviewer's decision for each step the document describes,
   // keyed by step name. Must be declared here: bodySchema is strict, so an
   // undeclared key is stripped and every step would silently default to skip.
@@ -160,6 +164,21 @@ async function usableSubstanceUnits(
   return { ok: true, units };
 }
 
+/**
+ * Writes the stages importStages chose. Materials may replace Production (or
+ * nothing); Production only fills a blank, so a stage a person set stays.
+ */
+async function setStages(conn: { query: (sql: string, params?: unknown[]) => Promise<any> }, changes: StageChange[]) {
+  for (const c of changes) {
+    await conn.query(
+      c.stage === 'materials'
+        ? `UPDATE component SET life_cycle_stage = ? WHERE component_id = ? AND (life_cycle_stage IS NULL OR life_cycle_stage = 'production')`
+        : `UPDATE component SET life_cycle_stage = ? WHERE component_id = ? AND life_cycle_stage IS NULL`,
+      [c.stage, c.id]
+    );
+  }
+}
+
 function invalid(error: z.ZodError) {
   const issue = error.issues[0];
   const where = issue?.path?.length ? issue.path.join('.') : 'body';
@@ -212,7 +231,7 @@ export async function POST(request: NextRequest) {
       // part of this case. The body's attach_component_id is the default for
       // lines without one; a line with neither is held, never guessed.
       const caseComponents = await query<any>(
-        `SELECT component_id, component_name, hierarchy_level FROM component WHERE case_id = ?`,
+        `SELECT component_id, component_name, component_type, hierarchy_level, life_cycle_stage FROM component WHERE case_id = ?`,
         [targetCaseId]
       );
       const nameById = new Map<number, string>(
@@ -237,11 +256,16 @@ export async function POST(request: NextRequest) {
       const unitBySubstance = usable.units;
 
       const skippedFlows: string[] = [];
-      // The same lines, kept for later (migrate-040, E12 "lines held").
+      // The same lines, kept for later (migrate-040, E12 "lines held"). The
+      // step kept with a held line is the one it was placed on at review (the
+      // file's "30" became "30. Pack"), not the file's placeholder step
+      // ("Purchased materials"), which an append skips: with the real name the
+      // Inventory's held line opens on its step.
       const heldLines: HeldLine[] = [];
-      const heldFlow = (f: any, reason: HeldLine['reason']) =>
+      const heldFlow = (f: any, reason: HeldLine['reason'], stepId?: number | null) =>
         heldLines.push({
-          kind: 'flow', reason, step_name: f.node || null, substance_text: f.substance_text, substance_id: f.substance_id ?? null,
+          kind: 'flow', reason, step_name: (stepId ? nameById.get(stepId) : null) ?? (f.node || null),
+          substance_text: f.substance_text, substance_id: f.substance_id ?? null,
           direction: f.direction, quantity: f.quantity, unit: f.unit, provenance: f.provenance ?? null,
         });
       const appendResult = await transaction(async (conn) => {
@@ -265,6 +289,14 @@ export async function POST(request: NextRequest) {
         }
         let stepsCreated = 0;
         let stepsAttached = 0;
+        const createdIds = new Set<number>();
+        const tierById = new Map<number, string>();
+        const stageById = new Map<number, string | null>();
+        for (const c of caseComponents as any[]) {
+          tierById.set(Number(c.component_id), String(c.component_type ?? ''));
+          stageById.set(Number(c.component_id), c.life_cycle_stage ?? null);
+        }
+        const stageLines: StageLine[] = [];
 
         // Plan order, so a parent is created before the child that names it.
         for (const n of nodes) {
@@ -302,6 +334,9 @@ export async function POST(request: NextRequest) {
           idByName.set(n.name.trim().toLowerCase(), newId);
           levelById.set(newId, Math.max(1, level));
           nameById.set(newId, n.name);
+          createdIds.add(newId);
+          tierById.set(newId, n.tier);
+          stageById.set(newId, null);
           stepsCreated++;
         }
 
@@ -321,7 +356,7 @@ export async function POST(request: NextRequest) {
           if (!f.substance_id) {
             held++;
             skippedFlows.push(`${f.substance_text}: no confirmed substance match`);
-            heldFlow(f, 'no_substance');
+            heldFlow(f, 'no_substance', stepForLine(f as any));
             continue;
           }
           const target = stepForLine(f as any);
@@ -338,7 +373,7 @@ export async function POST(request: NextRequest) {
             skippedFlows.push(
               `${f.substance_text}: unit '${f.unit}' cannot convert to factor unit '${factorUnit}'`
             );
-            heldFlow(f, 'unit');
+            heldFlow(f, 'unit', target);
             continue;
           }
           const flowKey = `${target}|${f.substance_id}|${f.direction}`;
@@ -370,6 +405,7 @@ export async function POST(request: NextRequest) {
           );
           applied++;
           usedSteps.add(target);
+          stageLines.push({ step_id: target, direction: f.direction, unit: f.unit, substance_text: f.substance_text, substance_name: (f as any).substance_name ?? null });
         }
 
         // Costs ADD onto each step's existing columns (append, never overwrite).
@@ -455,7 +491,21 @@ export async function POST(request: NextRequest) {
 
         const heldKept = await recordHeldLines(conn, targetCaseId, userId, heldLines);
 
+        const stages = importStages({
+          docType: body.doc_type,
+          steps: [...tierById.keys()].map((cid) => ({
+            id: cid,
+            name: nameById.get(cid) ?? '',
+            tier: tierById.get(cid) ?? '',
+            stage: stageById.get(cid) ?? null,
+            created: createdIds.has(cid),
+          })),
+          lines: stageLines,
+        });
+        await setStages(conn, stages);
+
         return {
+          stages,
           applied,
           held,
           heldKept,
@@ -488,6 +538,7 @@ export async function POST(request: NextRequest) {
           costs_replaced: appendResult.costsReplaced,
           flows_kept: appendResult.flowsKept,
           flows_replaced: appendResult.flowsReplaced,
+          stages_set: appendResult.stages.map(({ name, stage }) => ({ name, stage })),
         },
         { status: 200 }
       );
@@ -634,6 +685,7 @@ export async function POST(request: NextRequest) {
 
       let applied = 0;
       let held = 0;
+      const stageLines: StageLine[] = [];
       for (const f of flows) {
         if (!f.substance_id) {
           held++;
@@ -672,6 +724,7 @@ export async function POST(request: NextRequest) {
           ]
         );
         applied++;
+        stageLines.push({ step_id: componentId, direction: f.direction, unit: f.unit, substance_text: f.substance_text, substance_name: (f as any).substance_name ?? null });
       }
 
       // Aggregate costs per node into the component cost columns.
@@ -706,7 +759,15 @@ export async function POST(request: NextRequest) {
 
       const heldKept = await recordHeldLines(conn, caseId, userId, heldLines);
 
-      return { caseId, caseName: uniqueName, components: idByName.size, applied, held, heldKept, costNodes: costByNode.size };
+      // Every step here is new, so none has a stage of its own yet.
+      const stages = importStages({
+        docType: body.doc_type,
+        steps: nodes.map((n) => ({ id: idByName.get(n.name)!, name: n.name, tier: n.tier, stage: null, created: true })),
+        lines: stageLines,
+      });
+      await setStages(conn, stages);
+
+      return { caseId, caseName: uniqueName, components: idByName.size, applied, held, heldKept, costNodes: costByNode.size, stages };
     });
 
     return NextResponse.json(
@@ -720,6 +781,7 @@ export async function POST(request: NextRequest) {
         held_details: skippedFlows,
         held_lines_kept: result.heldKept,
         cost_nodes: result.costNodes,
+        stages_set: result.stages.map(({ name, stage }) => ({ name, stage })),
       },
       { status: 201 }
     );

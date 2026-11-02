@@ -111,3 +111,64 @@ describe('F29 held import lines', () => {
     expect(list.json.projects.find((p: any) => p.project_id === w.P.id).held_lines).toBe(0);
   });
 });
+
+describe('F29b a bill of materials added to a case (F3, F4)', () => {
+  it('a held line keeps the step it was placed on, and the steps that take in its materials go to Materials', async () => {
+    const t = w.users.editor.token;
+    const op = w.P.base.op;
+    const opRow = await sqlOne<any>('SELECT component_name, life_cycle_stage FROM component WHERE component_id = ?', [op]);
+    const res = await api.post('/api/ingest/apply', {
+      token: t,
+      json: {
+        target_case_id: w.P.base.id,
+        doc_type: 'bom',
+        // The bill of materials' placeholder step, skipped: its lines go where the review placed them.
+        nodes: [{ name: 'Purchased materials', tier: 'operation', parent: null }],
+        node_actions: { 'Purchased materials': { action: 'skip' } },
+        flows: [
+          { node: 'Purchased materials', substance_text: 'Shipping box', substance_id: null, direction: 'input', quantity: 0.5, unit: 'kg', attach_component_id: op },
+          { node: 'Purchased materials', substance_text: 'Frame tube set', substance_id: w.substances.steel, direction: 'input', quantity: 2.2, unit: 'kg', attach_component_id: op },
+        ],
+        costs: [],
+        notes: [],
+      },
+    });
+    expect(res.status, res.text).toBe(200);
+    expect(res.json).toMatchObject({ flows_applied: 1, flows_held_for_review: 1 });
+    const held = (await api.get(`/api/cases/${w.P.base.id}/held-lines`, { token: t })).json.lines.find((l: any) => l.substance_text === 'Shipping box');
+    // The step it was placed on, not the skipped "Purchased materials".
+    expect(held.step_name).toBe(opRow.component_name);
+    const after = await sqlOne<any>('SELECT life_cycle_stage FROM component WHERE component_id = ?', [op]);
+    if (opRow.life_cycle_stage === null || opRow.life_cycle_stage === 'production') {
+      expect(after.life_cycle_stage).toBe('materials');
+      expect(res.json.stages_set).toContainEqual({ name: opRow.component_name, stage: 'materials' });
+    } else {
+      // A stage someone chose (not Production) stays.
+      expect(after.life_cycle_stage).toBe(opRow.life_cycle_stage);
+    }
+  });
+
+  it('a routing made into a new case gives its steps Production, the product none', async () => {
+    const res = await api.post('/api/ingest/apply', {
+      token: w.users.editor.token,
+      json: {
+        project_id: w.P.id,
+        case_name: `Stages ${w.tag}`,
+        doc_type: 'routing',
+        nodes: [
+          { name: `Frame ${w.tag}`, tier: 'product', parent: null },
+          { name: `10. Cut ${w.tag}`, tier: 'operation', parent: `Frame ${w.tag}` },
+        ],
+        flows: [],
+        costs: [{ node: `10. Cut ${w.tag}`, category: 'labor', amount: 7.04, hours: 0.3, occupation: '51-4121' }],
+        notes: [],
+      },
+    });
+    expect(res.status, res.text).toBe(201);
+    const rows = await sql<any>('SELECT component_name, life_cycle_stage FROM component WHERE case_id = ? ORDER BY component_id', [Number(res.json.case_id)]);
+    expect(rows).toEqual([
+      { component_name: `Frame ${w.tag}`, life_cycle_stage: null },
+      { component_name: `10. Cut ${w.tag}`, life_cycle_stage: 'production' },
+    ]);
+  });
+});

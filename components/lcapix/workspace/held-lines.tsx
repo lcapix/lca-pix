@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { announceComponentsChanged, useSubstanceCatalog } from '@/lib/case-editor/use-flows'
-import { matchSubstance, type CatalogSubstance } from '@/lib/ingest/maplca'
+import { plausibleMatches, type CatalogSubstance } from '@/lib/ingest/maplca'
 import type { WorkspaceStep } from '@/lib/workspace/use-workspace'
 
 interface HeldLine {
@@ -44,9 +44,17 @@ export function HeldLines({ caseId, steps, readOnly, method, region }: { caseId:
   useEffect(() => {
     void load()
   }, [load])
+  // The import's Done card links here (#held-lines): once the lines are in,
+  // bring the section into view so the link lands on what it names.
+  const [arrived, setArrived] = useState(false)
+  useEffect(() => {
+    if (arrived || !lines.length || typeof window === 'undefined' || window.location.hash !== '#held-lines') return
+    setArrived(true)
+    document.getElementById('held-lines')?.scrollIntoView({ block: 'start' })
+  }, [lines, arrived])
   if (!lines.length && !saved) return null
   return (
-    <section className="ws-held" aria-labelledby="held-h">
+    <section className="ws-held" id="held-lines" aria-labelledby="held-h">
       <h2 id="held-h" className="np-h2" style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 10 }}>
         Held from the file <span className="ds-count">{lines.length}</span>
       </h2>
@@ -97,9 +105,12 @@ function HeldRow({
   const [qty, setQty] = useState(line.quantity == null ? '' : String(line.quantity))
   const [busy, setBusy] = useState<'resolve' | 'dismiss' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // The match list closes once a match is picked, and opens again when the
+  // name is typed over.
+  const [picked, setPicked] = useState(false)
   const picks = useMemo(() => {
     const text = substance.trim()
-    if (!text) return []
+    if (!text || picked) return []
     const catalog: CatalogSubstance[] = substances.map((s: any) => ({
       substance_id: Number(s.substance_id),
       substance_name: String(s.substance_name),
@@ -111,8 +122,9 @@ function HeldRow({
       variant: s.climate_scope,
       factor_source: s.climate_source,
     }))
-    return matchSubstance(text, catalog, 8).candidates
-  }, [substance, substances])
+    // Ranked by relevance, without implausible matches (the rules are on plausibleMatches).
+    return plausibleMatches(text, line.direction, catalog, 8)
+  }, [substance, substances, picked, line.direction])
   // The step the file named, when the case has it.
   const named = steps.find((s) => s.name.toLowerCase() === (line.step_name ?? '').toLowerCase())
   const [stepId, setStepId] = useState<number | ''>(named?.id ?? '')
@@ -167,7 +179,7 @@ function HeldRow({
           </select>
           {line.line_kind === 'flow' && (
             <>
-              <input className="ds-input" list={listId} aria-label={`Substance for ${what}`} placeholder="Substance" value={substance} onChange={(e) => setSubstance(e.target.value)} style={{ width: 200 }} />
+              <input className="ds-input" list={listId} aria-label={`Substance for ${what}`} placeholder="Substance" value={substance} onChange={(e) => (setSubstance(e.target.value), setPicked(false))} style={{ width: 200 }} />
               <datalist id={listId}>
                 {substances.map((s: any) => (
                   <option key={s.substance_id} value={s.substance_name} />
@@ -177,12 +189,17 @@ function HeldRow({
                 <ul aria-label={`Matches for ${what}`} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                   {picks.map((c) => (
                     <li key={c.substance_id}>
-                      <button type="button" className="ds-link" onClick={() => setSubstance(c.substance_name)}>
+                      <button type="button" className="ds-link" onClick={() => (setSubstance(c.substance_name), setPicked(true))}>
                         {c.substance_name} · {Math.round(c.score * 100)}% · {c.factor_value == null ? 'factor not set' : `${c.factor_value} ${c.factor_unit ?? ''}`.replace(/[—–]/g, '-').trim()} · {(c.variant || 'variant not set').replace(/[—–]/g, '-')} · {(c.source || 'source not set').replace(/[—–]/g, '-')}
                       </button>
                     </li>
                   ))}
                 </ul>
+              )}
+              {!picked && substance.trim() !== '' && picks.length === 0 && !byName.has(substance.trim().toLowerCase()) && (
+                <span role="note" style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
+                  No close match in the library. Try another name.
+                </span>
               )}
               <input className="ds-input ds-mono" aria-label={`Amount of ${what}`} inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value)} style={{ width: 90 }} />
               <input className="ds-input ds-mono" aria-label={`Unit of ${what}`} value={unit} onChange={(e) => setUnit(e.target.value)} style={{ width: 70 }} />
