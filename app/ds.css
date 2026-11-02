@@ -1424,6 +1424,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 /* claude: data sources */
 .srcs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .srcs-card { padding: 16px; }
@@ -1540,3 +1541,9 @@
 .ip-scope-set { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-top: 10px; }
 .ip-scope-set .ip-line-field { flex: 1 1 200px; }
 >>>>>>> 581d555 (Import review is lean and ends on Next; the Done card always has a next step; leaving a review asks first (F1, F2, F4, B3).)
+=======
+/* lane 3: project and class */
+.pc-settings { display: grid; gap: 8px; margin: 0 0 22px; max-width: 760px; }
+.pc-next { margin: 12px 24px 0; }
+.so-mine { margin: 0 24px 16px; }
+>>>>>>> 3853c0c (C1 A7 D3 G4: a project opens on its Cases board; the old Overview is gone.)

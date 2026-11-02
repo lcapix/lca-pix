@@ -29,7 +29,8 @@ describe('buildCaseTree', () => {
     expect(tree.id).toBe('1')
     expect(tree.label).toBe('Bracket')
     expect(tree.type).toBe('Product')
-    expect(tree.cost).toBe(13) // the canvas rounds a node's cost
+    // A7: unrounded, so a sum of steps is rounded once where it is shown (12.75, never 13).
+    expect(tree.cost).toBe(12.75)
     expect(tree.children?.map((c) => c.label)).toEqual(['Weld'])
     expect(tree.children?.[0].cost).toBe(7)
   })

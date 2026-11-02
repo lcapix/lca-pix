@@ -55,8 +55,9 @@ function costOf(c: ComponentLike): number {
     (c.transportationCost ?? 0) +
     (c.equipmentCost ?? 0) +
     (c.overheadCost ?? 0)
-  if (abc > 0) return Math.round(abc)
-  return Math.round((c.operationalCostUSD ?? 0) + (c.capitalCostUSD ?? 0))
+  // A7: unrounded, so a parent that sums its steps rounds once (to cents, where it is shown).
+  if (abc > 0) return abc
+  return (c.operationalCostUSD ?? 0) + (c.capitalCostUSD ?? 0)
 }
 
 function flowsOf(c: ComponentLike): number {

@@ -1,14 +1,17 @@
 'use client'
 
-// Project settings on the Overview (P123, P126, P127, G144): name, description,
-// goal, functional unit, boundary and exclusions, default method and region,
-// and, for the owner, whether AI may read the project's figures. PUT
-// /api/projects/:id takes them all. After a save the header and the sidebar
-// show the new values at once.
+// Project settings, opened from the Cases board (C1; P123, P126, P127, G144):
+// name, description, goal, functional unit, boundary and exclusions, default
+// method and region, and, for the owner, whether AI may read the project's
+// figures, then Delete project for the owner. PUT /api/projects/:id takes them
+// all. Only the Save button saves (Enter in a box never does), and after a
+// save the board and the sidebar show the new values at once.
 
-import { useState, type FormEvent } from 'react'
-import { Button, SavedLine, SectionLabel } from '@/components/lcapix/ds'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button, ConfirmDialog, ErrorCard, SavedLine, SectionLabel } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
+import { enterNeverSubmits } from '@/lib/project/enter-never-submits'
 import { BOUNDARIES, METHODS, REGIONS } from '@/lib/project/study-options'
 import { useShellStore } from '@/lib/shell/use-shell'
 
@@ -91,7 +94,13 @@ export function ProjectSettings({
   }
 
   return (
-    <form className="ds-card ds-card-pad hub-settings" onSubmit={(e) => void save(e)} aria-labelledby="settings-h">
+    <form
+      className="ds-card ds-card-pad hub-settings"
+      onSubmit={(e) => void save(e)}
+      onKeyDown={enterNeverSubmits}
+      onChange={() => setSaved(null)}
+      aria-labelledby="settings-h"
+    >
       <SectionLabel as="h2" id="settings-h">
         Project settings
       </SectionLabel>
@@ -155,5 +164,120 @@ export function ProjectSettings({
         Save settings
       </Button>
     </form>
+  )
+}
+
+/** The raw project (GET /api/projects/:id) as the form starts from it. */
+function toSettings(p: any) {
+  return {
+    name: p?.project_name ?? '',
+    description: p?.description ?? '',
+    goalStatement: p?.goal_statement ?? '',
+    functionalUnit: p?.functional_unit ?? '',
+    systemBoundary: p?.system_boundary ?? 'cradle-to-gate',
+    boundaryNotes: p?.boundary_notes ?? '',
+    lciaMethod: p?.lcia_method ?? 'CML 2001',
+    regionCode: p?.region_code ?? 'Global',
+    aiEnabled: p?.ai_enabled !== false,
+  }
+}
+
+/**
+ * The Cases board's "Project settings" panel: the form above for an admin or
+ * the owner, then Delete project (owner only, with a confirm). It reads the
+ * project fresh, so it starts from what is stored.
+ */
+export function ProjectSettingsPanel({
+  projectId,
+  owner,
+  onSaved,
+  onClose,
+}: {
+  projectId: number
+  owner: boolean
+  onSaved: () => void
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [project, setProject] = useState<any | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const load = async () => {
+    setError(null)
+    try {
+      const r = await apiRequest(`/api/projects/${projectId}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d?.error ?? `the project answered ${r.status}`)
+      setProject(d.project)
+    } catch (e: any) {
+      setError(e?.message ?? 'the project did not load')
+    }
+  }
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  const remove = async () => {
+    setDeleteBusy(true)
+    setDeleteError(null)
+    try {
+      const r = await apiRequest(`/api/projects/${projectId}`, { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d?.error ?? `Not deleted (${r.status}).`)
+      await useShellStore.getState().refresh()
+      router.replace('/home')
+    } catch (e: any) {
+      setDeleteError(e?.message ?? 'The project was not deleted.')
+      setDeleteBusy(false)
+    }
+  }
+
+  return (
+    <section id="pc-settings" className="pc-settings" aria-label="Project settings panel">
+      {error ? (
+        <ErrorCard title="The settings did not load" cause={error} onRetry={() => void load()} />
+      ) : !project ? (
+        <p role="status" className="np-sub">
+          Loading the settings…
+        </p>
+      ) : (
+        <ProjectSettings
+          project={toSettings(project)}
+          projectId={String(projectId)}
+          owner={owner}
+          onSaved={(saved) => {
+            // Delete project names the project as it is now.
+            setProject((cur: any) => (cur ? { ...cur, project_name: saved.name } : cur))
+            onSaved()
+          }}
+        />
+      )}
+      <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        <Button onClick={onClose}>Close settings</Button>
+        {owner && project && (
+          <Button variant="danger-quiet" onClick={() => setDeleting(true)}>
+            Delete project
+          </Button>
+        )}
+      </span>
+      <ConfirmDialog
+        open={deleting}
+        title={`Delete "${project?.project_name ?? 'this project'}"?`}
+        consequence="The project and all of its cases, flows and runs are removed. This cannot be undone."
+        confirmLabel="Delete project"
+        busy={deleteBusy}
+        onCancel={() => setDeleting(false)}
+        onConfirm={() => void remove()}
+      >
+        {deleteError && (
+          <p className="ds-dialog-body" role="alert" style={{ color: 'var(--ds-error)' }}>
+            {deleteError}
+          </p>
+        )}
+      </ConfirmDialog>
+    </section>
   )
 }

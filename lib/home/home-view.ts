@@ -136,11 +136,11 @@ export function needsAttention(projects: HomeProject[], userId: number, memberWo
   return out
 }
 
-/** "34 cases · 31 people · 5 ticked as hand-in" / "1 case · just you". */
+/** "34 cases · 31 people · 5 handed in" / "1 case · just you". */
 export function projectMeta(p: HomeProject, userId: number): string {
   const parts = [`${p.case_count} ${p.case_count === 1 ? 'case' : 'cases'}`]
   parts.push(p.people <= 1 ? 'just you' : `${p.people} people`)
-  if (runsProject(p, userId) && p.hand_ins > 0) parts.push(`${p.hand_ins} ticked as hand-in`)
+  if (runsProject(p, userId) && p.hand_ins > 0) parts.push(`${p.hand_ins} handed in`)
   return parts.join(' · ')
 }
 

@@ -153,11 +153,14 @@ export function placesFor(open: NavProject | null, userId: number | null | undef
   return base
 }
 
-export type ProjectPage = 'overview' | 'cases' | 'compare' | 'people' | 'assignments'
+export type ProjectPage = 'cases' | 'compare' | 'people' | 'assignments'
 
-/** The open project's nested pages. People and Assignments are there for every member. */
+/**
+ * The open project's nested pages. People and Assignments are there for every
+ * member. No Overview: a project opens on its Cases board (C1).
+ */
 export function projectPagesFor(_open: NavProject, _userId: number | null | undefined): ProjectPage[] {
-  return ['overview', 'cases', 'compare', 'people', 'assignments']
+  return ['cases', 'compare', 'people', 'assignments']
 }
 
 /** A student sees no "+ New project" at the top level (sidebar.md, Students). */

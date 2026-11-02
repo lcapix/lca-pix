@@ -46,6 +46,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                  JOIN component cm ON cm.component_id = f.component_id
                 WHERE cm.case_id = c.case_id AND f.quantity IS NULL) AS flows_missing_amount,
               (SELECT COUNT(*) FROM component cm WHERE cm.case_id = c.case_id) AS step_count,
+              -- A frozen hand-in (migrate-043): when it was handed in, and the working case it froze.
+              (SELECT MAX(s.submitted_at) FROM submission s WHERE s.frozen_case_id = c.case_id) AS handed_in_at,
+              (SELECT MAX(s.working_case_id) FROM submission s WHERE s.frozen_case_id = c.case_id) AS working_case_id,
               (SELECT COUNT(*) FROM flows f
                  JOIN component cm ON cm.component_id = f.component_id
                 WHERE cm.case_id = c.case_id) AS flow_count
@@ -89,6 +92,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const run = latest.get(Number(r.latest_run_id));
       const hasInterpretation = !!String(r.interpretation ?? '').trim();
       const answered = LESSONS.filter((l) => state.lessons[l.id]?.correct === true).map((l) => l.id);
+      // D3: a read-only copy made by Hand in is the hand-in itself, not another case to run.
+      const handedIn = r.assignment_id != null && Number(r.read_only ?? 0) === 1;
       return {
         case_id: r.case_id,
         case_name: r.case_name,
@@ -116,11 +121,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // The list screens (E07, E07b, E10): where the case is, its latest run.
         copied_from: r.parent_case_id != null && listed.has(Number(r.parent_case_id)) ? Number(r.parent_case_id) : null,
         flows_missing_amount: Number(r.flows_missing_amount ?? 0),
-        stage: pipelineStage({
-          completedRuns: Number(r.completed_runs ?? 0),
-          hasInterpretation,
-          isFinal: !!r.is_final,
-        }),
+        stage: handedIn
+          ? 'handed_in'
+          : pipelineStage({
+              completedRuns: Number(r.completed_runs ?? 0),
+              hasInterpretation,
+              isFinal: !!r.is_final,
+            }),
+        assignment_id: r.assignment_id == null ? null : Number(r.assignment_id),
+        read_only: Number(r.read_only ?? 0) === 1,
+        handed_in: handedIn,
+        handed_in_at: handedIn ? r.handed_in_at ?? r.created_at ?? null : null,
+        // The working case this hand-in froze, when the caller reaches it (B-A1).
+        working_case_id: handedIn && r.working_case_id != null && listed.has(Number(r.working_case_id)) ? Number(r.working_case_id) : null,
         latest_run: run
           ? {
               run_id: Number(run.run_id),

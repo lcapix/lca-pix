@@ -23,8 +23,10 @@ export async function GET(request: NextRequest) {
               perm.permission_name,
               -- Counts over the cases the caller reaches only: in a project that
               -- keeps members' cases apart, a student's card counts their own (B-A1).
+              -- A frozen hand-in (read-only, made by Hand in) is not one more case (D3).
               (SELECT COUNT(*) FROM case_table c
-                WHERE c.project_id = p.project_id AND ${REACHABLE_CASE_SQL}) AS case_count,
+                WHERE c.project_id = p.project_id AND ${REACHABLE_CASE_SQL}
+                  AND NOT (c.assignment_id IS NOT NULL AND c.read_only = 1)) AS case_count,
               (SELECT COUNT(*) FROM case_table c JOIN component comp ON comp.case_id = c.case_id
                 WHERE c.project_id = p.project_id AND ${REACHABLE_CASE_SQL}) AS component_count,
               -- For the project lists (E12, E19): people, and the latest work
@@ -41,10 +43,14 @@ export async function GET(request: NextRequest) {
               ) AS last_run_at,
               -- Home (E12): hand-ins, members' cases with no run yet, and the
               -- base case (the first one) with its latest completed run.
+              -- Hand-ins: the frozen copies Hand in made, and any case still ticked as one.
               (SELECT COUNT(*) FROM case_table c4
-                WHERE c4.project_id = p.project_id AND c4.is_final = 1 AND ${reachableCaseSql('c4')}) AS hand_ins,
+                WHERE c4.project_id = p.project_id AND ${reachableCaseSql('c4')}
+                  AND (c4.is_final = 1 OR (c4.assignment_id IS NOT NULL AND c4.read_only = 1))) AS hand_ins,
+              -- A frozen hand-in is never "a case with no run" to chase (D3).
               (SELECT COUNT(*) FROM case_table c5
                 WHERE c5.project_id = p.project_id AND c5.created_by <> p.owner_id AND ${reachableCaseSql('c5')}
+                  AND NOT (c5.assignment_id IS NOT NULL AND c5.read_only = 1)
                   AND NOT EXISTS (SELECT 1 FROM assessment_runs r5 WHERE r5.case_id = c5.case_id AND r5.status = 'completed')
               ) AS member_cases_without_run,
               (SELECT MIN(c6.case_id) FROM case_table c6

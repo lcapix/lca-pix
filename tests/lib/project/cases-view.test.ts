@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answerOf, byStage, CARD_TAG, casesHeader, changeVsBase, matchesSearch, noCaseYet, segmentsFilled, splitCases } from '@/lib/project/cases-view'
+import { answerOf, byStage, CARD_TAG, casesHeader, changeVsBase, countedCases, lessonsOf, matchesSearch, noCaseYet, PIPELINE_LABEL, segmentsFilled, splitCases } from '@/lib/project/cases-view'
 
 const run = (id: number, value: number) => ({ run_id: id, headline: { value, unit: 'kg CO2 eq' } })
 const base = { case_id: 1, case_name: 'Base case', case_type: 'base', created_by: 9, author: 'Elena Rivera', stage: 'run' as const, latest_run: run(301, 1.7196) }
@@ -21,12 +21,21 @@ describe('Cases (E07, E07b)', () => {
   })
   it('card words and segments, search, who has no case, the table order', () => {
     expect(CARD_TAG.not_run.text).toBe('No run yet')
-    expect(CARD_TAG.handed_in.text).toBe('✓ Ticked as hand-in')
+    expect(CARD_TAG.handed_in.text).toBe('✓ Handed in')
     expect([segmentsFilled('not_run'), segmentsFilled('handed_in')]).toEqual([1, 4])
     expect(matchesSearch(ana, 'ana')).toBe(true)
     expect(matchesSearch(ana, "sam's")).toBe(false)
     expect(noCaseYet([{ user_id: 20 }, { user_id: 21 }, { user_id: 22 }], [ana, sam])).toBe(1)
     expect(noCaseYet([{ user_id: 22, permission_name: 'viewer' }], [ana, sam])).toBe(0)
     expect([sam, ana, base].sort(byStage).map((c) => c.author)).toEqual(['Ana Ruiz', 'Elena Rivera', 'Sam Ortiz'])
+  })
+  it('D3: a frozen hand-in is the hand-in, not another case; G4: no "Lessons 0 of 6"', () => {
+    const frozen = { ...ana, case_id: 5, handed_in: true, read_only: true, assignment_id: 1 }
+    expect(countedCases([base, ana, frozen]).map((c) => c.case_id)).toEqual([1, 3])
+    expect(casesHeader({ all: 3, mine: 2, others: 1, handIns: 1 }, 'student', null)).toBe('3 cases · 2 yours, 1 from students · 1 handed in')
+    expect(PIPELINE_LABEL.handed_in).toBe('Handed in')
+    expect(lessonsOf({ ...sam, lessons_total: 6, lessons_answered: [] }, {})).toBeNull()
+    expect(lessonsOf({ ...sam, lessons_total: 6, lessons_answered: ['goal'] }, { goal: 'Goal and scope' })?.text).toBe('Lessons 1 of 6')
+    expect(lessonsOf({ ...sam, lessons_total: 6, lessons_answered: [], prediction_made: true }, {})?.text).toBe('Lessons 0 of 6, predicted')
   })
 })

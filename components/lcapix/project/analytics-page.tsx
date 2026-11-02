@@ -318,7 +318,7 @@ function DotPlot({ dots, base, unit }: { dots: Dot[]; base: number | null; unit:
   const rows = labelRows(labels, 3)
   const rowY = (r: number) => 26 + r * 34
   const baseBoxX = base == null ? 0 : x(base) + 8 + BASE_BOX > W ? x(base) - 8 - BASE_BOX : x(base) + 8
-  const summary = `${dots.length} runs on one axis from ${fixed(min, dec)} to ${fixed(max, dec)} ${unit}${base != null ? `; the base case at ${caseTotal(base, 'base')}` : ''}.`
+  const summary = `${dots.length} ${dots.length === 1 ? 'run' : 'runs'} on one axis from ${fixed(min, dec)} to ${fixed(max, dec)} ${unit}${base != null ? `; the base case at ${caseTotal(base, 'base')}` : ''}.`
 
   return (
     <svg className="an-plot" viewBox={`0 0 ${W} 236`} role="img" aria-label={summary}>

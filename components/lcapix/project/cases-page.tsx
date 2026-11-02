@@ -6,12 +6,17 @@
 // Run, Written, Ticked as hand-in) or as a table sorted by how far along each
 // one is. Each card says what is missing next. Nothing here grades: it says
 // what exists. Search finds a person or a case.
+// A project opens here (C1): Project settings (and Delete project) open from
+// the header. A hand-in's frozen copy shows as the hand-in, with its run and
+// date, never as one more case to run (D3).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Button, ConfirmDialog, ErrorCard, Segmented, TextDialog } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
+import { ProjectSettingsPanel } from '@/components/lcapix/workspace/project-settings'
+import { safeRunDate } from '@/lib/results/results-view'
 import { useShellData, useShellStore } from '@/lib/shell/use-shell'
 import { isProjectRole, projectCapabilities } from '@/lib/project-role'
 import { readRunPrefs, runAssessmentBody } from '@/lib/project/workspace'
@@ -27,6 +32,8 @@ import {
   CARD_TAG,
   casesHeader,
   changeVsBase,
+  countedCases,
+  isHandIn,
   lessonsOf,
   matchesSearch,
   noCaseYet,
@@ -54,6 +61,7 @@ export function CasesPage() {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [allRows, setAllRows] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const split = useMemo(() => (data ? splitCases(data.cases, userId) : { mine: [], others: [] }), [data, userId])
   if (error) {
@@ -81,6 +89,17 @@ export function CasesPage() {
   const missing = seesAll ? noCaseYet(data.members, data.cases) : 0
   const plural = `${word[0].toUpperCase()}${word.slice(1)}s`
   const caseHref = (c: ProgressCase) => `/project/${projectId}/case/${c.case_id}`
+  const caps = projectCapabilities(isProjectRole(data.project.my_role) ? data.project.my_role : null)
+  const isOwner = data.project.owner_id === userId
+  const counted = countedCases(data.cases)
+  const handIns = data.cases.length - counted.length
+  // C3: a what-if starts from your own case (your copy of the sample, your
+  // assignment case), never from a read-only one; the form reads ?from=.
+  const ownSource =
+    split.mine.find((c) => !c.read_only && !isHandIn(c) && c.case_type === 'base') ??
+    [...split.mine].filter((c) => !c.read_only && !isHandIn(c)).sort((a, b) => b.case_id - a.case_id)[0] ??
+    null
+  const newCaseHref = `/project/${projectId}/case/new${ownSource ? `?from=${ownSource.case_id}` : ''}`
 
   return (
     <div className="np pc">
@@ -90,7 +109,11 @@ export function CasesPage() {
           <h1 className="ds-title" style={{ margin: '2px 0 0', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
             Cases{' '}
             <span style={{ fontSize: 15, fontWeight: 400, color: 'var(--ds-text-2)' }}>
-              {casesHeader({ all: data.cases.length, mine: split.mine.length, others: split.others.length }, word, scope)}
+              {casesHeader(
+                { all: counted.length, mine: countedCases(split.mine).length, others: countedCases(split.others).length, handIns },
+                word,
+                scope,
+              )}
             </span>
           </h1>
         </div>
@@ -113,10 +136,18 @@ export function CasesPage() {
             ]}
           />
         )}
-        <Link href={`/project/${projectId}/case/new`} className="ds-btn ds-btn--primary">
+        {caps.canManage && (
+          <Button aria-expanded={settingsOpen} aria-controls={settingsOpen ? 'pc-settings' : undefined} onClick={() => setSettingsOpen((v) => !v)}>
+            Project settings
+          </Button>
+        )}
+        <Link href={newCaseHref} className="ds-btn ds-btn--primary">
           + New case
         </Link>
       </header>
+      {caps.canManage && settingsOpen && (
+        <ProjectSettingsPanel projectId={projectId} owner={isOwner} onSaved={reload} onClose={() => setSettingsOpen(false)} />
+      )}
 
       <section aria-labelledby="mine-h">
         <h2 id="mine-h" className="ds-section-label">
@@ -136,7 +167,9 @@ export function CasesPage() {
                       <Progress c={c} />
                     </span>
                     <span style={{ fontSize: 14, color: 'var(--ds-text-2)' }}>
-                      {[c.description || (c.case_type === 'base' ? 'The base case' : 'A what-if'), c.latest_run ? runLabel(c.latest_run) : 'not run yet'].join(' · ')}
+                      {isHandIn(c)
+                        ? handInLine(c)
+                        : [c.description || (c.case_type === 'base' ? 'The base case' : 'A what-if'), c.latest_run ? runLabel(c.latest_run) : 'not run yet'].join(' · ')}
                     </span>
                   </span>
                   {change && change !== 'Same' && <span className="pc-change">{change}</span>}
@@ -151,7 +184,7 @@ export function CasesPage() {
           </div>
         ) : (
           <p className="np-sub" style={{ margin: '8px 0 0' }}>
-            None yet. <Link className="ds-link" href={`/project/${projectId}/case/new`}>+ New case</Link>
+            None yet. <Link className="ds-link" href={newCaseHref}>+ New case</Link>
           </p>
         )}
       </section>
@@ -254,7 +287,15 @@ export function CasesPage() {
                         <td className="ds-mono" style={{ textAlign: 'right' }}>
                           {answerOf(c) ?? <span style={{ color: 'var(--ds-text-2)' }}>None yet</span>}
                         </td>
-                        <td>{c.stage === 'handed_in' ? <span style={{ color: 'var(--ds-green)', fontWeight: 600 }}>✓ Ticked</span> : 'Not ticked'}</td>
+                        <td>
+                          {isHandIn(c) ? (
+                            <span style={{ color: 'var(--ds-green)', fontWeight: 600 }}>✓ Handed in {c.handed_in_at ? safeRunDate(c.handed_in_at) : ''}</span>
+                          ) : c.stage === 'handed_in' ? (
+                            <span style={{ color: 'var(--ds-green)', fontWeight: 600 }}>✓ Ticked</span>
+                          ) : (
+                            'Not handed in'
+                          )}
+                        </td>
                       </tr>
                     ))}
                 </tbody>
@@ -299,7 +340,18 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
         <span style={{ flex: 1, minWidth: 0 }}>
           <strong style={{ display: 'block', fontSize: 16 }}>{c.author ?? 'Someone'}</strong>
           <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
-            {c.case_name} · {c.latest_run ? <span className="ds-mono">{runLabel(c.latest_run)}</span> : c.case_type === 'base' ? 'not run yet' : c.created_at ? `copied ${whenWords(c.created_at)}` : 'not run yet'}
+            {c.case_name} ·{' '}
+            {isHandIn(c) ? (
+              handInLine(c)
+            ) : c.latest_run ? (
+              <span className="ds-mono">{runLabel(c.latest_run)}</span>
+            ) : c.case_type === 'base' ? (
+              'not run yet'
+            ) : c.created_at ? (
+              `copied ${whenWords(c.created_at)}`
+            ) : (
+              'not run yet'
+            )}
           </span>
           <span style={{ display: 'block', fontSize: 13, color: 'var(--ds-text-2)' }}>
             <Progress c={c} />
@@ -451,12 +503,18 @@ function CaseMenu({
   )
 }
 
+/** D1, D3: "Handed in 3 Nov 2026 · with Run 1", or "Handed in 3 Nov 2026 · without a run". */
+function handInLine(c: ProgressCase): string {
+  const when = c.handed_in_at ? `Handed in ${safeRunDate(c.handed_in_at)}` : 'Handed in'
+  return `${when} · ${c.latest_run ? `with ${runLabel(c.latest_run)}` : 'without a run'}`
+}
+
 /** A case's progress in one line (C03, P38 to P41): steps, flows, runs, lessons and the write-up. */
 function Progress({ c }: { c: ProgressCase }) {
   const lessons = lessonsOf(c, LESSON_TITLES)
   return (
     <>
-      {c.steps ?? 0} steps · {c.flows ?? 0} flows · {c.runs ?? 0} runs
+      {countWord(c.steps ?? 0, 'step')} · {countWord(c.flows ?? 0, 'flow')} · {countWord(c.runs ?? 0, 'run')}
       {lessons && (
         <>
           {' · '}
@@ -468,3 +526,6 @@ function Progress({ c }: { c: ProgressCase }) {
     </>
   )
 }
+
+/** G4: "1 step", "2 steps". */
+const countWord = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`

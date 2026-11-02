@@ -1,13 +1,30 @@
 /**
- * Project pages that still work: overview, cases, analytics, new case,
- * new project, and reports. Duplicate (P129) is exercised by the worked-example
- * journey. Export (P120) is exercised by the results journey.
+ * Project pages that still work: the Cases board a project opens on, cases,
+ * analytics, new case, new project, and reports. Duplicate (P129) is exercised
+ * by the worked-example journey. Export (P120) is exercised by the results
+ * journey.
+ *
+ * C1 (2026-11-01, her decision): the old project Overview (the hub) is gone; a
+ * project opens on its Cases board. Its rows now read there, or are retired:
+ *   moved to the Cases board: P02 name, P04 description (settings), P06 Compare
+ *     (sidebar), P09 P15 Add case (+ New case), P10 P124 Delete project
+ *     (settings), P14 the cases, P16 a case's description, P18 open a case,
+ *     P25 goal and scope (settings), P26 Run, P28 P130 Rename, P29 P131 Delete
+ *     case (the case's menu), P27 Results (the case's own tab).
+ *   retired with the hub: P03 "comparison" chip, P07 Class button (/class
+ *     redirects, P31), P08 Import Data (the New case form's From a file, P119),
+ *     P11 breadcrumb (the sidebar), P12 KPI strip, P13 comparison banner
+ *     (Compare's verdict), P17 mini canvas, P19 View Full Hierarchy, P20 node
+ *     details (the case's step panel), P21 Clone from base on an empty
+ *     comparative (the New case form's what-if copies the base, P101, and its
+ *     empty comparative, P102), P22 Impact overview, P23 Top contributors,
+ *     P24 Cost summary (the Results tab).
  */
 import { expect, storagePath, test } from '../support/fixtures';
 import { note, row } from '../support/parity';
 import { open } from '../support/ui';
 
-test('P02 P03 P04 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19 P20 P21 P22 P23 P24 P25 P26 P27 P28 P29 P124 P130 P131 project overview', async ({
+test('P02 P04 P06 P09 P10 P14 P15 P16 P18 P25 P26 P27 P28 P29 P124 P130 P131 a project opens on its Cases board, and what the Overview did is there', async ({
   api,
   newUser,
   signIn,
@@ -44,63 +61,51 @@ test('P02 P03 P04 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19 P20 P2
     unit: 'kg',
   });
 
-  const { page } = await signIn(user);
-  await open(page, `/project/${projectId}`, { ready: 'Parity study' });
-  await expect.soft(page.getByRole('button', { name: 'Compare Cases' }), note('P06', 'Compare Cases button (disabled under 2 cases)')).toBeDisabled();
-
   await as.post(`/api/cases/${base}/duplicate`, { case_name: 'Lighter frame' });
   await as.post(`/api/projects/${projectId}/cases`, { case_name: 'Blank alternative', case_type: 'comparative', description: 'Nothing in it yet.' });
-  await page.reload();
+
+  const { page } = await signIn(user);
   await open(page, `/project/${projectId}`, { ready: 'Parity study' });
+  await expect.soft(page, note('P02', 'the project opens on its Cases board')).toHaveURL(new RegExp(`/project/${projectId}/cases$`), { timeout: 90_000 });
 
-  await row(page.getByRole('heading', { name: 'Parity study' }), 'P02', 'Project name heading');
-  await row(page.getByText('comparison', { exact: true }), 'P03', '"comparison" chip when there are comparatives');
-  await row(page.getByText('A study of one frame.'), 'P04', 'Project description');
-  await row(page.getByRole('button', { name: 'Class' }), 'P07', 'Class button to /class');
-  await row(page.getByRole('button', { name: 'Import Data' }), 'P08', 'Import Data button');
-  await row(page.getByRole('button', { name: 'Add Case' }), 'P09', 'Add Case (to base/new or comparative/new)');
-  await row(page.getByRole('button', { name: 'Projects', exact: true }), 'P11', 'Breadcrumb Projects > name');
-  await row(page.getByText('Cases', { exact: true }).first(), 'P12', 'KPI strip (Cases, Steps, Global Warming, Cost)');
-  await row(page.getByText('Steps', { exact: true }).first(), 'P12', 'KPI strip (Cases, Steps, Global Warming, Cost)');
-  await row(page.getByText('Global Warming', { exact: true }).first(), 'P12', 'KPI strip (Cases, Steps, Global Warming, Cost)');
-  await row(page.getByText('Cost', { exact: true }).first(), 'P12', 'KPI strip (Cases, Steps, Global Warming, Cost)');
-  await row(page.getByText(/Comparing/), 'P13', 'Comparison banner "X vs Y"');
-  await row(page.getByRole('button', { name: /Cut frame/ }), 'P14', 'Case tabs: pick base, cycle comparatives, show counts');
-  await row(page.getByRole('button', { name: /Comparative 1 of/ }), 'P14', 'Case tabs: pick base, cycle comparatives, show counts');
-  await row(page.getByRole('button', { name: 'Add case' }), 'P15', 'Add comparative / Add case from the tabs');
-  await row(page.getByText('The base way of making it.'), 'P16', 'Active case description');
-  await row(page.getByText('Frame product'), 'P17', 'Mini canvas: drag, zoom, select node');
-  await row(page.getByRole('button', { name: 'Add a step' }), 'P17', 'Mini canvas: drag, zoom, select node');
-  await row(page.getByRole('button', { name: 'Open editor' }).first(), 'P18', 'Open editor');
-  await page.getByRole('button', { name: 'View Full Hierarchy' }).click();
-  await row(page.getByRole('dialog').getByText(/Process Hierarchy/), 'P19', 'View Full Hierarchy dialog (search, expand/collapse all, zoom, pan)');
-  await page.keyboard.press('Escape');
-  await row(page.getByText(/Path: Frame product/), 'P20', 'Node details: path, costs, flows, open in editor, dismiss');
-  await row(page.getByRole('button', { name: 'Dismiss details' }), 'P20', 'Node details: path, costs, flows, open in editor, dismiss');
-  await row(page.getByText('Impact Overview'), 'P22', 'Impact overview (latest GWP, method, steps, categories, flows)');
-  await row(page.getByText('Top contributors'), 'P23', 'Top contributors');
-  await row(page.getByText('Cost summary'), 'P24', 'Cost summary');
-  await row(page.getByText('Goal & scope'), 'P25', 'ISO journey stepper, present/missing layers, run readiness');
-  await row(page.getByRole('button', { name: 'Run Assessment' }), 'P26', 'Run Assessment (gated, remembered method/region)');
-  await row(page.getByRole('button', { name: 'Results', exact: true }), 'P27', 'Results button');
-  await row(page.getByRole('button', { name: 'Rename case' }), 'P130', 'Rename case');
-  await page.getByRole('button', { name: 'Rename case' }).click();
+  await row(page.getByText('Parity study').first(), 'P02', 'Project name heading');
+  await row(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Compare/ }), 'P06', 'Compare the cases');
+  await row(page.getByRole('link', { name: '+ New case' }).first(), 'P09', 'Add Case (to base/new or comparative/new)');
+  await row(page.getByRole('link', { name: '+ New case' }).first(), 'P15', 'Add comparative / Add case');
+  await row(page.getByRole('link', { name: /Cut frame/ }).first(), 'P14', 'The cases: base and comparatives, with counts');
+  await row(page.getByRole('link', { name: /Lighter frame/ }).first(), 'P14', 'The cases: base and comparatives, with counts');
+  await row(page.getByText('The base way of making it.').first(), 'P16', 'A case\'s description');
+  await row(page.getByText(/1 step · 1 flow · 0 runs/).first(), 'P14', 'show counts');
+
+  // Settings: name, description, goal and scope; Delete project (owner) with a confirm.
+  await page.getByRole('button', { name: 'Project settings' }).click();
+  const settings = page.getByRole('form', { name: 'Project settings' });
+  await expect.soft(settings.getByLabel('Description'), note('P04', 'Project description')).toHaveValue('A study of one frame.');
+  await row(settings.getByLabel('Functional unit'), 'P25', 'Goal and scope');
+  await page.getByRole('button', { name: 'Delete project' }).click();
+  await row(page.getByRole('alertdialog', { name: 'Delete "Parity study"?' }), 'P10', 'Delete project (confirm)');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+  await row(page.getByRole('button', { name: 'Delete project' }), 'P124', 'Delete project');
+  await page.getByRole('button', { name: 'Close settings' }).click();
+
+  // A case's menu: Rename, Run, Delete (P118 walks each one).
+  await page.getByRole('button', { name: 'Menu for Cut frame' }).click();
+  await row(page.getByRole('menuitem', { name: 'Run' }), 'P26', 'Run Assessment');
+  await row(page.getByRole('menuitem', { name: 'Rename' }), 'P130', 'Rename case');
+  await row(page.getByRole('menuitem', { name: 'Delete' }), 'P131', 'Delete case');
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
   await row(page.getByRole('dialog', { name: 'Rename case' }), 'P28', 'Rename case (dialog)');
-  await page.getByRole('button', { name: 'Cancel' }).click();
-
-  await row(page.getByRole('button', { name: 'Delete case' }), 'P131', 'Delete case');
-  await page.getByRole('button', { name: 'Delete case' }).click();
+  await page.getByRole('dialog', { name: 'Rename case' }).getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Menu for Cut frame' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
   await row(page.getByRole('alertdialog', { name: 'Delete this case?' }), 'P29', 'Delete case (confirm)');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
 
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
-  await row(page.getByRole('alertdialog', { name: 'Delete "Parity study"?' }), 'P10', 'Delete project (confirm)');
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
-  await row(page.getByRole('button', { name: 'Delete', exact: true }), 'P124', 'Delete project');
-
-  await page.getByText('0 steps').click();
-  await row(page.getByRole('button', { name: 'Clone from base' }), 'P21', 'Empty comparative: Clone from base / Start blank');
-  await row(page.getByRole('button', { name: 'Start blank' }), 'P21', 'Empty comparative: Clone from base / Start blank');
+  // Open a case: its own tabs hold the tree and the results.
+  await page.getByRole('link', { name: /Cut frame/ }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/case/${base}$`), { timeout: 90_000 });
+  await row(page.getByRole('tree'), 'P18', 'Open the case');
+  await row(page.getByRole('tab', { name: /^Results/ }), 'P27', 'Results');
 });
 
 test('P49 P57 analytics says when it cannot load, and the sidebar goes back', async ({ api, newUser, signIn }) => {
@@ -111,7 +116,7 @@ test('P49 P57 analytics says when it cannot load, and the sidebar goes back', as
   await signed.route(/\/api\/projects\/\d+\/progress/, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"no"}' }));
   await open(signed, `/project/${projectId}/analytics`);
   await row(signed.getByRole('button', { name: 'Try again' }), 'P57', 'No-data card with Try again');
-  await row(signed.getByRole('link', { name: 'Overview' }), 'P49', 'Back to project button and breadcrumb');
+  await row(signed.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Cases/ }), 'P49', 'Back to project button and breadcrumb');
 });
 
 test('P99 P100 P101 P103 P119 a new case copies, and refuses a name that is taken', async ({ api, newUser, signIn }) => {

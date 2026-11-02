@@ -102,7 +102,7 @@ export function HierarchyFlowChart({
               className="font-mono"
               style={{ fontSize: 10.5, color: colors.text, opacity: 0.72 }}
             >
-              {flowsCount} flows · ${Math.round(cost)}
+              {flowsCount} {flowsCount === 1 ? 'flow' : 'flows'} · ${cost.toFixed(2)}
             </p>
           </div>
           {children.length > 0 && (

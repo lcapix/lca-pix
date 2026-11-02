@@ -20,7 +20,8 @@ test('P58 P61 P62 P66 P70 P73 P76 P82 P83 compare two runs, then a stale one', a
   await open(page, `/project/${projectId}/comparison?cases=${baseCaseId},${caseId}`, { ready: 'Compare' });
   await expect.soft(page, note('P61', 'Shareable ?cases= URL')).toHaveURL(new RegExp(`cases=${baseCaseId},${caseId}`));
   await row(page.getByRole('heading', { name: /^Compare/ }), 'P58', 'Breadcrumb and back button');
-  await row(page.getByRole('link', { name: 'Overview' }), 'P58', 'Breadcrumb and back button');
+  // C1: no Overview page; the way back to the project is its Cases page.
+  await row(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Cases/ }), 'P58', 'Breadcrumb and back button');
   await row(page.getByRole('region', { name: 'Totals' }).getByText(/Same as A|lower|higher/), 'P66', 'Per-case total and % vs base');
   await row(page.getByRole('combobox', { name: 'Impact category' }), 'P83', 'Impact category selector');
 

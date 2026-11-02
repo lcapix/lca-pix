@@ -32,7 +32,7 @@ describe('Home (E02, E12)', () => {
     expect(homeMode([sample])).toBe('sample')
     expect(homeMode([sample, project({})])).toBe('later')
     expect(countsLine([project({}), project({ project_id: 2, owner_id: 3 }), sample], ME)).toBe('1 project of yours · 1 shared with you · the sample')
-    expect(projectMeta(project({}), ME)).toBe('34 cases · 31 people · 5 ticked as hand-in')
+    expect(projectMeta(project({}), ME)).toBe('34 cases · 31 people · 5 handed in')
     expect(projectMeta(project({ case_count: 1, people: 1, hand_ins: 0 }), ME)).toBe('1 case · just you')
     // A member is not told about hand-ins.
     expect(projectMeta(project({ owner_id: 3, permission_name: 'editor' }), ME)).toBe('34 cases · 31 people')

@@ -16,9 +16,13 @@ export function placeHref(place: Place, openId: number | null): string {
   }
 }
 
-export function projectHref(projectId: number, page: ProjectPage = 'overview'): string {
+/**
+ * Where a project page lives. With no page: the project's own address, which
+ * opens on its Cases board (the sample opens on its study page).
+ */
+export function projectHref(projectId: number, page?: ProjectPage): string {
   switch (page) {
-    case 'overview':
+    case undefined:
       return `/project/${projectId}`
     case 'cases':
       return `/project/${projectId}/cases`
@@ -34,7 +38,8 @@ export function projectHref(projectId: number, page: ProjectPage = 'overview'): 
 /** Which of the open project's pages a path is (a case page counts as Cases). */
 export function projectPageOf(pathname: string, projectId: number): ProjectPage | null {
   const base = `/project/${projectId}`
-  if (pathname === base || pathname === `${base}/`) return 'overview'
+  // The project's own address opens on Cases (C1: there is no Overview page).
+  if (pathname === base || pathname === `${base}/`) return 'cases'
   const rest = pathname.slice(base.length)
   if (!pathname.startsWith(base + '/')) return null
   if (/^\/(cases|case\/|import|start)/.test(rest)) return 'cases'
@@ -61,4 +66,4 @@ export const PLACE_LABEL: Record<Place, string> = {
   analytics: 'Analytics',
 }
 export const PLACE_ICON: Record<Place, string> = { home: 'home', findings: 'pin', reports: 'report', analytics: 'analytics' }
-export const PAGE_LABEL: Record<ProjectPage, string> = { overview: 'Overview', cases: 'Cases', compare: 'Compare', people: 'People', assignments: 'Assignments' }
+export const PAGE_LABEL: Record<ProjectPage, string> = { cases: 'Cases', compare: 'Compare', people: 'People', assignments: 'Assignments' }

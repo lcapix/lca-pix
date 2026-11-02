@@ -1,8 +1,15 @@
 /**
- * Task 6 (group D): the project Overview for every project, roles, settings,
- * the comparison line, the Cases menu, the one New case form, the New project
- * form, and the findings from discovery runs 1 to 3 that belong to the hub.
- * Every row's test title starts with its ID.
+ * Task 6 (group D): what the project Overview held, roles, settings, the Cases
+ * menu, the one New case form, the New project form, and the findings from
+ * discovery runs 1 to 3 that belonged to the hub. Every row's test title
+ * starts with its ID.
+ *
+ * C1 (2026-11-01, her decision): the Overview (the hub) is removed; a project
+ * opens on its Cases board, where Project settings and Delete project now
+ * live, and the sample opens on its study page. P01, P30, P123 to P127, G144
+ * read there. Retired with the hub: the P01 KPI strip on the sample, the P13
+ * comparison line on the hub (Compare's verdict carries the runs' numbers), and
+ * the P141 KPI tiles (the Cases board's answers are checked in their place).
  */
 import { workedExample } from '../support/editor';
 import { expect, test } from '../support/fixtures';
@@ -18,16 +25,15 @@ async function studyWithCase(as: any, name = 'Hub study') {
   return { projectId, baseId };
 }
 
-test('P01 the sample study opens on the new Overview, read-only, with Make my own copy', async ({ api, newUser, signIn }) => {
+test('P01 the sample study opens on its study page, read-only, with Make my own copy', async ({ api, newUser, signIn }) => {
   const user = await newUser('hub-sample');
   const sample = await api.as(user.token).post<{ project_id: number }>('/api/example-project');
   const { page } = await signIn(user);
-  await open(page, `/project/${sample.project_id}`, { ready: 'The sample study is read-only.' });
-  await row(page.getByRole('heading', { level: 1 }), 'P01', 'Overview shown for every project');
-  await row(page.getByRole('list', { name: 'Project summary' }), 'P01', 'the KPI strip on the sample too');
+  await open(page, `/project/${sample.project_id}`, { ready: 'Read-only · made for you when you signed up' });
+  await row(page.getByRole('heading', { level: 1 }), 'P01', 'the sample opens on its own page');
   await expect.soft(page.getByRole('button', { name: 'Import Data' }), note('P01', 'the sample is read-only')).toHaveCount(0);
   const copied = page.waitForResponse((r) => /\/api\/cases\/\d+\/duplicate/.test(r.url()) && r.request().method() === 'POST', NAV);
-  await page.getByRole('button', { name: 'Make my own copy' }).click();
+  await page.locator('header').getByRole('button', { name: 'Make my own copy' }).click();
   expect((await copied).status()).toBe(201);
   await expect(page).toHaveURL(/\/project\/\d+\/case\/\d+$/, NAV);
 });
@@ -40,19 +46,33 @@ test('P30 each role sees only the controls it may use, and the server refuses th
   const users = { editor: await newUser('hub-editor'), viewer: await newUser('hub-viewer'), admin: await newUser('hub-admin') };
   for (const [role, u] of Object.entries(users)) await as.post(`/api/projects/${projectId}/members`, { email: u.email, role });
 
+  // On the Cases board: the case's menu (Rename, Run, Delete) and Project settings (with Delete project).
   const expectFor = async (u: any, want: Record<string, boolean>, label: string) => {
     const { page, context } = await signIn(u);
     await open(page, `/project/${projectId}`, { ready: 'Roles study' });
+    await expect(page).toHaveURL(/\/cases$/, NAV);
+    const menu = page.getByRole('button', { name: 'Menu for Cut frame' });
+    if ((await menu.count()) > 0) await menu.click();
     for (const [name, shown] of Object.entries(want)) {
-      const control = name === 'settings' ? page.getByRole('form', { name: 'Project settings' }) : page.getByRole('button', { name, exact: true });
+      const control =
+        name === 'settings'
+          ? page.getByRole('button', { name: 'Project settings' })
+          : name === 'Delete project'
+            ? page.getByRole('button', { name: 'Delete project' })
+            : page.getByRole('menuitem', { name, exact: true });
+      if (name === 'Delete project' && (await page.getByRole('button', { name: 'Project settings' }).count()) > 0) {
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: 'Project settings' }).click();
+        await expect(page.getByRole('form', { name: 'Project settings' })).toBeVisible(NAV);
+      }
       await expect.soft(control, note('P30', `${label}: ${name} ${shown ? 'shown' : 'hidden'}`)).toHaveCount(shown ? 1 : 0);
     }
     await context.close();
   };
-  await expectFor(users.viewer, { 'Import Data': false, 'Add Case': false, 'Run Assessment': false, 'Rename case': false, 'Delete case': false, Delete: false, settings: false }, 'viewer');
-  await expectFor(users.editor, { 'Import Data': true, 'Add Case': true, 'Run Assessment': true, 'Rename case': true, 'Delete case': false, Delete: false, settings: false }, 'editor');
-  await expectFor(users.admin, { 'Rename case': true, 'Delete case': true, Delete: false, settings: true }, 'admin');
-  await expectFor(owner, { 'Delete case': true, Delete: true, settings: true }, 'owner');
+  await expectFor(users.viewer, { Rename: false, Run: false, Delete: false, settings: false, 'Delete project': false }, 'viewer');
+  await expectFor(users.editor, { Rename: true, Run: true, Delete: false, settings: false, 'Delete project': false }, 'editor');
+  await expectFor(users.admin, { Rename: true, Delete: true, settings: true, 'Delete project': false }, 'admin');
+  await expectFor(owner, { Delete: true, settings: true, 'Delete project': true }, 'owner');
 
   // The server still says no to what a role cannot do.
   const editorApi = api.as(users.editor.token);
@@ -60,18 +80,18 @@ test('P30 each role sees only the controls it may use, and the server refuses th
   await expect.soft(api.as(users.viewer.token).put(`/api/cases/${baseId}`, { case_name: 'Renamed' }), note('P30', 'a viewer cannot rename')).rejects.toThrow(/403/);
 });
 
-test('P13 the comparison line shows the runs\' own numbers, or why there are none', async ({ api, newUser, signIn }) => {
+test('P13 the Cases board shows the runs\' own answers, or that there is none yet', async ({ api, newUser, signIn }) => {
   const user = await newUser('hub-banner');
   const as = api.as(user.token);
   const { projectId, caseId, baseCaseId } = await workedExample(api, user, 'Lighter blank');
   const { page } = await signIn(user);
-  await open(page, `/project/${projectId}`, { ready: 'Comparing' });
-  // The copy has no run yet: the line names the two cases and says why there is no number.
-  const banner = page.getByRole('region', { name: 'Comparison' });
-  await row(banner.getByText(/No number yet/), 'P13', 'Comparison banner, nothing invented when the checks fail');
+  await open(page, `/project/${projectId}/cases`, { ready: 'Your cases' });
+  // The copy has no run yet: its card says so, with no number.
+  const card = page.locator('.pc-mine-card').filter({ hasText: 'Lighter blank' });
+  await row(card.getByText(/not run yet/), 'P13', 'nothing invented before a run');
   await as.post(`/api/cases/${caseId}/assessments`, {});
   await page.reload();
-  await row(banner.getByText(/the same climate impact/), 'P13', 'Comparison banner with the runs\' own numbers');
+  await row(card.getByText('1.720'), 'P13', 'the run\'s own number');
   await expect.soft(page.getByText(/28\.0%|\+\$240/), note('P13', 'no invented numbers')).toHaveCount(0);
   expect(baseCaseId).toBeTruthy();
 });
@@ -82,7 +102,8 @@ test('P123 P126 P127 G144 project settings save, show at once, and keep the AI s
   const { projectId } = await studyWithCase(as, 'Settings study');
   await as.put(`/api/projects/${projectId}`, { ai_enabled: false });
   const { page } = await signIn(user);
-  await open(page, `/project/${projectId}`, { ready: 'Project settings' });
+  await open(page, `/project/${projectId}/cases`, { ready: 'Your cases' });
+  await page.getByRole('button', { name: 'Project settings' }).click();
   const form = page.getByRole('form', { name: 'Project settings' });
   await expect.soft(form.getByRole('checkbox', { name: /AI may read/ }), note('G144', 'the AI switch starts as stored (off)')).not.toBeChecked();
   await form.getByLabel('Name', { exact: true }).fill('Renamed study');
@@ -91,7 +112,7 @@ test('P123 P126 P127 G144 project settings save, show at once, and keep the AI s
   await form.getByLabel(/Default region/).selectOption('US');
   await form.getByRole('button', { name: 'Save settings' }).click();
   await row(form.getByText('Settings saved.'), 'P123', 'Rename the project');
-  await row(page.getByRole('heading', { level: 1, name: /Renamed study/ }), 'P123', 'the header shows the new name at once');
+  await row(page.locator('.pc-head').getByText('Renamed study'), 'P123', 'the header shows the new name at once');
   const saved = (await as.get(`/api/projects/${projectId}`)).project;
   expect.soft(saved.functional_unit, note('P126', 'Edit FU, boundary, goal, exclusions')).toBe('1 frame');
   expect.soft([saved.lcia_method, saved.region_code], note('P127', 'Default method and region')).toEqual(['TRACI 2.1', 'US']);
@@ -250,7 +271,7 @@ test('P59 P60 P63 P65 P67 P68 P69 P71 P72 P74 P75 P77 P78 P79 P80 P81 P84 G126 P
   await expect.soft(page.getByText(/An older run: made before results were saved/), note('P71', 'only for runs without a snapshot')).toHaveCount(0);
 });
 
-test('P138 P141 the Cases board counts who has no case from a view that sees every case, and the Overview uses Results\' formats', async ({ api, newUser, signIn }) => {
+test('P138 P141 the Cases board counts who has no case from a view that sees every case, and uses Results\' formats', async ({ api, newUser, signIn }) => {
   test.setTimeout(180_000);
   const owner = await newUser('hub-board');
   const as = api.as(owner.token);
@@ -263,9 +284,9 @@ test('P138 P141 the Cases board counts who has no case from a view that sees eve
   await open(page, `/project/${projectId}/cases`, { ready: 'Cases' });
   await row(page.getByText(/2 people have no case yet/).first(), 'P138', 'the count of people with no case (2.7)');
   await expect.soft(page.getByText(/Cut frame · .*copied/), note('P138', 'the base case is not "copied"')).toHaveCount(0);
-  await open(page, `/project/${projectId}`, { ready: 'Board study' });
-  const kpis = page.getByRole('list', { name: 'Project summary' });
-  await expect.soft(kpis.getByText(/^\$[\d,]+\.\d{2}$|^–$/).first(), note('P141', 'money as Results writes it (3.4)')).toBeVisible();
-  await expect.soft(kpis.getByText(/^\d{1,3}(,\d{3})*\.\d{3}$/).first(), note('P141', 'an impact as Results writes it (3.4)')).toBeVisible();
+  // The board's answer is written as Results writes it (3.4): never a long float.
+  const answer = page.locator('.pc-mine-card').filter({ hasText: 'Cut frame' }).locator('.ds-mono').last();
+  await expect.soft(answer, note('P141', 'an impact as Results writes it (3.4)')).toHaveText(/^\d{1,3}(,\d{3})*\.\d{2,3}$|^–$/);
+  await expect.soft(page.getByText(/\d\.\d{5,}/), note('P141', 'never "89.39187362460063"')).toHaveCount(0);
   await expect.soft(page.getByText(/\d\.\d{3,}%/), note('P141', 'shares to one decimal, never "89.39187362460063%"')).toHaveCount(0);
 });

@@ -4,7 +4,7 @@
  * search, and the table's order. Pure; the page reads the progress route.
  */
 
-import { PIPELINE_LABEL, type PipelineStage } from '@/lib/summary/case-summary'
+import { PIPELINE_LABEL as STAGE_WORDS, type PipelineStage } from '@/lib/summary/case-summary'
 import { caseTotal, fixed } from '@/lib/ui/format'
 
 export interface ProgressCase {
@@ -26,12 +26,21 @@ export interface ProgressCase {
   prediction_made?: boolean
   has_interpretation?: boolean
   has_assumptions?: boolean
+  /** The assignment a working case or a hand-in belongs to (migrate-043). */
+  assignment_id?: number | null
+  read_only?: boolean
+  /** D3: a read-only copy made by Hand in: the hand-in itself, with the run it was handed in with. */
+  handed_in?: boolean
+  handed_in_at?: string | null
+  /** The working case a hand-in froze, when the caller reaches it. */
+  working_case_id?: number | null
 }
 
 /** The lessons answered, as "Lessons 3 of 6, predicted", and their titles for a hover (P40). */
 export function lessonsOf(c: ProgressCase, titles: Record<string, string>): { text: string; title: string } | null {
-  if (!c.lessons_total) return null
   const done = c.lessons_answered ?? []
+  // G4: "Lessons 0 of 6" says nothing on a case where no lesson was taken.
+  if (!c.lessons_total || (!done.length && !c.prediction_made)) return null
   return {
     text: `Lessons ${done.length} of ${c.lessons_total}${c.prediction_made ? ', predicted' : ''}`,
     title: done.length ? `Answered: ${done.map((id) => titles[id] ?? id).join(', ')}` : 'No lesson answered yet',
@@ -52,9 +61,18 @@ export const STAGES: PipelineStage[] = ['not_run', 'run', 'written', 'handed_in'
 export const CARD_TAG: Record<PipelineStage, { text: string; tone: 'warn' | 'info' | 'plain' | 'good' }> = {
   not_run: { text: 'No run yet', tone: 'warn' },
   run: { text: 'No write-up yet', tone: 'info' },
-  written: { text: 'Not ticked as hand-in', tone: 'plain' },
-  handed_in: { text: '✓ Ticked as hand-in', tone: 'good' },
+  written: { text: 'Not handed in', tone: 'plain' },
+  handed_in: { text: '✓ Handed in', tone: 'good' },
 }
+
+/** The board's column names: one hand-in, the one Assignments makes (D4). */
+export const PIPELINE_LABEL: Record<PipelineStage, string> = { ...STAGE_WORDS, handed_in: 'Handed in' }
+
+/** A hand-in's frozen copy (D3): shown as the hand-in, never counted as another case. */
+export const isHandIn = (c: object) => !!(c as Pick<ProgressCase, 'handed_in'>).handed_in
+
+/** The cases a project counts: its own and its copies, not the frozen hand-ins (D3). */
+export const countedCases = <C extends object>(cases: C[]): C[] => cases.filter((c) => !isHandIn(c))
 
 /** The four segments under a card: one filled per stage reached (copied is the first). */
 export const segmentsFilled = (stage: PipelineStage) => STAGES.indexOf(stage) + 1
@@ -64,9 +82,10 @@ export function splitCases<C extends ProgressCase>(cases: C[], userId: number): 
 }
 
 /** "34 cases · 2 yours, 32 from students · TRACI 2.1 · US". */
-export function casesHeader(n: { all: number; mine: number; others: number }, word: 'student' | 'member', scope: string | null): string {
+export function casesHeader(n: { all: number; mine: number; others: number; handIns?: number }, word: 'student' | 'member', scope: string | null): string {
   const parts = [`${n.all} ${n.all === 1 ? 'case' : 'cases'}`]
   if (n.others) parts.push(`${n.mine} yours, ${n.others} from ${word}s`)
+  if (n.handIns) parts.push(`${n.handIns} handed in`)
   if (scope) parts.push(scope)
   return parts.join(' · ')
 }
@@ -105,4 +124,3 @@ export function byStage(a: ProgressCase, b: ProgressCase): number {
   return STAGES.indexOf(b.stage) - STAGES.indexOf(a.stage) || (a.author ?? '').localeCompare(b.author ?? '')
 }
 
-export { PIPELINE_LABEL }
