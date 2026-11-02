@@ -7,7 +7,7 @@
 
 import { runLabel } from '@/lib/results/full-results-view'
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { makeOwnCopy } from '@/lib/workspace/make-copy'
 import { Button, Callout, ErrorCard } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
@@ -15,7 +15,15 @@ import { ACCESS_WORD } from '@/lib/ui/words'
 import type { WorkspaceCase, WorkspaceInventory } from '@/lib/workspace/use-workspace'
 import { amount as fmtAmount } from '@/lib/ui/format'
 
-export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSteps = false): string {
+/** The run the screen shows, when it is not the latest (Results with ?run=). */
+export interface ShownRun {
+  run_id: number
+  case_run_number?: number | null
+  method: string
+  region: string
+}
+
+export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSteps = false, picked: ShownRun | null = null): string {
   const kind =
     k.case_type === 'base'
       ? 'Base case'
@@ -26,8 +34,15 @@ export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSt
   const unit = k.reference_flow_unit
     ? `${fmtAmount(k.reference_flow ?? 1)} ${k.reference_flow_unit}`
     : k.project_functional_unit?.trim() || `${fmtAmount(k.reference_flow ?? 1)} unit`
-  const scope = inv ? `${inv.method} · ${inv.region}` : k.project_lcia_method ?? ''
-  const run = inv?.latest_run ? runLabel(inv.latest_run) : noSteps ? 'no steps yet' : 'not run yet'
+  // A6: the method and region of the run on show, not the study's. Before a
+  // first run, the study's (what Run Assessment will use).
+  const shown = picked ?? inv?.latest_run ?? null
+  const scope = shown
+    ? `${shown.method} · ${shown.region || 'Global'}`
+    : inv
+      ? `${inv.method} · ${inv.region}`
+      : k.project_lcia_method ?? ''
+  const run = shown ? runLabel(shown) : noSteps ? 'no steps yet' : 'not run yet'
   // A frozen hand-in is read-only too, and is not the sample.
   const ro = k.read_only ? (k.assignment_id ? 'Handed in, read-only' : 'Sample, read-only') : null
   return [kind, unit, scope, run, ro].filter(Boolean).join(' · ')
@@ -86,6 +101,7 @@ export function CaseHeader({
 }) {
   const router = useRouter()
   const warn = warnLine(inventory?.counts)
+  const picked = usePickedRun(kase.case_id, inventory?.latest_run?.run_id ?? null)
   const [copying, setCopying] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
 
@@ -106,7 +122,7 @@ export function CaseHeader({
       <header className="ws-header">
         <div style={{ flex: 1, minWidth: 240 }}>
           <h1 className="ds-title">{kase.case_name}</h1>
-          <div className="ws-facts">{caseFacts(kase, inventory, noSteps)}</div>
+          <div className="ws-facts">{caseFacts(kase, inventory, noSteps, picked)}</div>
           {warn && (
             <div className="ws-warnline">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -149,15 +165,10 @@ export function CaseHeader({
           </Button>
         )}
       </header>
+      {/* C2: instructions only for a case in an assignment (its own instructions). A copy
+          never shows the base case's description: the sample's "Read-only: make your own
+          copy" would sit on a case the student can change. */}
       <AssignmentInstructions kase={kase} />
-      {!kase.assignment_id && kase.copied_from?.base_description?.trim() && (
-        // C05: a copy shows the base case's instructions while the student works.
-        <div style={{ padding: '0 18px' }} aria-label="Instructions" role="region">
-          <Callout tone="info" lead={`From the ${kase.copied_from.case_name}:`}>
-            {kase.copied_from.base_description}
-          </Callout>
-        </div>
-      )}
       {(runError || copyError) && (
         <div style={{ padding: '12px 24px 0' }}>
           <ErrorCard
@@ -272,4 +283,39 @@ function AssignmentInstructions({ kase }: { kase: WorkspaceCase }) {
       </Callout>
     </div>
   )
+}
+
+/**
+ * A6: Results can show an older run (?tab=results&run=). The header then
+ * names that run's method, region and number, read from the case's runs.
+ * Null when the latest run is on show (the inventory already carries it).
+ */
+function usePickedRun(caseId: number, latestId: number | null): ShownRun | null {
+  const search = useSearchParams()
+  const asked = search?.get('tab') === 'results' ? Number(search.get('run')) : 0
+  const want = asked > 0 && asked !== latestId ? asked : 0
+  const [run, setRun] = useState<ShownRun | null>(null)
+  useEffect(() => {
+    setRun(null)
+    if (!want) return
+    let live = true
+    apiRequest(`/api/cases/${caseId}/assessments`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const a = (d?.assessments ?? []).find((x: any) => Number(x.run_id) === want)
+        if (live && a) {
+          setRun({
+            run_id: Number(a.run_id),
+            case_run_number: a.case_run_number ?? null,
+            method: a.calculation_method ?? '',
+            region: a.region_code ?? 'Global',
+          })
+        }
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [caseId, want])
+  return run
 }
