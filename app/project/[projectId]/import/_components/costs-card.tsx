@@ -58,7 +58,7 @@ export function CostsCard({
         )}
       </div>
       <div className="ip-fit">
-        <table className="ds-table ip-lines-table">
+        <table className="ds-table ip-costs-table">
           <thead>
             <tr>
               <th scope="col" className="ip-col-amount" style={{ textAlign: 'right' }}>
