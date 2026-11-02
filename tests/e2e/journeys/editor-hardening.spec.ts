@@ -343,7 +343,7 @@ test.describe('editor hardening: own factors', () => {
 
     // The Inventory says Hand-entered with the source.
     await page.getByRole('tab', { name: /^Inventory/ }).click();
-    const row = page.getByRole('row').filter({ has: page.getByRole('textbox', { name: 'Steel, amount in g' }) });
+    const row = page.getByRole('row').filter({ has: page.getByRole('textbox', { name: 'Steel, amount in g', exact: true }) });
     await expect(row.getByText('Hand-entered', { exact: true })).toBeVisible();
     await expect(row.getByText('Hand-entered: Mill EPD 2025')).toBeVisible();
 
