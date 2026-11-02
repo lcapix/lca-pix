@@ -40,10 +40,11 @@ export type CheckedCase = Pick<BannerCase, 'caseId' | 'name' | 'status' | 'run'>
 
 /**
  * Why two cases give no number side by side, or null when they may. One rule
- * for every headline number: this line, and Compare's verdict and change by
- * category (lib/compare/verdict.ts). A headline: a region difference, which
- * Compare shows as a warning beside its totals, stops the number here, and so
- * does an incomplete run.
+ * for every number that compares two runs: this line, Compare's totals chip,
+ * Ranking, verdict and change by category (lib/compare/verdict.ts), the
+ * Results tab's and the Write-up's note against the base (whyNoChange below)
+ * and the exported report. A method, region or functional unit difference
+ * stops the number, and so do a stale or incomplete run.
  */
 export function whyNoNumber(base: CheckedCase, other: CheckedCase): string | null {
   const checks = comparability(
@@ -78,4 +79,36 @@ export function comparisonBanner(cases: BannerCase[]): ComparisonBanner | null {
   const cb = costOf(other)
   if (ca || cb) parts.push(cb === ca ? 'the same cost' : `${money(Math.abs(cb - ca))} ${cb < ca ? 'less' : 'more'} cost`)
   return { base: base.name, other: other.name, line: parts.join(' · '), why: null }
+}
+
+/** One run as the Results tab, the Write-up and the report know it. */
+export interface RunBasis {
+  /** The case's name, for the reason ("Base case has no complete run yet."). */
+  name: string
+  method: string | null | undefined
+  region: string | null | undefined
+  /** The run's functional unit; leave out when it is the same study's and not known here. */
+  functionalUnit?: string | null
+  /** The case changed after this run. */
+  stale?: boolean
+}
+
+/**
+ * Why a run gives no percentage against another run (the Base case's, or
+ * the case it was copied from), or null when it may. The same rule as
+ * whyNoNumber: it builds the two cases and asks it. Where the caller does not
+ * know the functional unit (both runs belong to one study, whose unit is
+ * read at run time), the two runs are taken to share it, so only method,
+ * region and staleness decide.
+ */
+export function whyNoChange(run: RunBasis, against: RunBasis): string | null {
+  const fuKnown = run.functionalUnit !== undefined && against.functionalUnit !== undefined
+  const fu = (r: RunBasis) => (fuKnown ? (r.functionalUnit ?? null) : 'the study\u2019s functional unit')
+  const asCase = (r: RunBasis, id: string): CheckedCase => ({
+    caseId: id,
+    name: r.name,
+    status: r.stale ? 'stale' : 'ok',
+    run: { runId: 0, method: r.method ?? null, region: r.region ?? 'Global', functionalUnit: fu(r), stale: !!r.stale },
+  })
+  return whyNoNumber(asCase(against, 'against'), asCase(run, 'run'))
 }

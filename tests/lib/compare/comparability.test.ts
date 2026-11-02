@@ -28,13 +28,35 @@ describe('whether runs may be compared', () => {
       { caseId: '2', run: run({ region: 'Global' }), editedSinceRun: true },
     ])
     expect(r.fair).toBe(false)
-    expect(r.failed).toBe(1)
+    // A3: the region refuses numbers like any other check, so both fail.
+    expect(r.failed).toBe(2)
     const region = r.checks.find((c) => c.key === 'region')!
+    expect(region.ok).toBe(false)
+    expect(region.warn).toBeFalsy()
     expect(region.label).toBe('Region differs: US vs Global')
     expect(region.caseIds).toEqual(['2'])
     const current = r.checks.find((c) => c.key === 'current')!
     expect(current.label).toBe('Run is older than the last change')
     expect(current.caseIds).toEqual(['2'])
+  })
+
+  it('A4: a method or region check names the case that differs from A, never A itself', () => {
+    const m = comparability([
+      { caseId: 'A', run: run({ method: 'TRACI 2.1' }) },
+      { caseId: 'B', run: run({ method: 'CML 2001' }) },
+    ])
+    expect(m.checks.find((c) => c.key === 'method')!.caseIds).toEqual(['B'])
+    // A rerun of A on CML: the copy is still the one to run again, under A's method.
+    const flipped = comparability([
+      { caseId: 'A', run: run({ method: 'CML 2001' }) },
+      { caseId: 'B', run: run({ method: 'TRACI 2.1' }) },
+    ])
+    expect(flipped.checks.find((c) => c.key === 'method')!.caseIds).toEqual(['B'])
+    const r = comparability([
+      { caseId: 'A', run: run({ region: 'EU' }) },
+      { caseId: 'B', run: run({ region: 'US' }) },
+    ])
+    expect(r.checks.find((c) => c.key === 'region')!.caseIds).toEqual(['B'])
   })
 
   it('fails on a method or functional-unit mismatch, and on a missing functional unit', () => {

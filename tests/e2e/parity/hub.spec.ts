@@ -242,10 +242,10 @@ test('P59 P60 P63 P65 P67 P68 P69 P71 P72 P74 P75 P77 P78 P79 P80 P81 P84 G126 P
   await row(page.getByText('No saved comparisons in this project yet.'), 'G126', 'Saved comparisons list');
   await page.goto(`/project/${projectId}/comparison?cases=${baseCaseId},${caseId}`);
   await row(page.getByRole('region', { name: 'Totals' }), 'P63', 'the Compare tab opens the chosen cases again');
-  // Different regions are a warning, not a failure.
+  // Different regions refuse a percentage (A3, 2026-11-01): both totals stay, labelled as not comparable.
   await as.post(`/api/cases/${caseId}/assessments`, { calculation_method: 'TRACI 2.1', region_code: 'Global' });
   await page.goto(`/project/${projectId}/comparison?cases=${baseCaseId},${caseId}`);
-  await row(page.getByText('Fair to compare, with a warning'), 'P65', 'Different regions shown with a warning');
+  await row(page.getByRole('region', { name: 'Totals' }).getByText(/^Not comparable: Region differs: US vs Global\./), 'P65', 'Different regions: both totals, no percentage');
   // An older run (no frozen results) says so; the sample's base run is frozen, so this checks the wording is absent.
   await expect.soft(page.getByText(/An older run: made before results were saved/), note('P71', 'only for runs without a snapshot')).toHaveCount(0);
 });

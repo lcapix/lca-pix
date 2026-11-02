@@ -1421,9 +1421,18 @@
 .pub-main { min-height: 60vh; }
 .pub-page { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
+<<<<<<< HEAD
 /* claude: data sources */
 .srcs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .srcs-card { padding: 16px; }
 .srcs-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .srcs-table th { text-align: left; font-weight: 600; color: var(--ds-text-2); font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--ds-line); }
 .srcs-table td { padding: 8px 0; border-bottom: 1px solid var(--ds-line); }
+=======
+/* lane 2: results */
+/* Compare's held card: what changed in B, read left to right under the reason. */
+.cmp-held-what { justify-self: stretch; text-align: left; max-width: 640px; margin: 0 auto; }
+.cmp-held-what .cmp-what-list { margin-top: 4px; font-size: 14px; }
+/* The Write-up's line when there is no change against the base: why, in words. */
+.wu-nochange { color: var(--ds-text-2); }
+>>>>>>> fae6dd7 (A3 A4: Compare prints no percentage across regions or methods, one percentage per pair, and the fix reruns the case that differs.)

@@ -39,9 +39,7 @@ export function headerLine(names: string[], c: Comparability): string {
 
 export function verdict(c: Comparability, cases: number): { ok: boolean; title: string; sub: string } {
   if (cases < 2) return { ok: false, title: 'Add a second case', sub: 'Compare puts two or more cases side by side' }
-  // P65: a region difference is a warning, shown, not a failed check.
-  const warned = c.checks.filter((k) => k.warn && !k.ok)
-  if (!c.failed && warned.length) return { ok: true, title: 'Fair to compare, with a warning', sub: warned.map((k) => k.label).join('. ') }
+  // A region difference fails like any other check: no percentage across regions.
   if (!c.failed) return { ok: true, title: 'Fair to compare', sub: 'All four checks pass' }
   return { ok: false, title: 'Not comparable yet', sub: `${c.failed} of 4 checks ${c.failed === 1 ? 'fails' : 'fail'}` }
 }
@@ -58,17 +56,30 @@ export interface CheckAction {
 }
 
 /**
- * What to do about a failed check: run the first case it names again, under
- * the base case's method and region (the run route takes both), so the rerun
- * passes the check. A functional unit set at the project is read at run time,
- * so a rerun fixes that check too once the unit is set.
+ * What to do about a failed check: run a case it names again, under A's
+ * method and region (the run route takes both), so the rerun passes the
+ * check. A method or region check names the cases whose run differs from A
+ * (lib/compare/comparability.ts), so the action never reruns A itself. The
+ * label says which case and which method or region, and what it is on now
+ * when `scopeOf` knows it. A functional unit set at the project is read at
+ * run time, so a rerun fixes that check too once the unit is set.
  */
-export function checkAction(k: ComparabilityCheck, nameOf: (id: string) => string, base: { method: string | null; region: string | null }): CheckAction | null {
+export function checkAction(
+  k: ComparabilityCheck,
+  nameOf: (id: string) => string,
+  base: { method: string | null; region: string | null },
+  scopeOf?: (id: string) => { method: string | null; region: string | null } | null,
+): CheckAction | null {
   if (k.ok || !k.caseIds.length) return null
   const id = k.caseIds[0]
   const name = nameOf(id)
-  if (k.key === 'region' && base.region) return { caseId: id, label: `Run ${name} in ${base.region}` }
-  if (k.key === 'method' && base.method) return { caseId: id, label: `Run ${name} under ${base.method}` }
+  const now = scopeOf?.(id) ?? null
+  if (k.key === 'region' && base.region) {
+    return { caseId: id, label: `Run ${name} again in ${base.region}${now?.region ? ` (it is in ${now.region})` : ''}` }
+  }
+  if (k.key === 'method' && base.method) {
+    return { caseId: id, label: `Run ${name} again under ${base.method}${now?.method ? ` (it is on ${now.method})` : ''}` }
+  }
   if (k.key === 'current' && /no run/.test(k.label)) return { caseId: id, label: `Run ${name}` }
   return { caseId: id, label: `Run ${name} again` }
 }
@@ -169,13 +180,34 @@ export function changeCell(delta: number, unit: string, changed: boolean): strin
   return `${delta < 0 ? '−' : '+'}${fixed(Math.abs(delta), 3)} ${unit}`
 }
 
-/** "▼ 3.1% lower" against the base, at the totals as shown (3 decimals). */
+/**
+ * The change of `value` against `base` in percent of the size of the base,
+ * from the run values (not the rounded totals): the one number Compare's
+ * totals chip, its Ranking and its verdict all print for the same pair.
+ * Null when the base is 0 or a value is missing.
+ */
+export function changePct(value: number | null | undefined, base: number | null | undefined): number | null {
+  if (value === null || value === undefined || base === null || base === undefined) return null
+  if (!Number.isFinite(value) || !Number.isFinite(base) || base === 0) return null
+  return ((value - base) / Math.abs(base)) * 100
+}
+
+/** "11.0% lower than A", "the same as A" (within 0.1%), or null when there is no percentage. */
+export function changeWords(value: number, base: number, against = 'A'): string | null {
+  const pct = changePct(value, base)
+  if (pct === null) return null
+  const shown = fixed(Math.abs(pct), 1)
+  if (shown === '0.0') return `the same as ${against}`
+  return `${shown}% ${pct < 0 ? 'lower' : 'higher'} than ${against}`
+}
+
+/** "▼ 11.0% lower" against the base, the same percentage as the Ranking and the verdict. */
 export function totalChip(value: number, base: number): string | null {
-  const a = Number(fixed(value, 3))
-  const b = Number(fixed(base, 3))
-  if (!b) return null
-  if (a === b) return 'Same as A'
-  return `${a < b ? '▼' : '▲'} ${fixed((Math.abs(a - b) / Math.abs(b)) * 100, 1)}% ${a < b ? 'lower' : 'higher'}`
+  const pct = changePct(value, base)
+  if (pct === null) return null
+  const shown = fixed(Math.abs(pct), 1)
+  if (shown === '0.0') return 'Same as A'
+  return `${pct < 0 ? '▼' : '▲'} ${shown}% ${pct < 0 ? 'lower' : 'higher'}`
 }
 
 export interface WhatChanged {
@@ -188,25 +220,88 @@ export interface WhatChanged {
   nothingElse: boolean
 }
 
+/** One line per setting the two runs differ in: "Region (electricity grid): US → EU". */
+export function scopeLines(scope: ReadonlyArray<{ label: string; base: string; other: string }> | null | undefined): string[] {
+  return (scope ?? []).map((d) => {
+    const line = `${d.label}: ${d.base} → ${d.other}`
+    if (/^region/i.test(d.label)) return `${line}. The electricity factor changes with the region.`
+    if (/method/i.test(d.label)) return `${line}. Every factor comes from the other method.`
+    return line
+  })
+}
+
+type ResultFlow = { step: string; substance: string; category: string; value: number }
+
 /**
- * What changed between A and B, from the inventory diff (lib/compare/diff.ts)
- * and B's own run: the factor is B's result for that flow divided by its
- * amount, so it is the number the run used, not a library lookup.
+ * Flows the inventory did not change whose result moved between the two runs
+ * in this category: the factor behind them changed (another region's grid,
+ * another method, or an own factor). Values are the runs' own, per
+ * functional unit.
+ */
+export function factorShifts(
+  diff: CaseDiff | null,
+  a: { flows: ResultFlow[] },
+  b: { flows: ResultFlow[] },
+  category: string,
+  unit: string,
+): string[] {
+  const key = (f: { step: string; substance: string }) => `${f.step}\u0000${f.substance}`
+  const sum = (rows: ResultFlow[]) => {
+    const m = new Map<string, { step: string; substance: string; value: number }>()
+    for (const r of rows) {
+      if (r.category !== category) continue
+      const had = m.get(key(r))
+      m.set(key(r), { step: r.step, substance: r.substance, value: (had?.value ?? 0) + r.value })
+    }
+    return m
+  }
+  const touched = new Set<string>()
+  for (const f of diff?.flows ?? []) {
+    if (f.kind === 'changed' || f.kind === 'swapped') touched.add(key({ step: f.step, substance: f.to.substance })).add(key({ step: f.step, substance: f.from.substance }))
+    else if (f.kind === 'added') touched.add(key({ step: f.step, substance: f.to.substance }))
+    else if (f.kind === 'removed') touched.add(key({ step: f.step, substance: f.from.substance }))
+  }
+  const ma = sum(a.flows)
+  const mb = sum(b.flows)
+  const lines: string[] = []
+  for (const [k, x] of ma) {
+    const y = mb.get(k)
+    if (!y || touched.has(k)) continue
+    if (fixed(x.value, 3) === fixed(y.value, 3)) continue
+    lines.push(`${x.substance} at ${x.step}: same amount, but its result went ${result3(x.value)} → ${result3(y.value)} ${unit}, so its factor changed`)
+  }
+  // Own factors the inventory diff already names are not repeated.
+  return lines.filter((l) => !(diff?.flows ?? []).some((f) => f.kind === 'factor' && l.startsWith(`${f.flow.substance} at ${f.step}:`)))
+}
+
+/**
+ * What changed between A and B, from the inventory diff (lib/compare/diff.ts),
+ * the settings the two runs differ in (method, region, functional unit) and
+ * any factor that moved under an unchanged flow, plus B's own run: the factor
+ * is B's result for that flow divided by its amount, so it is the number the
+ * run used, not a library lookup.
  */
 export function whatChanged(
   diff: CaseDiff | null,
   other: { flows: Array<{ step: string; substance: string; category: string; value: number; tier?: string | null; scope?: string | null }> },
   category: string,
   unit: string,
+  extra: { scope?: ReadonlyArray<{ label: string; base: string; other: string }>; base?: { flows: ResultFlow[] } } = {},
 ): WhatChanged {
-  if (!diff) return { main: null, lines: [], factor: null, nothingElse: false }
+  const settings = scopeLines(extra.scope)
+  const shifts = extra.base ? factorShifts(diff, extra.base, other, category, unit) : []
+  if (!diff && !settings.length && !shifts.length) return { main: null, lines: [], factor: null, nothingElse: false }
   const lines = [
-    ...diff.flows.map((f) => `${changeText(f)} at ${f.step}`),
-    ...diff.steps.map((s) => `${s.kind === 'added' ? 'Added' : 'Removed'} the step ${s.step}`),
-    ...diff.costs.map((c) => `${sentenceCase(c.kind)} cost at ${c.step}: ${fixed(c.from, 2)} → ${fixed(c.to, 2)}`),
-    ...diff.hours.map((h) => `Hours at ${h.step}: ${h.from ?? 'none'} → ${h.to ?? 'none'}`),
+    ...settings,
+    ...(diff?.flows ?? []).map((f) => `${changeText(f)} at ${f.step}`),
+    ...(diff?.steps ?? []).map((s) => `${s.kind === 'added' ? 'Added' : 'Removed'} the step ${s.step}`),
+    ...(diff?.costs ?? []).map((c) => `${sentenceCase(c.kind)} cost at ${c.step}: ${fixed(c.from, 2)} → ${fixed(c.to, 2)}`),
+    ...(diff?.hours ?? []).map((h) => `Hours at ${h.step}: ${h.from ?? 'none'} → ${h.to ?? 'none'}`),
+    ...shifts,
   ]
-  const first = diff.flows.find((f) => f.kind === 'changed') as Extract<FlowChange, { kind: 'changed' }> | undefined
+  // The headline change is a flow edit only when no setting changed: a method or
+  // region difference is the bigger change, and it leads.
+  const first = settings.length ? undefined : ((diff?.flows ?? []).find((f) => f.kind === 'changed') as Extract<FlowChange, { kind: 'changed' }> | undefined)
   let factor: WhatChanged['factor'] = null
   if (first && first.to.quantity) {
     const rows = other.flows.filter((r) => r.step === first.step && r.substance === first.to.substance && r.category === category)

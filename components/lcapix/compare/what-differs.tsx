@@ -7,6 +7,7 @@ import { hasComparableResults, totalOf } from '@/lib/compare/analytics'
 import type { CostKey, FlowChange, FlowSide } from '@/lib/compare/diff'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import type { CompareCase, CompareDiff } from './types'
+import { whyNoNumber } from '@/lib/project/comparison-banner'
 import { BAD, GOOD, Muted, notComparableText, Panel, money, pctOf, seriesColor, sig, signedPct, signedSig, td, th } from './ui'
 
 const COST_LABEL: Record<CostKey, string> = {
@@ -95,6 +96,7 @@ export function WhatDiffersPanel({
         const cTotal = totalOf(copy, category)
         const delta = cTotal - bTotal
         const bothRun = hasComparableResults(base) && hasComparableResults(copy)
+        const blocked = whyNoNumber(base, copy)
         const noFactorFrom = (s: FlowSide) => !!base.run?.hasSnapshot && !baseChar.has(s.substance)
         const noFactorTo = (s: FlowSide) => !!copy.run?.hasSnapshot && !copyChar.has(s.substance)
 
@@ -106,7 +108,13 @@ export function WhatDiffersPanel({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: seriesColor(idx) }} />
-              {bothRun ? (
+              {bothRun && blocked ? (
+                // The shared rule: across methods, regions or functional units, both totals and no change.
+                <span style={{ fontSize: 13 }}>
+                  {category}: <span className="ds-mono">{sig(bTotal)}</span> and <span className="ds-mono">{sig(cTotal)}</span> {unit}, not
+                  comparable: {blocked.replace(/\.$/, '')}.
+                </span>
+              ) : bothRun ? (
                 <span style={{ fontSize: 13 }}>
                   {category}: <span className="ds-mono">{sig(bTotal)}</span> →{' '}
                   <span className="ds-mono">{sig(cTotal)}</span> {unit}{' '}

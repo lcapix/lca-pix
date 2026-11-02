@@ -5,9 +5,12 @@
 // functional unit; every run current). When they pass: the totals, change by
 // step, and what changed in the copy. When one fails: the totals greyed,
 // change by step held back with the reason, and the run that fixes it, under
-// the base case's method and region. Under the totals, the verdict and the
-// change by category for A against B; any check that is not ok, a region
-// difference included, holds their numbers back. The fuller views (every category,
+// A's method and region. Under the totals, the verdict and the change by
+// category for A against B. Any check that is not ok, a region difference
+// included, holds back every percentage on the page (the totals chip, the
+// Ranking, the verdict, the change by category): one rule, whyNoNumber in
+// lib/project/comparison-banner.ts. The absolute totals stay, labelled as not
+// comparable. The fuller views (every category,
 // hotspots, cost, where the change comes from by step or material, what
 // differs in every copy, data quality) are tabs below; when the checks fail,
 // each says why. ?tab=saved lists the project's saved comparisons.
@@ -27,6 +30,7 @@ import {
   cellValue,
   changeCell,
   changeSummary,
+  changeWords,
   checkAction,
   checkLabel,
   headerLine,
@@ -38,7 +42,8 @@ import {
   verdict,
   whatChanged,
 } from '@/lib/compare/compare-view'
-import { caseTotal, amountBox, co2Unit, fixed, result3, share } from '@/lib/ui/format'
+import { caseTotal, amountBox, co2Unit, fixed, result3 } from '@/lib/ui/format'
+import { whyNoNumber } from '@/lib/project/comparison-banner'
 import { sourceKindOf } from '@/lib/workspace/inventory'
 import type { CompareCase } from './types'
 import { DeltaCard, VerdictCard } from './verdict-cards'
@@ -152,14 +157,23 @@ export function ComparePage() {
   const pair = base && other ? [base, other] : []
   const showAmounts = pair.every((c) => (c.run?.perFuScale ?? 1) === 1)
   const rows = fair && pair.length === 2 ? stepRows(pair, category, diff, showAmounts) : []
-  const changed = other && fair ? whatChanged(diff, other, category, unit) : null
+  const scopeDiff = other ? data?.diffs.find((d) => d.caseId === other.caseId)?.scope ?? [] : []
+  const changed = other && other !== base ? whatChanged(diff, other, category, unit, { scope: scopeDiff, base }) : null
   const summary = changeSummary(rows, unit)
-  const failedAction = checks.checks.map((k) => checkAction(k, nameOf, baseScope)).find(Boolean) ?? null
+  const scopeOf = (id: string) => {
+    const c = compared.find((x) => x.caseId === id)
+    return c?.run ? { method: c.run.method, region: c.run.region } : null
+  }
+  const failedAction = checks.checks.map((k) => checkAction(k, nameOf, baseScope, scopeOf)).find(Boolean) ?? null
+  // Why no percentage is shown anywhere on the page, or null when every check passes.
+  const noPct = fair ? null : checks.checks.filter((k) => !k.ok).map((k) => k.label).join('. ') || 'Run both cases to compare them'
 
   const run = async (caseId: string) => {
     setRunning(caseId)
     setRunError(null)
     try {
+      // A run picked by hand for this case would hide the new one: the comparison reads its latest run after.
+      pickRun(caseId, '')
       await runAgain(caseId, baseScope)
     } catch (e: any) {
       setRunError(e?.message ?? 'The run did not start.')
@@ -300,15 +314,15 @@ export function ComparePage() {
               <span>{v.sub}</span>
             </div>
             {checks.checks.map((k) => {
-              const act = checkAction(k, nameOf, baseScope)
+              const act = checkAction(k, nameOf, baseScope, scopeOf)
               return (
                 <div key={k.key} className="cmp-check" data-fail={!k.ok || undefined}>
                   <span className="cmp-check-icon" aria-hidden>
-                    {k.warn ? '!' : k.ok ? '✓' : '✕'}
+                    {k.ok ? '✓' : '✕'}
                   </span>
                   <span style={{ minWidth: 0 }}>
                     <strong>
-                      <span className="ds-sr-only">{k.warn ? 'Warning: ' : k.ok ? 'Passes: ' : 'Fails: '}</span>
+                      <span className="ds-sr-only">{k.ok ? 'Passes: ' : 'Fails: '}</span>
                       {checkLabel(k, compared.length)}
                     </strong>
                     {k.ok ? (
@@ -377,7 +391,7 @@ export function ComparePage() {
               </li>
             ))}
           </ul>
-          <Ranking cases={compared} baseId={base.caseId} category={category} unit={unit} />
+          <Ranking cases={compared} baseId={base.caseId} category={category} unit={unit} blocked={noPct} />
           <p>
             <Link className="ds-btn" href={`/project/${projectId}/case/new?kind=whatif&from=${base.caseId}`}>
               Duplicate the base
@@ -390,7 +404,8 @@ export function ComparePage() {
                 const t = c.totals.find((x) => x.category === category)
                 const stale = c.status === 'stale' || !!c.run?.stale
                 const baseT = base.totals.find((x) => x.category === category)
-                const chip = i > 0 && fair && t && baseT ? totalChip(t.value, baseT.value) : null
+                // The same rule for the chip as for every other percentage: the pair must pass every check.
+                const chip = i > 0 && fair && t && baseT && !whyNoNumber(base, c) ? totalChip(t.value, baseT.value) : null
                 return (
                   <div key={c.caseId} className="cmp-total" data-grey={!fair || undefined}>
                     <span className="cmp-total-name">
@@ -422,7 +437,7 @@ export function ComparePage() {
             <p className="cmp-totals-foot">
               {fair
                 ? `${sentenceCase(category)}, per ${fu ?? 'functional unit'}.`
-                : 'Not comparable yet. The totals are greyed until every check passes.'}
+                : `Not comparable: ${noPct}. Each total is shown as its own run computed it, with no percentage between them, until every check passes.`}
             </p>
           </section>
 
@@ -579,6 +594,19 @@ export function ComparePage() {
                 <Button variant="primary" busy={running === failedAction.caseId} disabled={!!running} onClick={() => void run(failedAction.caseId)}>
                   ▶ {failedAction.label}
                 </Button>
+              )}
+              {changed && changed.lines.length > 0 && (
+                <div className="cmp-held-what">
+                  <h3 style={{ margin: '18px 0 6px', fontSize: 16 }}>
+                    What changed in {letterOf(other.caseId)} against A
+                  </h3>
+                  <ul aria-label={`What changed in ${other.name}`} className="cmp-what-list">
+                    {changed.lines.slice(0, 8).map((l) => (
+                      <li key={l}>{l}</li>
+                    ))}
+                    {changed.lines.length > 8 && <li>and {changed.lines.length - 8} more</li>}
+                  </ul>
+                </div>
               )}
             </section>
           )}
@@ -740,8 +768,13 @@ function runNumber(c: CompareCase, runId: number): number {
   return i < 0 ? ids.length + 1 : i + 1
 }
 
-/** P74: the copies ranked against A in this category, lowest first, and why any is not ranked. */
-function Ranking({ cases, baseId, category, unit }: { cases: CompareCase[]; baseId: string; category: string; unit: string }) {
+/**
+ * P74: the copies ranked against A in this category, lowest first, and why any
+ * is not ranked. When a comparability check fails nothing is ranked and no
+ * percentage shows (the same rule as the totals chip and the verdict); the
+ * percentage is the one the chip prints (changeWords, from the run values).
+ */
+function Ranking({ cases, baseId, category, unit, blocked }: { cases: CompareCase[]; baseId: string; category: string; unit: string; blocked: string | null }) {
   const r = rankCases(
     cases.map((c) => ({ ...c, method: c.run?.method ?? null, functionalUnit: c.run?.functionalUnit ?? null })) as any,
     baseId,
@@ -751,23 +784,29 @@ function Ranking({ cases, baseId, category, unit }: { cases: CompareCase[]; base
   return (
     <section aria-label="Ranking" className="ds-card ds-card-pad" style={{ margin: '12px 0' }}>
       <span className="ds-section-label">Ranking · {sentenceCase(category)}, lowest first</span>
-      {r.baseExcluded ? (
+      {blocked ? (
+        <p style={{ margin: '6px 0 0' }}>Nothing is ranked: not comparable. {blocked}.</p>
+      ) : r.baseExcluded ? (
         <p style={{ margin: '6px 0 0' }}>Nothing is ranked: {nameOf(baseId)} cannot anchor it because {NOT_RANKED[r.baseExcluded]}.</p>
       ) : (
         <ol style={{ margin: '6px 0 0', paddingLeft: 20 }}>
-          {r.ranked.map((x) => (
-            <li key={x.caseId}>
-              {nameOf(x.caseId)} <span className="ds-mono">{result3(x.value)}</span> {unit}
-              {r.baseValue ? ` (${x.value === r.baseValue ? 'the same as A' : `${share(Math.abs(x.value - r.baseValue), Math.abs(r.baseValue))} ${x.value < r.baseValue ? 'lower' : 'higher'} than A`})` : ''}
-            </li>
-          ))}
+          {r.ranked.map((x) => {
+            const words = r.baseValue !== null ? changeWords(x.value, r.baseValue) : null
+            return (
+              <li key={x.caseId}>
+                {nameOf(x.caseId)} <span className="ds-mono">{result3(x.value)}</span> {unit}
+                {words ? ` (${words})` : ''}
+              </li>
+            )
+          })}
         </ol>
       )}
-      {r.excluded.map((x) => (
-        <p key={x.caseId} style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--ds-text-2)' }}>
-          {nameOf(x.caseId)} is not ranked: {NOT_RANKED[x.reason]}.
-        </p>
-      ))}
+      {!blocked &&
+        r.excluded.map((x) => (
+          <p key={x.caseId} style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--ds-text-2)' }}>
+            {nameOf(x.caseId)} is not ranked: {NOT_RANKED[x.reason]}.
+          </p>
+        ))}
     </section>
   )
 }

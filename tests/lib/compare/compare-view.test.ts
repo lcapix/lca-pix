@@ -66,24 +66,31 @@ describe('compare view', () => {
       { caseId: '1', run: run('US') },
       { caseId: '2', name: 'Lighter blank', run: run('Global'), editedSinceRun: true },
     ])
-    // P65: the region difference is a warning, so only the edited run fails.
-    expect(verdict(failed, 2)).toMatchObject({ ok: false, title: 'Not comparable yet', sub: '1 of 4 checks fails' })
+    // A3: a region difference refuses numbers like any other check (it was a warning).
+    expect(verdict(failed, 2)).toMatchObject({ ok: false, title: 'Not comparable yet', sub: '2 of 4 checks fail' })
     const regionOnly = comparability([
       { caseId: '1', run: run('US') },
       { caseId: '2', run: run('Global') },
     ])
-    expect(verdict(regionOnly, 2)).toMatchObject({ ok: true, title: 'Fair to compare, with a warning' })
-    expect(verdict(regionOnly, 2).sub).toMatch(/Region differs/)
+    expect(regionOnly.fair).toBe(false)
+    expect(verdict(regionOnly, 2)).toMatchObject({ ok: false, title: 'Not comparable yet', sub: '1 of 4 checks fails' })
     expect(headerLine(['Base case', 'Lighter blank'], failed)).toBe('Base case vs Lighter blank · TRACI 2.1')
     expect(verdict(comparability([{ caseId: '1', run: run('US') }, { caseId: '2', run: null }]), 2).sub).toBe('1 of 4 checks fails')
     const name = () => 'Lighter blank'
     const scope = { method: 'TRACI 2.1', region: 'US' }
     expect(failed.checks.map((k) => checkAction(k, name, scope)?.label ?? null)).toEqual([
       null,
-      'Run Lighter blank in US',
+      'Run Lighter blank again in US',
       null,
       'Run Lighter blank again',
     ])
+    // A4: the method fix names the copy (B), the method it moves to, and the one it is on.
+    const methods = comparability([
+      { caseId: 'A', run: { ...run('US'), method: 'TRACI 2.1' } },
+      { caseId: 'B', run: { ...run('US'), method: 'CML 2001' } },
+    ])
+    const act = checkAction(methods.checks.find((k) => k.key === 'method')!, name, scope, () => ({ method: 'CML 2001', region: 'US' }))
+    expect(act).toEqual({ caseId: 'B', label: 'Run Lighter blank again under TRACI 2.1 (it is on CML 2001)' })
   })
 
   it('lays out change by step with each step\'s flows and the changed row', () => {
