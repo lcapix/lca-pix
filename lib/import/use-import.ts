@@ -53,6 +53,7 @@ import { uploadTooLargeMessage } from '@/lib/upload-limits'
 import { itacPlantWorkbook } from '@/lib/ingest/itac-browser'
 import { readFailureKind, type ReadFailure } from '@/lib/import/file-rules'
 import { withoutSteps } from '@/lib/import/steps-hours'
+import { useLeaveGuard } from '@/lib/import/use-leave-guard'
 
 /** Where the page is: picking a document, reading it, reviewing the plan, applying it, done. */
 export type ImportPhase = 'pick' | 'previewing' | 'review' | 'applying' | 'done'
@@ -456,6 +457,8 @@ export function useImport(projectId: string, router: ImportRouter) {
       setColumnRoles({})
       setDroppedSteps(new Set())
       setPhase('review')
+      // "Sample loaded. Press Check what we read." has been done: close it.
+      toast.dismiss()
     } catch (e: any) {
       setError(e?.message || 'Preview failed')
       setPhase('pick')
@@ -509,9 +512,12 @@ export function useImport(projectId: string, router: ImportRouter) {
         flowModes: appending ? Object.fromEntries(flowClashes.map((c) => [c.key, flowModeOf(c.key)])) : undefined,
       })
       // A new case leaves out the steps the reviewer unticked, with what hangs off them.
-      const body = appending
+      const kept = appending
         ? built
         : withoutSteps(built as any, new Set([...droppedSteps].map((n) => finalName(n) ?? n)))
+      // The kind of file decides the life-cycle stage of the steps it fills
+      // (lib/import/stages.ts): a bill of materials is the Materials stage.
+      const body = { ...(kept as object), doc_type: connector }
       const sentFlows: unknown[] = (body as any).flows ?? flows
       const r = await fetch('/api/ingest/apply', {
         method: 'POST',
@@ -600,14 +606,19 @@ export function useImport(projectId: string, router: ImportRouter) {
   const setColumnRole = (column: string, role: string) =>
     setColumnRoles((r) => ({ ...r, [column]: role }))
 
-  const startOver = () => {
-    setPlan(null)
-    setPhase('pick')
-  }
-  const addAnotherDocument = () => {
-    // Continue assembling THIS case with the next document:
-    // the one that fills the first layer still missing.
-    const next = nextConnector(completeness?.missing ?? [])
+  // Every way off an open review asks first (B3): the read is spent and the
+  // edits are only here.
+  const reviewing = !!plan && (phase === 'review' || phase === 'applying')
+  const guard = useLeaveGuard(reviewing, router.push)
+  const startOver = () =>
+    guard.ask(() => {
+      setPlan(null)
+      setPhase('pick')
+    }, false)
+  const addAnotherDocument = (connectorNext?: string) => {
+    // Continue assembling THIS case with the next document: the one the Done
+    // card named, else the one that fills the first layer still missing.
+    const next = connectorNext ?? nextConnector(completeness?.missing ?? [])
     if (next) setConnector(next)
     setFirstDoc(false)
     setTargetCaseId(applied.case_id)
@@ -630,7 +641,7 @@ export function useImport(projectId: string, router: ImportRouter) {
     setCompleteness(null)
     setPhase('pick')
   }
-  const goBack = () => router.push(backHref(projectId, targetCaseId))
+  const goBack = () => guard.ask(() => router.push(backHref(projectId, targetCaseId)))
   const openCase = () => router.push(`/project/${projectId}/case/${applied.case_id}`)
 
   return {
@@ -651,6 +662,8 @@ export function useImport(projectId: string, router: ImportRouter) {
     columnRoles, setColumnRole, apply, startOver,
     // Done, and navigation.
     applied, completeness, addAnotherDocument, startNewCase, openCase, goBack,
+    // Leaving an open review: the question and its two answers.
+    leaveAsked: guard.asking, keepReviewing: guard.keep, leaveReview: guard.leave,
   }
 }
 

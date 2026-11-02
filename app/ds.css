@@ -1423,6 +1423,7 @@
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 /* claude: data sources */
 .srcs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .srcs-card { padding: 16px; }
@@ -1488,3 +1489,54 @@
 .ws-inv-edit td { background: var(--ds-main); }
 .ws-inv-edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px; align-items: start; }
 >>>>>>> a81796e (Step panel, Inventory and costs save only by Save, ask before unsaved edits are left, and show the math.)
+=======
+/* lane 4: import and forms */
+/* Check what we read, one column: the review reads top to bottom and the
+   lines table gets the page's width instead of 702px beside a side column. */
+.ip-review.ip-review--one { grid-template-columns: minmax(0, 1fr); max-width: 1180px; }
+.ip-review--one .ip-review-side { display: grid; gap: 14px; }
+/* Tables laid out to their card: fixed columns, so nothing scrolls sideways
+   and a long name wraps by words, never a few letters to a line. */
+.ip-fit { width: 100%; overflow-x: hidden; }
+.ip-lines-table, .ip-steps-table { table-layout: fixed; width: 100%; min-width: 0; }
+.ip-lines-table td, .ip-steps-table td { overflow-wrap: break-word; word-break: normal; vertical-align: top; }
+.ip-lines-table th, .ip-lines-table td, .ip-steps-table th, .ip-steps-table td { padding-left: 10px; padding-right: 10px; }
+.ip-col-tick { width: 44px; }
+.ip-col-amount { width: 112px; }
+.ip-col-status { width: 128px; }
+.ip-col-edit { width: 72px; }
+.ip-col-tier { width: 140px; }
+.ip-col-num { width: 110px; }
+.ip-line-name { display: block; font-size: 15px; line-height: 1.3; }
+.ip-line-meta { display: block; margin-top: 2px; font-size: 12px; color: var(--ds-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-line-match { display: block; font-size: 14px; line-height: 1.3; }
+.ip-line-note { display: block; font-size: 12px; color: var(--ds-text-2); }
+.ip-line-step { display: block; font-size: 14px; line-height: 1.3; }
+.ip-line-step[data-unplaced] { color: #7a4d00; font-weight: 600; }
+.ip-lines-table tr[data-open] td { border-bottom: 0; }
+.ip-line-edit-row td { background: #f8faf8; padding-top: 4px; padding-bottom: 16px; }
+.ip-line-edit { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; align-items: start; }
+.ip-line-field { display: grid; gap: 6px; min-width: 0; }
+.ip-line-field .ds-input { width: 100%; max-width: none; min-width: 0; }
+.ip-line-field--wide { grid-column: 1 / 2; }
+.ip-line-field--all { grid-column: 1 / -1; }
+.ip-line-edit .ip-line-field--wide + .ip-line-field--wide { grid-column: 2 / -1; }
+.ip-edit-toggle { font-weight: 600; }
+@media (max-width: 1100px) {
+  .ip-col-status { width: 96px; }
+  .ip-col-amount { width: 92px; }
+  .ip-line-edit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ip-line-field--wide, .ip-line-edit .ip-line-field--wide + .ip-line-field--wide { grid-column: 1 / -1; }
+}
+.ip-steps-summary p { overflow-wrap: break-word; }
+/* "Next:" at the foot of the review. */
+.ip-next { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 16px 20px; border: 1px solid var(--ds-line); border-radius: 16px; background: #fff; font-size: 15px; }
+/* The Done card: held lines, the stage note, and Next. */
+.ip-held-note { margin: 0; padding: 14px 28px; border-bottom: 1px solid var(--ds-line-soft); background: var(--ds-warn-bg); font-size: 14px; display: grid; gap: 8px; }
+.ip-held-note ul { margin: 0; padding-left: 18px; }
+.ip-stage-note { margin: 0; padding: 12px 28px; border-bottom: 1px solid var(--ds-line-soft); font-size: 14px; color: var(--ds-text-2); }
+.ip-done-next { flex: 1 1 100%; font-size: 15px; color: var(--ds-text-2); }
+.ip-done-next strong { color: var(--ds-text); }
+.ip-scope-set { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-top: 10px; }
+.ip-scope-set .ip-line-field { flex: 1 1 200px; }
+>>>>>>> 581d555 (Import review is lean and ends on Next; the Done card always has a next step; leaving a review asks first (F1, F2, F4, B3).)

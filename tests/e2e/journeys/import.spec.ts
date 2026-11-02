@@ -34,14 +34,20 @@ test('P92 P94 P95 P96 F13 add a routing → check what we read → save 3 steps 
   for (const op of OPS) await expect(page.getByRole('checkbox', { name: `Keep ${op}` })).toBeChecked();
   await page.getByLabel('Case name').fill('Tube frame');
 
+  // Save counts every step the case will have (the product, the groups and
+  // the three operations), the same count the Done card and the tree give (F4).
+  const save = page.getByRole('button', { name: /^Save \d+ steps to a new case$/ });
+  const saveCount = Number((await save.innerText()).match(/Save (\d+) steps/)?.[1]);
   const apply = page.waitForResponse((r) => r.url().includes('/api/ingest/apply'), NAV);
-  await page.getByRole('button', { name: 'Save 3 steps to a new case' }).click();
+  await save.click();
   const applied = await apply;
   expect(applied.status()).toBe(201);
   const { case_id: caseId, components_created: created } = (await applied.json()) as { case_id: number; components_created: number };
   expect(created).toBeGreaterThanOrEqual(4); // the product + three operations
+  expect(created).toBe(saveCount);
 
   await expect(page.getByText(/^Saved\./)).toBeVisible(NAV);
+  await expect(page.getByText(`Saved. ${created} steps are in Tube frame.`)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Where this case stands' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start another case' })).toBeVisible();
   await page.getByRole('button', { name: 'Open the tree' }).click();

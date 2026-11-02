@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }) }))
 vi.mock('@/components/auth-guard', () => ({ AuthGuard: ({ children }: any) => <>{children}</> }))
 
 import ImportPage from '@/app/project/[projectId]/import/page'
@@ -109,7 +109,10 @@ describe('import review quantities', () => {
     expect(await screen.findByText('Powder coat pigment')).toBeInTheDocument()
     // Quantities are editable at review (a document can be read wrong), so each
     // sits in a field holding the document's exact value: never rounded to 0,
-    // and an untouched field never reads as a correction.
+    // and an untouched field never reads as a correction. The fields sit behind
+    // each line's Edit, and the steps' behind Edit the steps (F2).
+    for (const name of ['Powder coat pigment', 'Solvent vapour', 'Steel tube']) fireEvent.click(screen.getByRole('button', { name: `Edit ${name}` }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit the steps' }))
     const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value
     expect(value('Amount of Powder coat pigment')).toBe('0.0004')
     expect(value('Amount of Solvent vapour')).toBe('4.2e-7')
@@ -136,6 +139,7 @@ describe('import review quantities', () => {
     fireEvent.click(screen.getByRole('button', { name: /Check what we read/ }))
     expect(await screen.findByText('Powder coat pigment')).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Powder coat pigment' }))
     fireEvent.change(screen.getByLabelText('Amount of Powder coat pigment'), { target: { value: '0.004' } })
     expect(document.body.textContent).toContain('file said 4e-4')
   })

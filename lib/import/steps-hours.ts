@@ -14,6 +14,10 @@ export interface StepHoursRow {
   tier: string
   /** Labour hours per unit, summed over the step's labour costs; null when none. */
   hours: number | null
+  /** The labour cost the file's hours come to (hours × the trade's wage), per unit; null when none. */
+  cost: number | null
+  /** How the cost was worked out ("0.8 h per unit × $23.47/h Welders, BLS OEWS mean wage"). */
+  basis: string | null
   /** "p.1 · line 3", from the provenance locator. */
   where: string | null
 }
@@ -29,6 +33,8 @@ export function stepsAndHours(plan: Pick<IngestPlan, 'nodes' | 'costs'>): StepHo
       name: n.name,
       tier: n.tier,
       hours: labour.length ? labour.reduce((t, c) => t + Number(c.hours), 0) : null,
+      cost: labour.some((c) => Number.isFinite(Number(c.amount))) ? labour.reduce((t, c) => t + (Number(c.amount) || 0), 0) : null,
+      basis: labour.map((c) => c.basis).filter(Boolean).join('; ') || null,
       where: shortLocator(n.provenance?.locator ?? null),
     }
   })

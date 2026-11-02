@@ -62,7 +62,9 @@ test('I01 P89 P90 P91 P93 P97 P98 matches, a name clash, the status card, append
   await row(page.getByText(/Place every line on a step first/), 'P93', 'Append banner with unplaced count');
 
   await row(page.getByRole('banner').getByRole('button', { name: /^Back to the (case|project)$/ }).or(page.getByRole('button', { name: /^Back to the (case|project)$/ })).first(), 'P90', 'Back in the header on every step');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  // Start over throws the read away, so it asks first (B3).
+  await page.getByRole('button', { name: 'Start over', exact: true }).click();
+  await page.getByRole('alertdialog', { name: 'Leave this review?' }).getByRole('button', { name: 'Leave' }).click();
   await page.route(/\/api\/ingest\/preview/, (route) =>
     route.fulfill({
       status: 415,
@@ -113,6 +115,8 @@ test('I02 I03 I04 I05 I06 I07 I08 I10 I11 a respelled bill of materials into a T
   await page.getByRole('button', { name: /Check what we read/ }).click();
   expectOk(await preview);
 
+  // A line's match, amount and unit sit behind its own Edit (F2).
+  await page.getByRole('button', { name: 'Edit Aluminium sheet' }).click();
   const alu = page.getByLabel('What Aluminium sheet matches in the library');
   await expect.soft(alu.locator('option:checked'), 'I04 "Aluminium sheet" lands on the library\'s Aluminum').toHaveText(/^Aluminum · /);
   await row(page.getByText('Each match shows its climate factor in TRACI 2.1'), 'I02', 'Factors shown for the project\'s method');
@@ -127,11 +131,12 @@ test('I02 I03 I04 I05 I06 I07 I08 I10 I11 a respelled bill of materials into a T
 
   // I03: beyond the top 3, the whole library.
   const before = await alu.locator('option').count();
-  await page.locator('tr', { hasText: 'Aluminium sheet' }).getByRole('button', { name: 'Search the whole library' }).click();
+  await page.getByRole('group', { name: 'Edits of Aluminium sheet' }).getByRole('button', { name: 'Search the whole library' }).click();
   await expect.soft(alu.locator('option'), 'I03 the whole library is searched').not.toHaveCount(before);
   expect.soft(await alu.locator('option').count(), 'I03 more than the top 3').toBeGreaterThan(4);
 
   // I07: hold the stainless line, save, and the saved card lists it.
+  await page.getByRole('button', { name: 'Edit Stainless steel 304' }).click();
   await page.getByLabel('What Stainless steel 304 matches in the library').selectOption('');
   await page.getByLabel('Case name').fill('Respelled');
   const applied = page.waitForResponse((r) => r.url().includes('/api/ingest/apply'), NAV);

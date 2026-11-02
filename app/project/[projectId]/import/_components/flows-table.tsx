@@ -2,15 +2,18 @@
 
 // The lines a file gave (F2.3, F2.6): All lines, Need a step, Need a match;
 // each line with what we read, what it matched (with its score), the amount,
-// the step it goes on (adding to a case) and its status. "Lines at 90% or
-// more are ticked"; an unticked line is not saved as a material.
+// the step it goes on (adding to a case) and its status, one row per line
+// with its edits behind its own Edit (F2). The table is laid out to its card
+// (fixed columns), so it never scrolls sideways and a name wraps by words.
+// "Lines at 90% or more are ticked"; an unticked line is not saved.
 
 import { useState } from 'react'
 import { authHeaders } from '@/lib/import/auth-headers'
-import { matchSubstance, type CatalogSubstance, type MappedFlow, type SubstanceCandidate } from '@/lib/ingest/maplca'
+import { candidatesFor, matchSubstance, type CatalogSubstance, type MappedFlow, type SubstanceCandidate } from '@/lib/ingest/maplca'
 import { noFlowsMessage } from '@/lib/import/display'
 import { flowKey, type FlowEdit } from '@/lib/import/review'
 import { lineShows, lineStatus, type LineFilter } from '@/lib/import/line-status'
+import { lineKind, tickedLinesSentence } from '@/lib/import/line-kind'
 
 import { FlowRow } from './flow-row'
 import type { StepPicker } from './step-cell'
@@ -50,8 +53,20 @@ export function FlowsTable({
     need_match: rows.filter((r) => lineShows('need_match', status(r), true)).length,
   }
   const [wider, setWider] = useState<Record<number, SubstanceCandidate[]>>({})
+  // The lines whose edits are open: none until asked for.
+  const [open, setOpen] = useState<Set<number>>(new Set())
+  const toggle = (i: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  const columns = appending ? 7 : 6
   const shown = rows.filter((r) => lineShows(filter, status(r), placed(r.i)))
-  const ticked = rows.filter((r) => r.e.include).length
+  const tickedKinds = rows
+    .filter((r) => r.e.include)
+    .map((r) => lineKind({ substance_text: r.f.substance_text, substance_name: r.e.substance_name, unit: r.e.unit?.trim() || r.f.unit }))
   const widen = async (flow: MappedFlow, index: number) => {
     const r = await fetch(`/api/substances?method=${encodeURIComponent(factorBasis.method)}&region=${encodeURIComponent(factorBasis.region)}`, { headers: authHeaders() })
     const d = await r.json().catch(() => ({}))
@@ -67,7 +82,9 @@ export function FlowsTable({
       variant: s.climate_scope,
       factor_source: s.climate_source,
     }))
-    const { candidates } = matchSubstance(flow.substance_text, catalog, catalog.length || 1)
+    // The whole library, less what cannot be meant (an input is never an emission).
+    const pool = candidatesFor(flow.direction, catalog)
+    const { candidates } = matchSubstance(flow.substance_text, pool, pool.length || 1)
     setWider((prev) => ({ ...prev, [index]: candidates }))
   }
 
@@ -93,21 +110,23 @@ export function FlowsTable({
         </div>
       </div>
       {rows.length === 0 && <p style={{ padding: '0 24px 16px', fontSize: 14, color: 'var(--ds-text-2)' }}>{noFlowsMessage(connector)}</p>}
-      <div style={{ overflowX: 'auto' }}>
-        <table className="ds-table ip-lines-table">
+      <div className="ip-fit">
+        <table className="ds-table ip-lines-table" data-appending={appending || undefined}>
           <thead>
             <tr>
-              <th scope="col">
-                <span className="ds-sr-only">Save as a material</span>
+              <th scope="col" className="ip-col-tick">
+                <span className="ds-sr-only">Save this line</span>
               </th>
-              <th scope="col">What we read</th>
-              <th scope="col">In or out</th>
+              <th scope="col" className="ip-col-what">What we read, in or out</th>
               <th scope="col">Matched to</th>
-              <th scope="col" style={{ textAlign: 'right' }}>
+              <th scope="col" className="ip-col-amount" style={{ textAlign: 'right' }}>
                 Amount
               </th>
-              {appending && <th scope="col">Place on step</th>}
-              <th scope="col">Status</th>
+              {appending && <th scope="col">Step</th>}
+              <th scope="col" className="ip-col-status">Status</th>
+              <th scope="col" className="ip-col-edit">
+                <span className="ds-sr-only">Edit</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -121,12 +140,15 @@ export function FlowsTable({
                 stepKey={flowKey(f, i)}
                 picker={picker}
                 placed={placed(i)}
+                open={open.has(i)}
+                onToggle={() => toggle(i)}
+                columns={columns}
                 onSearchLibrary={() => void widen(f, i)}
               />
             ))}
             {!shown.length && rows.length > 0 && (
               <tr>
-                <td colSpan={appending ? 7 : 6} style={{ color: 'var(--ds-text-3)' }}>
+                <td colSpan={columns} style={{ color: 'var(--ds-text-3)' }}>
                   No line here.
                 </td>
               </tr>
@@ -136,7 +158,7 @@ export function FlowsTable({
       </div>
       <p className="ip-lines-foot">
         <span style={{ flex: 1 }}>
-          The {ticked} ticked {ticked === 1 ? 'line is' : 'lines are'} saved as {ticked === 1 ? 'a material' : 'materials'}. Unticked lines are not, only their cost.
+          {tickedLinesSentence(tickedKinds)} Unticked lines are not, only their cost.
         </span>
         {appending && counts.need_step > 0 && (
           <strong style={{ color: 'var(--ds-warn)' }}>

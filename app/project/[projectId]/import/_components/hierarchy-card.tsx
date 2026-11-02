@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { fmtNum } from '@/components/lcapix/formatters'
 import type { IngestPlan } from '@/lib/ingest/maplca'
 import { TIER_LABEL, costsByStep, documentCostTotal, tierDepth } from '@/lib/import/display'
@@ -13,6 +14,11 @@ import type { TargetComponent } from '@/lib/import/placement-suggestions'
  * second routing merges instead of duplicating every step. Each step's cost
  * from the document sits beside it, and the document's total by the heading,
  * so the money is read with the model rather than in a separate table.
+ *
+ * Closed to a one-line summary until "Edit the steps" (F2): about forty
+ * controls open at once crowded the review. The page shows it for a routing
+ * or a new case only; a bill of materials or an equipment list added to a
+ * case keeps the suggested decisions without showing them.
  */
 export function HierarchyCard({
   nodes,
@@ -33,15 +39,39 @@ export function HierarchyCard({
   onStepAction: (originalName: string, value: string) => void
   targetComponents: TargetComponent[]
 }) {
+  const [open, setOpen] = useState(false)
   if (nodes.length === 0) return null
   const byStep = costsByStep(costs)
+  const decided = appending
+    ? nodes.reduce(
+        (acc, n) => {
+          const a = stepActions[n.name]?.action ?? 'skip'
+          acc[a === 'attach' ? 'attach' : a === 'create' ? 'create' : 'skip']++
+          return acc
+        },
+        { attach: 0, create: 0, skip: 0 },
+      )
+    : null
+  const summary = [
+    `${nodes.length} ${nodes.length === 1 ? 'step' : 'steps'} in this file`,
+    costs.length > 0 ? `$${fmtNum(documentCostTotal(costs))} of cost` : null,
+    decided ? `${decided.attach} matched to this case's steps, ${decided.create} new, ${decided.skip} skipped` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
   return (
-    <div className="card" style={{ padding: 20 }}>
-      <div className="eyebrow" style={{ fontSize: 10, marginBottom: 10 }}>
-        HIERARCHY · {nodes.length} NODES
-        {costs.length > 0 ? ` · $${fmtNum(documentCostTotal(costs))} of cost in this document` : ''}
-        {appending ? ' · matched against the case' : ''}
+    <section className="card ip-steps-summary" style={{ padding: open ? 20 : '14px 20px' }} aria-labelledby="ip-steps-h">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h2 id="ip-steps-h" className="eyebrow" style={{ fontSize: 10, margin: 0, flex: 1, minWidth: 200 }}>
+          The steps
+        </h2>
+        <button type="button" className="ds-link" style={{ fontWeight: 600 }} aria-expanded={open} aria-controls="ip-steps-edit" onClick={() => setOpen((o) => !o)}>
+          {open ? 'Close the steps' : 'Edit the steps'}
+        </button>
       </div>
+      <p style={{ margin: '4px 0 0', fontSize: 14, color: 'var(--ds-text-2)' }}>{summary}</p>
+      {open && (
+      <div id="ip-steps-edit" style={{ marginTop: 12 }}>
       <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginBottom: 8 }}>
         {appending
           ? 'Each step below was matched against the steps this case already has. Attach keeps the existing step and adds to it; create makes a new one; skip leaves it out. Check the reason before you apply.'
@@ -150,6 +180,8 @@ export function HierarchyCard({
           </div>
         )
       })}
-    </div>
+      </div>
+      )}
+    </section>
   )
 }

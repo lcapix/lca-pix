@@ -30,11 +30,12 @@ import { FirstDocBanner } from './_components/first-doc-banner'
 import { FlowsTable } from './_components/flows-table'
 import { HierarchyCard } from './_components/hierarchy-card'
 import { ImportHeader } from './_components/import-header'
+import { LeaveReviewDialog } from './_components/leave-review-dialog'
+import { NextBar } from './_components/next-bar'
 import { NeedsReviewCard } from './_components/needs-review-card'
 import { NotesList } from './_components/notes-list'
 import { PickForm } from './_components/pick-form'
 import { ProjectStatusCard } from './_components/project-status-card'
-import { ReviewActions } from './_components/review-actions'
 import { SampleDialog } from './_components/sample-dialog'
 import { StepsHoursCard } from './_components/steps-hours-card'
 import type { StepPicker } from './_components/step-cell'
@@ -61,13 +62,10 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   }
 
   const stepRows = useMemo(() => (plan ? stepsAndHours(plan) : []), [plan])
-  // "Save 5 steps": the steps in the Steps and hours table that stay ticked;
-  // a file with no such table counts every step it gave.
-  const keptSteps = plan
-    ? stepRows.length
-      ? stepRows.filter((r) => !imp.droppedSteps.has(r.name)).length
-      : plan.nodes.length - droppedWithChildren(plan.nodes, imp.droppedSteps).size
-    : 0
+  // "Save 9 steps": every step the new case will have, the product and the
+  // groups above the operations included, so the number matches the tree's
+  // count and the Done card's (F4). The operations table counts its own rows.
+  const keptSteps = plan ? plan.nodes.length - droppedWithChildren(plan.nodes, imp.droppedSteps).size : 0
   const savedLines = plan ? plan.flows.filter((_, i) => imp.edits[i]?.include).length : 0
   const saveLabel = appending
     ? `Save ${savedLines} ${savedLines === 1 ? 'line' : 'lines'} to ${targetName}`
@@ -82,6 +80,10 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
       ? 'Keep at least one step'
       : null
 
+  // The steps editor is for a file that gives steps: a routing, or anything
+  // that makes a new case. A bill of materials or an equipment list added to a
+  // case keeps the suggested decisions without the editor (F2).
+  const showSteps = !!plan && plan.nodes.length > 0 && (imp.connector === 'routing' || !appending)
   const title = phase === 'done' && applied ? `Saved to ${applied.case_name ?? targetName ?? 'the case'}` : reviewing ? 'Check what we read' : 'Add a file'
   const readByAi = imp.isLLM && !!imp.file && /\.(pdf|html?|txt)$/i.test(imp.file.name)
 
@@ -112,9 +114,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
               </p>
             )}
           </div>
-          {reviewing && (
-            <ReviewActions applying={phase === 'applying'} saveLabel={saveLabel} blockedReason={blocked} onApply={imp.apply} onBack={imp.startOver} />
-          )}
+          {/* Save and Start over sit once, at the foot of the review, after "Next:" (F2). */}
         </div>
 
         {error && (
@@ -181,7 +181,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
               </span>
             </div>
 
-            <div className="ip-review">
+            <div className="ip-review ip-review--one">
               <div className="ip-review-side">
                 <div className="ip-notice">
                   <strong style={{ display: 'block' }}>{readByAi ? 'Read by AI.' : 'Read from the spreadsheet.'}</strong>
@@ -191,6 +191,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                       ? 'Check every step before you save. Untick a step to leave it out.'
                       : 'Check every line before you save. Lines at 90% or more are ticked.'}
                 </div>
+                {showSteps && (
                 <HierarchyCard
                   nodes={plan.nodes}
                   costs={plan.costs}
@@ -201,6 +202,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                   onStepAction={imp.chooseStepAction}
                   targetComponents={imp.targetComponents}
                 />
+                )}
                 {remainingReviewCount(plan.review, imp.dismissedReview) > 0 && (
                   <NeedsReviewCard review={plan.review} dismissedReview={imp.dismissedReview} onDismiss={imp.dismissReview} />
                 )}
@@ -240,17 +242,23 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                     }
                   />
                 )}
-                {plan.costs.length > 0 && <CostsCard costs={plan.costs} appending={appending} picker={stepPicker} />}
+                {/* A routing's labour already sits in Operations and hours, cost and all. */}
+                {plan.costs.length > 0 && !(stepRows.length > 0 && !appending && plan.costs.every((c) => c.category === 'labor')) && (
+                  <CostsCard costs={plan.costs} appending={appending} picker={stepPicker} />
+                )}
                 {appending && <CostConflictsCard conflicts={imp.costClashes} modeOf={imp.costModeOf} onModeChange={imp.setCostMode} />}
                 {appending && (
                   <FlowConflictsCard conflicts={imp.flowClashes} modeOf={imp.flowModeOf} onModeChange={imp.setFlowMode} loadError={imp.existingFlowsError} />
                 )}
-                {imp.connector === 'routing' && !appending && (
-                  <div className="ip-info">
-                    <span aria-hidden>ⓘ</span>
-                    <span>A routing gives the steps and their hours. Add the bill of materials next for materials, and the equipment list for machine energy.</span>
-                  </div>
-                )}
+                <NextBar
+                  connector={imp.connector}
+                  appending={appending}
+                  saveLabel={saveLabel}
+                  blockedReason={blocked}
+                  applying={phase === 'applying'}
+                  onApply={imp.apply}
+                  onStartOver={imp.startOver}
+                />
               </div>
             </div>
           </>
@@ -262,14 +270,16 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
             applied={applied}
             fileName={imp.file?.name ?? null}
             readByAi={readByAi}
-            stepCount={applied.appended ? undefined : keptSteps}
             caseName={targetName}
+            connector={imp.connector}
             onAddAnother={imp.addAnotherDocument}
             onOpenCase={imp.openCase}
             onStartNew={imp.startNewCase}
           />
         )}
       </div>
+
+      {imp.leaveAsked && <LeaveReviewDialog readsLeft={imp.readsLeft} onKeep={imp.keepReviewing} onLeave={imp.leaveReview} />}
 
       {/* The sample document itself, so nobody has to guess what is read. */}
       {sampleView && (

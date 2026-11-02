@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }) }))
 vi.mock('@/components/auth-guard', () => ({ AuthGuard: ({ children }: any) => <>{children}</> }))
 
 import ImportPage from '@/app/project/[projectId]/import/page'
@@ -90,6 +90,8 @@ describe('appending waits for the case', () => {
       releaseSteps(json(200, STEPS))
     })
     expect(await screen.findByRole('button', { name: /^Save/ })).toBeEnabled()
+    // The step decisions sit behind Edit the steps (F2).
+    fireEvent.click(screen.getByRole('button', { name: 'Edit the steps' }))
     expect((screen.getByLabelText('What happens to 10. Cut tube') as HTMLSelectElement).value).toBe('attach:2')
     // And the step's existing labour is shown, set to Keep.
     expect((screen.getByLabelText('What to do with the labor cost of 10. Cut tube') as HTMLSelectElement).value).toBe('keep')

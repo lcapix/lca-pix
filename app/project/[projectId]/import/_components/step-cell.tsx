@@ -15,6 +15,15 @@ export interface StepPicker {
   onChoose: (key: string, stepId: number | null) => void
 }
 
+/** The step a line goes on, in words, for the line's closed row: its step, a new one, the default, or none yet. */
+export function stepChoiceText(stepKey: string, picker: StepPicker): string {
+  const id = picker.placement[stepKey]
+  if (id != null) return picker.steps.find((s) => s.id === id)?.name ?? 'A step of the case'
+  if (picker.newStep?.[stepKey]) return `New step: ${picker.newStep[stepKey]}`
+  if (picker.attachComponentId != null) return picker.steps.find((s) => s.id === picker.attachComponentId)?.name ?? 'The default step'
+  return 'Choose a step'
+}
+
 // The STEP picker for one line when appending, with why it was suggested.
 /** The STEP picker for the line with this placement key. */
 export function StepCell({ stepKey, picker }: { stepKey: string; picker: StepPicker }) {
