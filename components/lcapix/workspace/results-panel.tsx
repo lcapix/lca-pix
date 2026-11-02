@@ -13,7 +13,9 @@ import { useRouter } from 'next/navigation'
 import { useShellStore } from '@/lib/shell/use-shell'
 import { Button, EmptyState, Flag, SectionLabel } from '@/components/lcapix/ds'
 import { SOURCE_WORD } from '@/lib/ui/words'
-import { amount, answer, caseTotal, co2Unit, fixed, money, result3 } from '@/lib/ui/format'
+import { caseTotal, co2Unit, money } from '@/lib/ui/format'
+import { categoryNumber, headlineNumber } from '@/lib/results/number-view'
+import { whyNoChange } from '@/lib/project/comparison-banner'
 import { useGuidedMode } from '@/lib/shell/use-shell'
 import { apiRequest } from '@/lib/api-client'
 import { answerSentence, compareNote, costBeside, howSure, otherCategories, runClimate, whatBuilds } from '@/lib/workspace/results-view'
@@ -81,10 +83,15 @@ export function ResultsPanel({
   // A change is read only between runs of the same method and region (Task 4, item 3).
   const prev = previousComparable(completed, run)
   const prevTotal = prev ? runClimate(prev)?.value : undefined
-  const sameBasis = (o: { method?: string | null; region?: string | null } | null) =>
-    !!o && (o.method ?? null) === (run.calculation_method ?? null) && (o.region ?? 'Global') === (run.regionCode ?? 'Global')
+  // The one rule Compare uses (whyNoNumber): no change across methods, regions or a stale run.
+  const againstWhy = against
+    ? whyNoChange(
+        { name: kase.case_name, method: run.calculation_method, region: run.regionCode ?? 'Global', stale: !older && !!editedAfter },
+        { name: against.label || 'the Base case', method: against.method, region: against.region ?? 'Global' },
+      )
+    : null
   const note =
-    climate && against && sameBasis(against)
+    climate && against && !againstWhy
       ? compareNote(climate.value, against, !!kase.copied_from)
       : climate && prev && prevTotal !== undefined
         ? compareNote(climate.value, { label: '', run_id: prev.run_id, case_run_number: prev.case_run_number, total: prevTotal }, false)
@@ -165,7 +172,7 @@ export function ResultsPanel({
         <div className="ws-panel-section">
           <SectionLabel>Answer · {climate.name}</SectionLabel>
           <div className="ws-answer" style={{ marginTop: 8 }}>
-            <span className="ws-answer-num">{answer(climate.value, kase.case_type)}</span>
+            <span className="ws-answer-num">{headlineNumber(climate.value, climate.name, kase.case_type)}</span>
             <span className="ds-mono" style={{ fontSize: 16 }}>
               {co2Unit(climate.unit)} per {unit}
             </span>
@@ -178,6 +185,11 @@ export function ResultsPanel({
               </span>
               {note.note && <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>{note.note}</span>}
             </div>
+          )}
+          {against && againstWhy && (
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
+              No change against the {against.label || 'Base case'}: {againstWhy.replace(/\.$/, '')}.
+            </p>
           )}
         </div>
       ) : (
@@ -199,7 +211,7 @@ export function ResultsPanel({
                   <span style={{ width: `${maxBuild ? (b.fraction / maxBuild) * 100 : 0}%` }} />
                 </span>
                 <span className="ds-mono" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {b.value ? result3(b.value) : '0'}
+                  {b.value ? categoryNumber(b.value) : '0'}
                 </span>
                 <span className="ds-mono" style={{ textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--ds-text-2)' }}>
                   {b.share}
@@ -212,16 +224,7 @@ export function ResultsPanel({
 
       {sure && (
         <div className="ws-panel-section">
-          <SectionLabel>How sure</SectionLabel>
-          <p style={{ margin: '8px 0 10px', fontSize: 15 }}>{sure.sentence}</p>
-          <div style={{ display: 'flex', height: 10, borderRadius: 999, overflow: 'hidden', background: 'var(--ds-line-soft)' }} aria-hidden>
-            {sure.groups.map((g) => (
-              <span key={g.kind} style={{ width: `${Math.max(0, g.fraction) * 100}%`, background: SURE_COLOUR[g.kind] }} />
-            ))}
-          </div>
-          <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
-            {sure.groups.map((g) => `${SOURCE_WORD[g.kind]} ${g.share}`).join(' · ')}
-          </p>
+          <HowSure sure={sure} />
         </div>
       )}
 
@@ -260,7 +263,7 @@ export function ResultsPanel({
                       {r.share}
                     </td>
                     <td className="ds-mono" style={{ textAlign: 'right' }}>
-                      {r.impact ? result3(r.impact) : '0'}
+                      {r.impact ? categoryNumber(r.impact) : '0'}
                     </td>
                   </tr>
                 ))}
@@ -281,7 +284,7 @@ export function ResultsPanel({
                 <li key={o.name} style={{ display: 'flex', gap: 12 }}>
                   <span style={{ flex: 1 }}>{o.name}</span>
                   <span className="ds-mono">
-                    {amount(o.value)} {o.unit}
+                    {categoryNumber(o.value)} {o.unit}
                   </span>
                 </li>
               ))}
@@ -339,5 +342,28 @@ export function ResultsPanel({
         )}
       </div>
     </FloatingPanel>
+  )
+}
+
+/**
+ * How sure (A8): the climate total split by where its factors come from, with
+ * one sentence on the largest part. The Results tab and the full results page
+ * both print this, from the same computation (howSure in
+ * lib/workspace/results-view.ts).
+ */
+export function HowSure({ sure }: { sure: NonNullable<ReturnType<typeof howSure>> }) {
+  return (
+    <section aria-label="How sure">
+      <SectionLabel>How sure</SectionLabel>
+      <p style={{ margin: '8px 0 10px', fontSize: 15 }}>{sure.sentence}</p>
+      <div style={{ display: 'flex', height: 10, borderRadius: 999, overflow: 'hidden', background: 'var(--ds-line-soft)' }} aria-hidden>
+        {sure.groups.map((g) => (
+          <span key={g.kind} style={{ width: `${Math.max(0, g.fraction) * 100}%`, background: SURE_COLOUR[g.kind] }} />
+        ))}
+      </div>
+      <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
+        {sure.groups.map((g) => `${SOURCE_WORD[g.kind]} ${g.share}`).join(' · ')}
+      </p>
+    </section>
   )
 }

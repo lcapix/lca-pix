@@ -13,6 +13,9 @@ import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
 import { insightsBreakdownOf, insightsMaterialsOf } from '@/lib/results/insights-inputs'
 import { boundaryGaps, groupByStage, stageLabel, STAGES, type StageId } from '@/lib/life-cycle'
 import { amount, grouped, money, result3, share } from '@/lib/ui/format'
+import { categoryNumber, headlineNumber } from '@/lib/results/number-view'
+import { howSure } from '@/lib/workspace/results-view'
+import { HowSure } from './results-panel'
 import { isCompletedRun } from '@/lib/results/run-math'
 import { factorTitle, isGlobalFallback, isWeakFactorSource, safeRunDate } from '@/lib/results/results-view'
 import { caseRunNumber, changeWords, CLIMATE, climateOnlyFlows, comparableRun, frozenStepCosts, previousComparable, runCosts, stepDiffRows } from '@/lib/results/full-results-view'
@@ -173,7 +176,8 @@ function FullRun({
       />
 
       <section aria-label="Total" style={{ display: 'grid', gap: 4 }}>
-        {impact ? <BigValue value={result3(impact.value)} unit={impact.unit} /> : <p>Not counted in {category}.</p>}
+        {/* A8: the same number the Results tab prints, the same way. */}
+        {impact && category ? <BigValue value={headlineNumber(impact.value, category, caseType)} unit={impact.unit} /> : <p>Not counted in {category}.</p>}
         <p style={{ margin: 0 }}>
           {impact && prev && prevValue !== undefined
             ? `${changeWords(impact.value, prevValue)} from Run ${caseRunNumber(runs, prev.run_id)} (${prev.calculation_method}, ${prev.regionCode ?? 'Global'})`
@@ -197,7 +201,7 @@ function FullRun({
           <SectionLabel>This case</SectionLabel>
           <KeyValue
             rows={[
-              [category ?? 'Category', impact ? `${result3(impact.value)} ${impact.unit}` : 'Not counted'],
+              [category ?? 'Category', impact && category ? `${headlineNumber(impact.value, category, caseType)} ${impact.unit}` : 'Not counted'],
               [
                 'Against the base case',
                 isBase
@@ -217,6 +221,8 @@ function FullRun({
       </section>
 
       <CategoryChart impacts={run.impacts} selected={category} onSelect={onCategory} />
+
+      <SureCard run={run} caseType={caseType} />
 
       <section aria-label="Cost by kind">
         <SectionLabel>Cost by kind</SectionLabel>
@@ -422,7 +428,7 @@ function CategoryChart({
               </button>
               <span aria-hidden style={{ display: 'block', height: 8, width: `${Math.max(1, width(r.value))}%`, background: 'var(--ds-green)' }} />
               <span className="ds-num" style={{ overflowWrap: 'anywhere' }}>
-                {result3(r.signed)} {r.unit}
+                {categoryNumber(r.signed)} {r.unit}
               </span>
             </li>
           ))}
@@ -779,4 +785,18 @@ export function completedRuns(runs: WorkspaceRun[]): WorkspaceRun[] {
 function perUnitMoney(x: number): string {
   if (!Number.isFinite(x)) return '–'
   return Math.abs(x) >= 0.01 ? money(x) : `$${Number(x.toPrecision(4))}`
+}
+
+/** A8: the Results tab's "How sure", from the same computation, so the two never disagree. */
+function SureCard({ run, caseType }: { run: WorkspaceRun; caseType: string }) {
+  const sure = howSure(run, caseType)
+  if (!sure) return null
+  return (
+    <Card>
+      <HowSure sure={sure} />
+      <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
+        This splits the climate total by where each factor applies. The data quality statement below grades the same factors by who published them.
+      </p>
+    </Card>
+  )
 }
