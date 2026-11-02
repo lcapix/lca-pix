@@ -1421,25 +1421,18 @@
 .pub-main { min-height: 60vh; }
 .pub-page { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
 /* claude: data sources */
 .srcs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .srcs-card { padding: 16px; }
 .srcs-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .srcs-table th { text-align: left; font-weight: 600; color: var(--ds-text-2); font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--ds-line); }
 .srcs-table td { padding: 8px 0; border-bottom: 1px solid var(--ds-line); }
-=======
 /* lane 2: results */
 /* Compare's held card: what changed in B, read left to right under the reason. */
 .cmp-held-what { justify-self: stretch; text-align: left; max-width: 640px; margin: 0 auto; }
 .cmp-held-what .cmp-what-list { margin-top: 4px; font-size: 14px; }
 /* The Write-up's line when there is no change against the base: why, in words. */
 .wu-nochange { color: var(--ds-text-2); }
->>>>>>> fae6dd7 (A3 A4: Compare prints no percentage across regions or methods, one percentage per pair, and the fix reruns the case that differs.)
-=======
 /* lane 1: editor (B1, B3, C4, E1 to E7). Drafts that only Save stores, the
    unsaved bar, read-only values as plain text, step details below the flows,
    and the Inventory as one table with costs on the rows. */
@@ -1489,8 +1482,6 @@
 .ws-inv-more { display: block; margin-top: 6px; }
 .ws-inv-edit td { background: var(--ds-main); }
 .ws-inv-edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px; align-items: start; }
->>>>>>> a81796e (Step panel, Inventory and costs save only by Save, ask before unsaved edits are left, and show the math.)
-=======
 /* lane 4: import and forms */
 /* Check what we read, one column: the review reads top to bottom and the
    lines table gets the page's width instead of 702px beside a side column. */
@@ -1540,10 +1531,7 @@
 .ip-done-next strong { color: var(--ds-text); }
 .ip-scope-set { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-top: 10px; }
 .ip-scope-set .ip-line-field { flex: 1 1 200px; }
->>>>>>> 581d555 (Import review is lean and ends on Next; the Done card always has a next step; leaving a review asks first (F1, F2, F4, B3).)
-=======
 /* lane 3: project and class */
 .pc-settings { display: grid; gap: 8px; margin: 0 0 22px; max-width: 760px; }
 .pc-next { margin: 12px 24px 0; }
 .so-mine { margin: 0 24px 16px; }
->>>>>>> 3853c0c (C1 A7 D3 G4: a project opens on its Cases board; the old Overview is gone.)
