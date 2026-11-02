@@ -94,8 +94,12 @@ describe('mass assignment', () => {
       token: w.users.editor.token,
       json: { quantity: 2, component_id: w.Q.component, flow_id: w.Q.flow },
     });
-    expect(put.status).toBe(200);
-    expect(put.json.flow.component_id).toBe(w.P.base.task);
+    // component_id now moves a flow to another step of the SAME case (E1); a step in
+    // another project is refused outright, and nothing about either flow changes.
+    expect(put.status).toBe(400);
+    const own = await sqlOne('SELECT component_id, quantity FROM flows WHERE flow_id = ?', [created.json.flow.flow_id]);
+    expect(Number(own.component_id)).toBe(w.P.base.task);
+    expect(Number(own.quantity)).toBe(1);
     expect(Number((await sqlOne('SELECT quantity FROM flows WHERE flow_id = ?', [w.Q.flow])).quantity)).toBe(3);
   });
 

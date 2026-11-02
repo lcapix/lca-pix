@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as api from '@/lib/api-client';
 
@@ -33,8 +33,11 @@ describe('/library/substances', () => {
     }));
 
     render(<SubstancesLibraryPage />);
-    expect(await screen.findByText('Steel')).toBeInTheDocument();
-    expect(screen.getByText('kg')).toBeInTheDocument();
-    expect(screen.getByText('kWh')).toBeInTheDocument();
+    // Wait for the settled page: the header re-renders once the counts arrive.
+    await waitFor(() => {
+      expect(screen.getByText('Steel')).toBeInTheDocument();
+      expect(screen.getByText('kg')).toBeInTheDocument();
+      expect(screen.getByText('kWh')).toBeInTheDocument();
+    });
   });
 });
