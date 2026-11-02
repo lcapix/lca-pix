@@ -2,7 +2,7 @@
  * Builds the sample study (lib/sample/sample-study.ts) in one account, on the
  * caller's connection, so the whole study commits or none of it does: the
  * project (flagged is_sample), the read-only base case with its 17 steps,
- * nine flows and costs (each cost with its rate and source), a run, the
+ * eight flows and costs (each cost with its rate and source), a run, the
  * "Shorter cure cycle" what-if (a copy with one change, also read-only) and
  * its run. Needs migrations 033 to 039.
  */

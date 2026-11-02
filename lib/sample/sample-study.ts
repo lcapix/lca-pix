@@ -1,6 +1,6 @@
 /**
  * The sample study every account gets to read first (education E02, E03, E04,
- * E14, F1.4): a painted steel bracket, 17 steps in five tiers, nine flows, its
+ * E14, F1.4): a painted steel bracket, 17 steps in five tiers, eight flows, its
  * costs, a base case run and a what-if ("Shorter cure cycle") run. Pure data;
  * lib/sample/build-sample.ts writes it.
  *
@@ -18,6 +18,15 @@
  *     0.937 kg CO2-eq/kg), so the design's "Cardboard: no factor" would be
  *     false, and with it the total would be 1.78, not 1.72. Logged for a
  *     decision (education-build-log, 2.9).
+ *
+ * C6 (2026-11-01): the sample ships with no warnings, its numbers unchanged.
+ *   - The shear's electricity (0.05 kWh) sits on "Shear blank", the task that
+ *     uses it, not on "10. Cut blank" above "Deburr edges" (which has its own
+ *     grinder electricity): the same substance on a step and on a step below
+ *     it read as "Possible double count". The total is the same sum.
+ *   - No packaging tape line: it was recorded as "1 roll", a unit kg cannot
+ *     take, so it was left out of every run and warned "unit can't convert".
+ *     Leaving it out of the inventory changes no number.
  */
 
 import type { StageId } from '@/lib/life-cycle'
@@ -38,7 +47,8 @@ export const SAMPLE_PROJECT = {
 
 export const SAMPLE_BASE_CASE = {
   name: 'Base case',
-  description: 'The sample study. Read-only: make your own copy to change it.',
+  // Copied into every "Make my own copy", so it says nothing that is untrue of a copy (C2).
+  description: 'The base case of the sample study.',
   referenceFlow: 1,
   referenceFlowUnit: 'bracket',
 }
@@ -149,7 +159,6 @@ export const SAMPLE_STEPS: SampleStep[] = [
     description: 'A 2 mm sheet is cut to one blank.',
     flows: [
       { substance: 'Steel', direction: 'input', quantity: 0.8, unit: 'kg', note: 'Illustrative: the blank weight. Weigh your own part and replace it.' },
-      { substance: 'Electricity', direction: 'input', quantity: 0.05, unit: 'kWh', note: 'Illustrative: shear power x cutting time.' },
     ],
   },
   {
@@ -195,6 +204,7 @@ export const SAMPLE_STEPS: SampleStep[] = [
     stage: 'materials',
     quantity: 12,
     unit: 's',
+    flows: [{ substance: 'Electricity', direction: 'input', quantity: 0.05, unit: 'kWh', note: 'Illustrative: shear power x cutting time.' }],
     costs: [material(0.8, steelPrice), labor(0.0033, welder)],
   },
   {
@@ -230,11 +240,6 @@ export const SAMPLE_STEPS: SampleStep[] = [
     tier: 'elemental_task',
     parent: '40. Pack and ship',
     stage: 'distribution',
-    flows: [
-      // A unit the tape's kg cannot take: the sample's one "Left out, unit can't
-      // convert" line, the kind a document import produces (E04: "Pick kg or g").
-      { substance: 'Packaging tape', direction: 'input', quantity: 1, unit: 'roll', note: 'Recorded as 1 roll. Pick kg or g to count it.' },
-    ],
     costs: [labor(0.0042, worker)],
   },
 ]

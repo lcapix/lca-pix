@@ -16,16 +16,16 @@ beforeAll(async () => {
 });
 
 describe('F33 case inventory', () => {
-  it('the sample: 9 flows, statuses, and rows equal to the frozen run', async () => {
+  it('the sample: 8 flows, statuses (none left out, C6), and rows equal to the frozen run', async () => {
     const res = await api.get(`/api/cases/${sample.case_id}/inventory`, { token: u.token });
     expect(res.status, res.text).toBe(200);
     expect(res.json).toMatchObject({ method: 'TRACI 2.1', region: 'US' });
-    expect(res.json.counts).toEqual({ all: 9, counted: 5, no_factor: 3, needs_amount: 0, left_out: 1 });
+    expect(res.json.counts).toEqual({ all: 8, counted: 5, no_factor: 3, needs_amount: 0, left_out: 0 });
     const by = (s: string) => res.json.rows.filter((r: any) => r.substance === s);
     expect(by('Steel')[0]).toMatchObject({ status: 'counted', amount: 0.8, climate: { factor: 1.9, tag: 'global' } });
     expect(by('Steel')[0].climate.impact).toBeCloseTo(1.52, 9);
     expect(by('Electricity').every((r: any) => r.status === 'counted' && r.climate.tag === 'regional' && r.climate.factor === 0.35)).toBe(true);
-    expect(by('Packaging tape')[0]).toMatchObject({ status: 'left_out', unit: 'roll', substance_unit: 'kg', climate: null });
+    expect(by('Packaging tape')).toEqual([]);
     expect(by('Argon')[0]).toMatchObject({ status: 'no_factor', climate: null });
     expect(res.json.climate.value.toFixed(2)).toBe('1.72');
     // Every counted row equals the run's frozen row: amount × factor = impact.
@@ -48,14 +48,14 @@ describe('F33 case inventory', () => {
     expect(inv.latest_run.changed_after_run).toBe(false);
     const cure = inv.rows.find((r: any) => r.substance === 'Electricity' && r.amount === 0.4);
     expect((await api.put(`/api/flows/${cure.flow_id}`, { token: u.token, json: { quantity: 0.25 } })).status).toBe(200);
-    const tape = inv.rows.find((r: any) => r.substance === 'Packaging tape');
-    expect((await api.put(`/api/flows/${tape.flow_id}`, { token: u.token, json: { unit: 'g', quantity: 4 } })).status).toBe(200);
+    const argon = inv.rows.find((r: any) => r.substance === 'Argon');
+    expect((await api.put(`/api/flows/${argon.flow_id}`, { token: u.token, json: { quantity: 0.03 } })).status).toBe(200);
     inv = (await api.get(`/api/cases/${cid}/inventory`, { token: u.token })).json;
     expect(inv.latest_run.changed_flows).toBe(2);
     // 3.11: the same rule as Compare's "Edited after this run".
     expect(inv.latest_run.changed_after_run).toBe(true);
     expect(inv.counts.left_out).toBe(0);
-    expect(inv.counts.no_factor).toBe(4);
+    expect(inv.counts.no_factor).toBe(3);
     expect(inv.climate.value.toFixed(3)).toBe('1.667');
   });
 

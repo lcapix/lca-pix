@@ -24,9 +24,18 @@ describe('the sample study definition', () => {
     }
   })
 
-  it('nine flows, and the climate arithmetic the screens quote: 1.72 and 1.667 with the eGRID 0.350 and worldsteel 1.900 factors', () => {
+  it('eight flows, no substance twice on one path (no double-count warning), no unit that cannot convert, and the climate arithmetic the screens quote: 1.72 and 1.667', () => {
     const flows = SAMPLE_STEPS.flatMap((s) => (s.flows ?? []).map((f) => ({ ...f, step: s.name })))
-    expect(flows).toHaveLength(9)
+    expect(flows).toHaveLength(8)
+    expect(flows.filter((f) => !['kg', 'kWh'].includes(f.unit))).toEqual([])
+    const path = (name: string): string[] => {
+      const step = SAMPLE_STEPS.find((x) => x.name === name)!
+      return step.parent ? [name, ...path(step.parent)] : [name]
+    }
+    for (const f of flows) {
+      const above = path(f.step).slice(1)
+      expect(flows.filter((g) => g !== f && g.substance === f.substance && above.includes(g.step)), `${f.substance} on ${f.step}`).toEqual([])
+    }
     const gw = (cure: number) =>
       flows.reduce((t, f) => {
         if (f.substance === 'Steel') return t + f.quantity * 1.9

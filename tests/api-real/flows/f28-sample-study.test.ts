@@ -38,7 +38,7 @@ describe('F28 sample study', () => {
     });
   });
 
-  it('17 steps in five tiers and nine flows, the tape recorded as 1 roll and the deburr from the calculator', async () => {
+  it('17 steps in five tiers and eight flows, the shear electricity on its task and the deburr from the calculator (C6: no warnings)', async () => {
     const tiers = await sql<any>(
       'SELECT component_type, COUNT(*) AS n FROM component WHERE case_id = ? GROUP BY component_type ORDER BY MIN(hierarchy_level)',
       [built.case_id],
@@ -52,11 +52,11 @@ describe('F28 sample study', () => {
         WHERE c.case_id = ? ORDER BY f.flow_id`,
       [built.case_id],
     );
-    expect(flows).toHaveLength(9);
+    expect(flows).toHaveLength(8);
     expect(flows).toEqual(expect.arrayContaining([
       { step: '10. Cut blank', substance: 'Steel', flow_type: 'input', quantity: 0.8, unit: 'kg' },
+      { step: 'Shear blank', substance: 'Electricity', flow_type: 'input', quantity: 0.05, unit: 'kWh' },
       { step: 'Deburr edges', substance: 'Electricity', flow_type: 'input', quantity: 0.0013, unit: 'kWh' },
-      { step: 'Fold and tape', substance: 'Packaging tape', flow_type: 'input', quantity: 1, unit: 'roll' },
       { step: '40. Pack and ship', substance: 'Scrap steel', flow_type: 'output', quantity: 0.12, unit: 'kg' },
     ]));
   });
@@ -86,7 +86,9 @@ describe('F28 sample study', () => {
     expect(((steel.impact / b) * 100).toFixed(1)).toBe('88.4');
     // The materials without a climate factor are named, not silently dropped.
     const statement = base.data_quality.statement.join(' ');
-    for (const name of ['Argon', 'Powder coating', 'Packaging tape', 'Scrap steel']) expect(statement).toContain(name);
+    for (const name of ['Argon', 'Powder coating', 'Scrap steel']) expect(statement).toContain(name);
+    // C6: the sample ships with no warnings (no double count, no unit that cannot convert).
+    expect(base.warnings.filter((w: string) => /double count|EXCLUDED|convert/i.test(w))).toEqual([]);
   });
 
   it('costs: $1.75 per bracket, Weld tab $0.55 = 0.39 + 0.01 + 0.03 + 0.12, each with its rate and source', async () => {
