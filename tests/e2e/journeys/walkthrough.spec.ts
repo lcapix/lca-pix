@@ -541,10 +541,11 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     const savedText = posted(desk, /^\/api\/cases\/\d+$/, 'PUT');
     await desk.getByRole('button', { name: 'Save the write-up' }).click();
     expect((await savedText).status()).toBe(200);
-    const ticked = posted(desk, /^\/api\/cases\/\d+$/, 'PUT');
-    // The box shows ticked once the server has saved it.
+    // The tick saves only on its own Save (B1, 2026-11-01), then the box shows ticked.
     const handIn = desk.getByRole('checkbox', { name: /^This is my hand-in/ });
     await handIn.click();
+    const ticked = posted(desk, /^\/api\/cases\/\d+$/, 'PUT');
+    await desk.getByRole('button', { name: 'Save the hand-in' }).click();
     expect((await ticked).status()).toBe(200);
     await expect(handIn).toBeChecked();
     await expect(desk.getByText(/✓ Ticked ·/)).toBeVisible();

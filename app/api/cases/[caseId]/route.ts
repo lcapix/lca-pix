@@ -241,6 +241,24 @@ export async function PUT(
       }
     }
 
+    // The write-up's Limits (migrate-045), in its own statement so a database
+    // without the column still saves Interpretation and Assumptions, and says
+    // so instead of claiming the limits were saved.
+    if (Object.prototype.hasOwnProperty.call(body, 'limitations')) {
+      const v = (body as any).limitations;
+      try {
+        await execute(`UPDATE case_table SET limitations = ? WHERE case_id = ?`, [
+          v === null || v === undefined ? null : String(v).slice(0, 20000),
+          caseId,
+        ]);
+        if (!saved.includes('the write-up')) saved.push('the write-up');
+      } catch (limitsErr: any) {
+        if (limitsErr?.code !== 'ER_BAD_FIELD_ERROR') throw limitsErr;
+        console.warn('[case PUT] limitations column missing (run migrate-045)');
+        return partial('Your limits could not be saved: the database needs migration 045.');
+      }
+    }
+
     // The hand-in flag (migrate-022). Its own statement so a database without
     // the column still saves everything else.
     // One hand-in per author in a project (WRITE-1): marking this case clears

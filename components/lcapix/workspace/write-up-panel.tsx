@@ -1,28 +1,37 @@
 'use client'
 
 // The Write-up panel beside the tree (E06, behaviour spec "Write-up tab"): the
-// answer with its note against the Base case, Interpretation and Assumptions
-// (saved to the case, printed in the report), "This is my hand-in" for a
-// student (it does not lock the case), and Export the report as PDF,
-// PowerPoint or CSV.
+// answer with its note against the Base case, Interpretation, Assumptions and
+// Limits (saved to the case with an explicit Save, printed in the report), the
+// hand-in, and Export the report as PDF, PowerPoint or CSV for a run the
+// student picks (the latest by default).
+//
+// Nothing here saves on its own. Leaving the tab or the page with unsaved
+// changes asks first: Save, Discard or keep editing.
 
 import { runLabel } from '@/lib/results/full-results-view'
 import { perUnit } from '@/lib/workspace/per-unit'
-import { useEffect, useState } from 'react'
-import { Button, Flag, SavedLine, Segmented } from '@/components/lcapix/ds'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Button, ConfirmDialog, Flag, SavedLine, Segmented } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { useGuidedMode } from '@/lib/shell/use-shell'
 import { LMS_NAME } from '@/lib/lms-name'
-import { answer, caseTotal, co2Unit } from '@/lib/ui/format'
-import { downloadRunExport } from '@/lib/results/results-view'
+import { co2Unit } from '@/lib/ui/format'
+import { headlineNumber } from '@/lib/results/number-view'
+import { downloadRunExport, safeRunDate } from '@/lib/results/results-view'
+import { whyNoChange } from '@/lib/project/comparison-banner'
 import { deltaChip, runClimate } from '@/lib/workspace/results-view'
-import type { WorkspaceRun } from '@/lib/workspace/use-runs'
+import { useCaseRuns, type WorkspaceRun } from '@/lib/workspace/use-runs'
 import type { WorkspaceCase } from '@/lib/workspace/use-workspace'
 import { FloatingPanel } from './floating-panel'
 import { ExerciseSlot } from './exercise-card'
 
 const MAX = 20000 // the case route's cap
 type Format = 'pdf' | 'pptx' | 'csv'
+
+/** What leaving the panel would take with it: anything typed or ticked and not saved. */
+const LEAVING = 'a[href], [role="tab"], [role="menuitemradio"], [role="menuitem"]'
 
 export function WriteUpPanel({
   kase,
@@ -33,7 +42,7 @@ export function WriteUpPanel({
 }: {
   kase: WorkspaceCase
   run: WorkspaceRun | null
-  against: { label: string; run_id: number; total: number } | null
+  against: { label: string; run_id: number; total: number; method?: string | null; region?: string | null } | null
   readOnly: boolean
   /** The case changed (write-up or hand-in): reload it. */
   onSaved: () => void
@@ -41,22 +50,47 @@ export function WriteUpPanel({
   const [, setGuided] = useGuidedMode()
   const [interpretation, setInterpretation] = useState(kase.interpretation ?? '')
   const [assumptions, setAssumptions] = useState(kase.assumptions ?? '')
+  const [limitations, setLimitations] = useState(kase.limitations ?? '')
+  const [finalDraft, setFinalDraft] = useState(kase.is_final)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [format, setFormat] = useState<Format>('pdf')
   useEffect(() => setInterpretation(kase.interpretation ?? ''), [kase.interpretation])
   useEffect(() => setAssumptions(kase.assumptions ?? ''), [kase.assumptions])
+  useEffect(() => setLimitations(kase.limitations ?? ''), [kase.limitations])
+  useEffect(() => setFinalDraft(kase.is_final), [kase.is_final])
+
+  // G1: the report is on a run the student picks; the latest by default.
+  const { completed } = useCaseRuns(kase.case_id, null)
+  const [reportRunId, setReportRunId] = useState<number | null>(null)
+  const reportRun = completed.find((r) => r.run_id === reportRunId) ?? completed[0] ?? run
 
   const climate = run ? runClimate(run) : null
   const unit = perUnit(kase)
-  const chip = climate && against ? deltaChip(climate.value, against) : null
-  const dirty = interpretation !== (kase.interpretation ?? '') || assumptions !== (kase.assumptions ?? '')
-  const tooLong = interpretation.length > MAX || assumptions.length > MAX
+  // A5: the same rule as Compare (whyNoNumber): no change across methods, regions or a stale run.
+  const why =
+    run && against
+      ? whyNoChange(
+          { name: kase.case_name, method: run.calculation_method, region: run.regionCode ?? 'Global' },
+          { name: against.label || 'the Base case', method: against.method, region: against.region ?? 'Global' },
+        )
+      : null
+  const chip = climate && against && !why ? deltaChip(climate.value, against) : null
+
+  const textDirty =
+    interpretation !== (kase.interpretation ?? '') ||
+    assumptions !== (kase.assumptions ?? '') ||
+    limitations !== (kase.limitations ?? '')
+  const inAssignment = !!kase.assignment_id
   // The hand-in is a student's: someone who can change the case but does not run the project.
   const student = kase.my_role === 'editor'
+  const tickShown = !inAssignment && (student || kase.is_final)
+  const tickDirty = tickShown && student && !readOnly && finalDraft !== kase.is_final
+  const dirty = !readOnly && (textDirty || tickDirty)
+  const tooLong = interpretation.length > MAX || assumptions.length > MAX || limitations.length > MAX
 
-  const put = async (body: Record<string, unknown>, what: string, line: string) => {
+  const put = async (body: Record<string, unknown>, what: string, line: string): Promise<boolean> => {
     setBusy(what)
     setError(null)
     try {
@@ -65,20 +99,78 @@ export function WriteUpPanel({
       if (!res.ok) throw new Error(d?.error ?? `error ${res.status}`)
       setSaved(line)
       onSaved()
+      return true
     } catch (e: any) {
       setError(`Not saved: ${e?.message ?? 'the request failed'}`)
+      return false
     } finally {
       setBusy(null)
     }
   }
 
+  const saveText = () => put({ interpretation, assumptions, limitations }, 'text', 'Saved · the write-up')
+  const saveTick = () =>
+    put({ is_final: finalDraft }, 'final', finalDraft ? 'Saved · ticked as your hand-in' : 'Saved · no longer your hand-in')
+  /** Everything not saved yet, text first. False when a save failed (the error says why). */
+  const saveAll = async (): Promise<boolean> => {
+    if (textDirty && !(await saveText())) return false
+    if (tickDirty && !(await saveTick())) return false
+    return true
+  }
+  const discard = useCallback(() => {
+    setInterpretation(kase.interpretation ?? '')
+    setAssumptions(kase.assumptions ?? '')
+    setLimitations(kase.limitations ?? '')
+    setFinalDraft(kase.is_final)
+  }, [kase])
+
+  // Leaving with unsaved changes asks first: a tab, a link or a case in the
+  // switcher is held, and replayed after Save or Discard. Closing or
+  // reloading the page asks through the browser.
+  const [leaving, setLeaving] = useState<HTMLElement | null>(null)
+  const replaying = useRef(false)
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!dirtyRef.current || replaying.current) return
+      const el = (e.target as HTMLElement | null)?.closest?.(LEAVING) as HTMLElement | null
+      if (!el || el.closest('.ds-dialog')) return
+      if (el.getAttribute('role') === 'tab' && el.getAttribute('aria-selected') === 'true') return
+      if (el.tagName === 'A' && (el.getAttribute('target') === '_blank' || el.hasAttribute('download'))) return
+      e.preventDefault()
+      e.stopPropagation()
+      setLeaving(el)
+    }
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    document.addEventListener('click', onClick, true)
+    window.addEventListener('beforeunload', onUnload)
+    return () => {
+      document.removeEventListener('click', onClick, true)
+      window.removeEventListener('beforeunload', onUnload)
+    }
+  }, [])
+  const go = (el: HTMLElement) => {
+    setLeaving(null)
+    replaying.current = true
+    try {
+      el.click()
+    } finally {
+      replaying.current = false
+    }
+  }
+
   const exportReport = async () => {
-    if (!run) return
+    if (!reportRun) return
     setBusy('export')
     setError(null)
     try {
-      await downloadRunExport(run.run_id, format, kase.case_name)
-      setSaved(`Exported · ${format === 'pptx' ? 'PowerPoint' : format.toUpperCase()} of ${runLabel(run)}`)
+      await downloadRunExport(reportRun.run_id, format, kase.case_name)
+      setSaved(`Exported · ${format === 'pptx' ? 'PowerPoint' : format.toUpperCase()} of ${runLabel(reportRun)}`)
     } catch (e: any) {
       setError(`The report was not exported: ${e?.message ?? 'the request failed'}`)
     } finally {
@@ -91,6 +183,22 @@ export function WriteUpPanel({
     tickedAt && !Number.isNaN(tickedAt.getTime())
       ? tickedAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase()
       : null
+
+  const field = (
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    placeholder: string,
+  ) => (
+    <label style={{ display: 'grid', gap: 6 }}>
+      <strong style={{ fontSize: 15 }}>{label}</strong>
+      {readOnly ? (
+        <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14 }}>{value.trim() || 'Not written yet.'}</p>
+      ) : (
+        <textarea className="ws-textarea" value={value} maxLength={MAX + 1} placeholder={placeholder} onChange={(e) => set(e.target.value)} />
+      )}
+    </label>
+  )
 
   return (
     <FloatingPanel
@@ -110,7 +218,7 @@ export function WriteUpPanel({
               Guided mode · Write it up
             </span>
             <br />
-            Say what your result means, then name your assumptions. The report puts this next to your numbers.
+            Say what your result means, name your assumptions and the limits of the study. The report puts this next to your numbers.
           </span>
           <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
             <Flag kind="beta" />
@@ -123,18 +231,26 @@ export function WriteUpPanel({
       />
 
       <div className="ws-panel-section">
-        {climate ? (
+        {climate && run ? (
           <>
             <div className="ws-answer">
-              <span style={{ fontSize: 44, fontWeight: 600, lineHeight: 1 }}>{answer(climate.value, kase.case_type)}</span>
+              <span style={{ fontSize: 44, fontWeight: 600, lineHeight: 1 }}>{headlineNumber(climate.value, climate.name, kase.case_type)}</span>
               <span className="ds-mono" style={{ fontSize: 14 }}>
                 {co2Unit(climate.unit)} per {unit}
               </span>
             </div>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
+              {runLabel(run)} · {run.calculation_method} · {run.regionCode ?? 'Global'}
+            </p>
             {chip && (
               <span className="ws-pill" style={{ cursor: 'default', marginTop: 10 }}>
                 {chip}
               </span>
+            )}
+            {why && against && (
+              <p className="wu-nochange" style={{ margin: '10px 0 0', fontSize: 13 }}>
+                No change against the {against.label || 'Base case'}: {why.replace(/\.$/, '')}.
+              </p>
             )}
           </>
         ) : (
@@ -143,61 +259,47 @@ export function WriteUpPanel({
       </div>
 
       <div className="ws-panel-section" style={{ display: 'grid', gap: 14 }}>
-        <label style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontSize: 15 }}>Interpretation</strong>
-          {readOnly ? (
-            <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14 }}>{interpretation.trim() || 'Not written yet.'}</p>
-          ) : (
-            <textarea
-              className="ws-textarea"
-              value={interpretation}
-              maxLength={MAX + 1}
-              placeholder="What does the result mean? Which step drives it, and why?"
-              onChange={(e) => setInterpretation(e.target.value)}
-            />
-          )}
-        </label>
-        <label style={{ display: 'grid', gap: 6 }}>
-          <strong style={{ fontSize: 15 }}>Assumptions</strong>
-          {readOnly ? (
-            <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14 }}>{assumptions.trim() || 'Not written yet.'}</p>
-          ) : (
-            <textarea
-              className="ws-textarea"
-              value={assumptions}
-              maxLength={MAX + 1}
-              placeholder="What did the model assume or leave out? Which factors are averages?"
-              onChange={(e) => setAssumptions(e.target.value)}
-            />
-          )}
-        </label>
+        {field('Interpretation', interpretation, setInterpretation, 'What does the result mean? Which step drives it, and why?')}
+        {field('Assumptions', assumptions, setAssumptions, 'What did the model assume? Which amounts are estimates, which factors are averages?')}
+        {field('Limits', limitations, setLimitations, 'What can this study not say? What is left out, and what would change the answer?')}
         {!readOnly && (
           <span style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button
               variant="dark"
-              disabled={!dirty || tooLong}
-              disabledReason={tooLong ? `Keep each under ${MAX.toLocaleString()} characters` : undefined}
+              disabled={!textDirty || tooLong}
+              disabledReason={tooLong ? `Keep each under ${MAX.toLocaleString()} characters` : textDirty ? undefined : 'Nothing to save yet'}
               busy={busy === 'text'}
-              onClick={() => put({ interpretation, assumptions }, 'text', 'Saved · the write-up')}
+              onClick={() => void saveText()}
             >
               Save the write-up
             </Button>
-            {dirty && <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>Not saved yet</span>}
+            {textDirty && <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>Not saved yet</span>}
           </span>
         )}
       </div>
 
-      {(student || kase.is_final) && (
+      {inAssignment && !kase.read_only && (
+        // One hand-in, on the Assignments page: it freezes a copy for the instructor.
+        <div className="ws-panel-section">
+          <strong style={{ fontSize: 15 }}>Next: hand it in</strong>
+          <p style={{ margin: '4px 0 8px', fontSize: 13, color: 'var(--ds-text-2)' }}>
+            Save your write-up, then hand in on the Assignments page. Your instructor gets a frozen copy of this case and its run.
+          </p>
+          <Link className="ds-btn" href={`/project/${kase.project_id}/assignments`}>
+            Hand in on the Assignments page
+          </Link>
+        </div>
+      )}
+
+      {tickShown && (
         <div className="ws-panel-section">
           <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', cursor: student && !readOnly ? 'pointer' : 'default' }}>
             <input
               type="checkbox"
               className="ws-check"
-              checked={kase.is_final}
+              checked={finalDraft}
               disabled={!student || readOnly || busy === 'final'}
-              onChange={(e) =>
-                put({ is_final: e.target.checked }, 'final', e.target.checked ? 'Saved · ticked as your hand-in' : 'Saved · no longer your hand-in')
-              }
+              onChange={(e) => setFinalDraft(e.target.checked)}
             />
             <span>
               <strong style={{ fontSize: 15 }}>{student ? 'This is my hand-in' : 'Ticked as the hand-in'}</strong>
@@ -214,34 +316,64 @@ export function WriteUpPanel({
               )}
             </span>
           </label>
+          {tickDirty && (
+            <span style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+              <Button variant="dark" size="small" busy={busy === 'final'} onClick={() => void saveTick()}>
+                Save the hand-in
+              </Button>
+              <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>Not saved yet</span>
+            </span>
+          )}
         </div>
       )}
 
-      <div className="ws-panel-section" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Button
-          variant="primary"
-          disabled={!run}
-          disabledReason={run ? undefined : 'Run this case first'}
-          busy={busy === 'export'}
-          onClick={exportReport}
-          icon={
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
-              <path d="M12 4v11m-5-5 5 5 5-5M5 20h14" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          }
-        >
-          Export the report
-        </Button>
-        <Segmented
-          label="Report format"
-          value={format}
-          onChange={setFormat}
-          options={[
-            { value: 'pdf', label: 'PDF' },
-            { value: 'pptx', label: 'PowerPoint' },
-            { value: 'csv', label: 'CSV' },
-          ]}
-        />
+      <div className="ws-panel-section" style={{ display: 'grid', gap: 10 }}>
+        {completed.length > 0 && reportRun && (
+          <label style={{ display: 'grid', gap: 6, fontSize: 14 }}>
+            <strong>Run to report</strong>
+            <select
+              className="ds-input"
+              value={String(reportRun.run_id)}
+              onChange={(e) => setReportRunId(Number(e.target.value) || null)}
+            >
+              {completed.map((r, i) => (
+                <option key={r.run_id} value={r.run_id}>
+                  {runLabel(r)} · {r.calculation_method} · {r.regionCode ?? 'Global'} · {safeRunDate(r.run_date)}
+                  {i === 0 ? ' (latest)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <span style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button
+            variant="primary"
+            disabled={!reportRun}
+            disabledReason={reportRun ? undefined : 'Run this case first'}
+            busy={busy === 'export'}
+            onClick={exportReport}
+            icon={
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden>
+                <path d="M12 4v11m-5-5 5 5 5-5M5 20h14" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            }
+          >
+            Export the report
+          </Button>
+          <Segmented
+            label="Report format"
+            value={format}
+            onChange={setFormat}
+            options={[
+              { value: 'pdf', label: 'PDF' },
+              { value: 'pptx', label: 'PowerPoint' },
+              { value: 'csv', label: 'CSV' },
+            ]}
+          />
+        </span>
+        {textDirty && !readOnly && (
+          <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>The report prints the write-up as last saved.</span>
+        )}
       </div>
       {(saved || error) && (
         <div style={{ padding: '0 18px 14px' }}>
@@ -254,6 +386,34 @@ export function WriteUpPanel({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!leaving}
+        title="Save the write-up first?"
+        consequence="You have changes in the write-up that are not saved. Save them, or discard them and go on."
+        confirmLabel="Save"
+        danger={false}
+        busy={busy === 'text' || busy === 'final'}
+        secondary={{
+          label: 'Discard',
+          onClick: () => {
+            const el = leaving
+            discard()
+            dirtyRef.current = false
+            if (el) go(el)
+          },
+        }}
+        onConfirm={async () => {
+          const el = leaving
+          if (!(await saveAll())) {
+            setLeaving(null)
+            return
+          }
+          dirtyRef.current = false
+          if (el) go(el)
+        }}
+        onCancel={() => setLeaving(null)}
+      />
     </FloatingPanel>
   )
 }

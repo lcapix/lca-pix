@@ -34,6 +34,8 @@ export interface WorkspaceCase {
   reference_flow_unit: string | null
   interpretation: string | null
   assumptions: string | null
+  /** The write-up's Limits (migrate-045); null before it is written or on a database without it. */
+  limitations: string | null
   is_final: boolean
   finalized_at: string | null
   project_functional_unit: string | null
@@ -155,6 +157,7 @@ export function useCaseWorkspace(caseId: number) {
         reference_flow_unit: cj.reference_flow_unit ?? null,
         interpretation: cj.interpretation ?? null,
         assumptions: cj.assumptions ?? null,
+        limitations: cj.limitations ?? null,
         is_final: !!cj.is_final,
         finalized_at: cj.finalized_at ?? null,
         project_functional_unit: cj.project_functional_unit ?? null,
