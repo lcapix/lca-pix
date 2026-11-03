@@ -231,7 +231,11 @@ function syncWindowGuards() {
     document.addEventListener('click', onClickCapture, true)
     windowBound = true
   }
-  if (edits.size) ensureSentinel()
+  // Not while a leave waits for Save or Discard: Back has just stepped off the
+  // same-URL entry, and pushing a new one would make the held Back land on
+  // this page again (Discard after Back stayed on the case). Keep editing
+  // puts it back.
+  if (edits.size && !pending) ensureSentinel()
   // Everything saved where it stands: take the same-URL entry off again, so
   // one Back still leaves the page.
   if (!edits.size && !pending && !leaving && window.history.state?.[SENTINEL]) {

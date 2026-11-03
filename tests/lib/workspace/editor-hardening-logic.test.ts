@@ -86,7 +86,7 @@ describe('B3 unsaved edits hold a move', () => {
     expect(go).toHaveBeenCalledOnce()
   })
 
-  it('an unsaved edit holds the move; Discard throws the edit away and then moves', () => {
+  it('an unsaved edit holds the move; Discard throws the edit away and then moves', async () => {
     const discard = vi.fn()
     registerUnsaved('flow-1', { label: 'Steel on 10. Cut blank', save: async () => true, discard })
     const go = vi.fn()
@@ -95,8 +95,8 @@ describe('B3 unsaved edits hold a move', () => {
     expect(pendingLeave()).toBe(true)
     discardAndGo()
     expect(discard).toHaveBeenCalledOnce()
-    expect(go).toHaveBeenCalledOnce()
     expect(hasUnsaved()).toBe(false)
+    expect(go).toHaveBeenCalledOnce()
   })
 
   it('Save saves every edit, then moves; a save that fails keeps you where you are', async () => {
