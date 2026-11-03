@@ -255,6 +255,8 @@ export function CaseWorkspace() {
     projectName,
     initialStepId: Number(search.get('componentId')) || null,
     startAdd: search.get('add') === 'step',
+    // W8: "Add the flow" from a step cost with no flow opens that step's Add a flow.
+    startAddFlow: search.get('add') === 'flow',
   }
 
   // D4: an assignment case that has an answer: write it up, then hand it in.

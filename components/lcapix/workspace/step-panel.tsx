@@ -55,6 +55,7 @@ export function StepPanel({
   onView,
   actions,
   onDelete,
+  startAdding = false,
 }: {
   kase: WorkspaceCase
   step: WorkspaceStep
@@ -66,10 +67,12 @@ export function StepPanel({
   onView: (v: TreeView) => void
   actions: StepActions
   onDelete: () => void
+  /** Open with Add a flow already open (a step cost's "Add the flow"). */
+  startAdding?: boolean
 }) {
   const [guided, setGuided] = useGuidedMode()
   const [saved, setSaved] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState(startAdding && !readOnly)
   const [flowAnyway, setFlowAnyway] = useState(false)
   // "No price for Argon: add its cost" opens the Cost view on that kind.
   const [costOpen, setCostOpen] = useState<CostBasisKind | null>(null)

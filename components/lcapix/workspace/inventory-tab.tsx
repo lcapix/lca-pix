@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 // The Inventory tab (E04, behaviour spec "Inventory tab"): a slim indented
 // tree on the left (pick a step to see only its flows; a row marks its step),
 // and on the right the status tabs with counts, then one table grouped by
@@ -550,6 +552,9 @@ function InventoryRowView({
 }
 
 /** A cost that sits on the step, not on a flow (E4): its math, its tag, and Edit with the same editor as the Cost view. */
+/** The cost kinds a flow should carry: their impact comes from the flow, never from the cost. */
+const FLOW_BACKED = new Set(['material', 'energy', 'transportation'])
+
 function StepCostRow({
   step,
   steps,
@@ -582,6 +587,13 @@ function StepCostRow({
         </td>
         <td>
           <span className="ws-inv-math ws-inv-muted">{hasFlows ? 'Not a flow: no impact of its own' : NO_IMPACT_LINE}</span>
+          {/* W8: a material, energy or transport cost with no flow behind it
+              counts no impact; offer the flow that would carry it. */}
+          {!hasFlows && !readOnly && FLOW_BACKED.has(kind) && c.amount != null && (
+            <Link className="ds-link" style={{ display: 'block', marginTop: 4, fontSize: 13 }} href={`?componentId=${step.id}&add=flow`}>
+              Add the {kind === 'energy' ? 'energy' : kind === 'transportation' ? 'transport' : 'material'} flow
+            </Link>
+          )}
         </td>
         <td>
           <span className="ds-mono ws-inv-math">

@@ -90,6 +90,7 @@ export function TreeTab({
   projectName = null,
   initialStepId = null,
   startAdd = false,
+  startAddFlow = false,
 }: {
   kase: WorkspaceCase
   steps: WorkspaceStep[]
@@ -110,6 +111,8 @@ export function TreeTab({
   initialStepId?: number | null
   /** ?add=step opens the Add a step form. */
   startAdd?: boolean
+  /** Open Add a flow on the step named by initialStepId (a cost's "Add the flow"). */
+  startAddFlow?: boolean
 }) {
   const results = resultsPanel !== undefined
   const byId = useMemo(() => new Map(steps.map((s) => [s.id, s])), [steps])
@@ -476,6 +479,7 @@ export function TreeTab({
           onView={onView}
           actions={actions}
           onDelete={() => setDeleteFor(selected)}
+          startAdding={startAddFlow && selected === initialStepId}
         />
       )}
 
