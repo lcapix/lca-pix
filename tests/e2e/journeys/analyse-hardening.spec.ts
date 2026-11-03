@@ -172,7 +172,7 @@ test('A8: the Results tab and the full results page print the same numbers and t
 
   await page.getByRole('link', { name: 'Open full page' }).click();
   await expect(page.getByRole('region', { name: 'Total' })).toContainText('1.72', NAV);
-  await expect(page.getByRole('region', { name: 'Total' })).not.toContainText('1.72');
+  await expect(page.getByRole('region', { name: 'Total' })).not.toContainText('1.720');
   await expect(page.getByRole('region', { name: 'Total' })).toContainText('$1.75');
   const acidFull = page.getByRole('region', { name: 'Category chart' }).locator('li').filter({ hasText: 'Acidification' }).locator('.ds-num');
   await expect(acidFull).toHaveText(acidTabValue);

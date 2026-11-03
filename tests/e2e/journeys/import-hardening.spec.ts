@@ -125,7 +125,7 @@ test('F1 F2 F4 three sample files into one case: each Done card says what is nex
   const aluRow = page.locator('.ip-lines-table tbody tr.ip-line-row').first();
   const editAlu = aluRow.locator('.ip-edit-toggle');
   await expect(editAlu).toHaveAccessibleName(/^Edit /);
-  await expect(editAlu).toHaveText('Change');
+  await expect(editAlu).toHaveText('Edit');
   await editAlu.click();
   await expect(pickers).toHaveCount(before + 1);
   await editAlu.click();

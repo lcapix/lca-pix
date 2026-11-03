@@ -123,7 +123,8 @@ test('I02 I03 I04 I05 I06 I07 I08 I10 I11 a respelled bill of materials into a T
   await expect.soft(alu.locator('option:checked'), 'I04 "Aluminium sheet" lands on the library\'s Aluminum').toHaveText(/^Aluminum · /);
   await row(page.getByText('Each match shows its climate factor in TRACI 2.1'), 'I02', 'Factors shown for the project\'s method');
   await expect.soft(alu.locator('option:checked'), 'I02 factor, unit, variant and source on the candidate').toHaveText(/· 8\.6 kg CO2 eq · .* · Global · International Aluminium Institute/);
-  await row(page.getByRole('columnheader', { name: 'In or out' }), 'I05', 'Direction column');
+  // 759aaa2: the direction is on the line itself ("Input · small-bom.csv"), not a column of its own.
+  await row(page.locator('tr', { hasText: 'Aluminium sheet' }).getByText(/^Input · /).first(), 'I05', 'Direction on each line');
   await row(page.locator('tr', { hasText: 'Aluminium sheet' }).getByText(/small-bom\.csv/), 'I05', 'Full provenance');
   await row(page.getByText(/matched 'Aluminum' \(substance \d+\)/), 'I06', 'Substance id in the review notes');
 
