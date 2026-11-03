@@ -78,7 +78,7 @@ test.describe('journey 1, hardened: the sample, my copy, the Cases board', () =>
     await expect(page).toHaveURL(/tab=writeup/, NAV);
     await page.goBack();
     await expect(page).toHaveURL(/tab=results/, NAV);
-    await expect(page.getByRole('tab', { name: /^Results/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tablist', { name: 'Case' }).getByRole('tab', { name: /^Results/ })).toHaveAttribute('aria-selected', 'true');
     await page.goBack();
     await expect(page).toHaveURL(/tab=inventory/, NAV);
     await page.goBack();

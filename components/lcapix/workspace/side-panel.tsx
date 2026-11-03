@@ -43,6 +43,7 @@ export function SidePanel({
             className="ws-side-tab"
             aria-selected={showing === 'main'}
             aria-controls="ws-side-main"
+            aria-label={`${mainTab} panel`}
             onClick={() => onShow('main')}
           >
             {mainTab}
@@ -54,6 +55,7 @@ export function SidePanel({
           id="ws-side-tab-docs"
           className="ws-side-tab"
           aria-selected={showing === 'docs'}
+          aria-label="Documents panel"
           onClick={() => onShow('docs')}
         >
           Documents

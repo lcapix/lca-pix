@@ -242,8 +242,8 @@ export function NewCaseForm() {
             <label className="nc-option-head">
               <input type="radio" name="kind" checked={kind === 'emptycomp'} onChange={() => setKind('emptycomp')} />
               <span>
-                <strong>An empty comparative</strong>
-                <span>A what-if with no steps yet.</span>
+                <strong>An empty what-if</strong>
+                <span>No steps yet. Build the change from nothing.</span>
               </span>
             </label>
           </div>
