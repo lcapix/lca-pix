@@ -13,7 +13,7 @@ const PUBLIC: Array<[string, string | RegExp]> = [
   ['/about', 'What is LCAPIX?'],
   ['/docs', 'Everything you need to ship a defensible LCA.'],
   ['/changelog', "What's new in LCAPIX."],
-  ['/pricing', 'Free to model. Pay when you need live data.'],
+  ['/pricing', 'Free while in beta'],
   ['/product', 'Six capabilities. One browser tab.'],
   ['/legal/privacy', 'Privacy policy'],
   ['/legal/terms', 'Terms of service'],
@@ -33,6 +33,15 @@ test.describe('signed out', () => {
       await expect.soft(page.getByRole('button', { name: /Notifications/ }), note('G117', `${path}: no bell`)).toHaveCount(0);
       await expect.soft(page.getByRole('navigation', { name: 'Main' }), note('G117', `${path}: no app sidebar`)).toHaveCount(0);
     }
+  });
+
+  test('pricing in the beta: free, with no plan, price or trial on offer', async ({ page }) => {
+    await open(page, '/pricing', { ready: 'Free while in beta' });
+    const main = page.locator('main');
+    await expect(main).not.toContainText(/\$\d|\bPro\b|trial|Enterprise|per seat/i);
+    await expect(main.getByRole('link', { name: /Sign up free/ })).toHaveAttribute('href', '/auth/signup');
+    await expect(main.getByRole('heading', { name: 'Not in the beta yet' })).toBeVisible();
+    await expect(main.getByRole('link', { name: 'lcapix50@gmail.com' })).toHaveAttribute('href', 'mailto:lcapix50@gmail.com');
   });
 
   test('G151 docs: where the data comes from, only the sources the app calls, each with where it appears', async ({ page }) => {
