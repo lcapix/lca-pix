@@ -14,7 +14,7 @@ describe('Cases (E07, E07b)', () => {
     expect(others.map((c) => c.case_id)).toEqual([ana.case_id, sam.case_id])
     expect(casesHeader({ all: 34, mine: 2, others: 32 }, 'student', 'TRACI 2.1 · US')).toBe('34 cases · 2 yours, 32 from students · TRACI 2.1 · US')
     expect(answerOf(base)).toBe('1.72')
-    expect(answerOf(ana)).toBe('1.682')
+    expect(answerOf(ana)).toBe('1.68')
     expect(answerOf(sam)).toBeNull()
     expect(changeVsBase(whatIf, base)).toBe('▼ 3.1%')
     expect(changeVsBase(base, base)).toBeNull()

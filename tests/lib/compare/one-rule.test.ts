@@ -92,7 +92,7 @@ describe('A3: What changed names a method, region or factor difference', () => {
     expect(w.main).toBeNull()
     expect(w.lines).toEqual([
       'Region (electricity grid): US → EU. The electricity factor changes with the region.',
-      'Electricity at 30. Powder coat and cure: same amount, but its result went 0.140 → 0.090 kg CO₂-eq, so its factor changed',
+      'Electricity at 30. Powder coat and cure: same amount, but its result went 0.140 → 0.0900 kg CO₂-eq, so its factor changed',
     ])
   })
 
@@ -103,12 +103,12 @@ describe('A3: What changed names a method, region or factor difference', () => {
 })
 
 describe('A8: one way to print a run number on both result screens', () => {
-  it('the climate answer at the case decimals, everything else at three', () => {
+  it('every result at 3 significant figures (UX 7)', () => {
     expect(headlineNumber(1.7199667, GW, 'base')).toBe('1.72')
-    expect(headlineNumber(1.53, GW, 'comparative')).toBe('1.530')
-    expect(headlineNumber(0.00066, AC, 'base')).toBe('0.001')
-    expect(categoryNumber(0.0066)).toBe('0.007')
-    expect(categoryNumber(0.0000198)).toBe('< 0.001')
+    expect(headlineNumber(1.53, GW, 'comparative')).toBe('1.53')
+    expect(headlineNumber(0.00066, AC, 'base')).toBe('0.000660')
+    expect(categoryNumber(0.0066)).toBe('0.00660')
+    expect(categoryNumber(0.0000198)).toBe('0.0000198')
   })
 })
 

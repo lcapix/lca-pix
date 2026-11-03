@@ -42,13 +42,13 @@ test.describe('F9 run an assessment', () => {
     expect((await posted).status()).toBe(201);
     await expect(page).toHaveURL(/tab=results/, NAV);
 
-    // RES-1: 800 × 1.9 + (0.05 + 0.000001 + 0.4 + 0.0013) × 0.35 = 1,520.158, grouped, three decimals (a copy).
+    // RES-1: 800 × 1.9 + (0.05 + 0.000001 + 0.4 + 0.0013) × 0.35 = 1,520.158, grouped, at 3 significant figures (UX 7).
     await expect(page.getByText('What builds this number')).toBeVisible(NAV);
-    await expect(page.locator('.ws-answer-num')).toHaveText('1,520.158');
+    await expect(page.locator('.ws-answer-num')).toHaveText('1,520');
 
-    // RUN-2: a 3.5e-7 contribution reads as "< 0.001", never as 0.
+    // RUN-2: a 3.5e-7 contribution reads as its digits, never as 0.
     const weldRow = page.locator('li').filter({ hasText: /^20\. Weld tab/ }).first();
-    await expect(weldRow).toContainText('< 0.001');
+    await expect(weldRow).toContainText('3.50 × 10⁻⁷');
   });
 });
 

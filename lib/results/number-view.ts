@@ -2,9 +2,9 @@
  * One way to print a run's numbers on the Results tab and on the full results
  * page (A8), so the same number never reads two ways (0.0066 against 0.007).
  *
- * The climate answer uses the case total's decimals (rules.md: 2 for a Base
- * case, 3 for a comparative case); every other category and every step value
- * uses three decimals, and a value too small for three says "< 0.001".
+ * UX 7: every number a student reads, the climate answer, every other
+ * category and every step value, is at 3 significant figures (lib/ui/format
+ * sig3), so a small value still shows its digits and never reads as 0.
  */
 
 import { answer, result3 } from '@/lib/ui/format'

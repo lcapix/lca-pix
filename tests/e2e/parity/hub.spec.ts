@@ -91,7 +91,7 @@ test('P13 the Cases board shows the runs\' own answers, or that there is none ye
   await row(card.getByText(/not run yet/), 'P13', 'nothing invented before a run');
   await as.post(`/api/cases/${caseId}/assessments`, {});
   await page.reload();
-  await row(card.getByText('1.720'), 'P13', 'the run\'s own number');
+  await row(card.getByText('1.72'), 'P13', 'the run\'s own number');
   await expect.soft(page.getByText(/28\.0%|\+\$240/), note('P13', 'no invented numbers')).toHaveCount(0);
   expect(baseCaseId).toBeTruthy();
 });

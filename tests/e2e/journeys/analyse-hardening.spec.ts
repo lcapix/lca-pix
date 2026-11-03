@@ -84,10 +84,10 @@ test('A3 A4: Compare prints one percentage when the runs compare, none across re
   // Same method and region: 1.720 against 1.530, and 11.0% in every place that prints a percentage.
   await open(page, comparison, { ready: 'Fair to compare' });
   const totals = page.getByRole('region', { name: 'Totals' });
-  await expect(totals).toContainText('1.720');
-  await expect(totals).toContainText('1.530');
+  await expect(totals).toContainText('1.72');
+  await expect(totals).toContainText('1.53');
   await expect(totals).toContainText('▼ 11.0% lower');
-  await expect(page.getByRole('region', { name: 'Ranking' })).toContainText(/My copy 1\.530 kg CO₂-eq \(11\.0% lower than A\)/);
+  await expect(page.getByRole('region', { name: 'Ranking' })).toContainText(/My copy 1\.53 kg CO₂-eq \(11\.0% lower than A\)/);
   await expect(page.getByRole('region', { name: 'Verdict' })).toContainText('My copy is 11.0% lower in Global Warming than Base case.');
   await expect(page.getByRole('region', { name: 'Change by category' })).toContainText('−11.0%');
   // The walk saw 14.7% on the chip and 14.6% in Ranking for one pair: every percentage on the page agrees now.
@@ -98,7 +98,7 @@ test('A3 A4: Compare prints one percentage when the runs compare, none across re
   await open(page, comparison, { ready: 'Not comparable yet' });
   await expect(page.getByText('Fails: Region differs: US vs EU')).toBeVisible();
   await expect(totals.locator('.cmp-total-num')).toHaveCount(2);
-  await expect(totals).toContainText('1.720');
+  await expect(totals).toContainText('1.72');
   await expect(totals).toContainText('Not comparable: Region differs: US vs EU.');
   await expect(page.getByRole('region', { name: 'Ranking' })).toContainText('Nothing is ranked: not comparable. Region differs: US vs EU.');
   await expect(page.getByRole('region', { name: 'Verdict' })).toContainText('Region differs: US vs EU');
@@ -172,7 +172,7 @@ test('A8: the Results tab and the full results page print the same numbers and t
 
   await page.getByRole('link', { name: 'Open full page' }).click();
   await expect(page.getByRole('region', { name: 'Total' })).toContainText('1.72', NAV);
-  await expect(page.getByRole('region', { name: 'Total' })).not.toContainText('1.720');
+  await expect(page.getByRole('region', { name: 'Total' })).not.toContainText('1.72');
   await expect(page.getByRole('region', { name: 'Total' })).toContainText('$1.75');
   const acidFull = page.getByRole('region', { name: 'Category chart' }).locator('li').filter({ hasText: 'Acidification' }).locator('.ds-num');
   await expect(acidFull).toHaveText(acidTabValue);
@@ -208,8 +208,8 @@ test('C2 G1 G2: a copy has no read-only banner; Limits saves; the report carries
   const pdf = await exportPdf(page);
   expect(pdf).toContain('Comparison with the base case');
   expect(pdf).toMatch(/Comparable: the same method, region and functional unit/);
-  expect(pdf).toContain('1.720');
-  expect(pdf).toContain('1.530');
+  expect(pdf).toContain('1.72');
+  expect(pdf).toContain('1.53');
   expect(pdf).toContain('11.0% lower');
   expect(pdf).toMatch(/Run 1, /);
   expect(pdf).toMatch(/Prepared (B|b)y Jordan Journey/);

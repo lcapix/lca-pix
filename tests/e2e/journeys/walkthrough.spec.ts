@@ -171,7 +171,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await expect(page.getByText('1.72', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('17 steps in five tiers, from the product down to each task.')).toBeVisible();
     await expect(page.getByText('89% comes from 10. Cut blank, almost all of it steel.')).toBeVisible();
-    await expect(page.getByText('1.667').first()).toBeVisible();
+    await expect(page.getByText('1.67').first()).toBeVisible();
     await expect(page.getByText(/3\.1\s?% lower/).first()).toBeVisible();
     await shot(page, 'E02-home-sample-study');
   });
@@ -243,7 +243,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(page).toHaveURL(/tab=results/, NAV);
-    await expect(page.locator('.ws-answer-num')).toHaveText('1.720', NAV);
+    await expect(page.locator('.ws-answer-num')).toHaveText('1.72', NAV);
     // Cost beside impact: the weld tab is 31.4 % of the cost and 2.4 % of the impact.
     await expect(page.getByText('Cost beside impact')).toBeVisible();
     await expect(page.getByText('$1.75', { exact: true }).first()).toBeVisible();
@@ -504,12 +504,12 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await page.getByRole('button', { name: 'Run the case', exact: true }).click();
     await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ranWhatIf).status()).toBe(201);
-    await expect(page.locator('.ws-answer-num')).toHaveText('1.667', NAV);
+    await expect(page.locator('.ws-answer-num')).toHaveText('1.67', NAV);
 
     // Compare: fair only when the four checks pass; 1.72 and 1.667.
     await open(page, `/project/${cls.projectId}/comparison?cases=${cls.baseCaseId},${whatIfId}`, { ready: 'Fair to compare' });
     await expect(page.getByText('1.72', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('1.667', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('1.67', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Change by step' })).toBeVisible();
     await shot(page, 'E09-compare');
 
@@ -557,7 +557,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await desk.getByRole('button', { name: 'Run the case', exact: true }).click();
     await desk.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
-    await expect(desk.locator('.ws-answer-num')).toHaveText('1.682', NAV);
+    await expect(desk.locator('.ws-answer-num')).toHaveText('1.68', NAV);
 
     // Her write-up, in her own words, then the hand-in tick (it locks nothing).
     await desk.getByRole('tab', { name: 'Write-up' }).click();
@@ -588,7 +588,7 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await ph.getByRole('tab', { name: /^Results/ }).click();
     await expect(ph.getByRole('tab', { name: /^Results/ })).toHaveAttribute('aria-selected', 'true', NAV);
     await expect(ph.getByText('What builds this number')).toBeVisible(NAV);
-    await expect(ph.getByText('1.682', { exact: true }).first()).toBeVisible();
+    await expect(ph.getByText('1.68', { exact: true }).first()).toBeVisible();
     await shot(ph, 'E17-phone-results');
     await phone.close();
     await anaDesk.close();

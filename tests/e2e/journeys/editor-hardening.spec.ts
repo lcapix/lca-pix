@@ -339,7 +339,7 @@ test.describe('editor hardening: own factors', () => {
     await expect(p.getByText('Saved · your own factor for Steel: 2.5 kg CO₂-eq per kg (Hand-entered: Mill EPD 2025)')).toBeVisible();
     const steel = p.locator('.ws-flow').filter({ hasText: 'Hand-entered: Mill EPD 2025' });
     await expect(steel.getByText('Hand-entered', { exact: true })).toBeVisible();
-    await expect(steel.locator('.ws-sum')).toHaveText('0.80 kg × 2.5 kg CO₂-eq per kg = 2.000 kg CO₂-eq');
+    await expect(steel.locator('.ws-sum')).toHaveText('0.80 kg × 2.5 kg CO₂-eq per kg = 2.00 kg CO₂-eq');
 
     // A2: kg → g. The factor is restated per g and the impact stays 2.000.
     await p.getByRole('combobox', { name: 'Unit for Steel' }).selectOption('g');
@@ -348,7 +348,7 @@ test.describe('editor hardening: own factors', () => {
     const flowId = (await flowsOf(api, user, cut)).find((f) => f.substance_name === 'Steel')!.flow_id;
     const own = (await api.as(user.token).get<{ factors: Array<{ factor_value: number; per_unit: string; source: string }> }>(`/api/flows/${flowId}/factor`)).factors[0];
     expect([Number(own.factor_value), own.per_unit, own.source]).toEqual([0.0025, 'g', 'Mill EPD 2025']);
-    await expect(p.locator('.ws-flow').filter({ hasText: 'Hand-entered: Mill EPD 2025' }).locator('.ws-sum')).toHaveText('800 g × 0.0025 kg CO₂-eq per g = 2.000 kg CO₂-eq');
+    await expect(p.locator('.ws-flow').filter({ hasText: 'Hand-entered: Mill EPD 2025' }).locator('.ws-sum')).toHaveText('800 g × 0.0025 kg CO₂-eq per g = 2.00 kg CO₂-eq');
 
     // The Inventory says Hand-entered with the source.
     await page.getByRole('tab', { name: /^Inventory/ }).click();

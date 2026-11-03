@@ -5,6 +5,7 @@
 import type { ReactNode } from 'react'
 import { HelpTip } from '@/components/lcapix/help-tip'
 import { fmtNum } from '@/components/lcapix'
+import { result3 } from '@/lib/ui/format'
 import type { CompareCase } from './types'
 export { pctChange as pctOf } from '@/lib/compare/analytics'
 
@@ -30,10 +31,15 @@ export function signed(n: number | null | undefined, digits = 2): string {
   return `${n > 0 ? '+' : '−'}${fmtNum(Math.abs(n), digits)}`
 }
 
-/** Four significant digits, so 88.62 and 0.007334 both keep their detail. */
-export function sig(n: number | null | undefined, digits = 4): string {
+/**
+ * Significant figures, so 88.6 and 0.00733 both keep their detail. Three by
+ * default (UX 7), the way every result screen reads, trailing zeros kept;
+ * a chart tooltip may ask for more.
+ */
+export function sig(n: number | null | undefined, digits = 3): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return '–'
   if (n === 0) return '0'
+  if (digits === 3) return result3(n)
   return Number(n.toPrecision(digits)).toLocaleString('en-US', { maximumSignificantDigits: digits })
 }
 

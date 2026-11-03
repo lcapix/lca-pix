@@ -42,6 +42,6 @@ test('G29 P129 F4 the sample study → Make my own copy → Run the case → Res
   await expect(page).toHaveURL(/tab=results/, NAV);
   await expect(page.getByText('What builds this number')).toBeVisible(NAV);
   // A copy is comparative: its answer has three decimals (rules.md).
-  await expect(page.locator('.ws-answer-num')).toHaveText('1.720');
+  await expect(page.locator('.ws-answer-num')).toHaveText('1.72');
   await expect(page.getByText(/^10\. Cut blank/).first()).toBeVisible();
 });

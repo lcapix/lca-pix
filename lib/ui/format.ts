@@ -19,9 +19,31 @@ export function fixed(x: number, d: number): string {
   return (Object.is(v, -0) ? 0 : v).toFixed(d)
 }
 
-/** A total as the screens show it: 2 decimals for a base case, 3 for a comparative. */
-export function caseTotal(x: number, caseType: 'base' | 'comparative' | string): string {
-  return fixed(x, caseType === 'comparative' ? 3 : 2)
+const SUPERSCRIPT: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' }
+
+/**
+ * UX 7: `x` to 3 significant figures, the way a student is taught to report a
+ * result: trailing zeros kept (1.70), half away from zero like fixed(), no
+ * thousands separator (grouped() adds one). Below 0.000001 it reads
+ * "1.30 × 10⁻⁷". Exports keep every digit; this is for reading only.
+ */
+export function sig3(x: number): string {
+  if (!Number.isFinite(x)) return '–'
+  if (x === 0) return '0'
+  const mag = Math.floor(Math.log10(Math.abs(Number(Math.abs(x).toPrecision(12)))))
+  if (mag < -6) {
+    const [m, e] = x.toExponential(2).split('e')
+    return `${m} × 10${String(Number(e)).replace(/./g, (c) => SUPERSCRIPT[c] ?? c)}`
+  }
+  const d = 2 - mag
+  if (d >= 0) return fixed(x, d)
+  const unit = 10 ** -d
+  return String(Number(fixed(x / unit, 0)) * unit)
+}
+
+/** A total as the screens show it, to 3 significant figures (UX 7); no thousands separator, so Number() reads it back. */
+export function caseTotal(x: number, _caseType?: 'base' | 'comparative' | string): string {
+  return sig3(x)
 }
 
 /** A share of a total, 1 decimal ("89.4%"); the total rounded as shown first (rules.md). */
@@ -64,16 +86,15 @@ export function grouped(s: string): string {
   return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${dec !== undefined ? `.${dec}` : ''}`
 }
 
-/** A case's answer as the screens print it: the case total (rules.md decimals) with thousands grouped. */
-export function answer(x: number, caseType: 'base' | 'comparative' | string): string {
+/** A case's answer as the screens print it: 3 significant figures with thousands grouped. */
+export function answer(x: number, caseType?: 'base' | 'comparative' | string): string {
   return grouped(caseTotal(x, caseType))
 }
 
 /**
- * A result to 3 decimals; a value that is not zero but too small to show at 3
- * decimals says so ("< 0.001") instead of reading as nothing (RUN-2).
+ * A result to 3 significant figures (UX 7), grouped. A small value still
+ * shows its digits ("0.000130"), so it never reads as nothing (RUN-2).
  */
 export function result3(x: number): string {
-  if (x !== 0 && Number.isFinite(x) && Math.abs(x) < 0.0005) return x < 0 ? '> −0.001' : '< 0.001'
-  return grouped(fixed(x, 3))
+  return grouped(sig3(x))
 }

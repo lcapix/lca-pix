@@ -54,7 +54,7 @@ describe('student Home', () => {
     ]
     expect(staffCases(cases, new Set([2])).map((c) => [c.case_name, c.answer, c.change])).toEqual([
       ['Base case', '1.72', null],
-      ['Shorter cure cycle', '1.667', '3.1% lower'],
+      ['Shorter cure cycle', '1.67', '3.1% lower'],
     ])
     expect(ownCase(cases, 7)?.case_name).toBe("Ana's case")
     expect(ownCase(cases, 3)).toBeNull()

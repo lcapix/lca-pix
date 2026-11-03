@@ -33,7 +33,7 @@ test.describe('journey 1, hardened: the sample, my copy, the Cases board', () =>
     const run = (await as.get<{ assessments: any[] }>(`/api/cases/${sample.case_id}/assessments?latest=1`)).assessments[0];
     const impacts: Record<string, { value: number }> = run.impacts ?? {};
     const value = (re: RegExp) => Number(Object.entries(impacts).find(([k]) => re.test(k))?.[1]?.value);
-    expect(value(/global warming/i).toFixed(3)).toBe('1.720');
+    expect(value(/global warming/i).toFixed(3)).toBe('1.72');
     expect(value(/acidification/i).toFixed(3)).toBe('0.001');
     const warnings: string[] = run.warnings ?? [];
     expect(warnings.filter((w) => /double count|convert|EXCLUDED/i.test(w))).toEqual([]);
@@ -70,7 +70,7 @@ test.describe('journey 1, hardened: the sample, my copy, the Cases board', () =>
     await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(page).toHaveURL(/tab=results/, NAV);
-    await expect(page.locator('.ws-answer-num')).toHaveText('1.720', NAV);
+    await expect(page.locator('.ws-answer-num')).toHaveText('1.72', NAV);
     await expect(page.getByText(/double count/i)).toHaveCount(0);
 
     // C5: each tab is a history entry. Write-up, then back to Results, back to Inventory, back to the Tree, all inside the case.

@@ -103,7 +103,7 @@ describe('compare view', () => {
     expect(rows[0].line).toBe('Steel 0.80 kg · Electricity 0.05 kWh')
     expect(rows[1].line).toBe('Electricity 0.40 → 0.25 kWh')
     expect(rows[2].line).toBe('Scrap steel 0.12 kg out')
-    expect(cellValue(rows[1].values[1], 'kg CO₂-eq')).toBe('0.088 kg CO₂-eq')
+    expect(cellValue(rows[1].values[1], 'kg CO₂-eq')).toBe('0.0875 kg CO₂-eq')
     expect(changeCell(rows[1].delta, 'kg CO₂-eq', true)).toBe('−0.053 kg CO₂-eq')
     expect(changeCell(0, 'kg CO₂-eq', false)).toBe('unchanged')
     expect(changeSummary(rows, 'kg CO₂-eq')).toBe('0.053 kg less, all from 30. Powder coat and cure.')
