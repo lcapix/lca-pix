@@ -241,7 +241,7 @@ export function TreeTab({
       </div>
 
       <div className="ws-topbar">
-        <span className="ws-info">
+        <span className="ws-info" data-results={results || undefined}>
           <span>
             {steps.length} {steps.length === 1 ? 'step' : 'steps'}
           </span>
