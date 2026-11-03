@@ -90,8 +90,8 @@ describe('appending waits for the case', () => {
       releaseSteps(json(200, STEPS))
     })
     expect(await screen.findByRole('button', { name: /^Save/ })).toBeEnabled()
-    // The step decisions sit behind Edit the steps (F2).
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the steps' }))
+    // The step decisions are open on arrival (Close the steps folds them).
+    expect(screen.getByRole('button', { name: 'Close the steps' })).toHaveAttribute('aria-expanded', 'true')
     expect((screen.getByLabelText('What happens to 10. Cut tube') as HTMLSelectElement).value).toBe('attach:2')
     // And the step's existing labour is shown, set to Keep.
     expect((screen.getByLabelText('What to do with the labor cost of 10. Cut tube') as HTMLSelectElement).value).toBe('keep')

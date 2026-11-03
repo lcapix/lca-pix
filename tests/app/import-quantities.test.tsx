@@ -90,6 +90,12 @@ afterEach(() => {
   localStorage.clear()
 })
 
+/** Open a review line's fields: press its Change, unless it started open (Close). */
+function openLine(name: string) {
+  const b = screen.getByRole('button', { name: new RegExp(`^(Change|Close) ${name}$`) })
+  if (b.getAttribute('aria-expanded') !== 'true') fireEvent.click(b)
+}
+
 describe('import review quantities', () => {
   it('prints small and large quantities in significant figures, never as 0', async () => {
     const params = Promise.resolve({ projectId: '1' })
@@ -109,10 +115,11 @@ describe('import review quantities', () => {
     expect(await screen.findByText('Powder coat pigment')).toBeInTheDocument()
     // Quantities are editable at review (a document can be read wrong), so each
     // sits in a field holding the document's exact value: never rounded to 0,
-    // and an untouched field never reads as a correction. The fields sit behind
-    // each line's Edit, and the steps' behind Edit the steps (F2).
-    for (const name of ['Powder coat pigment', 'Solvent vapour', 'Steel tube']) fireEvent.click(screen.getByRole('button', { name: `Edit ${name}` }))
-    fireEvent.click(screen.getByRole('button', { name: 'Edit the steps' }))
+    // and an untouched field never reads as a correction. Each line's fields sit
+    // behind its Change (a line whose match needs a look starts open), and the
+    // steps' editor is open on arrival.
+    for (const name of ['Powder coat pigment', 'Solvent vapour', 'Steel tube']) openLine(name)
+    expect(screen.getByRole('button', { name: 'Close the steps' })).toHaveAttribute('aria-expanded', 'true')
     const value = (label: string) => (screen.getByLabelText(label) as HTMLInputElement).value
     expect(value('Amount of Powder coat pigment')).toBe('0.0004')
     expect(value('Amount of Solvent vapour')).toBe('4.2e-7')
@@ -139,7 +146,7 @@ describe('import review quantities', () => {
     fireEvent.click(screen.getByRole('button', { name: /Check what we read/ }))
     expect(await screen.findByText('Powder coat pigment')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Powder coat pigment' }))
+    openLine('Powder coat pigment')
     fireEvent.change(screen.getByLabelText('Amount of Powder coat pigment'), { target: { value: '0.004' } })
     expect(document.body.textContent).toContain('file said 4e-4')
   })
