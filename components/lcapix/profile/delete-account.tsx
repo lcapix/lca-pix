@@ -84,7 +84,7 @@ export function DeleteAccountCard({ email }: { email: string }) {
                       {p.others > 0 && (
                         <span style={{ color: 'var(--ds-error)' }}>
                           {' '}
-                          · {p.others} other {p.others === 1 ? 'person' : 'people'} in it lose their work there too
+                          · {p.others === 1 ? '1 other person in it loses their' : `${p.others} other people in it lose their`} work there too
                         </span>
                       )}
                     </li>
