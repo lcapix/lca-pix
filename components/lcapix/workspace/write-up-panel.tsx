@@ -109,6 +109,7 @@ export function WriteUpPanel({
   }
 
   const saveText = () => put({ interpretation, assumptions, limitations }, 'text', 'Saved · the write-up')
+  const justSavedText = !textDirty && saved === 'Saved · the write-up'
   const saveTick = () =>
     put({ is_final: finalDraft }, 'final', finalDraft ? 'Saved · ticked as your hand-in' : 'Saved · no longer your hand-in')
   /** Everything not saved yet, text first. False when a save failed (the error says why). */
@@ -267,13 +268,15 @@ export function WriteUpPanel({
             <Button
               variant="dark"
               disabled={!textDirty || tooLong}
-              disabledReason={tooLong ? `Keep each under ${MAX.toLocaleString()} characters` : textDirty ? undefined : 'Nothing to save yet'}
+              disabledReason={tooLong ? `Keep each under ${MAX.toLocaleString()} characters` : textDirty || justSavedText ? undefined : 'Nothing to save yet'}
               busy={busy === 'text'}
               onClick={() => void saveText()}
             >
               Save the write-up
             </Button>
             {textDirty && <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>Not saved yet</span>}
+            {/* The confirmation sits beside the button it answers, in view (B4). */}
+            {justSavedText && <SavedLine>{saved}</SavedLine>}
           </span>
         )}
       </div>
@@ -375,7 +378,7 @@ export function WriteUpPanel({
           <span style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>The report prints the write-up as last saved.</span>
         )}
       </div>
-      {(saved || error) && (
+      {((saved && !justSavedText) || error) && (
         <div style={{ padding: '0 18px 14px' }}>
           {error ? (
             <span role="alert" style={{ fontSize: 13, color: 'var(--ds-error)' }}>
