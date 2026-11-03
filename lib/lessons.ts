@@ -107,8 +107,7 @@ export const LESSONS: Lesson[] = [
     done: (f) => f.layers.includes('energy'),
     question: {
       kind: 'number',
-      prompt:
-        'Deburr edges runs a 0.75 kW grinder for 8 seconds at 80% load. How many kWh is that?',
+      prompt: 'A grinder rated 0.75 kW runs for 8 seconds at 80% load. How many kWh is that?',
       // 0.75 x (8 / 3600) x 0.8, the machine calculator's own sum (E04).
       answer: (0.75 * 8 * 0.8) / 3600,
       tolerance: 0.05,
@@ -212,3 +211,81 @@ export function numberIsRight(given: number, q: Extract<Question, { kind: 'numbe
   if (q.answer === 0) return Math.abs(given) <= q.tolerance;
   return Math.abs(given - q.answer) / Math.abs(q.answer) <= q.tolerance;
 }
+
+/**
+ * What the case itself holds, for questions about the student's own product
+ * rather than the sample bracket: its functional unit, one material flow and
+ * the step that carries it, the product, one machine or line, another step.
+ */
+export type QuestionContext = {
+  functionalUnit: string | null;
+  material: { name: string; amount: number; unit: string; step: string } | null;
+  product: string | null;
+  line: string | null;
+  otherStep: string | null;
+};
+
+const MASS = /^(kg|g|mg|t|tonne|lb|oz)$/i;
+const short = (name: string) => name.split(',')[0].trim();
+
+/** The context from the case's steps (tree order) and its inventory rows. */
+export function questionContext(o: {
+  functionalUnit: string | null;
+  steps: Array<{ id: number; name: string; tier: string }>;
+  rows: Array<{ substance: string; amount: number | null; unit: string; direction: string; component_id: number }>;
+}): QuestionContext {
+  const byId = new Map(o.steps.map((s) => [s.id, s]));
+  const m = o.rows.find((r) => r.direction === 'input' && r.amount != null && r.amount > 0 && MASS.test(r.unit.trim()) && byId.has(r.component_id));
+  const materialStep = m ? byId.get(m.component_id)!.name : null;
+  const ops = o.steps.filter((s) => s.tier === 'operation' && s.name !== materialStep);
+  return {
+    functionalUnit: o.functionalUnit?.trim() || null,
+    material: m ? { name: short(m.substance), amount: Number(m.amount), unit: m.unit.trim(), step: materialStep! } : null,
+    product: o.steps.find((s) => s.tier === 'product')?.name ?? null,
+    line: o.steps.find((s) => s.tier === 'machine_line')?.name ?? o.steps.find((s) => s.tier === 'subprocess')?.name ?? null,
+    otherStep: ops.length ? ops[ops.length - 1].name : null,
+  };
+}
+
+const amountText = (x: number) => String(Number(x.toPrecision(3)));
+
+/**
+ * The lesson's question about this case: the functional unit and the
+ * inventory question name the student's own unit, material and steps; with
+ * too little in the case yet, the written question (the sample's) stands.
+ */
+export function questionFor(lesson: Lesson, c: QuestionContext | null): Question | undefined {
+  const q = lesson.question;
+  if (!q || !c) return q;
+  if (lesson.id === 'scope' && c.functionalUnit && c.material && c.line) {
+    const flow = `${amountText(c.material.amount)} ${c.material.unit} of ${c.material.name.toLowerCase()}`;
+    return {
+      kind: 'choice',
+      prompt: 'Which of these is a functional unit?',
+      options: [
+        { id: 'a', text: flow },
+        { id: 'b', text: c.functionalUnit },
+        { id: 'c', text: c.line },
+      ],
+      correct: 'b',
+      because: `A functional unit names the service delivered and how much of it: ${c.functionalUnit}. ${flow[0].toUpperCase()}${flow.slice(1)} is a flow inside the model, and ${c.line} is a place, not a unit of service.`,
+    };
+  }
+  if (lesson.id === 'inventory' && c.material && c.product && c.otherStep) {
+    const flow = `${amountText(c.material.amount)} ${c.material.unit} of ${c.material.name.toLowerCase()}`;
+    return {
+      kind: 'choice',
+      prompt: `Your inventory has ${flow}. Which step should carry that flow?`,
+      options: [
+        { id: 'a', text: `${c.product}, the product, so it covers the whole thing` },
+        { id: 'b', text: `The step that first uses it: ${c.material.step}` },
+        { id: 'c', text: `${c.otherStep}, because that is where the product is finished` },
+      ],
+      correct: 'b',
+      because:
+        'Flows hang off the step that consumes them. Put it there and the result can tell you which step to change; put it on the product and every step looks equally innocent.',
+    };
+  }
+  return q;
+}
+

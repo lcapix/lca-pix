@@ -51,3 +51,15 @@ describe('the step bar', () => {
     expect(s.map((x) => x.detail)).toEqual(['Per One bracket', '1 flow on 1 step', 'Changed since Run 2', 'Say what the result means'])
   })
 })
+
+describe('Hand in after a later run (journey review)', () => {
+  it('a run after the hand-in reopens the step: Hand it in again', async () => {
+    const { caseSteps, nextCaseStep } = await import('@/lib/workspace/case-steps')
+    const base = { functionalUnit: '1 bike frame', referenceFlow: 1, canSetScope: false, stepCount: 3, flowCount: 2, countedFlows: 2, needsAmount: 0, leftOut: 0, runLabel: 'Run 2', changedAfterRun: false, hasWriteUp: true, assignment: true, handedIn: true }
+    const fresh = caseSteps({ ...base, changedSinceHandIn: false }).find((s) => s.key === 'handin')!
+    expect([fresh.done, fresh.detail]).toEqual([true, 'Handed in'])
+    const stale = caseSteps({ ...base, changedSinceHandIn: true })
+    expect(stale.find((s) => s.key === 'handin')).toMatchObject({ done: false, detail: 'Changed since you handed in', action: 'Hand it in again' })
+    expect(nextCaseStep(stale)?.action).toBe('Hand it in again')
+  })
+})

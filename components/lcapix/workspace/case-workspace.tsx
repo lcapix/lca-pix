@@ -45,6 +45,7 @@ import { dataBasisLine } from '@/lib/workspace/per-fu'
 import { perUnit } from '@/lib/workspace/per-unit'
 import { SideSlotContext } from './floating-panel'
 import { ExerciseProvider, exerciseFacts } from './exercise-card'
+import { questionContext } from '@/lib/lessons'
 import { usePhone } from '@/lib/shell/use-phone'
 
 type Tab = 'tree' | 'inventory' | 'results' | 'writeup'
@@ -305,6 +306,7 @@ export function CaseWorkspace() {
   // The step bar (ISO 14044's four phases, then Hand in on an assignment case). D4:
   // after a run on an assignment case its Next is the write-up, then Hand in.
   const latestRun = inventory?.latest_run ?? null
+  const handIn = kase.assignment_id ? siblings.find((s) => s.read_only && s.assignment_id === kase.assignment_id && s.created_by === profile?.id) ?? null : null
   const barSteps = caseSteps({
     functionalUnit: kase.project_functional_unit,
     referenceFlow: kase.reference_flow,
@@ -318,7 +320,11 @@ export function CaseWorkspace() {
     changedAfterRun: !!latestRun?.changed_after_run,
     hasWriteUp: !!kase.interpretation?.trim(),
     assignment: !!kase.assignment_id,
-    handedIn: siblings.some((s) => s.read_only && s.assignment_id === kase.assignment_id && s.created_by === profile?.id),
+    handedIn: !!handIn,
+    // Run again after the hand-in: the instructor holds the older copy. (Not the case's own
+    // updated_at: Guided mode's answers write it too.)
+    changedSinceHandIn:
+      !!handIn?.created_at && !!latestRun?.run_date && new Date(latestRun.run_date).getTime() > new Date(handIn.created_at).getTime() + 1000,
   })
   const actOn = (key: CaseStepKey) => {
     const s = barSteps.find((x) => x.key === key)
@@ -500,6 +506,7 @@ export function CaseWorkspace() {
             interpretation: kase.interpretation,
           })}
           operations={steps.filter((x) => x.tier === 'operation').map((x) => x.name)}
+          questions={questionContext({ functionalUnit: kase.project_functional_unit, steps, rows: inventory?.rows ?? [] })}
           topStep={topStep}
           onSaved={reload}
         >

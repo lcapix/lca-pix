@@ -26,6 +26,8 @@ export interface CaseStepsInput {
   /** An assignment case shows Hand in; handedIn once a copy was handed in. */
   assignment: boolean
   handedIn: boolean
+  /** Run again or edited after the hand-in: the instructor has the older copy. */
+  changedSinceHandIn?: boolean
 }
 
 export interface CaseStep {
@@ -83,12 +85,13 @@ export function caseSteps(i: CaseStepsInput): CaseStep[] {
     },
   ]
   if (i.assignment) {
+    const stale = i.handedIn && !!i.changedSinceHandIn
     out.push({
       key: 'handin',
       label: 'Hand in',
-      done: i.handedIn,
-      detail: i.handedIn ? 'Handed in' : 'Your instructor gets a read-only copy',
-      action: i.handedIn ? 'See it on Assignments' : 'Hand it in',
+      done: i.handedIn && !stale,
+      detail: stale ? 'Changed since you handed in' : i.handedIn ? 'Handed in' : 'Your instructor gets a read-only copy',
+      action: stale ? 'Hand it in again' : i.handedIn ? 'See it on Assignments' : 'Hand it in',
     })
   }
   return out

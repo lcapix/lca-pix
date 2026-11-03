@@ -119,7 +119,7 @@ export function useCaseWorkspace(caseId: number) {
   const [kase, setKase] = useState<WorkspaceCase | null>(null)
   const [steps, setSteps] = useState<WorkspaceStep[]>([])
   const [inventory, setInventory] = useState<WorkspaceInventory | null>(null)
-  const [siblings, setSiblings] = useState<Array<{ case_id: number; case_name: string; case_type: string; created_by: number | null; run_count: number; assignment_id: number | null; read_only: boolean }>>([])
+  const [siblings, setSiblings] = useState<Array<{ case_id: number; case_name: string; case_type: string; created_by: number | null; run_count: number; assignment_id: number | null; read_only: boolean; created_at?: string | null }>>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const seq = useRef(0)
@@ -185,6 +185,7 @@ export function useCaseWorkspace(caseId: number) {
                 run_count: Number(x.run_count ?? 0),
                 assignment_id: x.assignment_id == null ? null : Number(x.assignment_id),
                 read_only: !!x.read_only,
+                created_at: x.created_at ?? null,
               })),
             )
           }

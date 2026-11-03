@@ -576,8 +576,9 @@
 .ws-outofdate { background: var(--ds-warn-bg); border-bottom: 1px solid var(--ds-warn-line); padding: 12px 18px; font-size: 13px; display: flex; gap: 10px; }
 .ws-guide { background: var(--ds-success-bg); border-bottom: 1px solid #cfe5d8; padding: 12px 18px; display: flex; gap: 12px; font-size: 13px; }
 .ws-flow { padding: 14px 18px; border-bottom: 1px solid var(--ds-line-soft); display: flex; flex-direction: column; gap: 6px; }
-.ws-flow-top { display: flex; align-items: center; gap: 8px; }
-.ws-flow-name { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; }
+.ws-flow-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The name on its own line, so the direction, amount and unit never cover it in the docked panel. */
+.ws-flow-name { font-size: 15px; font-weight: 600; flex: 1 0 100%; min-width: 0; overflow-wrap: anywhere; }
 .ws-dir { font-family: var(--ds-mono); font-size: 12px; border: 1px solid var(--ds-line-strong); border-radius: 6px; padding: 0 6px; line-height: 22px; }
 .ws-amount { width: 96px; height: 38px; text-align: right; font-family: var(--ds-mono); font-size: 14px; }
 .ws-sum { font-family: var(--ds-mono); font-size: 13px; color: var(--ds-text); }

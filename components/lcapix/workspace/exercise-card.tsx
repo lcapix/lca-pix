@@ -20,6 +20,8 @@ import {
   type LearningState,
   type LessonFacts,
   type LessonId,
+  questionFor,
+  type QuestionContext,
 } from '@/lib/lessons'
 
 interface ExerciseCtx {
@@ -32,6 +34,8 @@ interface ExerciseCtx {
   /** The operations a prediction can name, and the step the latest run puts first. */
   operations: string[]
   topStep: { name: string; share: string } | null
+  /** The case's own unit, material and steps, so a question is about this product (lessons.ts questionFor). */
+  questions: QuestionContext | null
 }
 
 const Ctx = createContext<ExerciseCtx | null>(null)
@@ -42,6 +46,7 @@ export function ExerciseProvider({
   facts,
   operations,
   topStep,
+  questions = null,
   onSaved,
   children,
 }: {
@@ -50,6 +55,7 @@ export function ExerciseProvider({
   facts: LessonFacts
   operations: string[]
   topStep: { name: string; share: string } | null
+  questions?: QuestionContext | null
   onSaved?: () => void
   children: ReactNode
 }) {
@@ -62,8 +68,8 @@ export function ExerciseProvider({
     if (res.ok) onSaved?.()
   }
   const value = useMemo(
-    () => ({ facts, state, save, reviewing, setReviewing, operations, topStep }),
-    [facts, state, reviewing, operations, topStep], // eslint-disable-line react-hooks/exhaustive-deps
+    () => ({ facts, state, save, reviewing, setReviewing, operations, topStep, questions }),
+    [facts, state, reviewing, operations, topStep, questions], // eslint-disable-line react-hooks/exhaustive-deps
   )
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
@@ -176,7 +182,7 @@ function Prediction() {
 function Question({ id }: { id: LessonId }) {
   const ctx = useContext(Ctx)!
   const lesson = LESSONS.find((l) => l.id === id)!
-  const q = lesson.question!
+  const q = questionFor(lesson, ctx.questions)!
   const given = ctx.state.lessons[id]
   const [answer, setAnswer] = useState(given?.answer ?? '')
   const answered = given?.answer !== undefined
