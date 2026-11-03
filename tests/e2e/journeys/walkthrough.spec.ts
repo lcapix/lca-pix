@@ -365,7 +365,12 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     expect((await bomPreview).status()).toBe(200);
     await expect(page.getByRole('heading', { name: 'Check what we read' })).toBeVisible(NAV);
     for (const line of ['Frame tube set', 'Shipping box']) {
-      await expect(page.locator('tr', { hasText: line }).last().getByLabel('Step this line is used at')).toHaveValue(/^\d+$/);
+      // A matched line starts closed: Change opens it (a line still to check is open already).
+      const toggle = page.locator('tr.ip-line-row', { hasText: line }).locator('.ip-edit-toggle');
+      if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+      // Its edits open in the row just below it.
+      const edits = page.locator('tr.ip-line-row', { hasText: line }).locator('xpath=following-sibling::tr[1]');
+      await expect(edits.getByLabel('Step this line is used at')).toHaveValue(/^\d+$/);
     }
     await shot(page, 'F2.6-add-bill-of-materials');
     const bomApplied = posted(page, /^\/api\/ingest\/apply$/);

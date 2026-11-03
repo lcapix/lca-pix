@@ -113,7 +113,7 @@ describe('F29 held import lines', () => {
 });
 
 describe('F29b a bill of materials added to a case (F3, F4)', () => {
-  it('a held line keeps the step it was placed on, and the steps that take in its materials go to Materials', async () => {
+  it('a held line keeps the step it was placed on; the step stays Production and its material counts in Materials', async () => {
     const t = w.users.editor.token;
     const op = w.P.base.op;
     const opRow = await sqlOne<any>('SELECT component_name, life_cycle_stage FROM component WHERE component_id = ?', [op]);
@@ -139,13 +139,15 @@ describe('F29b a bill of materials added to a case (F3, F4)', () => {
     // The step it was placed on, not the skipped "Purchased materials".
     expect(held.step_name).toBe(opRow.component_name);
     const after = await sqlOne<any>('SELECT life_cycle_stage FROM component WHERE component_id = ?', [op]);
-    if (opRow.life_cycle_stage === null || opRow.life_cycle_stage === 'production') {
-      expect(after.life_cycle_stage).toBe('materials');
-      expect(res.json.stages_set).toContainEqual({ name: opRow.component_name, stage: 'materials' });
-    } else {
-      // A stage someone chose (not Production) stays.
-      expect(after.life_cycle_stage).toBe(opRow.life_cycle_stage);
-    }
+    // migrate-046: Materials is a flow's stage, not the step's. An unset step
+    // becomes Production; a stage someone chose stays.
+    expect(after.life_cycle_stage).toBe(opRow.life_cycle_stage ?? 'production');
+    expect(res.json.stages_set ?? []).not.toContainEqual(expect.objectContaining({ stage: 'materials' }));
+    const inv = await api.get(`/api/cases/${w.P.base.id}/inventory`, { token: t });
+    expect(inv.status, inv.text).toBe(200);
+    const tube = inv.json.rows.find((r: any) => r.component_id === op && Number(r.amount) === 2.2);
+    expect(tube, 'the applied steel line is in the inventory').toBeTruthy();
+    expect([tube.stage, tube.stage_set]).toEqual(['materials', false]);
   });
 
   it('a routing made into a new case gives its steps Production, the product none', async () => {

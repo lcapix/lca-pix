@@ -97,6 +97,8 @@ test.describe('F6 process tree', () => {
       page.on('request', (r) => {
         if (r.method() === 'DELETE') deletes.push(r.url());
       });
+      // Delete step sits in Step details, which starts closed (E7).
+      await page.locator('summary', { hasText: 'Step details' }).click();
       await page.getByRole('button', { name: 'Delete step' }).click();
       const confirm = page.getByRole('alertdialog', { name: 'Delete this step?' });
       await expect(confirm).toContainText('Cancel deletes nothing.');

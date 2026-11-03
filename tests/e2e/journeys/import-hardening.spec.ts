@@ -136,11 +136,16 @@ test('F1 F2 F4 three sample files into one case: each Done card says what is nex
   await expect(pickers).toHaveCount(before);
   const bom = await save(page, /^Save \d+ lines to Touring bike$/);
   expect(bom.flows_applied).toBeGreaterThan(10);
-  // F4: the steps that take in the materials are in the Materials stage, and the card says so.
-  await expect(page.getByRole('note').filter({ hasText: /^Stage set to Materials on / })).toBeVisible();
+  // F4 (migrate-046): the step stays Production and no step is moved to Materials;
+  // the materials it takes in count in Materials through their own flows.
+  await expect(page.getByRole('note').filter({ hasText: /^Stage set to Materials on / })).toHaveCount(0);
   const comps = (await api.as(user.token).get(`/api/cases/${caseId}/components`)).components as any[];
   const cut = comps.find((c) => c.component_name === '10. Cut & miter frame tubes');
-  expect(cut.life_cycle_stage).toBe('materials');
+  expect(cut.life_cycle_stage).toBe('production');
+  const bomInv = (await api.as(user.token).get(`/api/cases/${caseId}/inventory`)).rows as any[];
+  const cutInputs = bomInv.filter((r) => r.component_id === cut.component_id && r.direction === 'input');
+  expect(cutInputs.length).toBeGreaterThan(0);
+  expect(cutInputs.map((r) => r.stage)).toEqual(cutInputs.map(() => 'materials'));
   await page.getByRole('button', { name: 'Add the equipment list →' }).click();
 
   // 3. The equipment list: electricity lines, short.
@@ -235,7 +240,9 @@ test('F3 a held line keeps its file\'s step, the Done card links to it, and its 
   const read = page.waitForResponse((r) => r.url().includes('/api/ingest/preview'), NAV);
   await page.getByRole('button', { name: /^Check what we read/ }).click();
   await read;
-  await page.getByRole('button', { name: 'Edit Cardboard' }).click();
+  // A held line (no match) starts open; open it only if it is closed.
+  const change = page.getByRole('button', { name: /^(Change|Close) Cardboard$/ });
+  if ((await change.getAttribute('aria-expanded')) !== 'true') await change.click();
   // Its step, from the file's Op Seq 30.
   const edits = page.getByRole('group', { name: 'Edits of Cardboard' });
   await expect(edits.getByRole('combobox', { name: 'Step this line is used at' }).locator('option:checked')).toHaveText('30. Pack');

@@ -139,7 +139,7 @@ test.describe('editor hardening: the step panel', () => {
       (e) => e as { status: number; body: string },
     );
     expect(refused?.status).toBe(400);
-    expect(refused?.body).toMatch(/kg and kWh measure different things/);
+    expect(refused?.body).toMatch(/cannot be converted to 'kg'/);
     const after = (await flowsOf(api, user, cut)).find((f) => f.flow_id === steel.flow_id)!;
     expect([Number(after.quantity), after.unit]).toEqual([Number(steel.quantity), steel.unit]);
   });
@@ -183,11 +183,12 @@ test.describe('editor hardening: the step panel', () => {
     await expect(page.getByText('Saved · 10. Cut blank is now under Welding')).toBeVisible();
     expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.parent_component_id).toBe(welding);
 
-    // The stage too (the sample puts 10. Cut blank in Materials; move it to Use).
-    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('materials');
+    // The stage too (the sample puts 10. Cut blank in Production since migrate-046,
+    // its steel counting in Materials through the flow; move the step to Use).
+    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('production');
     await p.getByRole('combobox', { name: 'Life-cycle stage' }).selectOption('use');
     expect(sent.filter((s) => s === `PUT /api/components/${cut}`)).toHaveLength(1); // only the Step under save
-    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('materials');
+    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('production');
     await p.getByRole('button', { name: 'Save the life-cycle stage' }).click();
     await expect(page.getByText('Saved · stage Use')).toBeVisible();
     expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('use');
@@ -506,7 +507,9 @@ test.describe('editor hardening: the Inventory', () => {
 
     // Delete, after the confirm.
     const alu = page.getByRole('row').filter({ has: page.getByRole('textbox', { name: 'Aluminum, amount in kg' }) });
-    await alu.getByRole('button', { name: 'Edit more of Aluminum' }).click();
+    // Its Edit more is still open from the substance change: open it only if closed.
+    const more = alu.getByRole('button', { name: 'Edit more of Aluminum' });
+    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
     await page.getByRole('button', { name: 'Delete flow' }).click();
     await page.getByRole('alertdialog', { name: 'Delete this flow?' }).getByRole('button', { name: 'Delete flow' }).click();
     await expect(page.getByText('Deleted · Aluminum on 20. Weld tab')).toBeVisible();
@@ -525,9 +528,9 @@ test.describe('editor hardening: the Inventory', () => {
     const steel = page.getByRole('row').filter({ has: page.getByRole('textbox', { name: 'Steel, amount in kg', exact: true }) });
     await expect(steel).toContainText(/0\.80 kg × [\d.]+ kg CO₂-eq per kg = [\d.]+ kg CO₂-eq/);
 
-    // Shear blank has costs and no flow: its group says so, and its labor sits as a step cost row.
-    const shear = page.getByRole('rowheader', { name: /^Shear blank/ });
-    await expect(shear).toContainText('Adds no impact: no flow on this step');
+    // Cure 20 min has a cost and no flow: its group says so. Shear blank's labor sits as a step cost row.
+    const cureGroup = page.getByRole('rowheader', { name: /^Cure 20 min/ });
+    await expect(cureGroup).toContainText('Adds no impact: no flow on this step');
     const labor = page.getByRole('row', { name: /^Labor Shear blank · a step cost/ });
     await expect(labor).toContainText(/0\.0033 h × \$[\d.]+\/h/);
 

@@ -48,7 +48,7 @@ test('G127 G128 old step pages open the case', async ({ api, newUser, signIn }) 
   await page.goto(`/project/${projectId}/case/${caseId}/component/new`);
   await expect.soft(page.getByRole('dialog', { name: 'Add a step' }), note('G127', 'Add step form')).toBeVisible();
   await page.goto(`/project/${projectId}/case/${caseId}/component/${cut.component_id}/edit`);
-  await expect.soft(page.getByLabel('Step name'), note('G128', 'The step is selected')).toHaveValue('10. Cut blank');
+  await expect.soft(page.getByLabel('Step name', { exact: true }).first(), note('G128', 'The step is selected')).toHaveValue('10. Cut blank');
 });
 
 test('E08 E09 E11 E12 E13 a flow can change, and a parent step warns first', async ({ api, newUser, signIn }) => {
