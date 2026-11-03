@@ -19,7 +19,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useParams, useSearchParams } from 'next/navigation'
-import { Button, ComingSoon, EmptyState, ErrorCard, SourceTag, Tabs } from '@/components/lcapix/ds'
+import { Button, EmptyState, ErrorCard, SourceTag, Tabs } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { rankCases } from '@/lib/compare/analytics'
 import { safeRunDate } from '@/lib/results/results-view'
@@ -80,6 +80,20 @@ export function ComparePage() {
   const { cases, byId, selected, setSelected, toggle, data, error, loading, runAgain, reload, pickRun } = useCompare(projectId, profile?.id ?? -1)
   const search = useSearchParams()
   const [view, setView] = useState<'compare' | 'saved'>(search?.get('tab') === 'saved' ? 'saved' : 'compare')
+  // Saving a comparison was retired (CMP-7): the Saved tab only lists older
+  // saves, so it shows only in a project that has some (or when asked for).
+  const [savedCount, setSavedCount] = useState<number | null>(null)
+  useEffect(() => {
+    let live = true
+    apiRequest(`/api/comparisons?project_id=${projectId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => live && setSavedCount(Array.isArray(d?.comparisons) ? d.comparisons.length : 0))
+      .catch(() => live && setSavedCount(0))
+    return () => {
+      live = false
+    }
+  }, [projectId])
+  const showSavedTab = view === 'saved' || (savedCount ?? 0) > 0
   const [category, setCategory] = useState(CLIMATE)
   const [vs, setVs] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
@@ -196,6 +210,7 @@ export function ComparePage() {
         </div>
         {compared.length > 0 && <ResultsMenu projectId={projectId} cases={compared} />}
       </header>
+      {showSavedTab && (
       <Tabs<'compare' | 'saved'>
         label="Compare or saved comparisons"
         selected={view}
@@ -211,6 +226,7 @@ export function ComparePage() {
           { id: 'saved', label: 'Saved comparisons' },
         ]}
       />
+      )}
 
       <div className="cmp-bar">
         {/* P59: any case, the base included, in or out with one click; no cap of 8. */}
@@ -654,9 +670,6 @@ export function ComparePage() {
         </>
       )}
 
-      <div style={{ marginTop: 18 }}>
-        <ComingSoon>Pin as a finding, compare across projects</ComingSoon>
-      </div>
     </div>
   )
 }
