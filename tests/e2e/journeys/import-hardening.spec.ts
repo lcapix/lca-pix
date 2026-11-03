@@ -124,7 +124,7 @@ test('F1 F2 F4 three sample files into one case: each Done card says what is nex
   const before = await pickers.count();
   const aluRow = page.locator('.ip-lines-table tbody tr.ip-line-row').first();
   const editAlu = aluRow.locator('.ip-edit-toggle');
-  await expect(editAlu).toHaveAccessibleName(/^Change /);
+  await expect(editAlu).toHaveAccessibleName(/^Edit /);
   await expect(editAlu).toHaveText('Change');
   await editAlu.click();
   await expect(pickers).toHaveCount(before + 1);
@@ -241,7 +241,7 @@ test('F3 a held line keeps its file\'s step, the Done card links to it, and its 
   await page.getByRole('button', { name: /^Check what we read/ }).click();
   await read;
   // A held line (no match) starts open; open it only if it is closed.
-  const change = page.getByRole('button', { name: /^(Change|Close) Cardboard$/ });
+  const change = page.getByRole('button', { name: /^(Edit|Close) Cardboard$/ });
   if ((await change.getAttribute('aria-expanded')) !== 'true') await change.click();
   // Its step, from the file's Op Seq 30.
   const edits = page.getByRole('group', { name: 'Edits of Cardboard' });

@@ -92,7 +92,7 @@ afterEach(() => {
 
 /** Open a review line's fields: press its Change, unless it started open (Close). */
 function openLine(name: string) {
-  const b = screen.getByRole('button', { name: new RegExp(`^(Change|Close) ${name}$`) })
+  const b = screen.getByRole('button', { name: new RegExp(`^(Edit|Close) ${name}$`) })
   if (b.getAttribute('aria-expanded') !== 'true') fireEvent.click(b)
 }
 

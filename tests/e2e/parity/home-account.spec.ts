@@ -118,7 +118,7 @@ test('G61 G64 G66 G104 G106 G148 G149 G150 profile and About you: optional insti
   await row(useCase, 'G66', 'Profile use-case options are onboarding\'s');
   await expect.soft(useCase.locator('option', { hasText: 'Product LCA' }), note('G66', 'old choices are not offered to everyone')).toHaveCount(0);
   await useCase.selectOption({ label: 'Teaching a class' });
-  await s2.page.getByRole('button', { name: /Save/ }).first().click();
+  await s2.page.getByRole('button', { name: 'Save changes' }).click();
   await row(s2.page.getByText('Teaching a class').first(), 'G61', 'The meta row shows the new value');
 
   // G150 (1.13): New project's start choice and dropdowns have names.

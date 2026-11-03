@@ -159,13 +159,13 @@ test('A8: the Results tab and the full results page print the same numbers and t
   const ex = await api.as(user.token).post<{ project_id: number; case_id: number }>('/api/example-project');
   const { page } = await signIn(user);
 
-  // The sample: 1.72 (a base case shows two decimals), Acidification 0.001 kg SO2 eq, $1.75.
+  // The sample: 1.72 and Acidification 0.00114 kg SO2 eq, at 3 significant figures (UX 7), $1.75.
   await open(page, `/project/${ex.project_id}/case/${ex.case_id}?tab=results`, { ready: 'What builds this number' });
   await expect(page.locator('.ws-answer-num')).toHaveText('1.72');
   await expect(page.getByText('$1.75').first()).toBeVisible();
   await page.getByRole('button', { name: /^Show the other/ }).click();
   const acidTab = page.locator('li').filter({ hasText: /^Acidification/ }).first();
-  await expect(acidTab).toContainText(/0\.001 kg SO/);
+  await expect(acidTab).toContainText(/0\.00114 kg SO/);
   const acidTabValue = (await acidTab.locator('.ds-mono').innerText()).trim();
   const sureTab = (await page.getByRole('region', { name: 'How sure' }).locator('p').first().innerText()).trim();
   expect(sureTab).toMatch(/% rests on /);

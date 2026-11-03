@@ -116,7 +116,9 @@ test('I02 I03 I04 I05 I06 I07 I08 I10 I11 a respelled bill of materials into a T
   expectOk(await preview);
 
   // A line's match, amount and unit sit behind its own Edit (F2).
-  await page.getByRole('button', { name: 'Edit Aluminium sheet' }).click();
+  // A line that needs a check starts open; open it only if it is closed.
+  const aluToggle = page.getByRole('button', { name: /^(Edit|Close) Aluminium sheet$/ });
+  if ((await aluToggle.getAttribute('aria-expanded')) !== 'true') await aluToggle.click();
   const alu = page.getByLabel('What Aluminium sheet matches in the library');
   await expect.soft(alu.locator('option:checked'), 'I04 "Aluminium sheet" lands on the library\'s Aluminum').toHaveText(/^Aluminum · /);
   await row(page.getByText('Each match shows its climate factor in TRACI 2.1'), 'I02', 'Factors shown for the project\'s method');

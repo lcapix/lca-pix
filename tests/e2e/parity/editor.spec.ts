@@ -86,7 +86,8 @@ test('E10 E14 change a flow amount, and use your own factor when the region fell
   await step(page, '10. Cut blank').click();
 
   await expect.soft(page.getByRole('textbox', { name: 'Steel, amount in kg', exact: true }), note('E10', "Change a flow's quantity")).toBeEnabled();
-  await row(page.getByRole('button', { name: 'Use my own number' }), 'E14', 'Override a factor');
+  // UX 6: the case says once which flows use the Global average; each flow keeps Use my own factor.
+  await row(page.getByRole('button', { name: 'Use my own factor' }).first(), 'E14', 'Override a factor');
 });
 
 test('E22 the material cost looks up a metal price per kg: reference with no key, and no price for lead', async ({ api, newUser, signIn }) => {
