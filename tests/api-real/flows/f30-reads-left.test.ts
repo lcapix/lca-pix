@@ -11,7 +11,7 @@ describe('F30 reads left', () => {
     const u = await createUser('f30reads');
     const first = await api.get('/api/ingest/reads-left', { token: u.token });
     expect(first.status).toBe(200);
-    expect(first.json).toEqual({ success: true, limit: 10, remaining: 10, resets_in_seconds: null });
+    expect(first.json).toEqual({ success: true, limit: 10, remaining: 10, resets_in_seconds: null, ai_reader: false }); // no HF_TOKEN in tests
     expect((await api.get('/api/ingest/reads-left', { token: u.token })).json.remaining).toBe(10);
 
     const fd = new FormData();
