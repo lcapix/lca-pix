@@ -229,7 +229,7 @@ function YourCase({
         </p>
       ) : kase.is_final ? (
         <p className="st-tick">
-          <span aria-hidden>✓</span> <strong>Ticked as hand-in</strong>
+          <span aria-hidden>✓</span> <strong>Handed in</strong>
           <span>A tick only. It locks nothing.</span>
         </p>
       ) : (

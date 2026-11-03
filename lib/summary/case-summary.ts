@@ -11,7 +11,7 @@ export const PIPELINE_LABEL: Record<PipelineStage, string> = {
   not_run: 'Not run yet',
   run: 'Run',
   written: 'Written',
-  handed_in: 'Ticked as hand-in',
+  handed_in: 'Handed in',
 }
 
 export function pipelineStage(c: { completedRuns: number; hasInterpretation: boolean; isFinal: boolean }): PipelineStage {

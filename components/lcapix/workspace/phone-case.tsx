@@ -98,7 +98,7 @@ export function PhoneCase({
             <p className="st-tick" data-off={!kase.is_final || undefined}>
               {kase.is_final ? (
                 <>
-                  <span aria-hidden>✓</span> <strong>Ticked as hand-in</strong>
+                  <span aria-hidden>✓</span> <strong>Handed in</strong>
                   <span>A tick only. It locks nothing.</span>
                 </>
               ) : (

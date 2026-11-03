@@ -3,7 +3,7 @@
 // left empty. Pure; read from the progress and empty-flows routes, so it
 // cannot drift from the cases. Nothing here scores or grades.
 
-import { fixed } from '@/lib/ui/format'
+import { answer } from '@/lib/ui/format'
 
 export interface ClassCase {
   case_id: number
@@ -13,22 +13,38 @@ export interface ClassCase {
   author: string | null
   has_interpretation: boolean
   is_final: boolean
+  /** A frozen hand-in copy (migrate-043) and the working case it froze. */
+  read_only?: boolean
+  assignment_id?: number | null
+  handed_in?: boolean
+  working_case_id?: number | null
   latest_run: { run_id: number; method?: string | null; region?: string | null; headline: { value: number; unit: string } | null } | null
 }
 
-/** The cases students made: everyone's but the owner's and admins'. */
+/** A frozen hand-in copy: counted through its working case, never as a case of its own. */
+const isHandInCopy = (c: ClassCase) => !!c.handed_in || (!!c.read_only && c.assignment_id != null)
+
+/** The cases students made: everyone's but the owner's and admins', without the hand-in copies. */
 export function studentCases<C extends ClassCase>(cases: C[], staff: Set<number>): C[] {
-  return cases.filter((c) => c.created_by == null || !staff.has(c.created_by))
+  return cases.filter((c) => (c.created_by == null || !staff.has(c.created_by)) && !isHandInCopy(c))
 }
 
+/** The working cases that were handed in on an assignment (from the frozen copies). */
+export function handedInIds(all: ClassCase[]): Set<number> {
+  return new Set(all.filter((c) => isHandInCopy(c) && c.working_case_id != null).map((c) => Number(c.working_case_id)))
+}
+
+/** Handed in: on an assignment, or ticked "This is my hand-in" (the older way). */
+const handed = (c: ClassCase, handedIn: Set<number>) => c.is_final || handedIn.has(c.case_id)
+
 /** Ran: at least one completed run (a failed run is not a result). */
-export function classCounts(cases: ClassCase[]): { cases: number; ran: number; wrote: number; ticked: number; notRun: number } {
+export function classCounts(cases: ClassCase[], handedIn: Set<number> = new Set()): { cases: number; ran: number; wrote: number; ticked: number; notRun: number } {
   const ran = cases.filter((c) => c.latest_run != null).length
   return {
     cases: cases.length,
     ran,
     wrote: cases.filter((c) => c.has_interpretation).length,
-    ticked: cases.filter((c) => c.is_final).length,
+    ticked: cases.filter((c) => handed(c, handedIn)).length,
     notRun: cases.length - ran,
   }
 }
@@ -46,7 +62,7 @@ export interface Dot {
  * another method or region than the base case's is a different measurement,
  * so it is left off the axis and counted.
  */
-export function landed(cases: ClassCase[], scope: { method: string | null; region: string | null }): { dots: Dot[]; otherScope: number } {
+export function landed(cases: ClassCase[], scope: { method: string | null; region: string | null }, handedIn: Set<number> = new Set()): { dots: Dot[]; otherScope: number } {
   let otherScope = 0
   const dots: Dot[] = []
   for (const c of cases) {
@@ -56,7 +72,7 @@ export function landed(cases: ClassCase[], scope: { method: string | null; regio
       otherScope++
       continue
     }
-    dots.push({ case_id: c.case_id, who: firstName(c.author) ?? c.case_name, case_name: c.case_name, value: r.headline.value, ticked: c.is_final })
+    dots.push({ case_id: c.case_id, who: firstName(c.author) ?? c.case_name, case_name: c.case_name, value: r.headline.value, ticked: handed(c, handedIn) })
   }
   return { dots: dots.sort((a, b) => a.value - b.value), otherScope }
 }
@@ -96,10 +112,10 @@ export function tickDecimals(step: number): number {
 /** "23 runs between 1.61 and 1.75. The base case is 1.72." */
 export function landedLine(dots: Dot[], base: number | null): string {
   if (!dots.length) return 'No student case has a run yet.'
-  const lo = fixed(dots[0].value, 2)
-  const hi = fixed(dots[dots.length - 1].value, 2)
+  const lo = answer(dots[0].value)
+  const hi = answer(dots[dots.length - 1].value)
   const head = dots.length === 1 ? `1 run, at ${lo}.` : lo === hi ? `${dots.length} runs, all at ${lo}.` : `${dots.length} runs between ${lo} and ${hi}.`
-  return base == null ? head : `${head} The base case is ${fixed(base, 2)}.`
+  return base == null ? head : `${head} The base case is ${answer(base)}.`
 }
 
 /** Which dots carry a name: the ticked hand-ins, or the lowest and highest when fewer than two are ticked. */

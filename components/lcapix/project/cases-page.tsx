@@ -3,7 +3,7 @@
 // Cases (E07 pipeline, E07b table): the project's cases. Yours first, each
 // with its latest answer (a copy with its change against the Base case); then
 // the class's (or the members'), on a board of four columns (Not run yet,
-// Run, Written, Ticked as hand-in) or as a table sorted by how far along each
+// Run, Written, Handed in) or as a table sorted by how far along each
 // one is. Each card says what is missing next. Nothing here grades: it says
 // what exists. Search finds a person or a case.
 // A project opens here (C1): Project settings (and Delete project) open from

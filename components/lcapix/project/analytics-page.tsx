@@ -24,6 +24,7 @@ import {
   landed,
   landedLine,
   studentCases,
+  handedInIds,
   tickDecimals,
   type Dot,
 } from '@/lib/project/analytics-view'
@@ -71,10 +72,11 @@ export function AnalyticsPage() {
     if (!data) return null
     const staff = new Set([data.project.owner_id, ...data.members.filter((m) => m.permission_name === 'admin').map((m) => m.user_id)])
     const students = studentCases(data.cases, staff)
+    const handedIn = handedInIds(data.cases)
     const shown = students.length > 0 ? students : data.cases.filter((c) => c.created_by != null && staff.has(c.created_by))
     const base = data.cases.find((c) => c.case_type === 'base' && c.created_by != null && staff.has(c.created_by)) ?? data.cases.find((c) => c.case_type === 'base')
     const scope = { method: base?.latest_run?.method ?? data.project.lcia_method, region: base?.latest_run?.region ?? data.project.region_code }
-    return { students: shown, counts: classCounts(shown), base, scope, ...landed(shown, scope) }
+    return { students: shown, counts: classCounts(shown, handedIn), base, scope, ...landed(shown, scope, handedIn) }
   }, [data])
 
   if (error) {
@@ -142,7 +144,7 @@ export function AnalyticsPage() {
               <Tile label={`${word[0].toUpperCase()}${word.slice(1)} cases`} n={ofN} of={null} />
               <Tile label="Ran" n={counts.ran} of={ofN} />
               <Tile label="Wrote up" n={counts.wrote} of={ofN} />
-              <Tile label="Ticked as hand-in" n={counts.ticked} of={ofN} />
+              <Tile label="Handed in" n={counts.ticked} of={ofN} />
             </div>
           </section>
 
@@ -248,8 +250,8 @@ export function AnalyticsPage() {
                 <dd>The case has at least one completed run.</dd>
                 <dt>Wrote up</dt>
                 <dd>The interpretation is written.</dd>
-                <dt>Ticked as hand-in</dt>
-                <dd>“This is my hand-in” is ticked.</dd>
+                <dt>Handed in</dt>
+                <dd>Handed in on an assignment, or “This is my hand-in” ticked.</dd>
                 <dt>Left empty</dt>
                 <dd>No amount, so the run leaves it out.</dd>
               </dl>

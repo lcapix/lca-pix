@@ -9,7 +9,7 @@ describe("E07's pipeline stage", () => {
     expect(pipelineStage({ completedRuns: 1, hasInterpretation: true, isFinal: false })).toBe('written')
     // The tick locks nothing and is shown as ticked whatever else exists.
     expect(pipelineStage({ completedRuns: 0, hasInterpretation: false, isFinal: true })).toBe('handed_in')
-    expect(PIPELINE_LABEL.handed_in).toBe('Ticked as hand-in')
+    expect(PIPELINE_LABEL.handed_in).toBe('Handed in')
   })
 })
 
