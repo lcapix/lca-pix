@@ -306,7 +306,7 @@ function FlowRowWs({
           )}
         </label>
         <span className="ws-dir">
-          <select className="ds-input" aria-label={`Direction for ${row.substance}`} value={draft.direction} onChange={(e) => draft.setDirection(e.target.value as 'input' | 'output')}>
+          <select className="ds-input" style={{ minWidth: 96 }} aria-label={`Direction for ${row.substance}`} value={draft.direction} onChange={(e) => draft.setDirection(e.target.value as 'input' | 'output')}>
             <option value="input">Input</option>
             <option value="output">Output</option>
           </select>
