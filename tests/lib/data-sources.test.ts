@@ -13,6 +13,7 @@ describe('G3 Data sources', () => {
     expect(sourceState({ ...base, configured: true, status: 'success', events: 3 }, '2026-06').word).toBe('Live')
     expect(sourceState({ ...base, configured: true, status: 'error', events: 3, fails: 1 }, '2026-06').word).toBe('Last call failed')
     expect(sourceState({ ...base, configured: true, status: 'idle', events: 0 }, '2026-06').word).toBe('Ready')
+    expect(sourceState({ ...base, configured: true, keyRequired: false, status: 'idle', events: 0 }, '2026-06').line).toBe('No key needed; not run yet on this server.')
   })
   it('Electricity Maps is not shown: no screen calls it', () => {
     const ids = shownSources([{ id: 'bls' }, { id: 'electricity_maps' }, { id: 'metals' }]).map((s) => s.id)
@@ -26,9 +27,11 @@ describe('G3 Data sources', () => {
       { source_reference: 'worldsteel 2022 global average crude steel', n: '15' },
       { source_reference: null, n: 4 },
       { source_reference: 'Some journal 2019', n: 2 },
+      { source_reference: 'openLCA TRACI 2.1', n: 39 },
     ])
     expect(g).toEqual([
       { name: 'US EPA TRACI 2.1 (lciafmt)', factors: 600 },
+      { name: 'openLCA (CML 2001, ReCiPe, TRACI)', factors: 39 },
       { name: 'worldsteel', factors: 15 },
       { name: 'EPA eGRID (US electricity)', factors: 9 },
       { name: 'Ember (Global and EU electricity)', factors: 6 },

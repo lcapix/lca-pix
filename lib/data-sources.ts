@@ -8,6 +8,8 @@ export interface SourceStatus {
   id: string
   name: string
   configured: boolean
+  /** False for a source that needs no API key (openLCA's bundled data, PubChem). */
+  keyRequired?: boolean
   staticBacked: boolean
   status: 'success' | 'warn' | 'error' | 'idle' | 'static'
   events: number
@@ -36,17 +38,19 @@ export function sourceState(s: SourceStatus, vintage: string): { word: string; l
   }
   if (!s.configured) return { word: 'Not set up', line: 'This source is not set up on this server.', tag: 'global' }
   if (s.status === 'error') return { word: 'Last call failed', line: 'The last call failed; the dated reference values are used until it answers.', tag: 'reference' }
-  if (s.events === 0) return { word: 'Ready', line: 'Live key set; not called yet on this server.', tag: 'regional' }
+  if (s.events === 0)
+    return { word: 'Ready', line: s.keyRequired === false ? 'No key needed; not run yet on this server.' : 'Live key set; not called yet on this server.', tag: 'regional' }
   return { word: 'Live', line: s.fails > 0 ? `Answering live (${s.fails} failed call${s.fails === 1 ? '' : 's'} on record).` : 'Answering live.', tag: 'regional' }
 }
 
 /** Known datasets, matched on the factor's cited source. Order matters: the first match wins. */
 const DATASETS: Array<{ name: string; match: RegExp }> = [
+  // openLCA first: its rows cite "openLCA TRACI 2.1", which is not the EPA file.
+  { name: 'openLCA (CML 2001, ReCiPe, TRACI)', match: /openlca/i },
   { name: 'US EPA TRACI 2.1 (lciafmt)', match: /lciafmt|traci/i },
   { name: 'EPA eGRID (US electricity)', match: /egrid/i },
   { name: 'Ember (Global and EU electricity)', match: /ember/i },
   { name: 'worldsteel', match: /worldsteel/i },
-  { name: 'openLCA (CML 2001, ReCiPe)', match: /openlca/i },
   { name: 'IPCC', match: /ipcc/i },
   { name: 'Entered by hand', match: /hand|own number|user|custom/i },
 ]
