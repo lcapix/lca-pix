@@ -385,16 +385,21 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await page.getByRole('treeitem', { name: /^Aluminium enclosure, Product/ }).click();
     await expect(page.getByText('From small-routing.csv', { exact: false }).first()).toBeVisible(NAV);
 
-    // A file that cannot be read: a scanned PDF, with the fix right there.
+    // A file that cannot be read: in this beta no PDF reader is on (no HF_TOKEN), so a PDF is
+    // refused when it is picked, with the fix said, and nothing is sent to be read.
     await open(page, `/project/${own.projectId}/import`, { ready: 'What kind of file is it?' });
     await page.getByRole('radio', { name: 'Routing' }).click();
+    let sent = false;
+    page.on('request', (r) => {
+      if (r.url().includes('/api/ingest/preview')) sent = true;
+    });
     await page.locator('input[type="file"]').setInputFiles({ name: 'routing-scan.pdf', mimeType: 'application/pdf', buffer: blankPdf() });
-    const failed = page.waitForResponse((r) => r.url().includes('/api/ingest/preview'), NAV);
-    await page.getByRole('button', { name: /^Check what we read/ }).click();
-    await failed;
-    const card = page.getByRole('alert').filter({ hasText: "We couldn't read routing-scan.pdf" });
-    await expect(card).toContainText('It looks scanned, so there is no text to read.', NAV);
-    await expect(card.getByRole('button', { name: 'Upload the spreadsheet version' })).toBeVisible();
+    await expect(page.getByRole('alert').filter({ hasText: 'routing-scan.pdf cannot be read here' })).toContainText(
+      'Upload the spreadsheet or CSV version.',
+      NAV,
+    );
+    await expect(page.getByRole('button', { name: /^Check what we read/ })).toBeDisabled();
+    expect(sent).toBe(false);
     await shot(page, 'F2.2b-file-cant-be-read');
 
     // Or start empty: the product at the top, and the first step under it.
