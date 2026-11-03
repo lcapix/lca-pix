@@ -29,7 +29,7 @@ export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSt
       ? 'Base case'
       : k.copied_from
         ? `Copy of the ${k.copied_from.case_name}`
-        : 'Comparative case'
+        : 'What-if'
   // The case's reference flow; without one, the study's functional unit ("1 bike frame").
   const unit = k.reference_flow_unit
     ? `${fmtAmount(k.reference_flow ?? 1)} ${k.reference_flow_unit}`

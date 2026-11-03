@@ -54,8 +54,8 @@ const TERMS: { term: string; def: string }[] = [
     def: 'The case the others are measured against. Typically captures the current production line / material mix / grid as-is.',
   },
   {
-    term: 'Comparative case',
-    def: 'A copy of a case with one thing changed, measured against the base case. Each project can hold many; Compare reads each one against the first case you pick.',
+    term: 'What-if (a comparative case)',
+    def: 'A copy of a case with one thing changed, measured against the base case. ISO 14044 calls this a comparative case. Each project can hold many; Compare reads each one against the first case you pick.',
   },
   {
     term: 'Assessment run',

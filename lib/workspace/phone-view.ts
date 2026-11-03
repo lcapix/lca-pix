@@ -11,7 +11,7 @@ import { isClimate, sourceKindOf, type InventoryRow } from './inventory'
 import type { Tier } from './tier-layout'
 
 export function caseKind(caseType: string): string {
-  return caseType === 'base' ? 'Base case' : 'Comparative case'
+  return caseType === 'base' ? 'Base case' : 'What-if'
 }
 
 export interface OutlineStep {

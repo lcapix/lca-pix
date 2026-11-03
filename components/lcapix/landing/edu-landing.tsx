@@ -185,7 +185,7 @@ export function EduLanding() {
             </Feature>
             <Feature title="What-if in one click" line="Copy a case, change one input, run it, and read the change against the base, with its sign.">
               <div className="lp-mini-whatif">
-                <span className="ds-mono lp-chip">Comparative</span> Shorter cure cycle
+                <span className="ds-mono lp-chip">What-if</span> Shorter cure cycle
                 <span className="lp-row">
                   Global warming <b className="ds-mono">▼ 3.1% lower</b>
                 </span>
@@ -320,7 +320,7 @@ export function EduLanding() {
               }
               items={[
                 'Routings, bills of materials and equipment lists read in',
-                'Comparative cases with four fairness checks',
+                'What-ifs with four fairness checks',
                 'Cost beside impact, each rate with its source',
                 'Exports to PDF, PowerPoint and CSV',
               ]}

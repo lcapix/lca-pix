@@ -28,7 +28,7 @@ describe('a case on a phone', () => {
       [1, '40. Pack and ship', '0%', 'No counted climate flow'],
     ])
     expect(outlineRows(steps, null, null, [])[0].right).toBeNull()
-    expect(caseKind('comparative')).toBe('Comparative case')
+    expect(caseKind('comparative')).toBe('What-if')
   })
 
   it('lists the climate factors once each, largest first, with a short source name', () => {

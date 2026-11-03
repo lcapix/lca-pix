@@ -41,7 +41,7 @@ export default function DataModelPage() {
             production line, the existing material mix, the current grid).
           </Li>
           <Li>
-            <strong>Comparative case</strong>: an alternative being
+            <strong>What-if</strong> (a comparative case): an alternative being
             evaluated. Inherits the same functional unit as the base; only the
             substitutions you care about should differ.
           </Li>
