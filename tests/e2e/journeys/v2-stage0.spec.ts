@@ -78,13 +78,13 @@ async function preview(
 }
 
 /**
- * Open the steps editor of the review. The lean review (F2) keeps it closed to
- * a one-line summary until "Edit the steps" is pressed; it is there for a
- * routing or a new case only.
+ * Make sure the steps editor of the review is open. It opens on arrival for a
+ * routing or a new case (the student can change a step read wrong at once);
+ * this reopens it if it was closed.
  */
 async function editSteps(page: Page) {
-  const toggle = page.getByRole('button', { name: 'Edit the steps' });
-  await toggle.click();
+  const toggle = page.locator('button[aria-controls="ip-steps-edit"]');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   await expect(page.getByRole('button', { name: 'Close the steps' })).toHaveAttribute('aria-expanded', 'true');
 }
 
@@ -220,7 +220,8 @@ test.describe('v2 stage 0 gate', () => {
     // instead, from the line's own Edit.
     const boxRow = page.locator('tr', { hasText: 'Shipping box' }).first();
     await expect(boxRow).toContainText('30. Pack');
-    await boxRow.getByRole('button', { name: /^Edit / }).click();
+    const change = boxRow.locator('.ip-edit-toggle');
+    if ((await change.getAttribute('aria-expanded')) !== 'true') await change.click();
     await page.getByLabel('Step this line is used at').selectOption(String(weld.component_id));
     await expect(boxRow).toContainText('20. Weld frame');
     const body = await apply(page, true);

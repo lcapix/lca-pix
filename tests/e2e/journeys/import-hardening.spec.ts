@@ -56,9 +56,14 @@ async function expectLean(page: Page) {
   expect(await fit.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), 'the lines table fits its card').toBe(true);
   const nameCell = page.locator('.ip-lines-table tbody tr').first().locator('td').nth(1);
   expect((await nameCell.boundingBox())!.width, 'the name column is readable').toBeGreaterThan(150);
-  // Every line closed: no match picker until its Edit is pressed.
-  await expect(page.locator('select[aria-label$="matches in the library"]')).toHaveCount(0);
-  for (const b of await page.getByRole('button', { name: /^Edit / }).all()) await expect(b).toHaveAttribute('aria-expanded', 'false');
+  // A line that is simply counted starts closed; one that needs a look (no
+  // match, a match to check, no climate factor, no step) starts open, so a
+  // wrong read can be changed without hunting for it.
+  for (const row of await page.locator('.ip-lines-table tbody tr.ip-line-row').all()) {
+    const status = (await row.locator('.ip-status').innerText()).trim();
+    const warn = ((await row.getAttribute('class')) ?? '').includes('ws-row-warn');
+    await expect(row.locator('.ip-edit-toggle')).toHaveAttribute('aria-expanded', status === 'Counted' && !warn ? 'false' : 'true');
+  }
   await expect(page.getByRole('region', { name: 'Next:' })).toBeVisible();
 }
 
@@ -72,14 +77,16 @@ test('F1 F2 F4 three sample files into one case: each Done card says what is nex
   await open(page, `/project/${projectId}/import`, { ready: 'What kind of file is it?' });
   await page.getByRole('radio', { name: 'Routing' }).click();
   await readSample(page);
-  // A routing shows its steps, closed to a summary until asked for.
+  // A routing shows its steps open, so a step read wrong can be changed at once; Close folds them.
   const editSteps = page.locator('button[aria-controls="ip-steps-edit"]');
-  await expect(editSteps).toHaveText('Edit the steps');
-  await expect(editSteps).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByLabel(/^Tier of /)).toHaveCount(0);
-  await editSteps.click();
+  await expect(editSteps).toHaveText('Close the steps');
+  await expect(editSteps).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByLabel(/^Tier of /).first()).toBeVisible();
   await editSteps.click();
+  await expect(page.getByLabel(/^Tier of /)).toHaveCount(0);
+  await expect(editSteps).toHaveText('Edit the steps');
+  await editSteps.click();
+  await expect(page.getByLabel(/^Tier of /).first()).toBeVisible();
   // The labour cost the hours come to is shown, not "After save".
   await expect(page.getByRole('cell', { name: 'After save' })).toHaveCount(0);
   await expect(page.locator('.ip-steps-table tbody tr').first().locator('td').nth(4)).toHaveText(/^\$\d+\.\d\d$/);
@@ -113,13 +120,21 @@ test('F1 F2 F4 three sample files into one case: each Done card says what is nex
   // F2: no steps editor on a bill of materials added to a case; lean lines.
   await expect(page.getByRole('button', { name: 'Edit the steps' })).toHaveCount(0);
   await expectLean(page);
-  // An Edit opens that line only, then closes.
-  const editAlu = page.locator('.ip-lines-table tbody tr').first().locator('.ip-edit-toggle');
-  await expect(editAlu).toHaveAccessibleName(/^Edit /);
+  // Change opens that line's match, amount, unit and step, then closes; a click on the row does the same.
+  const pickers = page.locator('select[aria-label$="matches in the library"]');
+  const before = await pickers.count();
+  const aluRow = page.locator('.ip-lines-table tbody tr.ip-line-row').first();
+  const editAlu = aluRow.locator('.ip-edit-toggle');
+  await expect(editAlu).toHaveAccessibleName(/^Change /);
+  await expect(editAlu).toHaveText('Change');
   await editAlu.click();
-  await expect(page.locator('select[aria-label$="matches in the library"]')).toHaveCount(1);
+  await expect(pickers).toHaveCount(before + 1);
   await editAlu.click();
-  await expect(page.locator('select[aria-label$="matches in the library"]')).toHaveCount(0);
+  await expect(pickers).toHaveCount(before);
+  await aluRow.locator('.ip-line-name').click();
+  await expect(pickers).toHaveCount(before + 1);
+  await aluRow.locator('.ip-line-name').click();
+  await expect(pickers).toHaveCount(before);
   const bom = await save(page, /^Save \d+ lines to Touring bike$/);
   expect(bom.flows_applied).toBeGreaterThan(10);
   // F4: the steps that take in the materials are in the Materials stage, and the card says so.

@@ -1538,3 +1538,6 @@
 .pc-settings { display: grid; gap: 8px; margin: 0 0 22px; max-width: 760px; }
 .pc-next { margin: 12px 24px 0; }
 .so-mine { margin: 0 24px 16px; }
+/* claude: import lines open on a click anywhere on the row */
+.ip-line-row { cursor: pointer; }
+.ip-line-row:hover > td { background: var(--ds-card-hover, rgba(0,0,0,0.02)); }

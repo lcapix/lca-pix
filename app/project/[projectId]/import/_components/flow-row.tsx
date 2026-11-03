@@ -60,7 +60,14 @@ export function FlowRow({
   const unit = e.unit?.trim() || f.unit
   return (
     <>
-      <tr className={status === 'pick_match' || !placed ? 'ws-row-warn' : undefined} data-open={open || undefined}>
+      <tr
+        className={`ip-line-row${status === 'pick_match' || !placed ? ' ws-row-warn' : ''}`}
+        data-open={open || undefined}
+        // The whole line opens its changes (the checkbox and buttons keep their own click).
+        onClick={(ev) => {
+          if (!(ev.target as HTMLElement).closest('input, button, select, a, label')) onToggle()
+        }}
+      >
         <td>
           <input
             type="checkbox"
@@ -98,8 +105,8 @@ export function FlowRow({
           <span className={`ip-status ip-status--${STATUS_TONE[status]}`}>{LINE_STATUS_WORD[status]}</span>
         </td>
         <td style={{ textAlign: 'right' }}>
-          <button type="button" className="ds-link ip-edit-toggle" aria-expanded={open} aria-controls={editId} aria-label={`${open ? 'Close the edits of' : 'Edit'} ${f.substance_text}`} onClick={onToggle}>
-            {open ? 'Close' : 'Edit'}
+          <button type="button" className="ds-btn ds-btn--small ip-edit-toggle" aria-expanded={open} aria-controls={editId} aria-label={`${open ? 'Close' : 'Change'} ${f.substance_text}`} onClick={onToggle}>
+            {open ? 'Close' : 'Change'}
           </button>
         </td>
       </tr>

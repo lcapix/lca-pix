@@ -15,10 +15,11 @@ import type { TargetComponent } from '@/lib/import/placement-suggestions'
  * from the document sits beside it, and the document's total by the heading,
  * so the money is read with the model rather than in a separate table.
  *
- * Closed to a one-line summary until "Edit the steps" (F2): about forty
- * controls open at once crowded the review. The page shows it for a routing
- * or a new case only; a bill of materials or an equipment list added to a
- * case keeps the suggested decisions without showing them.
+ * Open on arrival, so a step read wrong can be changed straight away
+ * (Shreya, 2026-11-02: closed, the controls looked gone); "Close the steps"
+ * folds it to a one-line summary. The page shows it for a routing or a new
+ * case only; a bill of materials or an equipment list added to a case keeps
+ * the suggested decisions without showing them.
  */
 export function HierarchyCard({
   nodes,
@@ -39,7 +40,7 @@ export function HierarchyCard({
   onStepAction: (originalName: string, value: string) => void
   targetComponents: TargetComponent[]
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   if (nodes.length === 0) return null
   const byStep = costsByStep(costs)
   const decided = appending
