@@ -117,7 +117,18 @@ const GUIDED_EVENT = 'lcapix:guided-mode'
 /**
  * Guided mode (BETA): off by default, kept on this device only. Every
  * listener hears a change made anywhere (the sidebar switch, "Turn off").
+ * Off is kept as a choice too ('0'), so a student's first case can start it
+ * on (UX 3) without ever overriding someone who turned it off.
  */
+/** Whether this device has a Guided mode choice yet, on or off. */
+export function guidedChoiceMade(): boolean {
+  try {
+    return localStorage.getItem(GUIDED_KEY) !== null
+  } catch {
+    return true
+  }
+}
+
 /** Turn Guided mode on for this device, from outside a component (Docs' button). */
 export function turnOnGuidedMode(): void {
   try {
@@ -146,8 +157,7 @@ export function useGuidedMode(): [boolean, (on: boolean) => void] {
   }, [])
   const set = useCallback((next: boolean) => {
     try {
-      if (next) localStorage.setItem(GUIDED_KEY, '1')
-      else localStorage.removeItem(GUIDED_KEY)
+      localStorage.setItem(GUIDED_KEY, next ? '1' : '0')
     } catch {}
     setOn(next)
     window.dispatchEvent(new Event(GUIDED_EVENT))

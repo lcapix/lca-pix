@@ -5,7 +5,8 @@
  * Each lesson has a task done in the real editor, a check that reads the
  * student's own data (so nothing can be passed by clicking through), and one
  * question that tests whether they understood why the task mattered. The
- * checks live here, away from the UI, so they can be tested.
+ * checks live here, away from the UI, so they can be tested. UX 3: each says
+ * it in plain words first, with the LCA term after it in brackets.
  */
 
 export type LessonId = 'scope' | 'inventory' | 'energy' | 'impact' | 'compare' | 'handin';
@@ -60,8 +61,8 @@ export const LESSONS: Lesson[] = [
     id: 'scope',
     title: 'Goal and scope',
     goal: 'Every result is per something. Decide what, before you measure anything.',
-    task: 'Set the functional unit, the reference flow and the boundary. Every amount in the case is per that unit.',
-    checkLabel: 'Functional unit written and reference flow above zero',
+    task: 'Say what one result is for, like one bike frame (the functional unit), how many of it the case makes (the reference flow), and where the study stops (the boundary). Every amount in the case is per that one thing. In a class, your instructor sets it.',
+    checkLabel: 'What one result is for is written, and the amount of it is above zero',
     done: (f) => f.functionalUnitSet,
     question: {
       kind: 'choice',
@@ -79,9 +80,9 @@ export const LESSONS: Lesson[] = [
   {
     id: 'inventory',
     title: 'Inventory: materials',
-    goal: 'The inventory is what physically goes in and out. It is where the numbers come from.',
+    goal: 'List what physically goes into each step and comes out of it (the inventory). Every number in the result comes from this list.',
     task: 'Add one material input to the step that consumes it, with the amount from your document.',
-    checkLabel: 'At least one material flow attached to a step',
+    checkLabel: 'At least one material on a step (a material flow)',
     done: (f) => f.layers.includes('materials'),
     question: {
       kind: 'choice',
@@ -119,16 +120,16 @@ export const LESSONS: Lesson[] = [
   {
     id: 'impact',
     title: 'Impact assessment',
-    goal: 'Characterization turns kilograms into an environmental effect, per category.',
-    task: 'Predict which step will carry the most climate impact, then run the assessment and see.',
-    checkLabel: 'A completed run exists',
+    goal: 'Each kilogram is multiplied by how strongly that substance causes each kind of harm, like warming (its characterization factor, per impact category).',
+    task: 'Guess which step will cause the most warming, then run the case and see.',
+    checkLabel: 'The case has run at least once',
     done: (f) => f.hasRun,
     question: {
       kind: 'choice',
       prompt: 'Two steps emit the same mass. Why can their climate impacts still differ?',
       options: [
         { id: 'a', text: 'The later step in the routing counts for more' },
-        { id: 'b', text: 'Each substance has its own characterization factor' },
+        { id: 'b', text: 'Each substance has its own multiplier for warming (its characterization factor)' },
         { id: 'c', text: 'Because one step costs more to run' },
       ],
       correct: 'b',
@@ -139,7 +140,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'compare',
     title: 'Interpretation by comparison',
-    goal: 'One number means little. A number next to a fair alternative means something.',
+    goal: 'One number means little on its own. Next to a fair other option, it says something (interpretation).',
     task: 'Duplicate this case, change one thing, run it, and open Compare.',
     checkLabel: 'A second case in this project with its own run',
     done: (f) => f.hasComparableCase,
@@ -147,7 +148,7 @@ export const LESSONS: Lesson[] = [
       kind: 'choice',
       prompt: 'Why can a run made with CML not be compared with a run made with TRACI?',
       options: [
-        { id: 'a', text: 'They characterize the same substance differently, so the scales differ' },
+        { id: 'a', text: 'They give the same substance a different multiplier, so the scales differ' },
         { id: 'b', text: 'TRACI is newer, so its numbers are always lower' },
         { id: 'c', text: 'They use different units for mass' },
       ],
@@ -159,7 +160,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'handin',
     title: 'Hand-in',
-    goal: 'The judgement is the assignment. The engine cannot write it for you.',
+    goal: 'What you conclude is the assignment. The app works out the numbers; it cannot write what they mean for you.',
     task: 'Write your interpretation and your assumptions on the Write-up tab, then export the report.',
     checkLabel: 'Interpretation written on this case',
     done: (f) => f.hasWriteUp,

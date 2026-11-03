@@ -13,6 +13,8 @@
 // an assignment case reads only for anyone but the student who owns it (an
 // instructor reads a student's hand-in or working case, never edits it). D4:
 // after a run on an assignment case the next step is "Write up, then hand in".
+// UX 3: a student's first case (no Guided mode choice yet on this device)
+// starts Guided mode on, says so once, and offers to turn it off.
 
 import { frozenStepCosts, runCosts, runLabel } from '@/lib/results/full-results-view'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -20,7 +22,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Button, Callout, EmptyState, ErrorCard, Tabs } from '@/components/lcapix/ds'
-import { useGuidedMode } from '@/lib/shell/use-shell'
+import { guidedChoiceMade, useGuidedMode } from '@/lib/shell/use-shell'
 import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
 import { apiRequest } from '@/lib/api-client'
 import { insightsBreakdownOf, insightsMaterialsOf } from '@/lib/results/insights-inputs'
@@ -78,6 +80,16 @@ export function CaseWorkspace() {
   const othersAssignment = !!kase?.assignment_id && (ownerOfCase === undefined || ownerOfCase !== profile?.id)
   const readOnly = caseReadOnly || othersAssignment
   const ownName = profile?.fullName?.trim() || null
+  // UX 3: a student is someone who signed up as one, or who works on their own assignment case.
+  const studentCase = !!kase && !readOnly && (profile?.useCase === 'student' || (!!kase.assignment_id && ownerOfCase === profile?.id))
+  const [, setGuided] = useGuidedMode()
+  const [guidedStarted, setGuidedStarted] = useState(false)
+  useEffect(() => {
+    if (studentCase && !guidedChoiceMade()) {
+      setGuided(true)
+      setGuidedStarted(true)
+    }
+  }, [studentCase, setGuided])
 
   const asked = search.get('tab')
   const tab: Tab = (TABS as string[]).includes(asked ?? '') ? (asked as Tab) : 'tree'
@@ -390,6 +402,7 @@ export function CaseWorkspace() {
         noSteps={!steps.length}
       />
       {!readOnly && <CaseSteps steps={barSteps} onAct={actOn} />}
+      {guidedStarted && <GuidedStarted onOff={() => (setGuided(false), setGuidedStarted(false))} onKeep={() => setGuidedStarted(false)} />}
       <LearnOffer asked={search.get('learn') === '1'} />
       {othersAssignment && ownerOfCase !== undefined && !caseReadOnly && (
         <div className="pc-next">
@@ -539,6 +552,31 @@ export function CaseWorkspace() {
           </div>
         </form>
       )}
+    </div>
+  )
+}
+
+/** UX 3: said once, on the student's first case, when Guided mode was started for them. */
+function GuidedStarted({ onOff, onKeep }: { onOff: () => void; onKeep: () => void }) {
+  return (
+    <div style={{ padding: '0 18px' }}>
+      <Callout
+        tone="info"
+        lead="Guided mode is on for your first case."
+        action={
+          <span style={{ display: 'flex', gap: 8 }}>
+            <Button size="small" variant="primary" onClick={onKeep}>
+              Keep it on
+            </Button>
+            <Button size="small" onClick={onOff}>
+              Turn it off
+            </Button>
+          </span>
+        }
+      >
+        Beside the tree it takes you through an LCA one step at a time: what the result is per, what goes in and out, the impact,
+        and what it means. The switch in the sidebar turns it off any time.
+      </Callout>
     </div>
   )
 }
