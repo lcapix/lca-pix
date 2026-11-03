@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode, useLayoutEffect } from 'react'
 import { Button } from './button'
 
 /**
@@ -33,14 +33,16 @@ export function TextDialog({
   const [value, setValue] = useState(initial)
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
+  // Before the dialog paints (layout effect), so a key pressed the moment it
+  // opens is never overwritten by the old name arriving a render later.
+  useLayoutEffect(() => {
     if (open) setValue(initial)
   }, [open, initial])
   // 1.3: the box opens with the current name selected, so typing replaces it.
   // Selected once the box holds that name (the value arrives a render after
   // open), then left alone so the person's own typing and selection stand.
   const selectedFor = useRef(false)
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       selectedFor.current = false
       return
