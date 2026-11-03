@@ -97,7 +97,7 @@ export default function GettingStartedPage() {
           lineHeight: 1.7,
         }}
       >
-        Press Run Assessment in the case header. A small dialog asks for the method and the region, set to the
+        Press Run the case in the case header. A small dialog asks for the method and the region, set to the
         study&apos;s. The answer opens on the case&apos;s Results tab; Open full page shows every category. Export a
         PDF, slides or a CSV from the Write-up tab or from Reports. Press{' '}
         <kbd className="ds-mono" style={kbdStyle}>

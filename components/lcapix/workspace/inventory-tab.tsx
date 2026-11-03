@@ -401,11 +401,11 @@ function InventoryRowView({
           <span style={{ fontSize: 12, color: 'var(--ds-text-2)', display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             {stepName} ·{' '}
             {readOnly ? (
-              <span className="ws-ro-value">{row.direction === 'input' ? 'IN' : 'OUT'}</span>
+              <span className="ws-ro-value">{row.direction === 'input' ? 'Input' : 'Output'}</span>
             ) : (
               <select className="ds-input" aria-label={`Direction for ${row.substance}`} value={draft.direction} onChange={(e) => draft.setDirection(e.target.value as 'input' | 'output')}>
-                <option value="input">In</option>
-                <option value="output">Out</option>
+                <option value="input">Input</option>
+                <option value="output">Output</option>
               </select>
             )}
           </span>

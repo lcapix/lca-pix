@@ -59,7 +59,7 @@ export function FullResults() {
   if (!run) {
     return (
       <div className="ws-full-results" style={{ padding: 24 }}>
-        <EmptyState line="Not run yet. Run Assessment and the answer shows here." />
+        <EmptyState line="Not run yet. Run the case and the answer shows here." />
         <Link className="ds-link" href={`/project/${projectId}/case/${caseId}`}>
           Back to the case
         </Link>
@@ -707,7 +707,7 @@ function FlowTable({ run, category, stepHref }: { run: WorkspaceRun; category: s
                     )}
                   </td>
                   <td>{f.substance}</td>
-                  <td>{f.dir === 'IN' ? 'In' : 'Out'}</td>
+                  <td>{f.dir === 'IN' ? 'Input' : 'Output'}</td>
                   <td className="ds-num">
                     {grouped(amount(f.amount))} {f.unit}
                     {f.conversion ? ` (${f.conversion})` : ''}
@@ -750,7 +750,7 @@ function FlowTable({ run, category, stepHref }: { run: WorkspaceRun; category: s
                     )}
                   </td>
                   <td>{f.substance}</td>
-                  <td>In</td>
+                  <td>Input</td>
                   <td className="ds-num">
                     {grouped(amount(f.amount))} {f.unit}
                   </td>

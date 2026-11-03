@@ -92,7 +92,7 @@ export function CostsCard({
                         type="button"
                         className="ds-link ip-edit-toggle"
                         aria-expanded={isOpen}
-                        aria-label={`${isOpen ? 'Close the step of' : 'Change the step of'} the ${KIND[c.category] ?? c.category} cost of $${Number(c.amount).toLocaleString()}`}
+                        aria-label={`${isOpen ? 'Close the step of' : 'Edit the step of'} the ${KIND[c.category] ?? c.category} cost of $${Number(c.amount).toLocaleString()}`}
                         onClick={() => toggle(i)}
                       >
                         {isOpen ? 'Close' : 'Edit'}

@@ -2,7 +2,7 @@
  * F4b: the worked example, from the empty Home to a result of your own.
  * docs/flows/USER_FLOWS.md §F4 (F4b.1–2) and §F9.1a, on the education
  * screens: the sample study arrives finished and read-only (E02), so the
- * path to a run of your own is Make my own copy → Run Assessment (E03, E05).
+ * path to a run of your own is Make my own copy → Run the case (E03, E05).
  */
 import { expect, test } from '../support/fixtures';
 import { open } from '../support/ui';
@@ -11,7 +11,7 @@ import { open } from '../support/ui';
 // for 60 s), which under parallel load takes longer than the 20 s default.
 const NAV = { timeout: 90_000 };
 
-test('G29 P129 F4 the sample study → Make my own copy → Run Assessment → Results shows the answer', async ({ newUser, signIn }) => {
+test('G29 P129 F4 the sample study → Make my own copy → Run the case → Results shows the answer', async ({ newUser, signIn }) => {
   const user = await newUser('example');
   const { page } = await signIn(user);
   await open(page, '/home', { ready: 'Open the sample study' });
@@ -32,11 +32,11 @@ test('G29 P129 F4 the sample study → Make my own copy → Run Assessment → R
   await expect(page.getByRole('tree')).toBeVisible(NAV);
 
   // The copy has every step and flow and no run of its own.
-  const run = page.getByRole('button', { name: 'Run Assessment', exact: true });
+  const run = page.getByRole('button', { name: 'Run the case', exact: true });
   await expect(run).toBeEnabled(NAV);
   const posted = page.waitForResponse((r) => /\/api\/cases\/\d+\/assessments/.test(r.url()) && r.request().method() === 'POST', NAV);
   await run.click();
-  await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
   expect((await posted).status()).toBe(201);
 
   await expect(page).toHaveURL(/tab=results/, NAV);

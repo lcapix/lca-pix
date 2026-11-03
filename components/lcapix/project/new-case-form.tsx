@@ -243,7 +243,7 @@ export function NewCaseForm() {
               <input type="radio" name="kind" checked={kind === 'emptycomp'} onChange={() => setKind('emptycomp')} />
               <span>
                 <strong>An empty comparative</strong>
-                <span>A comparison case with no steps yet.</span>
+                <span>A what-if with no steps yet.</span>
               </span>
             </label>
           </div>

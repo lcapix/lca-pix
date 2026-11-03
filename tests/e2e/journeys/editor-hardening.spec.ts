@@ -358,8 +358,8 @@ test.describe('editor hardening: own factors', () => {
 
     // Run; the full results row says "Hand-entered: Mill EPD 2025", never "source not on record".
     const ran = page.waitForResponse((r) => /^\/api\/cases\/\d+\/assessments$/.test(new URL(r.url()).pathname) && r.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     const run = await ran;
     expect(run.status()).toBe(201);
     const runId = (await run.json()).run_id;

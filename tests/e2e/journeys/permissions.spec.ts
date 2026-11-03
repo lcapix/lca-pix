@@ -30,7 +30,7 @@ test.describe('viewer member', () => {
     const { projectId, baseCaseId } = seed.example;
     await openCase(page, projectId, baseCaseId);
     await expect(page.getByText('Can read', { exact: true }).first()).toBeVisible();
-    for (const name of ['Run Assessment', 'Make my own copy', 'Add step']) {
+    for (const name of ['Run the case', 'Make my own copy', 'Add step']) {
       await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
     }
   });

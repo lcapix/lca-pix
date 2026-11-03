@@ -33,7 +33,7 @@ describe('deriveCaseStatus', () => {
       hasAssessment: false,
     })
     expect(v.status).toBe('ready')
-    expect(v.primary).toEqual({ action: 'run', label: 'Run assessment', run: true })
+    expect(v.primary).toEqual({ action: 'run', label: 'Run the case', run: true })
     expect(v.missingPhrase).toBe('Energy (from a utility bill)')
     expect(v.accent).toBe('var(--signal-info, #2563eb)')
   })

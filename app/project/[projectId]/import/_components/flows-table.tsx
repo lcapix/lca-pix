@@ -129,7 +129,7 @@ export function FlowsTable({
               {appending && <th scope="col">Step</th>}
               <th scope="col" className="ip-col-status">Status</th>
               <th scope="col" className="ip-col-edit">
-                <span className="ds-sr-only">Change</span>
+                <span className="ds-sr-only">Edit</span>
               </th>
             </tr>
           </thead>

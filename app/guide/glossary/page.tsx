@@ -7,7 +7,7 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Functional unit',
-    def: 'The unit of service every scenario in a project is normalised to (e.g. "1 painted metal box", "1 kWh battery capacity", "1000 food containers"). Pick this before you start building cases: alternatives can only be compared if they share the same functional unit.',
+    def: 'The unit of service every case in a project is normalised to (e.g. "1 painted metal box", "1 kWh battery capacity", "1000 food containers"). Pick this before you start building cases: alternatives can only be compared if they share the same functional unit.',
   },
   {
     term: 'Reference flow',
@@ -51,15 +51,15 @@ const TERMS: { term: string; def: string }[] = [
   },
   {
     term: 'Base case',
-    def: 'The reference scenario. Typically captures the current production line / material mix / grid as-is.',
+    def: 'The case the others are measured against. Typically captures the current production line / material mix / grid as-is.',
   },
   {
     term: 'Comparative case',
-    def: 'An alternative scenario you measure against the base. Each project can hold many; Compare reads each one against the first case you pick.',
+    def: 'A copy of a case with one thing changed, measured against the base case. Each project can hold many; Compare reads each one against the first case you pick.',
   },
   {
     term: 'Assessment run',
-    def: 'An immutable snapshot. Hitting Run Assessment freezes the current tree + flows + method + region and writes one assessment_runs row plus N assessment_results rows. Every number on Results comes from one specific run.',
+    def: 'An immutable snapshot. Pressing Run the case freezes the current tree + flows + method + region and writes one assessment_runs row plus N assessment_results rows. Every number on Results comes from one specific run.',
   },
   {
     term: 'Hot spot',

@@ -37,8 +37,8 @@ test.describe('F9 run an assessment', () => {
     const { page } = await signIn(user);
     await openCase(page, projectId, caseId);
     const posted = page.waitForResponse((r) => /\/api\/cases\/\d+\/assessments/.test(r.url()) && r.request().method() === 'POST', NAV);
-    await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await posted).status()).toBe(201);
     await expect(page).toHaveURL(/tab=results/, NAV);
 

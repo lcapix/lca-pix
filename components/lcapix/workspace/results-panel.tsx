@@ -67,7 +67,7 @@ export function ResultsPanel({
     return (
       <FloatingPanel tab="Results" label="Results" title={<strong>Results</strong>}>
         <div className="ws-panel-section">
-          <EmptyState line="Not run yet. Run Assessment and the answer shows here, with what builds it." />
+          <EmptyState line="Not run yet. Run the case and the answer shows here, with what builds it." />
         </div>
       </FloatingPanel>
     )

@@ -72,8 +72,8 @@ test('journey 6, hardened: set, start, run, hand in, and the teacher opens the h
     expect((await created).status()).toBe(201);
     await expect(tp.getByText(`Saved. "${TITLE}" is set for your students.`)).toBeVisible(NAV);
     // Changing it: Save, and the page says so.
-    await tp.getByRole('button', { name: 'Change' }).click();
-    const edit = tp.getByRole('form', { name: 'Change the assignment' });
+    await tp.getByRole('button', { name: 'Edit', exact: true }).click();
+    const edit = tp.getByRole('form', { name: 'Edit the assignment' });
     await edit.getByLabel('Instructions').fill('Make the blank lighter (0.70 kg), run it, write what changed, then hand it in.');
     const put = answered(tp, /^\/api\/assignments\/\d+$/, 'PUT');
     await edit.getByRole('button', { name: 'Save' }).click();
@@ -134,8 +134,8 @@ test('journey 6, hardened: set, start, run, hand in, and the teacher opens the h
     await expect(ap.getByRole('tree')).toBeVisible(NAV);
 
     const ran = answered(ap, /^\/api\/cases\/\d+\/assessments$/);
-    await ap.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await ap.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await ap.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await ap.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(ap).toHaveURL(/tab=results/, NAV);
     const bar = ap.getByRole('navigation', { name: 'Where this case stands' });
@@ -198,7 +198,7 @@ test('journey 6, hardened: set, start, run, hand in, and the teacher opens the h
     await expect(tp).toHaveURL(new RegExp(`/case/${frozenId}$`), NAV);
     await expect(tp.getByText(/Handed in, read-only/).first()).toBeVisible(NAV);
     await expect(tp.getByRole('tab', { name: /^Results/ })).toContainText('Run 1');
-    await expect(tp.getByRole('button', { name: 'Run Assessment', exact: true })).toHaveCount(0);
+    await expect(tp.getByRole('button', { name: 'Run the case', exact: true })).toHaveCount(0);
     await tp.goBack();
     await expect(tp).toHaveURL(new RegExp(`/project/${projectId}/assignments$`), NAV);
 
@@ -219,7 +219,7 @@ test('journey 6, hardened: set, start, run, hand in, and the teacher opens the h
     // The working case: the teacher reads it, never edits it.
     await open(tp, `/project/${projectId}/case/${workingId}`, { ready: `${TITLE} · Ana Ruiz` });
     await expect(tp.getByText("A student's case.")).toBeVisible(NAV);
-    await expect(tp.getByRole('button', { name: 'Run Assessment', exact: true })).toHaveCount(0);
+    await expect(tp.getByRole('button', { name: 'Run the case', exact: true })).toHaveCount(0);
     await expect(tp.getByRole('button', { name: /^\+ Add a step|^Add step$/ })).toHaveCount(0);
   });
 

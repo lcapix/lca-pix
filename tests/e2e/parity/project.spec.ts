@@ -90,7 +90,7 @@ test('P02 P04 P06 P09 P10 P14 P15 P16 P18 P25 P26 P27 P28 P29 P124 P130 P131 a p
 
   // A case's menu: Rename, Run, Delete (P118 walks each one).
   await page.getByRole('button', { name: 'Menu for Cut frame' }).click();
-  await row(page.getByRole('menuitem', { name: 'Run' }), 'P26', 'Run Assessment');
+  await row(page.getByRole('menuitem', { name: 'Run' }), 'P26', 'Run the case');
   await row(page.getByRole('menuitem', { name: 'Rename' }), 'P130', 'Rename case');
   await row(page.getByRole('menuitem', { name: 'Delete' }), 'P131', 'Delete case');
   await page.getByRole('menuitem', { name: 'Rename' }).click();

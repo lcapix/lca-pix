@@ -116,8 +116,8 @@ test('R02 choose method and region for a run', async ({ api, newUser, signIn }) 
   const { projectId, caseId } = await workedExample(api, user);
   const { page } = await signIn(user);
   await openCase(page, projectId, caseId);
-  await page.getByRole('button', { name: 'Run Assessment' }).click();
-  await row(page.getByRole('dialog', { name: 'Run assessment' }), 'R02', 'Choose method and region for a run');
+  await page.getByRole('button', { name: 'Run the case', exact: true }).click();
+  await row(page.getByRole('dialog', { name: 'Run the case' }), 'R02', 'Choose method and region for a run');
 });
 
 test('P05 P45 P46 P47 Analytics: a case link opens its results, and a solo owner sees their own cases', async ({ api, newUser, signIn }) => {

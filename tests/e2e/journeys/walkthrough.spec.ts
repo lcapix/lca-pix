@@ -239,8 +239,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
 
     // Results: the answer, and the cost beside it.
     const ran = posted(page, /^\/api\/cases\/\d+\/assessments$/);
-    await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(page).toHaveURL(/tab=results/, NAV);
     await expect(page.locator('.ws-answer-num')).toHaveText('1.720', NAV);
@@ -501,8 +501,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await page.getByRole('button', { name: 'Save Electricity on 30. Powder coat and cure' }).click();
     expect((await changed).status()).toBe(200);
     const ranWhatIf = posted(page, /^\/api\/cases\/\d+\/assessments$/);
-    await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ranWhatIf).status()).toBe(201);
     await expect(page.locator('.ws-answer-num')).toHaveText('1.667', NAV);
 
@@ -554,8 +554,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await desk.getByRole('button', { name: 'Save Steel on 10. Cut blank' }).click();
     expect((await lighter).status()).toBe(200);
     const ran = posted(desk, /^\/api\/cases\/\d+\/assessments$/);
-    await desk.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await desk.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await desk.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await desk.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(desk.locator('.ws-answer-num')).toHaveText('1.682', NAV);
 

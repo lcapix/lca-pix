@@ -58,7 +58,7 @@ const SECTIONS = [
       { l: 'Authentication', href: '/guide/api-reference' },
       { l: 'Projects', href: '/guide/api-reference' },
       { l: 'Cases & components', href: '/guide/api-reference' },
-      { l: 'Run assessment', href: '/guide/api-reference' },
+      { l: 'Run a case', href: '/guide/api-reference' },
       { l: 'Export PDF / PowerPoint', href: '/guide/api-reference' },
     ],
   },

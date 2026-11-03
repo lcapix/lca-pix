@@ -2,7 +2,7 @@
 
 // The case header (behaviour spec "Inside a case", E03, E03c): the case name,
 // its facts line, a warning line when flows are left out, the Case switcher,
-// and the one primary: Run Assessment, or Make my own copy on the read-only
+// and the one primary: Run the case, or Make my own copy on the read-only
 // sample. While a run is going: "Running… N s".
 
 import { runLabel } from '@/lib/results/full-results-view'
@@ -35,7 +35,7 @@ export function caseFacts(k: WorkspaceCase, inv: WorkspaceInventory | null, noSt
     ? `${fmtAmount(k.reference_flow ?? 1)} ${k.reference_flow_unit}`
     : k.project_functional_unit?.trim() || `${fmtAmount(k.reference_flow ?? 1)} unit`
   // A6: the method and region of the run on show, not the study's. Before a
-  // first run, the study's (what Run Assessment will use).
+  // first run, the study's (what Run the case will use).
   const shown = picked ?? inv?.latest_run ?? null
   const scope = shown
     ? `${shown.method} · ${shown.region || 'Global'}`
@@ -161,7 +161,7 @@ export function CaseHeader({
               </svg>
             }
           >
-            Run Assessment
+            Run the case
           </Button>
         )}
       </header>

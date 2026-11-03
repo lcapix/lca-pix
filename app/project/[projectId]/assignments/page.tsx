@@ -190,7 +190,7 @@ function AssignmentForm({
       style={{ display: 'grid', gap: 10, maxWidth: 720 }}
     >
       <SectionLabel as="h2" id="assign-form-h">
-        {initial ? 'Change the assignment' : 'New assignment'}
+        {initial ? 'Edit the assignment' : 'New assignment'}
       </SectionLabel>
       <label className="np-field">
         <span className="edu-field-label">Title</span>
@@ -343,7 +343,7 @@ function AssignmentCard({
           <Button aria-expanded={showSubs} onClick={() => setShowSubs((v) => !v)}>
             {showSubs ? 'Hide hand-ins' : 'Hand-ins'}
           </Button>
-          <Button onClick={onEdit}>Change</Button>
+          <Button onClick={onEdit}>Edit</Button>
           <Button variant="danger-quiet" onClick={() => setConfirm('delete')}>
             Delete
           </Button>

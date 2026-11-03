@@ -4,7 +4,7 @@
 // (name, facts, warning line, Case switcher, one primary), then the four tabs
 // (Tree with its step count, Inventory with "N need an amount", Results with
 // the run number, Write-up), Hide panel and Compare at the row's end. The tab
-// is in the URL (?tab=), an older run too (?run=). Run Assessment runs the
+// is in the URL (?tab=), an older run too (?run=). Run the case runs the
 // case with the study's method and region, counts the seconds, then opens
 // Results. UX 2: one docked panel beside the tab (side-panel.tsx) holds the
 // tab's own content (Step, Results, Write-up) and Documents (E21) as its two
@@ -154,7 +154,7 @@ export function CaseWorkspace() {
     [router, params.projectId, caseId],
   )
 
-  // Run Assessment: the study's method and region, a seconds count, then Results.
+  // Run the case: the study's method and region, a seconds count, then Results.
   const [running, setRunning] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [runError, setRunError] = useState<string | null>(null)
@@ -523,7 +523,7 @@ export function CaseWorkspace() {
         >
           <div className="ds-dialog" role="dialog" aria-modal="true" aria-labelledby="run-title">
             <h2 id="run-title" className="ds-dialog-title">
-              Run assessment
+              Run the case
             </h2>
             <label style={{ display: 'block', margin: '12px 0' }}>
               <span className="ds-section-label">Method</span>

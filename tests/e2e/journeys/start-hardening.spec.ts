@@ -66,8 +66,8 @@ test.describe('journey 1, hardened: the sample, my copy, the Cases board', () =>
     await expect(page.getByRole('button', { name: /^Left out, unit can.t convert 0$/ })).toBeVisible(NAV);
     await expect(page.getByText(/flows? (unit|units) can.t convert|Pick kg or g/i)).toHaveCount(0);
     const ran = answered(page, /^\/api\/cases\/\d+\/assessments$/);
-    await page.getByRole('button', { name: 'Run Assessment', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByRole('button', { name: 'Run the case', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(page).toHaveURL(/tab=results/, NAV);
     await expect(page.locator('.ws-answer-num')).toHaveText('1.720', NAV);

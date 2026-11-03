@@ -141,8 +141,8 @@ export const LESSONS: Lesson[] = [
     id: 'compare',
     title: 'Interpretation by comparison',
     goal: 'One number means little on its own. Next to a fair other option, it says something (interpretation).',
-    task: 'Duplicate this case, change one thing, run it, and open Compare.',
-    checkLabel: 'A second case in this project with its own run',
+    task: 'Make a what-if (New case, copying this one), change one thing, run it, and open Compare.',
+    checkLabel: 'A what-if in this project with its own run',
     done: (f) => f.hasComparableCase,
     question: {
       kind: 'choice',

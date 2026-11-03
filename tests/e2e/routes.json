@@ -161,7 +161,7 @@
     {
       "slug": "case-editor-five-tier",
       "path": "/project/{fiveTierProject}/case/{fiveTierCase}",
-      "ready": "Run Assessment",
+      "ready": "Run the case",
       "phoneReady": "Read only on a phone.",
       "brief": "10 Case (5 tiers, E03)"
     },
@@ -322,7 +322,7 @@
     {
       "slug": "case-copy",
       "path": "/project/{exampleProject}/case/{compCase}",
-      "ready": "Run Assessment",
+      "ready": "Run the case",
       "phoneReady": "Read only on a phone.",
       "brief": "22 Case (a copy you can change, E03)"
     },

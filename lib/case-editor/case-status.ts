@@ -60,7 +60,7 @@ export function deriveCaseStatus({
       : status === 'blocked'
         ? { action: 'add-inputs', label: 'Add material inputs', run: false }
         : status === 'ready'
-          ? { action: 'run', label: 'Run assessment', run: true }
+          ? { action: 'run', label: 'Run the case', run: true }
           : { action: 'view-results', label: 'View results', run: false }
   const missingPhrase = firstMissing
     ? `${firstMissing.label}${

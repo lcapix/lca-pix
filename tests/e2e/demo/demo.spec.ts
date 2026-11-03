@@ -149,9 +149,9 @@ test('the V1 demo: every feature, start to finish', async ({ page, api, newUser 
   });
 
   await scene(page, 'Run', async () => {
-    await page.getByRole('button', { name: 'Run Assessment' }).click();
+    await page.getByRole('button', { name: 'Run the case', exact: true }).click();
     await caption(page, 'Run: the study\'s method and region, changeable for this run.', 2000);
-    await page.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Run the case' }).getByRole('button', { name: 'Run', exact: true }).click();
     await expect(page.getByRole('tab', { name: /^Results/ })).toHaveAttribute('aria-selected', 'true', { timeout: 90_000 });
     await caption(page, 'Results: the climate answer, what builds it, how sure it is, and the change from the last run.');
   });

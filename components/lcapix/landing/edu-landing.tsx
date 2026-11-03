@@ -481,7 +481,7 @@ function AppFrame() {
             <strong>Elena Rivera’s case</strong>
             <small>Copy of the Base case · 1 bracket · TRACI 2.1 · US · Run #102</small>
           </span>
-          <span className="lp-frame-run">▶ Run Assessment</span>
+          <span className="lp-frame-run">▶ Run the case</span>
         </div>
         <div className="lp-frame-tabs">
           <span data-on>Tree 17</span>

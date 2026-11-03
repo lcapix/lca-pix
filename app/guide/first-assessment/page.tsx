@@ -122,7 +122,7 @@ export default function FirstAssessmentPage() {
         title="Run an assessment"
         body={
           <>
-            In the case, press <Chip>▶ Run Assessment</Chip>. A small dialog asks for:
+            In the case, press <Chip>▶ Run the case</Chip>. A small dialog asks for:
             <Ul>
               <Li>
                 <strong>Method</strong>: CML 2001, ReCiPe Midpoint (H) or TRACI 2.1, set to the study&apos;s.

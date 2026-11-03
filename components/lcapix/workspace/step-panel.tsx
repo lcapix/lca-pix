@@ -287,7 +287,7 @@ function FlowRowWs({
       <div className="ws-flow" data-readonly>
         <div className="ws-flow-top">
           <span className="ws-flow-name">{row.substance}</span>
-          <span className="ws-ro-value">{row.direction === 'input' ? 'In' : 'Out'}</span>
+          <span className="ws-ro-value">{row.direction === 'input' ? 'Input' : 'Output'}</span>
           <span className="ws-ro-value ds-mono">{row.amount === null ? 'no amount' : `${amountBox(row.amount)} ${row.unit}`}</span>
         </div>
         <div className="ws-sum">{rowSum(row)}</div>
@@ -313,8 +313,8 @@ function FlowRowWs({
         </label>
         <span className="ws-dir">
           <select className="ds-input" aria-label={`Direction for ${row.substance}`} value={draft.direction} onChange={(e) => draft.setDirection(e.target.value as 'input' | 'output')}>
-            <option value="input">In</option>
-            <option value="output">Out</option>
+            <option value="input">Input</option>
+            <option value="output">Output</option>
           </select>
         </span>
         <input
@@ -379,7 +379,7 @@ function FlowRowWs({
         </button>
         {!own && (
           <button type="button" className="ds-link" onClick={() => setOwn(true)}>
-            {row.climate?.tag === 'hand' ? 'Change my own factor' : 'Use my own factor'}
+            {row.climate?.tag === 'hand' ? 'Edit my own factor' : 'Use my own factor'}
           </button>
         )}
         <button type="button" className="ds-link" onClick={() => setDrop(true)}>

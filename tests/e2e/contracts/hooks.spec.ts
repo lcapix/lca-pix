@@ -43,19 +43,19 @@ test.describe('the tree', () => {
 });
 
 test.describe('accessible names', () => {
-  test('a case you can change: the four tabs and Run Assessment', async ({ page }) => {
+  test('a case you can change: the four tabs and Run the case', async ({ page }) => {
     const { projectId, compCaseId } = seed().example;
     await openCase(page, projectId, compCaseId);
     for (const tab of [/^Tree/, /^Inventory/, /^Results/, /^Write-up/]) await expect(page.getByRole('tab', { name: tab })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run the case', exact: true })).toBeVisible();
     await expect(control(page, 'Hide panel')).toBeVisible();
   });
 
-  test('the sample’s read-only base case: Make my own copy, not Run Assessment', async ({ page }) => {
+  test('the sample’s read-only base case: Make my own copy, not Run the case', async ({ page }) => {
     const { projectId, baseCaseId } = seed().example;
     await openCase(page, projectId, baseCaseId);
     await expect(page.getByRole('button', { name: 'Make my own copy' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Run Assessment', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Run the case', exact: true })).toHaveCount(0);
   });
 
   test('Results: Magic Insights and Try a what-if', async ({ page }) => {

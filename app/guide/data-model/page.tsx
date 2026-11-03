@@ -73,7 +73,7 @@ export default function DataModelPage() {
       </Section>
 
       <Section title="Assessment run">
-        A snapshot in time. When you press <strong>Run Assessment</strong> the
+        A snapshot in time. When you press <strong>Run the case</strong> the
         engine freezes the current tree + flows + selected method + region
         into an immutable <code>assessment_runs</code> row, then writes one{' '}
         <code>assessment_results</code> row per (component × category). Past

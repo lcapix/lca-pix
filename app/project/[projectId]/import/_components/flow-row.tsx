@@ -81,7 +81,7 @@ export function FlowRow({
         <td>
           <strong className="ip-line-name">{name}</strong>
           <span className="ip-line-meta ds-mono" title={f.provenance || undefined}>
-            {f.direction === 'output' ? 'Out' : 'In'}
+            {f.direction === 'output' ? 'Output' : 'Input'}
             {f.provenance ? ` · ${f.provenance}` : ''}
           </span>
         </td>
@@ -105,8 +105,8 @@ export function FlowRow({
           <span className={`ip-status ip-status--${STATUS_TONE[status]}`}>{LINE_STATUS_WORD[status]}</span>
         </td>
         <td style={{ textAlign: 'right' }}>
-          <button type="button" className="ds-btn ds-btn--small ip-edit-toggle" aria-expanded={open} aria-controls={editId} aria-label={`${open ? 'Close' : 'Change'} ${f.substance_text}`} onClick={onToggle}>
-            {open ? 'Close' : 'Change'}
+          <button type="button" className="ds-btn ds-btn--small ip-edit-toggle" aria-expanded={open} aria-controls={editId} aria-label={`${open ? 'Close' : 'Edit'} ${f.substance_text}`} onClick={onToggle}>
+            {open ? 'Close' : 'Edit'}
           </button>
         </td>
       </tr>

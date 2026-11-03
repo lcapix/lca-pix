@@ -726,7 +726,7 @@ function drawComponentBreakdown(doc: PDFKit.PDFDocument, data: ReportData, headi
 
   // Table
   const colWidths = [140, 140, 110, 105];
-  const headers = ['Component', 'Category', 'Impact Value', 'Unit'];
+  const headers = ['Step', 'Category', 'Impact value', 'Unit'];
 
   if (y > 640) {
     doc.addPage();
@@ -790,7 +790,7 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData, headi
   }
 
   const colWidths = [120, 120, 70, 100, 85];
-  const headers = ['Component', 'Substance', 'Direction', 'Amount', 'Unit'];
+  const headers = ['Step', 'Substance', 'Direction', 'Amount', 'Unit'];
 
   doc.rect(50, y, 495, 25).fill(COLORS.primary);
   doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.white);
@@ -818,7 +818,7 @@ function drawEnvironmentalFlows(doc: PDFKit.PDFDocument, data: ReportData, headi
 
     const dirColor = flow.direction === 'input' ? COLORS.blue : COLORS.red;
     doc.font('Helvetica-Bold').fontSize(8).fillColor(dirColor);
-    doc.text(flow.direction.toUpperCase(), 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2], lineBreak: false, ellipsis: true });
+    doc.text(flow.direction === 'input' ? 'Input' : 'Output', 60 + colWidths[0] + colWidths[1], y + 5, { width: colWidths[2], lineBreak: false, ellipsis: true });
 
     doc.font('Helvetica').fontSize(8).fillColor(COLORS.text);
     const amount = flow.amount == null || flow.amount === '' ? 'No amount yet' : num(flow.amount);
