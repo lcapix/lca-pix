@@ -265,7 +265,7 @@ export function TreeTab({
             )
           )}
         </span>
-        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+        <span className="ws-tools">
           <span className="ws-zoom" role="group" aria-label="Zoom">
             <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(ZOOM_FLOOR, +(z - 0.1).toFixed(2)))}>
               −

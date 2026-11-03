@@ -542,7 +542,10 @@
 .ws-step-sub[data-needs='true'] { color: #8f5b00; font-weight: 600; }
 .ws-chip { font-family: var(--ds-mono); font-weight: 500; font-size: 12px; line-height: 16px; padding: 0 6px; border-radius: 999px; background: var(--ds-green-wash); color: var(--ds-green-ink); white-space: nowrap; }
 .ws-topbar { position: absolute; left: 16px; right: 16px; top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; pointer-events: none; z-index: 5; }
-.ws-topbar > * { pointer-events: auto; flex-shrink: 0; white-space: nowrap; }
+.ws-topbar > * { pointer-events: auto; }
+.ws-info { flex-shrink: 0; white-space: nowrap; }
+.ws-tools { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; }
+.ws-tools > * { flex-shrink: 0; white-space: nowrap; }
 /* A narrow tree keeps its controls; the step and flow counts are on the tabs already. */
 @container ws-canvas (max-width: 760px) { .ws-info:not([data-results]) { display: none; } .ws-topbar { justify-content: flex-end; } }
 .ws-info { background: #fff; border: 1px solid var(--ds-line); border-radius: 999px; padding: 6px 12px; font-size: 12px; color: var(--ds-text-2); display: inline-flex; align-items: center; gap: 10px; }
