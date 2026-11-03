@@ -123,8 +123,8 @@ export function CaseWorkspace() {
   // Home's Continue card reads the case opened last on this device.
   const projectName = projects.find((p) => p.project_id === kase?.project_id)?.project_name ?? null
   useEffect(() => {
-    if (kase) rememberCase({ project_id: kase.project_id, case_id: kase.case_id, project_name: projectName, case_name: kase.case_name })
-  }, [kase, projectName])
+    if (kase) rememberCase({ project_id: kase.project_id, case_id: kase.case_id, project_name: projectName, case_name: kase.case_name }, profile?.id)
+  }, [kase, projectName, profile?.id])
 
   // The case this one is measured against: the case it was copied from, else
   // the project's Base case; the Base case itself reads its previous run.

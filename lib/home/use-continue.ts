@@ -19,11 +19,11 @@ export interface ContinueCase extends ContinueInput {
   sourceFile: string | null
 }
 
-export function useContinueCase(): { data: ContinueCase | null; loading: boolean } {
+export function useContinueCase(userId: number | null | undefined): { data: ContinueCase | null; loading: boolean } {
   const [data, setData] = useState<ContinueCase | null>(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    const last = readLastCase()
+    const last = readLastCase(userId)
     if (!last) {
       setLoading(false)
       return
@@ -74,6 +74,6 @@ export function useContinueCase(): { data: ContinueCase | null; loading: boolean
     return () => {
       live = false
     }
-  }, [])
+  }, [userId])
   return { data, loading }
 }

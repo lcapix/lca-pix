@@ -217,11 +217,11 @@ function SetUpClass() {
 
 function HomeLater({ projects, userId, firstName, teaching }: { projects: HomeProject[]; userId: number; firstName: string | null; teaching: boolean }) {
   const router = useRouter()
-  const cont = useContinueCase()
+  const cont = useContinueCase(userId)
   const items = needsAttention(projects, userId, teaching ? 'student' : 'member')
   const own = projects.filter((p) => !p.is_sample)
   const sample = projects.find((p) => p.is_sample) ?? null
-  const last = readLastCase()
+  const last = readLastCase(userId)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [removeError, setRemoveError] = useState<string | null>(null)

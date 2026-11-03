@@ -13,6 +13,7 @@ export const SIGNED_IN_KEYS = [
   'lcapix-projects',
   'lcapix-notifications',
   'lcapix-recent-projects',
+  'lcapix-last-case',
 ]
 
 export function signOut(navigate: (path: string) => void) {

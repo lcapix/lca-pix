@@ -1,6 +1,7 @@
 /**
  * The case opened last on this device (E12 "Continue", "last open: …"). Kept
- * in the browser only: it names nothing another person can read, and a case
+ * in the browser only, with who opened it: on a shared computer (a lab) the
+ * next person never sees the last one's case, and sign-out forgets it. A case
  * that is gone or no longer shared is simply forgotten when Home finds it 404.
  */
 
@@ -13,18 +14,23 @@ export interface LastCase {
   case_name: string
   /** ISO time it was opened. */
   at: string
+  /** Who opened it: read back only for the same person. */
+  user_id?: number
 }
 
-export function rememberCase(c: Omit<LastCase, 'at'>): void {
+export function rememberCase(c: Omit<LastCase, 'at' | 'user_id'>, userId: number | null | undefined): void {
+  if (!userId) return
   try {
-    localStorage.setItem(KEY, JSON.stringify({ ...c, at: new Date().toISOString() }))
+    localStorage.setItem(KEY, JSON.stringify({ ...c, user_id: userId, at: new Date().toISOString() }))
   } catch {}
 }
 
-export function readLastCase(): LastCase | null {
+export function readLastCase(userId: number | null | undefined): LastCase | null {
+  if (!userId) return null
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null')
     if (!v || !Number.isInteger(v.project_id) || !Number.isInteger(v.case_id) || typeof v.case_name !== 'string') return null
+    if (v.user_id !== userId) return null
     return v as LastCase
   } catch {
     return null
