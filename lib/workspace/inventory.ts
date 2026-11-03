@@ -211,3 +211,23 @@ export function inventoryBadge(counts: { needs_amount: number; left_out: number 
   if (counts.left_out) parts.push(`${counts.left_out} left out`)
   return parts.length ? parts.join(' · ') : null
 }
+
+/**
+ * UX 6: the one line per case about Global averages, in place of a notice on
+ * every flow. For a case run for a region (US, EU), the flows whose factor is
+ * the Global average because no factor for that region exists: how many, and
+ * the first few by name. Null for a Global case or when none fall back.
+ */
+export function globalAveragesLine(
+  rows: Array<{ substance: string; climate: { tag?: string | null } | null }>,
+  region: string,
+): string | null {
+  if (!region || region.toLowerCase() === 'global') return null
+  const counted = rows.filter((r) => r.climate)
+  const names = [...new Set(counted.filter((r) => r.climate?.tag === 'global').map((r) => r.substance.split(',')[0].trim().toLowerCase()))]
+  const n = counted.filter((r) => r.climate?.tag === 'global').length
+  if (!n) return null
+  const shown = names.slice(0, 3)
+  const list = names.length > 3 ? `${shown.join(', ')} and ${names.length - 3} more` : shown.length > 1 ? `${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}` : shown[0]
+  return `${n} of ${counted.length} ${counted.length === 1 ? 'flow' : 'flows'} ${n === 1 ? 'uses' : 'use'} the Global average, because there is no ${region} factor for ${list}. Only electricity has ${region} factors today. To use your own number for a flow, open it with Edit more.`
+}

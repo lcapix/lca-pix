@@ -1609,3 +1609,5 @@
 .ws-steps-label { font-size: 13px; font-weight: 600; }
 .ws-steps-detail { font-size: 12px; color: var(--ds-text-2); }
 .ws-steps-alldone { font-size: 13px; color: var(--ds-green); font-weight: 600; }
+/* UX 6: the case's one line about Global averages, above the Inventory table */
+.ws-global-line { padding: 10px 18px; font-size: 13px; line-height: 18px; color: var(--ds-text-2); background: var(--ds-grey-bg); border-bottom: 1px solid var(--ds-line-soft); }

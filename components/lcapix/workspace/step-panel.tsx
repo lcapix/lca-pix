@@ -34,7 +34,6 @@ import {
   deleteFlow,
   rowSum,
   sourceLine,
-  sourceText,
   useFlowDraft,
 } from './flow-bits'
 import { CostPanel } from './cost-panel'
@@ -163,7 +162,6 @@ export function StepPanel({
               row={r}
               step={step}
               steps={stepOptions}
-              region={inventory?.region ?? 'Global'}
               method={inventory?.method ?? ''}
               readOnly={readOnly}
               onSaved={setSaved}
@@ -259,7 +257,6 @@ function FlowRowWs({
   row,
   step,
   steps,
-  region,
   method,
   readOnly,
   onSaved,
@@ -267,19 +264,16 @@ function FlowRowWs({
   row: InventoryRow
   step: WorkspaceStep
   steps: Array<{ id: number; name: string; depth: number }>
-  region: string
   method: string
   readOnly: boolean
   onSaved: (line: string) => void
 }) {
   const draft = useFlowDraft(row, step.name, steps)
   const [own, setOwn] = useState(false)
-  const [kept, setKept] = useState(false)
   const [swap, setSwap] = useState(false)
   const [moving, setMoving] = useState(false)
   const [drop, setDrop] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const fallbackRegion = row.climate?.tag === 'global' && region && region.toLowerCase() !== 'global'
   const id = `amount-${row.flow_id}`
 
   if (readOnly) {
@@ -346,21 +340,6 @@ function FlowRowWs({
         <span>{sourceLine(row, method)}</span>
         {row.climate ? <FactorTag row={row} /> : <FlowStatusPill status={row.status} />}
       </div>
-      {fallbackRegion && !kept && row.climate && !own && (
-        <div className="ws-choice">
-          <span>
-            No {region} factor for {row.substance.toLowerCase()}. This uses the Global average from {sourceText(row.climate.source)}.
-          </span>
-          <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button variant="dark" onClick={() => setKept(true)}>
-              Keep the Global average
-            </Button>
-            <Button size="small" onClick={() => setOwn(true)}>
-              Use my own number
-            </Button>
-          </span>
-        </div>
-      )}
       {own && <OwnFactorForm row={row} method={method} onDone={(line) => (setOwn(false), line && onSaved(line))} />}
       {row.climate?.tag === 'hand' && !own && <BackToLibrary row={row} onSaved={onSaved} />}
       {swap && <SubstanceSwap row={row} method={method} draft={draft} onClose={() => setSwap(false)} />}

@@ -28,7 +28,7 @@ import { FROM_FLOWS } from '@/lib/costs/from-flows'
 import { COST_KIND_LABEL, basisLine, basisTag } from '@/lib/workspace/cost-text'
 import { flowCostCell } from '@/lib/workspace/flow-cost-text'
 import { factorText, perUnitText } from '@/lib/workspace/flow-edit'
-import { calculatorFits, machineKwh, type InventoryRow } from '@/lib/workspace/inventory'
+import { calculatorFits, globalAveragesLine, machineKwh, type InventoryRow } from '@/lib/workspace/inventory'
 import { TIER_COLOURS } from '@/lib/workspace/tier-layout'
 import { guard } from '@/lib/workspace/unsaved'
 import { useCaseStepCosts, type StepCosts } from '@/lib/workspace/use-step-costs'
@@ -47,7 +47,6 @@ import {
   deleteFlow,
   perOf,
   sourceLine,
-  sourceText,
   useFlowDraft,
 } from './flow-bits'
 import { ExerciseSlot } from './exercise-card'
@@ -134,6 +133,7 @@ export function InventoryTab({
   const needsAt = (id: number) => rows.some((r) => r.component_id === id && (r.status === 'needs_amount' || r.status === 'left_out'))
   const method = inventory?.method ?? ''
   const region = inventory?.region ?? 'Global'
+  const globalLine = globalAveragesLine(rows, region)
 
   // Costs for the steps with a flow or a cost of their own (E4).
   const costIds = useMemo(() => tree.filter((s) => ownCount(s.id) > 0 || Object.values(s.costs).some((v) => v != null)).map((s) => s.id), [tree, rows]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -226,6 +226,12 @@ export function InventoryTab({
         {readOnly && (
           <div className="ws-readonly-line" role="note">
             {READ_ONLY_LINE}
+          </div>
+        )}
+        {/* UX 6: one line for the case, not a notice on every flow that uses the Global average. */}
+        {globalLine && (
+          <div className="ws-global-line" role="note">
+            {globalLine}
           </div>
         )}
         <div className="ws-pills" role="group" aria-label="Show flows" style={{ padding: '14px 18px' }}>
@@ -378,7 +384,6 @@ function InventoryRowView({
   onSaved: (line: string) => void
 }) {
   const draft = useFlowDraft(row, stepName, steps)
-  const [kept, setKept] = useState(false)
   const [own, setOwn] = useState(false)
   const [more, setMore] = useState(false)
   const [swap, setSwap] = useState(false)
@@ -386,10 +391,8 @@ function InventoryRowView({
   const [error, setError] = useState<string | null>(null)
   const warn = row.status === 'needs_amount' || row.status === 'left_out'
   const id = `inv-amount-${row.flow_id}`
-  const fallback = !!row.climate && row.climate.tag === 'global' && region.toLowerCase() !== 'global'
   const cost = flowCostCell(row, stepCosts?.costs, stepCosts?.from_flows)
   const showCalc = !readOnly && row.status === 'needs_amount' && calculatorFits(row)
-  const showChoice = !readOnly && fallback && !kept && !own
 
   return (
     <>
@@ -476,25 +479,6 @@ function InventoryRowView({
           </td>
         </tr>
       )}
-      {showChoice && (
-        <tr>
-          <td colSpan={COLS}>
-            <div className="ws-choice">
-              <span>
-                No {region} factor for {row.substance.split(',')[0].toLowerCase()}. This uses the Global average from {sourceText(row.climate!.source)}.
-              </span>
-              <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Button variant="dark" onClick={() => setKept(true)}>
-                  Keep the Global average
-                </Button>
-                <Button size="small" onClick={() => setOwn(true)}>
-                  Use my own number
-                </Button>
-              </span>
-            </div>
-          </td>
-        </tr>
-      )}
       {(more || own) && !readOnly && (
         <tr className="ws-inv-edit">
           <td colSpan={COLS}>
@@ -523,7 +507,7 @@ function InventoryRowView({
                   <>
                     <BackToLibrary row={row} onSaved={onSaved} />
                     <button type="button" className="ds-link" onClick={() => setOwn(true)}>
-                      Change my own factor
+                      Edit my own factor
                     </button>
                   </>
                 ) : (
