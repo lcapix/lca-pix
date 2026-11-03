@@ -191,10 +191,11 @@ test('B3 leaving an open review asks first and spends no read', async ({ api, ne
   // Nothing was read again.
   expect((await as.get('/api/ingest/reads-left')).remaining).toBe(reads);
 
-  // Leave really leaves: browser back past the page.
+  // Leave really leaves: browser back past the page, to where the project
+  // opens (its Cases board: /project/:id replaces itself with it).
   await page.goBack();
   await dialog.getByRole('button', { name: 'Leave' }).click();
-  await expect(page).toHaveURL(new RegExp(`/project/${projectId}$`), NAV);
+  await expect(page).toHaveURL(new RegExp(`/project/${projectId}/cases$`), NAV);
   expect((await as.get(`/api/projects/${projectId}/cases`)).cases ?? []).toHaveLength(0);
 });
 

@@ -110,7 +110,8 @@ test('C03 C05 C06 C07 C08 C09 C11 P31 P37 P38 P39 P40 P41 an assignment from set
   await o.page.goto(`/project/${projectId}/class`);
   await o.page.waitForURL(/\/cases$/, { timeout: 90_000 });
   await row(o.page.getByText('Your cases'), 'P31', '/class redirects to /cases');
-  await row(o.page.getByText(/\d+ steps · \d+ flows · \d+ runs/).first(), 'P39', 'Steps, flows and run count per case');
+  // G4: the counts say "1 step", "0 flows", so each word may be singular.
+  await row(o.page.getByText(/\d+ steps? · \d+ flows? · \d+ runs?/).first(), 'P39', 'Steps, flows and run count per case');
   await o.page.getByRole('radio', { name: 'Table' }).click();
   await row(o.page.getByRole('columnheader', { name: 'Lessons' }), 'P40', 'Lessons N of M, predicted, lesson titles');
   await row(o.page.getByRole('columnheader', { name: 'Write-up' }), 'P41', 'Write-up column with assumptions');

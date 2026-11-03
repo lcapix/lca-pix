@@ -135,8 +135,9 @@
     {
       "slug": "project-workspace-five-tier",
       "path": "/project/{fiveTierProject}",
-      "ready": "Open editor",
-      "brief": "8 Project workspace (single case)"
+      "ready": "Your cases",
+      "landsOn": "/cases",
+      "brief": "8 A project opens on its Cases board (C1: the Overview is gone)"
     },
     {
       "slug": "case-new-base",

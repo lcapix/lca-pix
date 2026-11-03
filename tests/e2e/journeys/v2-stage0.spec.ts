@@ -77,6 +77,17 @@ async function preview(
   await expect(page.getByRole('heading', { name: 'Check what we read' })).toBeVisible(NAV);
 }
 
+/**
+ * Open the steps editor of the review. The lean review (F2) keeps it closed to
+ * a one-line summary until "Edit the steps" is pressed; it is there for a
+ * routing or a new case only.
+ */
+async function editSteps(page: Page) {
+  const toggle = page.getByRole('button', { name: 'Edit the steps' });
+  await toggle.click();
+  await expect(page.getByRole('button', { name: 'Close the steps' })).toHaveAttribute('aria-expanded', 'true');
+}
+
 /** Save the checked plan; returns the apply response body. */
 async function apply(page: Page, appending: boolean): Promise<any> {
   const res = page.waitForResponse((r) => r.url().includes('/api/ingest/apply'), NAV);
@@ -112,7 +123,9 @@ test.describe('v2 stage 0 gate', () => {
     // The revised routing adds one operation in a new department and work
     // center: Finishing → PNT-01 Paint booth → 25. Paint frame.
     await preview(page, projectId, { connector: 'routing', file: 'routing-revised.csv', caseId });
-    // Every step is shown with what will happen to it, and why.
+    // Every step is shown with what will happen to it, and why, once the
+    // steps editor is open.
+    await editSteps(page);
     for (const step of ['Finishing', 'PNT-01 Paint booth', '25. Paint frame']) {
       await expect(page.getByLabel(`What happens to ${step}`)).toHaveValue('create');
     }
@@ -198,10 +211,18 @@ test.describe('v2 stage 0 gate', () => {
     const weld = named(await components(api, user, caseId), '20. Weld frame')!;
 
     await preview(page, projectId, { connector: 'bom', file: 'small-bom.csv', caseId });
-    await expect(page.getByLabel('What happens to Purchased materials')).toHaveValue('skip');
-    // The box is suggested for 30. Pack (its op seq); put it on 20. Weld frame instead.
-    const boxRow = page.locator('tr', { hasText: 'Shipping box' }).last();
-    await boxRow.getByLabel('Step this line is used at').selectOption(String(weld.component_id));
+    // A bill of materials added to a case keeps the suggested step decisions
+    // without the steps editor (F2): its group "Purchased materials" is skipped,
+    // which the outcome below checks (no step created, none named so).
+    await expect(page.getByRole('button', { name: 'Edit the steps' })).toHaveCount(0);
+    await expect(page.getByLabel('What happens to Purchased materials')).toHaveCount(0);
+    // The box is suggested for 30. Pack (its op seq); put it on 20. Weld frame
+    // instead, from the line's own Edit.
+    const boxRow = page.locator('tr', { hasText: 'Shipping box' }).first();
+    await expect(boxRow).toContainText('30. Pack');
+    await boxRow.getByRole('button', { name: /^Edit / }).click();
+    await page.getByLabel('Step this line is used at').selectOption(String(weld.component_id));
+    await expect(boxRow).toContainText('20. Weld frame');
     const body = await apply(page, true);
     expect(body.steps_created).toBe(0);
 
@@ -240,6 +261,7 @@ test.describe('v2 stage 0 gate', () => {
     const projectId = await ownProject(api, user);
     const { page } = await signIn(user);
     await preview(page, projectId, { connector: 'routing', file: 'small-routing.csv', product: 'Edited frame' });
+    await editSteps(page);
 
     await page.getByLabel('Name of 30. Pack').fill('10. Cut tube');
     let applied = false;
@@ -277,9 +299,10 @@ test.describe('v2 stage 0 gate', () => {
     await openLabor();
     await page.getByLabel('Your rate in dollars per hour').fill('44');
     const saved = page.waitForResponse((r) => r.url().includes('/costs') && r.request().method() === 'PUT', NAV);
-    await page.getByRole('button', { name: 'Use', exact: true }).click();
+    // Saving is an explicit Save (V1 hardening 6); the line says what was stored.
+    await page.getByRole('button', { name: 'Save your own labor rate', exact: true }).click();
     expect((await saved).status()).toBe(200);
-    await expect(page.getByText('Saved · your own labor rate on 20. Weld frame')).toBeVisible();
+    await expect(page.getByText('Saved · your own labor rate $35.20 on 20. Weld frame')).toBeVisible();
 
     const weld = named(await components(api, user, caseId), '20. Weld frame')!;
     expect(num(weld.labor_hours)).toBeCloseTo(0.8, 4);
@@ -310,7 +333,8 @@ test.describe('v2 stage 0 gate', () => {
 
     await preview(page, projectId, { connector: 'routing', file: 'small-routing.csv', product: 'Layout frame' });
     // 6.30 + 20.66 + 6.30 (0.3 h × $21.00 for Pack: setup left out).
-    await expect(page.getByText(/\$33\.26 of cost in this document/)).toBeVisible();
+    // The steps summary carries the document's total; each step its own.
+    await expect(page.getByText(/\$33\.26 of cost/)).toBeVisible();
     await expect(page.getByText('$20.66', { exact: true }).first()).toBeVisible();
     const body = await apply(page, false);
 

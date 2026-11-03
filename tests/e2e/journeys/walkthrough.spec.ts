@@ -292,7 +292,8 @@ test('the walkthrough film, chapter by chapter', async ({ browser, api }) => {
     await expect(fold.getByText('Material cost from these flows: $0.12')).toBeVisible(NAV);
     const addTape = fold.getByRole('button', { name: 'No price for Packaging tape: add its cost →' });
     await expect(addTape).toBeVisible();
-    await expect(page.getByText('Flow added')).toBeHidden(NAV);
+    // Each of the two Saves raised its own toast; wait until both have closed.
+    await expect(page.getByText('Flow added')).toHaveCount(0, NAV);
     await shot(page, 'E14b-cost-from-flows');
     const priced = posted(page, /^\/api\/components\/\d+\/costs$/, 'PUT');
     await fold.getByRole('button', { name: 'Save the material cost from these flows' }).click();

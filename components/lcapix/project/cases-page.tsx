@@ -10,7 +10,7 @@
 // the header. A hand-in's frozen copy shows as the hand-in, with its run and
 // date, never as one more case to run (D3).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Button, ConfirmDialog, ErrorCard, Segmented, TextDialog } from '@/components/lcapix/ds'
@@ -100,6 +100,20 @@ export function CasesPage() {
     [...split.mine].filter((c) => !c.read_only && !isHandIn(c)).sort((a, b) => b.case_id - a.case_id)[0] ??
     null
   const newCaseHref = `/project/${projectId}/case/new${ownSource ? `?from=${ownSource.case_id}` : ''}`
+  // P30: a case someone else made carries the same menu, cut to the role (the
+  // hub had it; the board is where a project opens now). Where members see
+  // only their own cases, a member reaches the staff's cases read-only, so
+  // only Copy is offered there; the server refuses the rest either way.
+  const othersMenu = (c: ProgressCase) => (
+    <CaseMenu
+      projectId={projectId}
+      caseId={c.case_id}
+      name={c.case_name}
+      role={data.project.my_role}
+      readOnly={!!Number((c as any).read_only) || !seesAll}
+      onChanged={reload}
+    />
+  )
 
   return (
     <div className="np pc">
@@ -214,7 +228,7 @@ export function CasesPage() {
                       <span className="ds-count">{col.length}</span>
                     </h3>
                     {shown.map((c) => (
-                      <CaseCard key={c.case_id} c={c} href={caseHref(c)} />
+                      <CaseCard key={c.case_id} c={c} href={caseHref(c)} menu={othersMenu(c)} />
                     ))}
                     {col.length > PER_COLUMN && (
                       <button type="button" className="pc-more" aria-expanded={!!open[stage]} onClick={() => setOpen((o) => ({ ...o, [stage]: !o[stage] }))}>
@@ -268,9 +282,12 @@ export function CasesPage() {
                           </span>
                         </td>
                         <td>
-                          <Link className="ds-link" href={caseHref(c)} style={{ color: 'var(--ds-text)' }}>
-                            {c.case_name}
-                          </Link>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                            <Link className="ds-link" href={caseHref(c)} style={{ color: 'var(--ds-text)' }}>
+                              {c.case_name}
+                            </Link>
+                            {othersMenu(c)}
+                          </span>
                         </td>
                         <td>
                           <span className="pc-stage">
@@ -327,12 +344,13 @@ export function CasesPage() {
   )
 }
 
-function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
+function CaseCard({ c, href, menu }: { c: ProgressCase; href: string; menu?: ReactNode }) {
   const tag = CARD_TAG[c.stage]
   const answer = answerOf(c)
   const filled = segmentsFilled(c.stage)
   return (
-    <Link href={href} className="pc-card ds-focusable">
+    <div className="pc-card">
+      <Link href={href} className="pc-card-link ds-focusable">
       <span style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         <span className="pc-avatar" aria-hidden>
           {initialsOf(c.author ?? '?')}
@@ -368,8 +386,12 @@ function CaseCard({ c, href }: { c: ProgressCase; href: string }) {
           <span key={i} data-on={i < filled || undefined} />
         ))}
       </span>
-      <span className={`pc-tag pc-tag--${tag.tone}`}>{tag.text}</span>
-    </Link>
+      </Link>
+      <span className="pc-card-foot">
+        <span className={`pc-tag pc-tag--${tag.tone}`}>{tag.text}</span>
+        {menu}
+      </span>
+    </div>
   )
 }
 

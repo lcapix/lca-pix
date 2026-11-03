@@ -1532,6 +1532,9 @@
 .ip-scope-set { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-top: 10px; }
 .ip-scope-set .ip-line-field { flex: 1 1 200px; }
 /* lane 3: project and class */
+/* P30: a pipeline card is its link plus a foot with the tag and the case's menu. */
+.pc-card-link { display: grid; gap: 12px; color: inherit; text-decoration: none; border-radius: 10px; }
+.pc-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .pc-settings { display: grid; gap: 8px; margin: 0 0 22px; max-width: 760px; }
 .pc-next { margin: 12px 24px 0; }
 .so-mine { margin: 0 24px 16px; }
