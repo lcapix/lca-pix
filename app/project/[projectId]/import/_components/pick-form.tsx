@@ -40,6 +40,8 @@ export interface PickFormProps {
   onViewSample: (conn: string) => void
   onDownloadTemplate: (conn: string) => void
   readsLeft?: { limit: number; remaining: number } | null
+  /** False when this server cannot read PDFs and text documents (no AI reader). */
+  aiReader?: boolean
   onBack?: () => void
 }
 
@@ -70,6 +72,9 @@ export function PickForm(p: PickFormProps) {
   const [fileError, setFileError] = useState<string | null>(null)
   // An equipment list sizes the machines of existing steps: it needs a case with steps.
   const equipmentLocked = p.targetCaseId === null || p.placeSteps.length === 0
+  // With no AI reader, the kinds that are only ever PDFs or text cannot be read.
+  const noReader = p.aiReader === false
+  const readerLocked = (id: string) => noReader && (id === 'epd' || id === 'sds')
   const kinds = [...LIVE_DOC_TYPES].sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id))
   const planned = DOC_TYPES.filter((d) => d.status === 'planned')
   const isPdf = !!p.file && /\.pdf$/i.test(p.file.name)
@@ -77,6 +82,10 @@ export function PickForm(p: PickFormProps) {
   const take = (f: File | null) => {
     setFileError(null)
     if (!f) return p.onFileChange(null)
+    if (noReader && !/\.(csv|tsv|xlsx?|xlsm)$/i.test(f.name) && p.connector !== 'itac') {
+      setFileError(`${f.name} cannot be read here: reading PDFs and text documents is not on in this beta. Upload the spreadsheet or CSV version.`)
+      return
+    }
     if (!acceptsFile(f.name, p.doc?.accept)) {
       setFileError(`${f.name} is not a file this kind of document can be read from. Use ${p.doc?.accept.split(',').join(', ')}.`)
       return
@@ -101,7 +110,7 @@ export function PickForm(p: PickFormProps) {
         </span>
         <div className="ip-chips" role="radiogroup" aria-labelledby="kind-label">
           {kinds.map((d) => {
-            const locked = d.id === 'equipment' && equipmentLocked
+            const locked = (d.id === 'equipment' && equipmentLocked) || readerLocked(d.id)
             const on = p.connector === d.id
             return (
               <button
@@ -122,7 +131,16 @@ export function PickForm(p: PickFormProps) {
             )
           })}
         </div>
-        <p style={{ margin: '4px 0 0', fontSize: 15 }}>{EXPLAIN[p.connector] ?? p.doc?.provides}</p>
+        <p style={{ margin: '4px 0 0', fontSize: 15 }}>
+          {noReader && p.connector === 'routing'
+            ? 'A routing gives the steps in order and their hours. Upload it as a spreadsheet or CSV.'
+            : EXPLAIN[p.connector] ?? p.doc?.provides}
+        </p>
+        {noReader && (
+          <p className="ip-note">
+            <LockIcon /> EPD and safety data sheet · Not in this beta: reading PDFs is off. Spreadsheets and CSV files read as usual.
+          </p>
+        )}
         {equipmentLocked && (
           <p className="ip-note">
             <LockIcon /> Equipment list · Needs a case with steps below its product

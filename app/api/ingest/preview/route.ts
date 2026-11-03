@@ -19,7 +19,7 @@ import { isBomHeader, structureBom } from '@/lib/ingest/bom';
 import { isRoutingHeader, structureRouting } from '@/lib/ingest/routing';
 import { isEquipmentHeader, structureEquipment, type CaseStep } from '@/lib/ingest/equipment';
 import { mapModel, type CatalogSubstance } from '@/lib/ingest/maplca';
-import { readSheet, workbookText, limitedRange, SHEET_LIMITS, type SheetRead } from '@/lib/ingest/sheet-reader';
+import { readSheet, limitedRange, SHEET_LIMITS, type SheetRead } from '@/lib/ingest/sheet-reader';
 import type { ProcessModel } from '@/lib/ingest/schema';
 import {
   MAX_UPLOAD_BYTES,
@@ -35,6 +35,24 @@ import {
   enforceRateLimit,
 } from '@/lib/rate-limit';
 import { parseId } from '@/lib/ids';
+import { isSchemaGap } from '@/lib/db-errors';
+import { NO_AI_READER, aiReaderOn } from '@/lib/ingest/ai-reader';
+import {
+  COLUMN_FIELDS,
+  COLUMNS_NEEDED,
+  asBom,
+  asEquipment,
+  asRouting,
+  choiceFromFields,
+  cleanChoice,
+  columnSamples,
+  columnsReady,
+  fieldMapFor,
+  headerSignature,
+  type ColumnChoice,
+  type FieldMap,
+  type MappedConnector,
+} from '@/lib/ingest/column-fields';
 
 export const runtime = 'nodejs';
 // Uploads are capped at 12 MB (the full ITAC database workbook is ~16 MB and
@@ -75,8 +93,9 @@ export async function POST(request: NextRequest) {
     // A preview with no project (an API caller) shows CML 2001, and says so.
     let factorMethod = 'CML 2001';
     let factorRegion = 'Global';
+    let projectId: number | null = null;
     if (form.get('project_id') !== null) {
-      const projectId = parseId(form.get('project_id'));
+      projectId = parseId(form.get('project_id'));
       if (!projectId) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       const denied = await projectAccessDenied(userId, projectId, undefined, { notFound: 'Project not found' });
       if (denied) return denied;
@@ -114,6 +133,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: sniffed.error }, { status: 415 });
     }
     let pm: ProcessModel | undefined;
+    let mapped: Mapped | null = null;
     const lotSizeRaw = Number(form.get('lot_size'));
     const lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : null;
 
@@ -124,56 +144,47 @@ export async function POST(request: NextRequest) {
 
     if ((connector === 'bom' || connector === 'routing') && isSpreadsheet) {
       // Locate the table wherever it is (any sheet, header on any of the first
-      // rows, cleaned headers), then run the deterministic connector on it.
-      let read: SheetRead | null = null;
+      // rows, cleaned headers), then read it with the columns found by header,
+      // the person's choice, or the choice saved for this layout. No model:
+      // when the columns cannot be told apart, the person is asked (F2.3).
       try {
-        read = readSheet(buf, file.name, connector === 'bom' ? isBomHeader : isRoutingHeader);
+        mapped = await readMapped(connector, buf, file.name, form.get('column_map'), projectId);
       } catch (e: any) {
         return NextResponse.json(
           { error: `Could not open ${file.name} as a spreadsheet (${e?.message ?? 'unreadable file'}).` },
           { status: 400 }
         );
       }
-      if (read) {
-        pm =
-          connector === 'bom'
-            ? structureBom(read.rows, file.name, plantId || undefined, {
-                massHints: read.massHints,
-                decimalComma: read.decimalComma,
-              })
-            : structureRouting(read.rows, file.name, plantId || undefined, {
-                lotSize,
-                timeHints: read.timeHints,
-                decimalComma: read.decimalComma,
-              });
-        pm.notes.unshift(...read.notes);
+      if (!mapped) {
+        return NextResponse.json(
+          { error: `No table found in ${file.name}: it has no row of column headers in its first 30 rows.` },
+          { status: 400 }
+        );
       }
-      // Nothing recognisable: read the sheet text with the AI path instead of
-      // returning an empty plan. Same step checks, same human review.
+      if (!columnsReady(connector, mapped.fields)) {
+        return needsColumns(connector, mapped, `We could not tell which column is which in ${file.name}. It needs ${COLUMNS_NEEDED[connector]}.`);
+      }
+      const read = mapped.read;
+      pm =
+        connector === 'bom'
+          ? structureBom(read.rows, file.name, plantId || undefined, {
+              massHints: read.massHints,
+              decimalComma: read.decimalComma,
+              columns: asBom(mapped.fields),
+            })
+          : structureRouting(read.rows, file.name, plantId || undefined, {
+              lotSize,
+              timeHints: read.timeHints,
+              decimalComma: read.decimalComma,
+              columns: asRouting(mapped.fields),
+            });
+      pm.notes.unshift(...read.notes);
       const found =
-        !!pm &&
-        (connector === 'routing'
+        connector === 'routing'
           ? pm.nodes.some((n) => n.tier === 'operation')
-          : pm.flows.length > 0 || pm.notes.some((n) => /has no mass/.test(n)));
+          : pm.flows.length > 0 || pm.notes.some((n) => /has no mass/.test(n));
       if (!found) {
-        try {
-          const { structureWithLLM } = await import('@/lib/ingest/llm-structure');
-          const aiPm = await structureWithLLM(workbookText(buf, file.name), connector, file.name);
-          aiPm.notes.unshift(
-            'The columns were not recognised, so this spreadsheet was read by the AI path. Check every line before applying.',
-          );
-          pm = aiPm;
-        } catch (e: any) {
-          if (!pm) {
-            return NextResponse.json(
-              {
-                error: `No ${connector === 'bom' ? 'bill-of-materials' : 'routing'} table found in ${file.name} (no recognisable column headers), and the AI fallback failed: ${e?.message}`,
-              },
-              { status: 400 }
-            );
-          }
-          pm.notes.push(`The AI fallback was not available: ${e?.message}`);
-        }
+        return needsColumns(connector, mapped, `Read with these columns, ${file.name} gave no ${connector === 'bom' ? 'lines' : 'steps'}. Check which column is which.`);
       }
     } else if (connector === 'itac') {
       // The ITAC workbook has a fixed layout: the ASSESS sheet.
@@ -251,22 +262,26 @@ export async function POST(request: NextRequest) {
             null,
           hoursPerUnit: c.labor_hours != null ? Number(c.labor_hours) : null,
         }));
-      let read: SheetRead | null = null;
       try {
-        read = readSheet(buf, file.name, isEquipmentHeader);
+        mapped = await readMapped('equipment', buf, file.name, form.get('column_map'), projectId);
       } catch (e: any) {
         return NextResponse.json(
           { error: `Could not open ${file.name} as a spreadsheet (${e?.message ?? 'unreadable file'}).` },
           { status: 400 }
         );
       }
-      if (!read) {
+      if (!mapped) {
         return NextResponse.json(
-          { error: `No equipment table found in ${file.name}: it needs a work center column and a rated power column.` },
+          { error: `No table found in ${file.name}: it has no row of column headers in its first 30 rows.` },
           { status: 400 }
         );
       }
+      if (!columnsReady('equipment', mapped.fields)) {
+        return needsColumns('equipment', mapped, `We could not tell which column is which in ${file.name}. It needs ${COLUMNS_NEEDED.equipment}.`);
+      }
+      const read = mapped.read;
       pm = structureEquipment(read.rows, file.name, {
+        columns: asEquipment(mapped.fields),
         productName: (comps as any[]).find((c) => !c.parent_component_id)?.component_name ?? 'Product',
         steps,
         powerHints: read.powerHints,
@@ -275,6 +290,7 @@ export async function POST(request: NextRequest) {
       pm.notes.unshift(...read.notes);
     } else {
       // LLM-structured connectors (sds / epd / routing): extract text → model.
+      if (!aiReaderOn()) return NextResponse.json({ error: NO_AI_READER, no_ai_reader: true }, { status: 400 });
       const { extractDocText } = await import('@/lib/ingest/extract-text');
       const { structureWithLLM } = await import('@/lib/ingest/llm-structure');
       let text = '';
@@ -352,14 +368,108 @@ export async function POST(request: NextRequest) {
     if (!pm) {
       return NextResponse.json({ error: 'Nothing could be read from this document.' }, { status: 400 });
     }
+    if (mapped?.source === 'saved') {
+      pm.notes.unshift('Read with the columns chosen for this layout earlier in this project. Change them under Columns.');
+    }
+    if (mapped?.source === 'yours' && projectId) await saveChoice(userId, projectId, connector as MappedConnector, mapped);
     const plan = mapModel(pm, substances as CatalogSubstance[]);
 
-    return NextResponse.json({ success: true, connector, plant_id: plantId, plan, factor_method: factorMethod, factor_region: factorRegion, reads_left: readsLeft });
+    return NextResponse.json({
+      success: true,
+      connector,
+      plant_id: plantId,
+      plan,
+      factor_method: factorMethod,
+      factor_region: factorRegion,
+      reads_left: readsLeft,
+      ...(mapped ? columnInfo(connector as MappedConnector, mapped) : {}),
+    });
   } catch (error: any) {
     if (isAuthError(error)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Ingest preview error:', error);
     return NextResponse.json({ error: 'Failed to build ingestion preview' }, { status: 500 });
+  }
+}
+
+/** A spreadsheet read with its columns: found by header, the person's choice, or the one saved for the layout. */
+interface Mapped {
+  read: SheetRead;
+  fields: FieldMap;
+  source: 'header' | 'yours' | 'saved';
+  choice: ColumnChoice;
+}
+
+const KNOWN_HEADER: Record<MappedConnector, (h: string) => boolean> = {
+  bom: isBomHeader,
+  routing: isRoutingHeader,
+  equipment: isEquipmentHeader,
+};
+
+async function readMapped(
+  connector: MappedConnector,
+  buf: Buffer,
+  fileName: string,
+  rawChoice: FormDataEntryValue | null,
+  projectId: number | null,
+): Promise<Mapped | null> {
+  // Headers it knows first; else the row with the most filled cells, so a
+  // file with other headers can still have its columns named by the person.
+  const read = readSheet(buf, fileName, KNOWN_HEADER[connector]) ?? readSheet(buf, fileName, (h) => !!h);
+  if (!read) return null;
+  let choice = rawChoice !== null ? cleanChoice(rawChoice, read.headers, connector) : null;
+  let source: Mapped['source'] = choice ? 'yours' : 'header';
+  if (!choice && projectId) {
+    const saved = await savedChoice(projectId, connector, headerSignature(read.headers));
+    choice = saved ? cleanChoice(saved, read.headers, connector) : null;
+    if (choice && Object.keys(choice).length) source = 'saved';
+  }
+  choice ??= {};
+  return { read, source, choice, fields: fieldMapFor(connector, read.headers, read.rows, read.timeHints, choice) };
+}
+
+/** What the review screen needs to show and change which column is which. */
+function columnInfo(connector: MappedConnector, m: Mapped) {
+  return {
+    column_headers: columnSamples(m.read.headers, m.read.rows),
+    column_fields: COLUMN_FIELDS[connector],
+    columns: { ...Object.fromEntries(Object.entries(m.choice).filter(([, f]) => f === 'ignore')), ...choiceFromFields(m.fields) },
+    columns_needed: COLUMNS_NEEDED[connector],
+    columns_source: m.source,
+  };
+}
+
+/** Asked, not guessed: the columns and their first values, for the person to say which is which. */
+function needsColumns(connector: MappedConnector, m: Mapped, message: string) {
+  return NextResponse.json({ success: true, needs_columns: true, connector, message, ...columnInfo(connector, m) });
+}
+
+async function savedChoice(projectId: number, connector: MappedConnector, signature: string): Promise<unknown> {
+  try {
+    const row = await queryOne<any>(
+      `SELECT columns FROM import_column_map WHERE project_id = ? AND connector = ? AND header_signature = ?`,
+      [projectId, connector, signature],
+    );
+    return row?.columns ?? null;
+  } catch (err) {
+    if (isSchemaGap(err)) return null; // before migrate-047
+    throw err;
+  }
+}
+
+/** Keep the person's choice for this layout in the project, when they may change the project. */
+async function saveChoice(userId: number, projectId: number, connector: MappedConnector, m: Mapped): Promise<void> {
+  if (await projectAccessDenied(userId, projectId, 'editor')) return;
+  try {
+    await query(
+      `INSERT INTO import_column_map (project_id, connector, header_signature, columns, saved_by)
+       VALUES (?, ?, ?, ?::jsonb, ?)
+       ON CONFLICT (project_id, connector, header_signature)
+       DO UPDATE SET columns = EXCLUDED.columns, saved_by = EXCLUDED.saved_by, updated_at = now()`,
+      [projectId, connector, headerSignature(m.read.headers), JSON.stringify(m.choice), userId],
+    );
+  } catch (err) {
+    if (!isSchemaGap(err)) throw err;
   }
 }

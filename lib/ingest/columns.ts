@@ -1,7 +1,7 @@
-// Surface spreadsheet columns a connector did NOT map, so no data is silently
-// lost. A structured connector recognises a handful of columns by header; every
-// other column becomes a review note (with a sample value) telling the user
-// exactly what was left on the table, so they can ask us to map it.
+// Surface spreadsheet columns a connector did NOT map, so none is left out
+// silently. A structured connector recognises a handful of columns by header;
+// every other column becomes a review note (with a sample value) saying its
+// values are not used, and the Columns card lets the person give it a field.
 
 export function unmappedColumnNotes(
   rows: Array<Record<string, unknown>>,
@@ -23,7 +23,7 @@ export function unmappedColumnNotes(
     }
     notes.push(
       `Column "${h}" was read but not mapped${sample ? ` (e.g. "${sample.slice(0, 40)}")` : ''}` +
-        `. If it holds material, quantity, unit, cost or sub-assembly data, give it a role below; nothing in it is lost.`,
+        `. Its values are not used; to read it in, say what it holds under Columns.`,
     );
   }
   return notes;

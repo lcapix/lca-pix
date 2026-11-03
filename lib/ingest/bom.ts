@@ -79,6 +79,8 @@ export interface BomOptions {
   /** Mass units named in headers ("Weight (kg)"), from the sheet reader. */
   massHints?: Record<string, string>;
   decimalComma?: boolean;
+  /** The columns to read, when the person said which is which (column-fields.ts); else found by header. */
+  columns?: BomColumnMap;
 }
 
 /**
@@ -92,7 +94,7 @@ export function structureBom(
   opts: BomOptions = {},
 ): ProcessModel {
   const headers = rows.length ? Object.keys(rows[0]).filter((h) => !h.startsWith('__')) : [];
-  const cols = detectBomColumns(headers);
+  const cols = opts.columns ?? detectBomColumns(headers);
   const dc = !!opts.decimalComma;
   const loc = `BOM ${docName}`;
   const product = (productName || docName.replace(/\.(csv|xlsx?|tsv)$/i, '')).trim() || 'Assembled product';

@@ -55,9 +55,10 @@ import { itacPlantWorkbook } from '@/lib/ingest/itac-browser'
 import { readFailureKind, type ReadFailure } from '@/lib/import/file-rules'
 import { withoutSteps } from '@/lib/import/steps-hours'
 import { useLeaveGuard } from '@/lib/import/use-leave-guard'
+import { chooseColumn, columnInfoFrom, type ColumnChoice, type ColumnInfo } from '@/lib/import/columns'
 
 /** Where the page is: picking a document, reading it, reviewing the plan, applying it, done. */
-export type ImportPhase = 'pick' | 'previewing' | 'review' | 'applying' | 'done'
+export type ImportPhase = 'pick' | 'previewing' | 'columns' | 'review' | 'applying' | 'done'
 
 /** The part of the Next router the page uses. */
 export interface ImportRouter {
@@ -101,6 +102,11 @@ export function useImport(projectId: string, router: ImportRouter) {
   const [readFailure, setReadFailure] = useState<{ kind: ReadFailure; retryAfter: number | null; fileName: string | null } | null>(null)
   // F2.2: "Uses 1 of your 10 reads this hour".
   const [readsLeft, setReadsLeft] = useState<{ limit: number; remaining: number } | null>(null)
+  // Whether this server reads PDFs and text documents (false: spreadsheets and CSV only).
+  const [aiReader, setAiReader] = useState(true)
+  // Which column is which (F2.3): what the server read each column as, and the person's choice.
+  const [columnInfo, setColumnInfo] = useState<ColumnInfo | null>(null)
+  const [columnChoice, setColumnChoice] = useState<ColumnChoice>({})
   // Asked of the server on open and after every read, kept or failed: a failed
   // read uses one too, so the page never guesses.
   const [readsTick, setReadsTick] = useState(0)
@@ -117,7 +123,11 @@ export function useImport(projectId: string, router: ImportRouter) {
     let live = true
     fetch('/api/ingest/reads-left', { headers: authHeaders(false) })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => live && d && Number.isFinite(Number(d.limit)) && setReadsLeft({ limit: Number(d.limit), remaining: Number(d.remaining) }))
+      .then((d) => {
+        if (!live || !d) return
+        if (Number.isFinite(Number(d.limit))) setReadsLeft({ limit: Number(d.limit), remaining: Number(d.remaining) })
+        if (typeof d.ai_reader === 'boolean') setAiReader(d.ai_reader)
+      })
       .catch(() => {})
     return () => {
       live = false
@@ -430,7 +440,12 @@ export function useImport(projectId: string, router: ImportRouter) {
   const doc = getDocType(connector)
   const isLLM = isLLMImport(doc, connector, file)
 
-  const preview = async () => {
+  const preview = () => runPreview(null)
+  /** Read the file again, with the person's choice of which column is which. */
+  const readWithColumns = () => runPreview(columnChoice)
+  const setColumnFor = (header: string, field: string) => setColumnChoice((c) => chooseColumn(c, header, field))
+
+  const runPreview = async (choice: ColumnChoice | null) => {
     const invalid = previewValidationError({ hasFile: !!file, connector, plantId, targetCaseId })
     if (invalid !== null || !file) {
       setError(invalid)
@@ -454,6 +469,7 @@ export function useImport(projectId: string, router: ImportRouter) {
       for (const [name, value] of previewFields({ connector, plantId, lotSize, targetCaseId, projectId })) {
         fd.append(name, value)
       }
+      if (choice) fd.append('column_map', JSON.stringify(choice))
       const r = await fetch('/api/ingest/preview', {
         method: 'POST',
         headers: authHeaders(false), // browser sets the multipart boundary
@@ -478,6 +494,14 @@ export function useImport(projectId: string, router: ImportRouter) {
         return
       }
       setReadsTick((t) => t + 1)
+      setColumnInfo(columnInfoFrom(d))
+      setColumnChoice(d?.columns ?? {})
+      if (d?.needs_columns) {
+        // Not read yet: the person says which column is which, then it is read again.
+        setPlan(null)
+        setPhase('columns')
+        return
+      }
       const p: IngestPlan = d.plan
       setFactorBasis({ method: d.factor_method ?? 'CML 2001', region: d.factor_region ?? 'Global' })
       setPlan(p)
@@ -645,6 +669,12 @@ export function useImport(projectId: string, router: ImportRouter) {
   // edits are only here.
   const reviewing = !!plan && (phase === 'review' || phase === 'applying')
   const guard = useLeaveGuard(reviewing, router.push)
+  /** Back from "which column is which" to the file and its kind. */
+  const leaveColumns = () => {
+    setColumnInfo(null)
+    setColumnChoice({})
+    setPhase('pick')
+  }
   const startOver = () =>
     guard.ask(() => {
       setPlan(null)
@@ -695,6 +725,7 @@ export function useImport(projectId: string, router: ImportRouter) {
     costClashes, costModeOf, setCostMode, flowClashes, flowModeOf, setFlowMode, existingFlowsError,
     unmappedColumns, plainNotes, dismissedNotes, dismissNote, dismissedReview, dismissReview,
     columnRoles, setColumnRole, apply, startOver,
+    aiReader, columnInfo, columnChoice, setColumnFor, readWithColumns, leaveColumns,
     // Done, and navigation.
     applied, completeness, addAnotherDocument, startNewCase, openCase, goBack,
     // Leaving an open review: the question and its two answers.

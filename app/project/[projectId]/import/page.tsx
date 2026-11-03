@@ -40,6 +40,7 @@ import { SampleDialog } from './_components/sample-dialog'
 import { StepsHoursCard } from './_components/steps-hours-card'
 import type { StepPicker } from './_components/step-cell'
 import { UnmappedColumnsCard } from './_components/unmapped-columns-card'
+import { ColumnsCard } from './_components/columns-card'
 
 export default function ImportPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = use(params)
@@ -51,6 +52,8 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
   const targetName = targetCaseId !== null ? imp.projectCases.find((c) => c.case_id === targetCaseId)?.case_name ?? 'the case' : null
   const appending = targetCaseId !== null
   const reviewing = !!plan && (phase === 'review' || phase === 'applying')
+  // Which column is which, asked before anything is read (and while it is read again).
+  const asking = phase === 'columns' || (phase === 'previewing' && !!imp.columnInfo?.message)
 
   const stepPicker: StepPicker = {
     placement: imp.placement,
@@ -134,7 +137,18 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
           <ProjectStatusCard projectStatus={projectStatus} />
         )}
 
-        {(phase === 'pick' || phase === 'previewing') && (
+        {asking && imp.columnInfo && (
+          <ColumnsCard
+            info={imp.columnInfo}
+            choice={imp.columnChoice}
+            onChoose={imp.setColumnFor}
+            onRead={imp.readWithColumns}
+            onBack={imp.leaveColumns}
+            reading={phase === 'previewing'}
+          />
+        )}
+
+        {(phase === 'pick' || phase === 'previewing') && !asking && (
           <PickForm
             connector={imp.connector}
             onConnectorChange={imp.setConnector}
@@ -158,6 +172,7 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
             onViewSample={imp.viewSample}
             onDownloadTemplate={imp.downloadTemplate}
             readsLeft={imp.readsLeft}
+            aiReader={imp.aiReader}
             onBack={imp.goBack}
           />
         )}
@@ -206,7 +221,17 @@ export default function ImportPage({ params }: { params: Promise<{ projectId: st
                 {remainingReviewCount(plan.review, imp.dismissedReview) > 0 && (
                   <NeedsReviewCard review={plan.review} dismissedReview={imp.dismissedReview} onDismiss={imp.dismissReview} />
                 )}
-                {remainingNoteCount(imp.unmappedColumns, imp.dismissedNotes) > 0 && (
+                {imp.columnInfo && (
+                  <ColumnsCard
+                    info={imp.columnInfo}
+                    choice={imp.columnChoice}
+                    onChoose={imp.setColumnFor}
+                    onRead={imp.readWithColumns}
+                    reading={false}
+                    inReview
+                  />
+                )}
+                {!imp.columnInfo && remainingNoteCount(imp.unmappedColumns, imp.dismissedNotes) > 0 && (
                   <UnmappedColumnsCard
                     unmappedColumns={imp.unmappedColumns}
                     dismissedNotes={imp.dismissedNotes}

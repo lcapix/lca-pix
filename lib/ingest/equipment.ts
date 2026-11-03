@@ -74,6 +74,8 @@ export interface EquipmentOptions {
   /** Power unit named in a header ("Rated power (hp)"), from the sheet reader. */
   powerHints?: Record<string, string>;
   decimalComma?: boolean;
+  /** The columns to read, when the person said which is which (column-fields.ts); else found by header. */
+  columns?: EquipmentColumnMap;
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -89,7 +91,7 @@ export function structureEquipment(
   opts: EquipmentOptions,
 ): ProcessModel {
   const headers = rows.length ? Object.keys(rows[0]).filter((h) => !h.startsWith('__')) : [];
-  const cols = detectEquipmentColumns(headers);
+  const cols = opts.columns ?? detectEquipmentColumns(headers);
   const dc = !!opts.decimalComma;
   const loc = `Equipment list ${docName}`;
   const rate = ENERGY_RATES.electricity_industrial;

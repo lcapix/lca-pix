@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { isAuthError } from '@/lib/route-guard';
 import { RATE_LIMITS, rateLimitStatus } from '@/lib/rate-limit';
+import { aiReaderOn } from '@/lib/ingest/ai-reader';
 
 // GET /api/ingest/reads-left — how many document reads (POST /api/ingest/preview)
 // the caller has left this hour, without using one (F2.2). With a shared store
@@ -15,6 +16,8 @@ export async function GET(request: NextRequest) {
       limit: s.limit,
       remaining: s.remaining,
       resets_in_seconds: s.remaining > 0 ? null : Math.ceil(s.retryAfterMs / 1000),
+      // Whether PDFs and text documents can be read here (no key: spreadsheets only).
+      ai_reader: aiReaderOn(),
     });
   } catch (error: any) {
     if (isAuthError(error)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

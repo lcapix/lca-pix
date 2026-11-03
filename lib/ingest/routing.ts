@@ -131,6 +131,8 @@ export interface RoutingOptions {
   /** Time units named in headers ("Time (min)"), from the sheet reader. */
   timeHints?: Record<string, TimeUnit>;
   decimalComma?: boolean;
+  /** The columns to read, when the person said which is which (column-fields.ts); else found by header. */
+  columns?: RoutingColumnMap;
 }
 
 const fmtH = (x: number) => String(Number(x.toPrecision(4)));
@@ -144,7 +146,7 @@ export function structureRouting(
 ): ProcessModel {
   const headers = rows.length ? Object.keys(rows[0]).filter((h) => !h.startsWith('__')) : [];
   const hints = opts.timeHints ?? {};
-  const cols = detectRoutingColumns(headers, rows, hints);
+  const cols = opts.columns ?? detectRoutingColumns(headers, rows, hints);
   const dc = !!opts.decimalComma;
   const loc = `Routing ${docName}`;
   const product =
