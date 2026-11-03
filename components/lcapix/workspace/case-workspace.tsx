@@ -413,7 +413,9 @@ export function CaseWorkspace() {
       {!readOnly && <CaseSteps steps={barSteps} onAct={actOn} />}
       {guidedStarted && <GuidedStarted onOff={() => (setGuided(false), setGuidedStarted(false))} onKeep={() => setGuidedStarted(false)} />}
       <LearnOffer asked={search.get('learn') === '1'} />
-      {othersAssignment && ownerOfCase !== undefined && !caseReadOnly && (
+      {/* Whose case this is, for anyone but its student; the hand-in says "Handed in" instead.
+          Not gated on what this person may change: the server reads them as a viewer here. */}
+      {othersAssignment && ownerOfCase !== undefined && !kase.read_only && (
         <div className="pc-next">
           <Callout tone="info" lead="A student's case.">
             You read it here; only the student who owns it changes it.

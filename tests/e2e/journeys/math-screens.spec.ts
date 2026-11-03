@@ -107,7 +107,7 @@ test('the screens print the run, per functional unit, at 3 significant figures',
 
     // The Inventory: each row's amount × factor = impact, as the case holds it (the documents' amounts).
     const inv = await as.get<{ rows: Array<{ substance: string; amount: number | null; climate: { factor: number; impact: number; conversion: string | null } | null }> }>(`/api/cases/${id}/inventory`);
-    await open(page, `/project/${projectId}/case/${id}?tab=inventory`, { ready: 'Show flows' });
+    await open(page, `/project/${projectId}/case/${id}?tab=inventory`, { ready: 'All flows' });
     if (scale !== 1) await expect(page.getByRole('note').filter({ hasText: 'The inventory covers' }), `${where}: Inventory basis line`).toBeVisible();
     // Rows with no unit conversion, where the amount shown is the amount multiplied.
     for (const r of inv.rows.filter((x) => x.climate && x.amount != null && !x.climate.conversion).slice(0, 8)) {
