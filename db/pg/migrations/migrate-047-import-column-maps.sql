@@ -7,12 +7,20 @@
 
 CREATE TABLE IF NOT EXISTS import_column_map (
   project_id integer NOT NULL REFERENCES project (project_id) ON DELETE CASCADE,
-  connector character varying(32) NOT NULL,
-  header_signature character varying(64) NOT NULL,
+  connector character varying(32) COLLATE ci NOT NULL,
+  header_signature character varying(64) COLLATE ci NOT NULL,
   columns jsonb NOT NULL,
   saved_by integer,
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (project_id, connector, header_signature)
 );
+
+-- The baseline's rule for every table with updated_at (000-schema.sql).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'import_column_map__set_updated_at') THEN
+    CREATE TRIGGER "import_column_map__set_updated_at" BEFORE UPDATE ON "import_column_map" FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+  END IF;
+END $$;
 
 COMMENT ON TABLE import_column_map IS 'A person''s column choice for a spreadsheet layout, reused for the next file with the same headers in the project';

@@ -16,6 +16,8 @@
  *   UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN, or
  *   KV_REST_API_URL + KV_REST_API_TOKEN (Vercel KV, which is Upstash)
  * and the REST store below is used instead (fixed window, plain fetch, no SDK).
+ * Without those, on Vercel (VERCEL=1) or with RATE_LIMIT_STORE=postgres, the
+ * counts live in the app's own database (migrate-048), shared by every server.
  * RATE_LIMIT_STORE=memory forces the in-memory store. Anything else can be
  * plugged in at startup with `setRateLimitStore()`.
  *
@@ -234,6 +236,65 @@ export class UpstashRestRateLimitStore implements RateLimitStore {
   }
 }
 
+// ── Postgres store ───────────────────────────────────────────────────────────
+
+/**
+ * Fixed-window counter in the app's own database (migrate-048): one upsert per
+ * hit, so every server counts against the same row. Used on Vercel, where each
+ * warm instance would otherwise keep its own counts. About one hit in a hundred
+ * also clears rows whose window has passed. The database helpers load on first
+ * use, so importing this module never opens a connection.
+ */
+/** Runs one statement and gives back its rows (the app's pool by default; a test connection in tests). */
+type RowsOf = (sql: string, params?: unknown[]) => Promise<any[]>;
+
+export class PostgresRateLimitStore implements RateLimitStore {
+  constructor(private readonly rowsOf?: RowsOf) {}
+
+  private async run(sql: string, params: unknown[] = []): Promise<any[]> {
+    if (this.rowsOf) return this.rowsOf(sql, params);
+    const { query } = await import('./db-helpers');
+    return query<any>(sql, params as any[]);
+  }
+
+  async hit(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitResult> {
+    const window = Math.floor(now / policy.windowMs);
+    const expires = new Date((window + 1) * policy.windowMs).toISOString();
+    const rows = await this.run(
+      // A SELECT over the upsert, so the count comes back (lib/db answers a bare INSERT with a header).
+      `WITH up AS (
+         INSERT INTO rate_limit_hits (bucket, window_no, hits, expires_at) VALUES (?, ?, 1, ?)
+         ON CONFLICT (bucket, window_no) DO UPDATE SET hits = rate_limit_hits.hits + 1
+         RETURNING hits
+       ) SELECT hits FROM up`,
+      [key, window, expires],
+    );
+    if (Math.random() < 0.01) await this.run(`DELETE FROM rate_limit_hits WHERE expires_at < now()`).catch(() => {});
+    const count = Number(rows[0]?.hits);
+    if (!Number.isFinite(count)) throw new Error('rate-limit store returned no count');
+    const allowed = count <= policy.limit;
+    return {
+      allowed,
+      limit: policy.limit,
+      remaining: Math.max(0, policy.limit - count),
+      retryAfterMs: allowed ? 0 : (window + 1) * policy.windowMs - now,
+    };
+  }
+
+  async peek(key: string, policy: RateLimitPolicy, now: number): Promise<RateLimitResult> {
+    const window = Math.floor(now / policy.windowMs);
+    const [row] = await this.run(`SELECT hits FROM rate_limit_hits WHERE bucket = ? AND window_no = ?`, [key, window]);
+    const count = row ? Number(row.hits) : 0;
+    const remaining = Math.max(0, policy.limit - count);
+    return {
+      allowed: remaining > 0,
+      limit: policy.limit,
+      remaining,
+      retryAfterMs: remaining > 0 ? 0 : (window + 1) * policy.windowMs - now,
+    };
+  }
+}
+
 // ── Store selection ──────────────────────────────────────────────────────────
 
 export function createRateLimitStoreFromEnv(
@@ -243,6 +304,8 @@ export function createRateLimitStoreFromEnv(
   const url = env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL;
   const token = env.UPSTASH_REDIS_REST_TOKEN || env.KV_REST_API_TOKEN;
   if (url && token) return new UpstashRestRateLimitStore(url, token);
+  // On Vercel (it sets VERCEL=1), or when asked: counts shared through the database.
+  if (env.RATE_LIMIT_STORE === 'postgres' || env.VERCEL === '1') return new PostgresRateLimitStore();
   return new MemoryRateLimitStore();
 }
 

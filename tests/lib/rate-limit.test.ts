@@ -7,6 +7,7 @@ import {
   enforceRateLimit,
   clientIp,
   createRateLimitStoreFromEnv,
+  PostgresRateLimitStore,
   readBodyCapped,
   declaredContentLength,
   PayloadTooLargeError,
@@ -158,6 +159,11 @@ describe('store selection from env', () => {
   it('accepts Vercel KV variable names', () => {
     const s = createRateLimitStoreFromEnv({ KV_REST_API_URL: 'https://kv.example', KV_REST_API_TOKEN: 't' });
     expect(s).toBeInstanceOf(UpstashRestRateLimitStore);
+  });
+  it('on Vercel, or with RATE_LIMIT_STORE=postgres, counts are shared through the database', () => {
+    expect(createRateLimitStoreFromEnv({ VERCEL: '1' })).toBeInstanceOf(PostgresRateLimitStore);
+    expect(createRateLimitStoreFromEnv({ RATE_LIMIT_STORE: 'postgres' })).toBeInstanceOf(PostgresRateLimitStore);
+    expect(createRateLimitStoreFromEnv({ VERCEL: '1', RATE_LIMIT_STORE: 'memory' })).toBeInstanceOf(MemoryRateLimitStore);
   });
   it('RATE_LIMIT_STORE=memory forces memory', () => {
     const s = createRateLimitStoreFromEnv({
