@@ -4,9 +4,12 @@
 // here with a blank form, and signing up again from it would be wrong. When
 // the stored session still answers, go Home instead (replace, so Back does
 // not come here again). A stored session that has expired stays on the form.
+// The session is marked signed in first: a token whose signed-in flag was lost
+// would otherwise bounce between Home and Log in for ever.
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/lib/store'
 
 /** True while the stored session is being checked, so the page can say so instead of flashing the form. */
 export function useSignedInRedirect(): boolean {
@@ -26,7 +29,13 @@ export function useSignedInRedirect(): boolean {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!live) return
-        if (d?.user) router.replace('/home')
+        if (d?.user) {
+          try {
+            localStorage.setItem('user', JSON.stringify(d.user))
+          } catch {}
+          useAuthStore.getState().login({ id: String(d.user.id), name: d.user.username, email: d.user.email, createdAt: new Date() })
+          router.replace('/home')
+        }
         else setChecking(false)
       })
       .catch(() => live && setChecking(false))
