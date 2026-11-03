@@ -86,7 +86,7 @@ export function ProvenanceLine({
       ) : aiMode && aiStatus === 'limited' ? (
         <span role="status">You&apos;ve used this hour&apos;s insights, so this is the computed summary</span>
       ) : aiMode && aiStatus === 'fallback' ? (
-        <>AI narration unavailable (no model key configured): showing the computed insight.</>
+        <span role="status">AI wording is not on in this beta, so this is the computed summary. Every number is the same.</span>
       ) : (
         <>Computed deterministically from your assessment results. Not AI-generated.</>
       )}
