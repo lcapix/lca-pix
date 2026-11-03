@@ -1565,3 +1565,5 @@
   .ip-line-edit { grid-template-columns: minmax(0, 1fr); }
   .ip-line-field--wide, .ip-line-field--all, .ip-line-edit .ip-line-field--wide + .ip-line-field--wide { grid-column: 1 / -1; }
 }
+/* claude: a document row wraps when it carries Import and Delete */
+.ws-docs-row { flex-wrap: wrap; }

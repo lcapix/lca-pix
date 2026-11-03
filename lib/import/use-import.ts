@@ -49,6 +49,7 @@ import { costConflicts } from '@/lib/import/cost-conflicts'
 import { flowConflicts, type ExistingFlow } from '@/lib/import/flow-conflicts'
 import type { CostMode } from '@/lib/ingest/cost-columns'
 import { useSampleDocs } from '@/lib/import/use-sample-docs'
+import { documentAsFile, importableKind } from '@/lib/case-editor/case-documents'
 import { uploadTooLargeMessage } from '@/lib/upload-limits'
 import { itacPlantWorkbook } from '@/lib/ingest/itac-browser'
 import { readFailureKind, type ReadFailure } from '@/lib/import/file-rules'
@@ -123,6 +124,34 @@ export function useImport(projectId: string, router: ImportRouter) {
     }
   }, [readsTick])
   const samples = useSampleDocs({ plantId, setFile, setPlantId, setError })
+  // Documents panel, "Import into this case": ?case=&doc=&kind= opens the
+  // importer with that kept document loaded as the file, on that case. It is
+  // read only when the student presses Check what we read, like a dropped file.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const doc = q.get('doc')
+    const caseId = q.get('case')
+    const kind = importableKind(q.get('kind'))
+    if (!doc || !caseId || !kind || !/^\d{1,12}$/.test(doc) || !/^\d{1,12}$/.test(caseId)) return
+    let live = true
+    setConnector(kind)
+    fetch(`/api/cases/${caseId}/documents?id=${doc}`, { headers: authHeaders() })
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(d?.error ?? `The document could not be opened (${r.status}).`)
+        const row = d.document ?? d
+        if (typeof row?.content !== 'string' || !row.content.trim()) throw new Error('That document has no readable text to import.')
+        const f = documentAsFile(String(row.filename ?? 'document'), row.content)
+        if (!live) return
+        setFile(new File([f.text], f.name, { type: f.type }))
+        setError(null)
+        toast.success(`${f.name} loaded from the case's documents. Press Check what we read.`)
+      })
+      .catch((e) => live && setError(e?.message ?? 'The document could not be opened.'))
+    return () => {
+      live = false
+    }
+  }, [])
   const [idHints, setIdHints] = useState<string[]>([])
   const [applied, setApplied] = useState<any>(null)
 
@@ -224,8 +253,14 @@ export function useImport(projectId: string, router: ImportRouter) {
           setProjectCases(cases)
           setTargetCaseId((current) => {
             if (current !== null) return current
+            // ?case= (the empty tree's "Or add a file instead", a document's
+            // "Import into this case") wins when it is one of this project's
+            // cases; the initializer cannot read it during the server render.
             const asked = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('case') : null
-            if (asked) return current
+            if (asked && /^\d{1,12}$/.test(asked)) {
+              const hit = cases.find((c) => c.case_id === Number(asked))
+              return hit ? hit.case_id : null
+            }
             return cases[0]?.case_id ?? null
           })
         }

@@ -321,7 +321,7 @@ export function CaseWorkspace() {
   const body = docsOpen ? (
     <div className="ws-split">
       {tabBody}
-      <DocumentsPanel caseId={kase.case_id} readOnly={readOnly} onClose={closeDocs} />
+      <DocumentsPanel caseId={kase.case_id} projectId={kase.project_id} readOnly={readOnly} onClose={closeDocs} />
     </div>
   ) : (
     tabBody

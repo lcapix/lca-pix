@@ -65,3 +65,31 @@ export function documentsError(status: number, body: unknown): string {
   if (typeof said === 'string' && said.trim()) return said.trim()
   return `The server answered ${status}.`
 }
+
+/** The import a stored document can go through (routing, BOM, equipment list), or null. */
+export function importableKind(docType: string | null | undefined): 'routing' | 'bom' | 'equipment' | null {
+  return docType === 'routing' || docType === 'bom' || docType === 'equipment' ? docType : null
+}
+
+/** One cell as CSV: quoted when it holds a comma, a quote or a line break. */
+function csvCell(v: string): string {
+  return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+}
+
+/**
+ * A stored document as the file the importer reads. A spreadsheet is kept as
+ * tab-separated rows, so it goes back to a CSV of the same rows; anything
+ * else (a PDF's or a page's text) goes as plain text under its own name.
+ */
+export function documentAsFile(filename: string, content: string): { name: string; text: string; type: string } {
+  const base = filename.replace(/\.[^./]+$/, '') || 'document'
+  const sheet = /\.(csv|tsv|xlsx|xls)$/i.test(filename) || (content.split('\n')[0] ?? '').includes('\t')
+  if (sheet) {
+    const text = content
+      .split(/\r?\n/)
+      .map((line) => line.split('\t').map(csvCell).join(','))
+      .join('\n')
+    return { name: `${base}.csv`, text, type: 'text/csv' }
+  }
+  return { name: /\.txt$/i.test(filename) ? filename : `${base}.txt`, text: content, type: 'text/plain' }
+}

@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 // The Documents panel (E21): the case's own source documents (a routing, a
 // bill of materials, an equipment list, an EPD, a safety data sheet, an ITAC
 // report) open beside the tree, so a student reads amounts off them while
@@ -11,7 +13,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button, ConfirmDialog, ErrorCard, IconButton, SavedLine, SearchField } from '@/components/lcapix/ds'
-import { DOC_TYPES, docTypeLabel, highlightParts, hitSummary } from '@/lib/case-editor/case-documents'
+import { DOC_TYPES, docTypeLabel, highlightParts, hitSummary, importableKind } from '@/lib/case-editor/case-documents'
 import { useCaseDocuments, type CaseDocumentRow } from '@/lib/case-editor/use-case-documents'
 import { SAMPLE_DOCS, SAMPLE_LABELS } from '@/lib/ingest/sample-docs'
 
@@ -19,10 +21,13 @@ const ACCEPT = '.csv,.tsv,.xls,.xlsx,.pdf,.txt,.html,.htm,.md'
 
 export function DocumentsPanel({
   caseId,
+  projectId,
   readOnly,
   onClose,
 }: {
   caseId: number
+  /** For "Import into this case": the importer lives under the project. */
+  projectId: number
   /** A person who can only read this case reads the documents but cannot add or delete one. */
   readOnly: boolean
   onClose: () => void
@@ -45,7 +50,10 @@ export function DocumentsPanel({
             <h2 id={titleId} ref={headingRef} tabIndex={-1} className="ws-docs-title">
               Documents
             </h2>
-            <div className="ws-docs-sub">Read your amounts off the files this case was built from.</div>
+            <div className="ws-docs-sub">
+              Read your amounts off the files this case was built from. Adding a file here keeps it for reading; to put its lines in the
+              case, use Import into this case.
+            </div>
           </div>
           <IconButton label="Close documents" onClick={onClose}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -87,6 +95,16 @@ export function DocumentsPanel({
                         <span className="ws-docs-name">{row.filename}</span>
                         <span className="ws-docs-type">{docTypeLabel(row.doc_type)}</span>
                       </button>
+                      {!readOnly && importableKind(row.doc_type) && (
+                        // A routing, BOM or equipment list read in the panel can also go into the case: the importer opens with it loaded.
+                        <Link
+                          className="ds-btn ds-btn--small"
+                          aria-label={`Import ${row.filename} into this case`}
+                          href={`/project/${projectId}/import?case=${caseId}&doc=${row.document_id}&kind=${importableKind(row.doc_type)}`}
+                        >
+                          Import into this case
+                        </Link>
+                      )}
                       {!readOnly && (
                         <Button size="small" variant="danger-quiet" aria-label={`Delete ${row.filename}`} onClick={() => setAsked(row)}>
                           Delete
