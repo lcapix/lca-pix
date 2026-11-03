@@ -64,6 +64,22 @@ export async function addMember(owner: TestUser, projectId: number, member: Test
   );
 }
 
+/**
+ * An assignment in P, which stays a team project: making an assignment turns
+ * on "each member sees only their own case" (F42), so it is turned off again,
+ * as a teacher can on People. The class rules have their own tests
+ * (authz/isolation, f42-class-privacy).
+ */
+async function teamAssignment(owner: TestUser, projectId: number, title: string, templateId: number, what: string): Promise<number> {
+  const res = expectStatus(
+    await api.post(`/api/projects/${projectId}/assignments`, { token: owner.token, json: { title, template_case_id: templateId } }),
+    201,
+    what,
+  );
+  expectStatus(await api.put(`/api/projects/${projectId}`, { token: owner.token, json: { members_see_own_cases: false } }), 200, `${what}: team project again`);
+  return Number(res.json.assignment_id);
+}
+
 export async function createCase(user: TestUser, projectId: number, name: string, type: 'base' | 'comparative' = 'base') {
   const res = expectStatus(
     await api.post(`/api/projects/${projectId}/cases`, { token: user.token, json: { case_name: name, case_type: type } }),
@@ -291,13 +307,7 @@ export async function buildWorld(opts: { runs?: boolean } = {}): Promise<World> 
       name: pName,
       base: { id: baseId, name: baseName, product, machine, subprocess, op, task, flow, gasFlow, run: baseRun },
       comp: { id: compId, name: compName, run: compRun },
-      assignment: Number(
-        expectStatus(
-          await api.post(`/api/projects/${pId}/assignments`, { token: owner.token, json: { title: `Assignment ${tag}`, template_case_id: baseId } }),
-          201,
-          'P assignment',
-        ).json.assignment_id,
-      ),
+      assignment: await teamAssignment(owner, pId, `Assignment ${tag}`, baseId, 'P assignment'),
     },
     Q: {
       id: qId,
@@ -352,14 +362,7 @@ export async function buildWorld(opts: { runs?: boolean } = {}): Promise<World> 
         createComponent(owner, baseId, { component_name: `Glaze ${next()}`, component_type: 'operation', parent_component_id: subprocess }),
       flow: async () => addFlow(owner, task, { substance_id: electricity, flow_type: 'input', quantity: 0.25, unit: 'kWh' }),
       legacyComparison: legacyComparisonRow,
-      assignment: async () => {
-        const res = expectStatus(
-          await api.post(`/api/projects/${pId}/assignments`, { token: owner.token, json: { title: `Assignment ${next()}`, template_case_id: baseId } }),
-          201,
-          'fresh assignment',
-        );
-        return Number(res.json.assignment_id);
-      },
+      assignment: () => teamAssignment(owner, pId, `Assignment ${next()}`, baseId, 'fresh assignment'),
       heldLine: async () => {
         const res: any = await sql(
           `INSERT INTO import_held_lines (case_id, line_kind, reason, step_name, substance_text, substance_id, direction, quantity, unit, created_by)

@@ -114,6 +114,7 @@ async function staffCreators(userId: number, projectId: number): Promise<number[
 
 /** The 403 body for a change to a read-only case (the sample's base case). */
 export const READ_ONLY_CASE = "This case is read-only. Make your own copy to change it.";
+export const STUDENTS_CASE = "A student's case for an assignment: you can read it, and only the student who owns it changes it.";
 
 /**
  * The fields the case guard reads. hidden_from_members (037) and read_only
@@ -126,7 +127,7 @@ async function caseGuardRow(caseId: number): Promise<any> {
             (SELECT members_see_own_cases FROM project WHERE project.project_id = case_table.project_id) AS members_see_own_cases
        FROM case_table WHERE case_id = ?`;
   try {
-    return await queryOne<any>(sql(', hidden_from_members, read_only'), [caseId]);
+    return await queryOne<any>(sql(', hidden_from_members, read_only, assignment_id'), [caseId]);
   } catch (err: any) {
     if (err?.code !== 'ER_BAD_FIELD_ERROR') throw err;
     try {
@@ -179,6 +180,12 @@ export async function caseAccessDenied(
       return NextResponse.json({ error: messages.forbidden ?? 'Access denied' }, { status: 403 });
     }
     return null;
+  }
+  // An assignment case (a student's working case or hand-in) is changed only
+  // by the student who owns it: the instructor and the TA read it, as the
+  // screens show it (D5). Before the read-only rule, so a hand-in says this.
+  if (!denied && level && level !== 'viewer' && row.assignment_id != null && (row.created_by == null || Number(row.created_by) !== userId)) {
+    return NextResponse.json({ error: STUDENTS_CASE }, { status: 403 });
   }
   // The sample's base case (migrate-038): nobody changes it, its owner
   // included; reading and copying stay open. After the ownership rule, so a

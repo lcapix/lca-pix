@@ -33,7 +33,7 @@ async function templateIn(projectId: number, raw: unknown): Promise<{ ok: true; 
   const id = parseId(raw)
   if (!id) return { ok: false }
   const row = await queryOne<any>(
-    `SELECT case_id FROM case_table WHERE case_id = ? AND project_id = ? AND assignment_id IS NULL AND coalesce(read_only, 0) = 0`,
+    `SELECT case_id FROM case_table WHERE case_id = ? AND project_id = ? AND assignment_id IS NULL AND coalesce(read_only, 0) = 0 AND coalesce(hidden_from_members, 0) = 0`,
     [id, projectId],
   )
   return row ? { ok: true, id } : { ok: false }
@@ -65,12 +65,15 @@ export async function createAssignment(request: NextRequest, projectId: number) 
   const due = dueAt(json.body.due_at)
   if (!due.ok) return NextResponse.json({ error: 'The due date is not a date.' }, { status: 400 })
   const template = await templateIn(projectId, json.body.template_case_id)
-  if (!template.ok) return NextResponse.json({ error: 'The template must be a case of this project, not a student\'s copy.' }, { status: 400 })
+  if (!template.ok) return NextResponse.json({ error: 'The template must be a case of this project that students can see, not a student\'s copy.' }, { status: 400 })
   const assignmentId = await insert(
     `INSERT INTO assignment (project_id, title, instructions, due_at, template_case_id, created_by)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [projectId, title.slice(0, 200), String(json.body.instructions ?? '').trim() || null, due.value, template.id, userId],
   )
+  // An assignment makes this a class: each student then sees only their own
+  // case and the staff's, never a classmate's working case or hand-in.
+  await execute(`UPDATE project SET members_see_own_cases = 1 WHERE project_id = ? AND coalesce(members_see_own_cases, 0) = 0`, [projectId])
   return NextResponse.json({ success: true, assignment_id: assignmentId }, { status: 201 })
 }
 
@@ -90,7 +93,7 @@ export async function updateAssignment(request: NextRequest, assignmentId: numbe
   const due = has('due_at') ? dueAt(body.due_at) : ({ ok: true, value: row.due_at } as const)
   if (!due.ok) return NextResponse.json({ error: 'The due date is not a date.' }, { status: 400 })
   const template = has('template_case_id') ? await templateIn(row.project_id, body.template_case_id) : ({ ok: true, id: row.template_case_id } as const)
-  if (!template.ok) return NextResponse.json({ error: 'The template must be a case of this project, not a student\'s copy.' }, { status: 400 })
+  if (!template.ok) return NextResponse.json({ error: 'The template must be a case of this project that students can see, not a student\'s copy.' }, { status: 400 })
   const instructions = has('instructions') ? String(body.instructions ?? '').trim() || null : row.instructions
   await execute(`UPDATE assignment SET title = ?, instructions = ?, due_at = ?, template_case_id = ? WHERE assignment_id = ?`, [
     title.slice(0, 200),

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { internalError, readJson } from '@/lib/http';
 import { query, queryOne, execute } from '@/lib/db-helpers';
 import { getProjectRole, requireAuth } from '@/lib/auth';
-import { isAuthError, projectAccessDenied } from '@/lib/route-guard';
+import { casesRestrictedFor, isAuthError, projectAccessDenied } from '@/lib/route-guard';
 import { isSchemaGap } from '@/lib/db-errors';
 import { canonicalizeRegion } from '@/lib/factor-selection';
 import { parseId } from '@/lib/ids';
@@ -69,6 +69,12 @@ export async function GET(
     } catch (memberErr) {
       if (!isSchemaGap(memberErr)) throw memberErr;
       members = [];
+    }
+    // When members see only their own cases (a class project), a member sees
+    // the teaching staff and themselves, never every classmate's name and
+    // email; the same rule as GET /members.
+    if (await casesRestrictedFor(userId, projectId)) {
+      members = members.filter((m: any) => Number(m.user_id) === userId || ['owner', 'admin'].includes(m.permission_name));
     }
 
     // The caller's own role, so the client can hide what this member cannot do.

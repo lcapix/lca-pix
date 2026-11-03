@@ -77,7 +77,8 @@ export default function AssignmentsPage() {
   const role = isProjectRole(project.project.my_role) ? project.project.my_role : null
   const caps = projectCapabilities(role)
   // A template is one of the project's own cases, never a student's working or handed-in copy.
-  const templates = project.cases.filter((c: any) => !c.assignment_id && !Number(c.read_only))
+  // A case kept from students (an answer key) is never what they start from.
+  const templates = project.cases.filter((c: any) => !c.assignment_id && !Number(c.read_only) && !Number(c.hidden_from_members))
   const nameOf = (id: number | null) => project.cases.find((c) => c.case_id === id)?.case_name ?? null
 
   return (
@@ -216,6 +217,11 @@ function AssignmentForm({
           ))}
         </select>
       </label>
+      {!initial && (
+        <p className="edu-hint" style={{ margin: 0, fontSize: 13, color: 'var(--ds-text-2)' }}>
+          With an assignment, each student sees only their own case and yours, never a classmate&apos;s.
+        </p>
+      )}
       {error && (
         <p role="alert" className="edu-error">
           {error}
