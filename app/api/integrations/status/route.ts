@@ -128,9 +128,11 @@ async function readStatus(): Promise<NextResponse> {
   });
 
   // What the factors cite, for the Data sources screen (grouped there by dataset).
+  // Quarantined factors (migrate-017/024) never count in a run: left out, as the factor library does.
   const factorSources = await safeQuery<any>(`
     SELECT source_reference, COUNT(*) AS n
       FROM driver_impact_factors
+     WHERE method_name COLLATE "C" NOT ILIKE 'QUARANTINE%'
      GROUP BY source_reference`);
 
   return NextResponse.json({
