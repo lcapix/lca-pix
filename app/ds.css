@@ -463,10 +463,22 @@
 /* Documents (E21): the case's source documents beside the tree. Closed, none of this renders. */
 .ws-split { flex: 1; display: flex; align-items: flex-start; min-height: 0; }
 .ws-split > .ws-body { flex: 1; min-width: 0; align-self: stretch; }
-.ws-docs {
-  position: sticky; top: 12px; width: 400px; flex-shrink: 0; margin: 16px 24px 24px 0; max-height: calc(100vh - 24px);
+/* The one docked panel (side-panel.tsx): beside the tab, never over the tree */
+.ws-side {
+  position: sticky; top: 12px; width: 420px; flex-shrink: 0; margin: 16px 24px 24px 0; max-height: calc(100vh - 24px);
   background: #fff; border: 1px solid var(--ds-line); border-radius: 16px; box-shadow: var(--ds-shadow-card-sm); display: flex; flex-direction: column; overflow: hidden;
 }
+.ws-side[data-dock='left'] { order: -1; margin: 16px 0 24px 24px; }
+.ws-side[hidden], .ws-side-main[hidden], .ws-side-docs[hidden] { display: none; }
+.ws-side-tabs { display: flex; align-items: center; gap: 4px; padding: 4px 8px 0 8px; border-bottom: 1px solid var(--ds-line); }
+.ws-side-tabs .ds-icon-btn { width: 32px; height: 32px; margin-bottom: 4px; }
+.ws-side-tab { min-height: 40px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--ds-text-2); cursor: pointer; }
+.ws-side-tab:hover { color: var(--ds-text); }
+.ws-side-tab[aria-selected='true'] { color: var(--ds-text); border-bottom-color: var(--ds-green); }
+.ws-side-tab:focus-visible { outline: 2px solid var(--ds-green); outline-offset: -3px; border-radius: 6px; }
+.ws-side-main, .ws-side-docs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ws-docs { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+@media (max-width: 1100px) { .ws-side { width: 360px; } }
 .ws-docs-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 12px 12px 16px; border-bottom: 1px solid var(--ds-line-soft); }
 .ws-docs-head .ds-icon-btn { width: 32px; height: 32px; }
 .ws-docs-title { font-size: 15px; font-weight: 600; margin: 0; color: var(--ds-text); }
@@ -545,15 +557,10 @@
 .ws-keys kbd { font-family: var(--ds-mono); font-size: 12px; border: 1px solid var(--ds-line-strong); border-radius: 6px; padding: 0 6px; margin-right: 6px; background: var(--ds-head-row); color: var(--ds-text); }
 
 /* The floating step panel */
-.ws-panel {
-  position: absolute; top: 60px; width: 420px; max-width: calc(100% - 32px); max-height: calc(100% - 76px); z-index: 6;
-  background: #fff; border: 1px solid var(--ds-line); border-radius: 16px; box-shadow: var(--ds-shadow-pop); display: flex; flex-direction: column; overflow: hidden;
-}
-.ws-panel[data-dock='right'] { right: 16px; }
-.ws-panel[data-dock='left'] { left: 16px; }
-.ws-panel-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 14px; border-bottom: 1px solid var(--ds-line-soft); font-size: 14px; }
+.ws-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.ws-panel-head { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--ds-line-soft); font-size: 14px; }
 .ws-panel-head .ds-icon-btn { width: 32px; height: 32px; }
-.ws-panel-body { overflow-y: auto; }
+.ws-panel-body { overflow-y: auto; min-height: 0; }
 .ws-panel-section { padding: 14px 18px; border-bottom: 1px solid var(--ds-line-soft); }
 .ws-panel-section:last-child { border-bottom: 0; }
 .ws-outofdate { background: var(--ds-warn-bg); border-bottom: 1px solid var(--ds-warn-line); padding: 12px 18px; font-size: 13px; display: flex; gap: 10px; }

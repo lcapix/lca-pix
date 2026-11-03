@@ -90,6 +90,7 @@ export function StepPanel({
 
   return (
     <FloatingPanel
+      tab="Step"
       label={`Step: ${step.name}`}
       title={
         <>

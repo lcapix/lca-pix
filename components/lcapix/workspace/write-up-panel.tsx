@@ -203,6 +203,7 @@ export function WriteUpPanel({
 
   return (
     <FloatingPanel
+      tab="Write-up"
       label={`Write-up, ${kase.case_name}`}
       title={
         <>

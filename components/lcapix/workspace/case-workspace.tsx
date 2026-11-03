@@ -6,8 +6,9 @@
 // the run number, Write-up), Hide panel and Compare at the row's end. The tab
 // is in the URL (?tab=), an older run too (?run=). Run Assessment runs the
 // case with the study's method and region, counts the seconds, then opens
-// Results. Documents (E21), also at the row's end, opens the case's source
-// documents beside the tab; it starts closed. C5: each tab is its own history
+// Results. UX 2: one docked panel beside the tab (side-panel.tsx) holds the
+// tab's own content (Step, Results, Write-up) and Documents (E21) as its two
+// tabs; Documents at the row's end opens it there, and it starts closed. C5: each tab is its own history
 // entry, so browser back returns to the tab before, not out of the case. D5:
 // an assignment case reads only for anyone but the student who owns it (an
 // instructor reads a student's hand-in or working case, never edits it). D4:
@@ -37,6 +38,8 @@ import { ResultsPanel } from './results-panel'
 import { TreeTab, type TreeView } from './tree-tab'
 import { WriteUpPanel } from './write-up-panel'
 import { DocumentsPanel } from './documents-panel'
+import { SidePanel, type SideShows } from './side-panel'
+import { SideSlotContext } from './floating-panel'
 import { ExerciseProvider, exerciseFacts } from './exercise-card'
 import { usePhone } from '@/lib/shell/use-phone'
 
@@ -84,11 +87,21 @@ export function CaseWorkspace() {
   // 600 px and below: the read-only phone view (E16, E17).
   const phone = usePhone()
   const [insightsOpen, setInsightsOpen] = useState(false)
-  // The Documents panel: closed until asked for; closing it puts focus back on its button.
+  // The docked panel: the tab's own content goes into its slot; Documents is
+  // closed until asked for, and closing it puts focus back on its button.
   const [docsOpen, setDocsOpen] = useState(false)
+  const [sideShows, setSideShows] = useState<SideShows>('main')
+  const [sideSlot, setSideSlot] = useState<HTMLElement | null>(null)
+  const [sideMain, setSideMain] = useState<{ tab: string; key: string } | null>(null)
+  const sideCtx = useMemo(() => ({ slot: sideSlot, setMain: setSideMain }), [sideSlot])
+  // Another step clicked, or another tab: the panel shows it, not Documents.
+  useEffect(() => {
+    if (sideMain) setSideShows('main')
+  }, [sideMain?.key]) // eslint-disable-line react-hooks/exhaustive-deps
   const docsButton = useRef<HTMLButtonElement>(null)
   const closeDocs = () => {
     setDocsOpen(false)
+    setSideShows('main')
     docsButton.current?.focus()
   }
 
@@ -239,6 +252,13 @@ export function CaseWorkspace() {
   const canRun = (inventory?.rows ?? []).some((r) => r.status === 'counted' || r.status === 'no_factor')
   const quietRun = (tab === 'results' || tab === 'writeup') && !!run
   const hasPanel = tab !== 'inventory'
+  const openDocs = () => {
+    setDocsOpen(true)
+    setSideShows('docs')
+    if (hasPanel) setPanelHidden(false)
+  }
+  const sideVisible = hasPanel ? !panelHidden && (!!sideMain || docsOpen) : docsOpen
+  const docsShowing = docsOpen && sideVisible && (sideShows === 'docs' || !sideMain)
   const compareHref = target
     ? `/project/${kase.project_id}/comparison?cases=${target.caseId},${kase.case_id}`
     : `/project/${kase.project_id}/comparison?cases=${kase.case_id}`
@@ -251,6 +271,7 @@ export function CaseWorkspace() {
     inventory,
     readOnly,
     panelHidden,
+    sideOpen: sideVisible,
     view,
     onView: setView,
     onOpenInsights: () => setInsightsOpen(true),
@@ -335,14 +356,20 @@ export function CaseWorkspace() {
         </div>
   )
 
-  // Closed, the tab's body is exactly as before; open, the panel sits beside it.
-  const body = docsOpen ? (
-    <div className="ws-split">
-      {tabBody}
-      <DocumentsPanel caseId={kase.case_id} projectId={kase.project_id} readOnly={readOnly} onClose={closeDocs} />
-    </div>
-  ) : (
-    tabBody
+  const body = (
+    <SideSlotContext.Provider value={sideCtx}>
+      <div className="ws-split">
+        {tabBody}
+        <SidePanel
+          visible={sideVisible}
+          mainTab={sideMain?.tab ?? null}
+          shows={sideShows}
+          onShow={(s) => (s === 'docs' ? openDocs() : setSideShows('main'))}
+          onSlot={setSideSlot}
+          docs={docsOpen ? <DocumentsPanel caseId={kase.case_id} projectId={kase.project_id} readOnly={readOnly} onClose={closeDocs} /> : null}
+        />
+      </div>
+    </SideSlotContext.Provider>
   )
 
   return (
@@ -406,9 +433,9 @@ export function CaseWorkspace() {
               ref={docsButton}
               type="button"
               className="ws-panel-toggle"
-              aria-expanded={docsOpen}
+              aria-expanded={docsShowing}
               aria-controls={docsOpen ? 'ws-docs' : undefined}
-              onClick={() => (docsOpen ? closeDocs() : setDocsOpen(true))}
+              onClick={() => (docsShowing ? closeDocs() : openDocs())}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
                 <path d="M7 3.5h7l4.5 4.5v12.5H7z" strokeLinejoin="round" />

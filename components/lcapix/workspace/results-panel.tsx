@@ -65,7 +65,7 @@ export function ResultsPanel({
 
   if (!run) {
     return (
-      <FloatingPanel label="Results" title={<strong>Results</strong>}>
+      <FloatingPanel tab="Results" label="Results" title={<strong>Results</strong>}>
         <div className="ws-panel-section">
           <EmptyState line="Not run yet. Run Assessment and the answer shows here, with what builds it." />
         </div>
@@ -125,6 +125,7 @@ export function ResultsPanel({
 
   return (
     <FloatingPanel
+      tab="Results"
       label={`Results, ${runLabel(run)}`}
       title={
         <>

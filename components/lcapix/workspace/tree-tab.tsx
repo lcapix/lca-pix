@@ -14,7 +14,7 @@ import { stepKicker, stepSubLine } from '@/lib/workspace/step-text'
 import type { WorkspaceCase, WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
 import type { TierLayout } from '@/lib/workspace/tier-layout'
 import { StepPanel } from './step-panel'
-import { UnsavedBar, useDock } from './floating-panel'
+import { UnsavedBar } from './floating-panel'
 import { guard } from '@/lib/workspace/unsaved'
 import { useStepActions } from './step-actions'
 import { EmptyTree } from './empty-tree'
@@ -37,9 +37,6 @@ function TierGlyph({ tier, size = 12 }: { tier: Tier; size?: number }) {
     </svg>
   )
 }
-
-const PANEL_W = 420
-const PANEL_GAP = 32
 
 /** Each step's own cost and the sum of its subtree (the Cost view's chips, in cents). */
 export function costRollups(steps: WorkspaceStep[]): Map<number, { own: number; total: number }> {
@@ -82,6 +79,7 @@ export function TreeTab({
   inventory,
   readOnly,
   panelHidden,
+  sideOpen = false,
   view,
   onView,
   onOpenInsights,
@@ -98,6 +96,8 @@ export function TreeTab({
   inventory: WorkspaceInventory | null
   readOnly: boolean
   panelHidden: boolean
+  /** The docked panel is beside the tree, so the tree fits the width it leaves. */
+  sideOpen?: boolean
   view: TreeView
   onView: (v: TreeView) => void
   onOpenInsights: () => void
@@ -125,7 +125,6 @@ export function TreeTab({
   const [addOpen, setAddOpen] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
-  const [dock] = useDock()
 
   // Select the product (or the first step) once the tree is there.
   useEffect(() => {
@@ -141,13 +140,13 @@ export function TreeTab({
   const impacts = useMemo(() => impactRollups(steps, inventory), [steps, inventory])
   const total = inventory?.climate?.value ?? 0
 
-  // Fit into the space the panel leaves.
+  // Fit into the canvas; the docked panel sits beside it, so refit when it opens or hides.
   const fit = useCallback(() => {
     const el = canvasRef.current
     if (!el) return
-    const free = { width: el.clientWidth - (panelHidden ? 32 : PANEL_W + PANEL_GAP + 16), height: el.clientHeight - 60 }
+    const free = { width: el.clientWidth - 32, height: el.clientHeight - 60 }
     setZoom(fitScale(layout, free))
-  }, [layout, panelHidden])
+  }, [layout, sideOpen]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     fit()
   }, [fit])
@@ -159,28 +158,22 @@ export function TreeTab({
     setAnnounce(`${s.name}. ${stepKicker({ id: s.id, name: s.name, tier: s.tier }, parent)}. ${stepSubLine(s, rows).text}.`)
   }
 
-  // The panel never covers the focused step: pan it into the free space.
+  // The focused step is kept in view: pan it into the canvas.
   const reveal = useCallback(
     (id: number) => {
       const p = layout.steps.find((s) => s.id === id)
       const vp = viewportRef.current
       if (!p || !vp) return
-      // The panel sits on the side it is docked to; the free space is the rest.
-      const dockLeft = !panelHidden && dock === 'left'
-      const freeLeft = dockLeft ? PANEL_W + PANEL_GAP : 0
-      const freeRight = panelHidden || dockLeft ? vp.clientWidth : vp.clientWidth - PANEL_W - PANEL_GAP
-      // The stage sits after the room on the left when the panel is docked there.
-      const shift = dockLeft ? PANEL_W + PANEL_GAP : 0
-      const left = p.x * zoom + shift
-      const right = (p.x + p.w) * zoom + shift
-      if (right - vp.scrollLeft > freeRight - 16) vp.scrollLeft = right - freeRight + 32
-      else if (left - vp.scrollLeft < freeLeft + 16) vp.scrollLeft = Math.max(0, left - freeLeft - 32)
+      const left = p.x * zoom
+      const right = (p.x + p.w) * zoom
+      if (right - vp.scrollLeft > vp.clientWidth - 16) vp.scrollLeft = right - vp.clientWidth + 32
+      else if (left - vp.scrollLeft < 16) vp.scrollLeft = Math.max(0, left - 32)
       const top = p.y * zoom
       const bottom = (p.y + p.h) * zoom
       if (bottom - vp.scrollTop > vp.clientHeight - 16) vp.scrollTop = bottom - vp.clientHeight + 32
       else if (top - vp.scrollTop < 56) vp.scrollTop = Math.max(0, top - 72)
     },
-    [layout.steps, panelHidden, zoom, dock],
+    [layout.steps, zoom],
   )
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -236,10 +229,7 @@ export function TreeTab({
     )
   }
 
-  // E7: room beside the tree on the panel's side, so a step under the panel
-  // scrolls clear of it and can be clicked.
-  const room = panelHidden ? 0 : PANEL_W + PANEL_GAP
-  const stageW = layout.width * zoom + room
+  const stageW = layout.width * zoom
   const stageH = layout.height * zoom
   const flowCount = rows.length
   const edited = steps.reduce<string | null>((t, s) => (s.updated_at && (!t || s.updated_at > t) ? s.updated_at : t), null)
@@ -322,7 +312,7 @@ export function TreeTab({
         onFocus={() => focused == null && selected != null && setFocused(selected)}
       >
         <div style={{ width: stageW, height: stageH, position: 'relative' }}>
-          <div className="ws-stage" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})`, left: dock === 'left' ? room : 0 }}>
+          <div className="ws-stage" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})` }}>
             {layout.lanes.map((l, i) => (
               <div key={i} className="ws-lane" style={{ top: l.y, height: l.h }} aria-hidden>
                 <span className="ws-lane-label">
@@ -421,7 +411,6 @@ export function TreeTab({
           steps={steps}
           anchor={layout.steps.find((s) => s.id === menuFor)!}
           zoom={zoom}
-          offsetX={dock === 'left' ? room : 0}
           viewport={viewportRef.current}
           onClose={() => {
             setMenuFor(null)
@@ -579,7 +568,6 @@ function StepMenu({
   steps,
   anchor,
   zoom,
-  offsetX = 0,
   viewport,
   onClose,
   onRename,
@@ -591,7 +579,6 @@ function StepMenu({
   steps: WorkspaceStep[]
   anchor: { x: number; y: number; w: number; h: number }
   zoom: number
-  offsetX?: number
   viewport: HTMLDivElement | null
   onClose: () => void
   onRename: () => void
@@ -639,7 +626,7 @@ function StepMenu({
     }
   }, [moving, onClose])
 
-  const left = anchor.x * zoom + offsetX - (viewport?.scrollLeft ?? 0) + anchor.w * zoom + 8
+  const left = anchor.x * zoom - (viewport?.scrollLeft ?? 0) + anchor.w * zoom + 8
   const top = anchor.y * zoom - (viewport?.scrollTop ?? 0) + 8
   const item = (label: string, onClick: () => void, opts: { danger?: boolean; sub?: boolean } = {}) => (
     <button type="button" role="menuitem" className={opts.danger ? 'danger' : undefined} aria-haspopup={opts.sub ? 'menu' : undefined} onClick={onClick}>
