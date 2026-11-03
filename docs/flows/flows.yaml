@@ -1425,6 +1425,8 @@ permissions:
   - {id: R83, method: POST, path: '/api/assignments/{assignmentId}/start', params: {assignmentId: $fresh.assignment}, fresh: assignment, rule: editor, expect: *E201, not_found: 'Assignment not found', note: 'a second start returns the same case with 200'}
   - {id: R84, method: POST, path: '/api/assignments/{assignmentId}/submit', params: {assignmentId: $fresh.assignment}, fresh: assignment, rule: editor, expect: {anon: 401, nonmem: 404, viewer: 403, editor: 400, adminm: 400, owner: 400, padmin: 404}, not_found: 'Assignment not found', note: '400 = start the assignment first; a hand-in is tested in tests/api-real/flows/f29-assignments.test.ts'}
   - {id: R85, method: GET, path: '/api/assignments/{assignmentId}/submissions', params: {assignmentId: $P.assignment}, rule: admin, expect: *AD200, not_found: 'Assignment not found'}
+  - {id: R86, method: GET, path: /api/auth/account, rule: authenticated, expect: *A200, note: 'what deleting the account would take: the projects the caller owns and who else is in each'}
+  - {id: R87, method: DELETE, path: /api/auth/account, rule: authenticated, body: {confirm_email: 'not-this-account@lcapix.test'}, expect: {anon: 401, nonmem: 400, viewer: 400, editor: 400, adminm: 400, owner: 400, padmin: 403}, note: 'a wrong email deletes nothing (400); an administrator account is refused (403); a real deletion is tested in tests/api-real/flows/f39-delete-account.test.ts'}
 
 # Routes a flow needs that do not exist (see PERMISSIONS_MATRIX.md §2.9).
 missing_routes:
