@@ -1,13 +1,15 @@
 'use client'
 
 // Add a step: parent, a tier below that parent (skipping a level is allowed),
-// and a name. Nothing is created until Add the step is pressed; Enter in the
+// and a name. UX 4: the tier starts on the one suggested from the parent
+// (lib/workspace/tier-suggest.ts), with the reason under the choice. Nothing is created until Add the step is pressed; Enter in the
 // name box adds nothing (B2).
 
 import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/lcapix/ds'
 import { TIER_LABEL, TIERS, type Tier } from '@/lib/workspace/tier-layout'
 import type { WorkspaceStep } from '@/lib/workspace/use-workspace'
+import { suggestTier } from '@/lib/workspace/tier-suggest'
 
 export function tiersBelow(parent: Tier): Tier[] {
   const i = TIERS.indexOf(parent)
@@ -35,16 +37,16 @@ export function AddStepForm({
   const [parentId, setParentId] = useState<number | null>(defaultParentId)
   const parent = steps.find((s) => s.id === parentId) ?? null
   const choices = parent ? tiersBelow(parent.tier) : []
-  const [tier, setTier] = useState<Tier | null>(choices[0] ?? null)
+  const suggested = parent ? suggestTier(parent, steps) : null
+  const [tier, setTier] = useState<Tier | null>(suggested?.tier ?? null)
   const [name, setName] = useState('')
 
   useEffect(() => {
     if (!open) return
     const id = defaultParentId ?? steps[0]?.id ?? null
     const p = steps.find((s) => s.id === id) ?? null
-    const next = p ? tiersBelow(p.tier) : []
     setParentId(id)
-    setTier(next[0] ?? null)
+    setTier(p ? suggestTier(p, steps)?.tier ?? null : null)
     setName('')
   }, [open, defaultParentId, steps])
 
@@ -65,9 +67,8 @@ export function AddStepForm({
             onChange={(e) => {
               const id = Number(e.target.value)
               const p = steps.find((s) => s.id === id)
-              const next = p ? tiersBelow(p.tier) : []
               setParentId(id)
-              setTier(next[0] ?? null)
+              setTier(p ? suggestTier(p, steps)?.tier ?? null : null)
             }}
             style={{ width: '100%', marginTop: 6 }}
           >
@@ -93,6 +94,11 @@ export function AddStepForm({
           ))}
           {choices.length === 0 && <span>This step is already the lowest tier.</span>}
         </div>
+        {suggested && (
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
+            Suggested: {TIER_LABEL[suggested.tier]}. {suggested.why}
+          </p>
+        )}
         <label style={{ display: 'block', margin: '12px 0' }}>
           <span className="ds-section-label">Name</span>
           <input

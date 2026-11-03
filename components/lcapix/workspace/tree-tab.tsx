@@ -19,6 +19,7 @@ import { guard } from '@/lib/workspace/unsaved'
 import { useStepActions } from './step-actions'
 import { EmptyTree } from './empty-tree'
 import { AddStepForm } from './add-step-form'
+import { suggestTier } from '@/lib/workspace/tier-suggest'
 
 export type TreeView = 'impact' | 'cost'
 
@@ -562,7 +563,7 @@ function Legend() {
   )
 }
 
-/** The step menu (E03c): Rename, Move to…, Add a <next tier> below, Delete step. */
+/** The step menu (E03c): Rename, Move to…, Add a <suggested tier> below, Delete step. */
 function StepMenu({
   step,
   steps,
@@ -597,8 +598,9 @@ function StepMenu({
   }
   mark(step.id)
   const rank = TIERS.indexOf(step.tier)
-  // 1.4: the menu names the tier it adds (the next one down); the lowest tier adds none.
-  const next: Tier | undefined = TIERS[rank + 1]
+  // 1.4: the menu names the tier it adds, the one Add a step will start on (UX 4,
+  // suggested from the steps already under it); the lowest tier adds none.
+  const next: Tier | undefined = suggestTier(step, steps)?.tier
   const targets = steps.filter((s) => TIERS.indexOf(s.tier) < rank && !below.has(s.id))
 
   useEffect(() => {
