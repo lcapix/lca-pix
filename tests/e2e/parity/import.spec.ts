@@ -139,7 +139,9 @@ test('I02 I03 I04 I05 I06 I07 I08 I10 I11 a respelled bill of materials into a T
   expect.soft(await alu.locator('option').count(), 'I03 more than the top 3').toBeGreaterThan(4);
 
   // I07: hold the stainless line, save, and the saved card lists it.
-  await page.getByRole('button', { name: 'Edit Stainless steel 304' }).click();
+  // This line needs a check too, so it may already be open.
+  const ssToggle = page.getByRole('button', { name: /^(Edit|Close) Stainless steel 304$/ });
+  if ((await ssToggle.getAttribute('aria-expanded')) !== 'true') await ssToggle.click();
   await page.getByLabel('What Stainless steel 304 matches in the library').selectOption('');
   await page.getByLabel('Case name').fill('Respelled');
   const applied = page.waitForResponse((r) => r.url().includes('/api/ingest/apply'), NAV);
