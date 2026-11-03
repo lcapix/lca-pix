@@ -8,6 +8,7 @@
  * Limited to RATE_LIMITS.signup per IP.
  */
 
+import { passwordProblem } from '@/lib/password-rules';
 import { NextRequest, NextResponse } from 'next/server';
 import { readJson } from '@/lib/http';
 import { insert, exists } from '@/lib/db-helpers';
@@ -47,14 +48,8 @@ export async function POST(request: NextRequest) {
     if (normalizedEmail.length > 100 || !EMAIL_RE.test(normalizedEmail)) {
       return bad('Please enter a valid email address');
     }
-    if (password.length < 8) {
-      return bad('Password must be at least 8 characters long');
-    }
-    // bcrypt only reads the first 72 bytes; a longer password would be
-    // silently truncated, so refuse it instead.
-    if (Buffer.byteLength(password, 'utf8') > 72) {
-      return bad('Password must be at most 72 bytes long');
-    }
+    const problem = passwordProblem(password);
+    if (problem) return bad(problem);
     const fullName = typeof fullNameRaw === 'string' ? fullNameRaw.trim().slice(0, 120) || null : null;
 
     const limited = await enforceRateLimit(RATE_LIMITS.signup, [clientIp(request)]);

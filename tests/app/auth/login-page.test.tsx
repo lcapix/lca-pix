@@ -127,10 +127,12 @@ describe('Login form', () => {
     },
   );
 
-  it('Forgot password? says Coming soon: there is no reset yet', () => {
+  it('Forgot password? says how to get back in: Google reaches the same account, else a one-time password by email', () => {
     render(<LoginPage />);
     fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }));
-    expect(screen.getByText('Resetting a password by email is coming soon.')).toBeTruthy();
+    const note = screen.getByRole('note');
+    expect(note.textContent).toMatch(/Continue with Google above: it signs you into this same account/);
+    expect(screen.getByRole('link', { name: 'lcapix50@gmail.com' }).getAttribute('href')).toBe('mailto:lcapix50@gmail.com');
   });
 
   it('the first Tab stop is Continue with Google (acceptance check 10)', () => {

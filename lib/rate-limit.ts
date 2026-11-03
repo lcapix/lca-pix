@@ -68,6 +68,8 @@ export const RATE_LIMITS = {
   login: { id: 'login', limit: 5, windowMs: MINUTE },
   /** Per IP. */
   signup: { id: 'signup', limit: 60, windowMs: HOUR },
+  /** Per user: each try checks the current password. */
+  passwordChange: { id: 'password-change', limit: 5, windowMs: MINUTE },
   /** Per user: each call streams from the paid Hugging Face router. */
   insights: { id: 'insights', limit: 20, windowMs: HOUR },
   /** Per user: each upload can fan out to several LLM calls. */

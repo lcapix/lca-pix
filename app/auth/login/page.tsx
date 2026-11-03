@@ -2,11 +2,14 @@
 
 // Log in (F1.2b): Continue with Google first, then email and password. The
 // error sits under the password, in the server's neutral words (it never says
-// whether the email has an account). "Forgot password?" is Coming soon: there
-// is no reset route yet. A ?error= code from the Google route shows as a card
+// whether the email has an account). "Forgot password?" says how to get back
+// in with no reset email: Google sign-in reaches the same account (matched on
+// its verified email), else a one-time password by hand (scripts/admin/
+// reset-password.mjs). A ?error= code from the Google route shows as a card
 // above the form, known codes only.
 
 import { needsOnboarding } from "@/lib/onboarding"
+import { CONTACT_EMAIL } from "@/lib/contact"
 import type React from "react"
 
 import { useEffect, useState } from "react"
@@ -15,7 +18,7 @@ import Link from "next/link"
 import { useAuthStore } from "@/lib/store"
 import { EduAuthShell, EyeIcon, FieldError, GoogleMark } from "@/components/lcapix/auth/edu-auth-shell"
 import { useSignedInRedirect } from "@/components/lcapix/auth/use-signed-in-redirect"
-import { ComingSoon, ErrorCard } from "@/components/lcapix/ds"
+import { ErrorCard } from "@/components/lcapix/ds"
 
 type LoginError = { title: string; description: string }
 
@@ -193,7 +196,13 @@ export default function LoginPage() {
             </button>
           </div>
           {errors.password && <FieldError id="password-error">{errors.password}</FieldError>}
-          {resetAsked && <ComingSoon>Resetting a password by email is coming soon.</ComingSoon>}
+          {resetAsked && (
+            <p className="edu-hint" role="note" style={{ margin: "6px 0 0" }}>
+              If your email is a Google account, press Continue with Google above: it signs you into this same account.
+              Otherwise, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> from that address and we will
+              send you a one-time password.
+            </p>
+          )}
         </div>
         {errors.general && <FieldError id="general-error">{errors.general}</FieldError>}
         <button type="submit" className="edu-submit" disabled={isLoading} aria-busy={isLoading || undefined} style={{ marginTop: 8 }}>

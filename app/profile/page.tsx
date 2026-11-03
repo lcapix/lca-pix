@@ -16,6 +16,7 @@ import { useAuthStore } from "@/lib/store"
 import { toast } from "sonner"
 import { ApiError, apiGet, apiRequest } from "@/lib/api-client"
 import { DeleteAccountCard } from "@/components/lcapix/profile/delete-account"
+import { ChangePasswordCard } from "@/components/lcapix/profile/change-password"
 
 /**
  * /profile: editable user profile.
@@ -435,7 +436,8 @@ export default function ProfilePage() {
               </form>
             )}
             {!loading && !loadError && server.email && (
-              <div style={{ marginTop: 20 }}>
+              <div style={{ marginTop: 20, display: 'grid', gap: 20 }}>
+                <ChangePasswordCard />
                 <DeleteAccountCard email={server.email} />
               </div>
             )}

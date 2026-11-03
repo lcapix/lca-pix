@@ -181,12 +181,12 @@ async function runCellAsIs(row: PermissionRow, caller: Caller, expected: number)
 }
 
 describe('permissions matrix (docs/flows/flows.yaml)', () => {
-  it('has 139 rows covering 89 route x method pairs (92 base, 46 own-cases, R10b)', () => {
+  it('has 140 rows covering 90 route x method pairs (93 base, 46 own-cases, R10b)', () => {
     // 130 rows over 80 pairs, then the seven assignment rows R79 to R85 (migrate-043),
-    // then R86 and R87, deleting an account.
-    expect(rows).toHaveLength(139);
+    // then R86 and R87, deleting an account, and R88, changing a password.
+    expect(rows).toHaveLength(140);
     expect(rows.filter((r) => r.own_cases)).toHaveLength(46);
-    expect(new Set(rows.map((r) => `${r.method} ${r.path.split('?')[0]}`)).size).toBe(89);
+    expect(new Set(rows.map((r) => `${r.method} ${r.path.split('?')[0]}`)).size).toBe(90);
   });
 
   for (const row of rows) {

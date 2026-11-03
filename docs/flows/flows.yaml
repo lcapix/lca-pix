@@ -1427,6 +1427,7 @@ permissions:
   - {id: R85, method: GET, path: '/api/assignments/{assignmentId}/submissions', params: {assignmentId: $P.assignment}, rule: admin, expect: *AD200, not_found: 'Assignment not found'}
   - {id: R86, method: GET, path: /api/auth/account, rule: authenticated, expect: *A200, note: 'what deleting the account would take: the projects the caller owns and who else is in each'}
   - {id: R87, method: DELETE, path: /api/auth/account, rule: authenticated, body: {confirm_email: 'not-this-account@lcapix.test'}, expect: {anon: 401, nonmem: 400, viewer: 400, editor: 400, adminm: 400, owner: 400, padmin: 403}, note: 'a wrong email deletes nothing (400); an administrator account is refused (403); a real deletion is tested in tests/api-real/flows/f39-delete-account.test.ts'}
+  - {id: R88, method: PUT, path: /api/auth/password, rule: authenticated, body: {current_password: 'not-the-password', new_password: 'a-new-password'}, expect: {anon: 401, nonmem: 400, viewer: 400, editor: 400, adminm: 400, owner: 400, padmin: 400}, note: 'a wrong current password changes nothing (400); a real change is tested in tests/api-real/flows/f40-password.test.ts'}
 
 # Routes a flow needs that do not exist (see PERMISSIONS_MATRIX.md §2.9).
 missing_routes:
