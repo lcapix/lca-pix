@@ -115,7 +115,7 @@ describe('R20 a run is named by its place in its own case (finding 2.8)', () => 
   })
   it('the note against the base case uses the base case\'s own run number', () => {
     expect(compareNote(1.72, { label: 'Base case', run_id: 301, case_run_number: 1, total: 1.72 }, true).chip).toBe('Same as the Base case, Run 1')
-    expect(compareNote(1.72, { label: '', run_id: 300, case_run_number: 2, total: 1.8 }, false).chip).toBe('0.080 lower than Run 2')
+    expect(compareNote(1.72, { label: '', run_id: 300, case_run_number: 2, total: 1.8 }, false).chip).toBe('0.0800 lower than Run 2')
   })
 })
 

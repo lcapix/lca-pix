@@ -6,7 +6,7 @@
  * case, and Cost beside impact. Pure, so every phrase is tested.
  */
 
-import { caseTotal, fixed, share } from '@/lib/ui/format'
+import { caseTotal, fixed, share, sig3 } from '@/lib/ui/format'
 import { isClimate, sourceKindOf } from '@/lib/workspace/inventory'
 import type { SourceKind } from '@/lib/ui/words'
 
@@ -226,7 +226,8 @@ export function compareNote(
   if (diff === 0) return { chip: `Same as ${against}`, note: isCopy ? 'Nothing in your copy differs yet.' : 'The two totals agree.' }
   const word = diff < 0 ? 'lower' : 'higher'
   const pct = b ? `${fixed((Math.abs(diff) / b) * 100, 1)}% ${word}` : ''
-  return { chip: `${fixed(Math.abs(diff), 3)} ${word} than ${against}`, note: pct }
+  // The size is the exact difference at 3 significant figures (UX 7), as Compare prints it.
+  return { chip: `${sig3(Math.abs(thisTotal - other.total))} ${word} than ${against}`, note: pct }
 }
 
 export interface CostRow {

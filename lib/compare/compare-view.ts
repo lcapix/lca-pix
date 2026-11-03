@@ -2,7 +2,7 @@
 // Pure, so every sentence and number a reader compares is tested. The rule
 // for when numbers are compared at all is lib/compare/comparability.ts.
 
-import { amountBox, fixed, result3 } from '@/lib/ui/format'
+import { amountBox, fixed, result3, sig3 } from '@/lib/ui/format'
 import type { Comparability, ComparabilityCheck } from './comparability'
 import type { CaseDiff, FlowChange, FlowSide } from './diff'
 
@@ -177,7 +177,7 @@ export function cellValue(v: number, unit: string): string {
 /** The Change cell: "unchanged" or a signed "−0.053 kg CO₂-eq". */
 export function changeCell(delta: number, unit: string, changed: boolean): string {
   if (!changed || Number(fixed(delta, 3)) === 0) return changed ? `±0 ${unit}` : 'unchanged'
-  return `${delta < 0 ? '−' : '+'}${fixed(Math.abs(delta), 3)} ${unit}`
+  return `${delta < 0 ? '−' : '+'}${sig3(Math.abs(delta))} ${unit}`
 }
 
 /**
@@ -325,7 +325,7 @@ export function changeSummary(rows: StepRow[], unit: string): string | null {
   if (Number(fixed(total, 3)) === 0) return 'The changes cancel out at three decimals.'
   const word = total < 0 ? 'less' : 'more'
   const short = unit.split(' ')[0] || unit
-  const head = `${fixed(Math.abs(total), 3)} ${short} ${word}`
+  const head = `${sig3(Math.abs(total))} ${short} ${word}`
   if (moved.length === 1) return `${head}, all from ${moved[0].step}.`
   const top = [...moved].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0]
   // A share of the net change only reads right when every step moved the same way.

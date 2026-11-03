@@ -43,7 +43,8 @@ export function sig3(x: number): string {
 
 /** A total as the screens show it, to 3 significant figures (UX 7); no thousands separator, so Number() reads it back. */
 export function caseTotal(x: number, _caseType?: 'base' | 'comparative' | string): string {
-  return sig3(x)
+  // Below 0.000001 sig3 writes "× 10⁻⁷", which Number() cannot read; "1.30e-7" it can.
+  return x !== 0 && Number.isFinite(x) && Math.abs(x) < 1e-6 ? x.toPrecision(3) : sig3(x)
 }
 
 /** A share of a total, 1 decimal ("89.4%"); the total rounded as shown first (rules.md). */

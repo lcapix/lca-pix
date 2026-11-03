@@ -62,13 +62,13 @@ describe('results view (E05, rules.md facts)', () => {
     expect(sure.groups.map((g) => `${g.kind} ${g.share}`)).toEqual(['global 88.4%', 'regional 11.6%'])
   })
 
-  it('notes the change against the Base case at the 3 decimals shown', () => {
+  it('notes the change against the Base case at 3 significant figures (UX 7)', () => {
     expect(compareNote(1.72, { label: 'Base case', run_id: 101, total: 1.72 }, true)).toEqual({
       chip: 'Same as the Base case, Run #101',
       note: 'Nothing in your copy differs yet.',
     })
     expect(compareNote(1.667, { label: 'Base case', run_id: 301, total: 1.72 }, false)).toEqual({
-      chip: '0.053 lower than the Base case, Run #301',
+      chip: '0.0530 lower than the Base case, Run #301',
       note: '3.1% lower',
     })
     expect(deltaChip(1.682, { label: 'Base case', total: 1.72 })).toBe('▼ 2.2% vs the Base case')

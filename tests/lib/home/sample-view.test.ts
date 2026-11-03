@@ -27,7 +27,7 @@ describe('the sample Overview (E02) in its own numbers', () => {
   it('05 what changed, and 04 how sure said in full', () => {
     const f = (step: string, a: number) => ({ step, substance: 'Electricity', direction: 'input' as const, amount: a, unit: 'kWh' })
     expect(whatChanged([f('30. Powder coat and cure', 0.4), f('20. Weld tab', 0.12)], [f('30. Powder coat and cure', 0.25), f('20. Weld tab', 0.12)], 1.72, 1.6674667).sentence).toBe(
-      '0.053 kg less, all from 30. Powder coat and cure: its electricity went from 0.40 to 0.25 kWh.',
+      '0.0525 kg less, all from 30. Powder coat and cure: its electricity went from 0.40 to 0.25 kWh.',
     )
     expect(whatChanged([f('a', 1)], [f('a', 1)], 1.72, 1.72).sentence).toBe('Nothing differs from the base case yet.')
     const groups = [{ kind: 'global' as const, share: '88.4%', fraction: 0.884, substances: ['steel'] }]
