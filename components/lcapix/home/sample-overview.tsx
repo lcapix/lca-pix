@@ -18,7 +18,7 @@ import { useGuidedMode, useShellData } from '@/lib/shell/use-shell'
 import { useSidebarGuide } from '@/lib/shell/guide-slot'
 import { useSampleStudy } from '@/lib/home/use-sample-study'
 import { exampleWriteUp, howSureLong, whatChanged, whatGoesIn, type FlowAmount } from '@/lib/home/sample-view'
-import { amountBox, answer, caseTotal, co2Unit, fixed, result3 } from '@/lib/ui/format'
+import { amountBox, answer, caseTotal, co2Unit, fixed, result3, sig3n } from '@/lib/ui/format'
 import { answerSentence, howSure, runClimate, whatBuilds } from '@/lib/workspace/results-view'
 import { TIER_COLOURS, TIER_LABEL, TIERS } from '@/lib/workspace/tier-layout'
 import { makeOwnCopy } from '@/lib/workspace/make-copy'
@@ -162,7 +162,7 @@ export function SampleOverview({ projectId, ownName, ownsProject }: { projectId:
           wiClimate.value,
         )
       : null
-  const pctDiff = climate && wiClimate ? (Number(fixed(wiClimate.value, 3)) - Number(fixed(climate.value, 3))) / Number(fixed(climate.value, 3)) : null
+  const pctDiff = climate && wiClimate ? (wiClimate.value - climate.value) / climate.value : null
   const allFrom =
     changed && changed.changes.length && new Set(changed.changes.map((c) => c.substance.split(',')[0].toLowerCase())).size === 1
       ? changed.changes[0].substance.split(',')[0].toLowerCase()
@@ -261,7 +261,7 @@ export function SampleOverview({ projectId, ownName, ownsProject }: { projectId:
                   <td className="ds-mono so-dim">{stepName(r.component_id)}</td>
                   <td>{r.substance}</td>
                   <td className="ds-mono">
-                    {amountBox(r.amount)} {r.unit} × {fixed(r.climate!.factor, 3)} = {result3(r.climate!.impact)}
+                    {amountBox(r.amount)} {r.unit} × {result3(r.climate!.factor)} = {result3(r.climate!.impact)}
                   </td>
                   <td>
                     <span style={{ display: 'block', fontSize: 13 }}>

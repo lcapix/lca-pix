@@ -5,7 +5,7 @@
  * Pure; read from the case's steps and flows and its run.
  */
 
-import { amount, caseTotal, fixed, share as shareOf } from '@/lib/ui/format'
+import { amount, caseTotal, fixed, share as shareOf, sig3n } from '@/lib/ui/format'
 import type { SourceKind } from '@/lib/ui/words'
 import { isClimate, sourceKindOf, type InventoryRow } from './inventory'
 import type { Tier } from './tier-layout'
@@ -45,8 +45,9 @@ export function outlineRows(
   flows: InventoryRow[],
   caseType = 'comparative',
 ): OutlineRow[] {
-  // Shares as Results shows them: of the total rounded as shown (rules.md).
-  const shown = total == null ? null : Number(caseTotal(total, caseType))
+  // Shares as Results shows them: of the exact total (UX 7).
+  const shown = total == null || !total ? null : total
+  void caseType
   const kids = new Map<number | null, OutlineStep[]>()
   const ids = new Set(steps.map((s) => s.id))
   for (const s of steps) {
@@ -63,7 +64,7 @@ export function outlineRows(
       if (seen.has(s.id)) continue
       seen.add(s.id)
       const v = sums?.get(s.id) ?? 0
-      const pct = shown ? shareOf(Number(fixed(v, 3)), shown) : null
+      const pct = shown ? shareOf(v, shown) : null
       const share = pct === '100.0%' ? '100%' : pct === '0.0%' ? '0%' : pct
       const f = firstFlow.get(s.id)
       const task = s.tier === 'elemental_task'

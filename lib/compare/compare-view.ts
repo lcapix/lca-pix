@@ -2,7 +2,7 @@
 // Pure, so every sentence and number a reader compares is tested. The rule
 // for when numbers are compared at all is lib/compare/comparability.ts.
 
-import { amountBox, fixed, result3, sig3 } from '@/lib/ui/format'
+import { amountBox, fixed, result3, sig3, sig3n } from '@/lib/ui/format'
 import type { Comparability, ComparabilityCheck } from './comparability'
 import type { CaseDiff, FlowChange, FlowSide } from './diff'
 
@@ -176,7 +176,7 @@ export function cellValue(v: number, unit: string): string {
 
 /** The Change cell: "unchanged" or a signed "−0.053 kg CO₂-eq". */
 export function changeCell(delta: number, unit: string, changed: boolean): string {
-  if (!changed || Number(fixed(delta, 3)) === 0) return changed ? `±0 ${unit}` : 'unchanged'
+  if (!changed || sig3n(delta) === 0) return changed ? `±0 ${unit}` : 'unchanged'
   return `${delta < 0 ? '−' : '+'}${sig3(Math.abs(delta))} ${unit}`
 }
 
@@ -267,7 +267,7 @@ export function factorShifts(
   for (const [k, x] of ma) {
     const y = mb.get(k)
     if (!y || touched.has(k)) continue
-    if (fixed(x.value, 3) === fixed(y.value, 3)) continue
+    if (sig3n(x.value) === sig3n(y.value)) continue
     lines.push(`${x.substance} at ${x.step}: same amount, but its result went ${result3(x.value)} → ${result3(y.value)} ${unit}, so its factor changed`)
   }
   // Own factors the inventory diff already names are not repeated.
@@ -319,10 +319,10 @@ export function whatChanged(
 
 /** "0.053 kg less, all from 30. Powder coat and cure." from the step rows. */
 export function changeSummary(rows: StepRow[], unit: string): string | null {
-  const moved = rows.filter((r) => Number(fixed(r.delta, 3)) !== 0)
+  const moved = rows.filter((r) => sig3n(r.delta) !== 0)
   if (!moved.length) return null
   const total = moved.reduce((t, r) => t + r.delta, 0)
-  if (Number(fixed(total, 3)) === 0) return 'The changes cancel out at three decimals.'
+  if (sig3n(total) === 0) return 'The changes cancel out.'
   const word = total < 0 ? 'less' : 'more'
   const short = unit.split(' ')[0] || unit
   const head = `${sig3(Math.abs(total))} ${short} ${word}`

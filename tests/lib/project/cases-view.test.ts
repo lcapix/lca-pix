@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { answerOf, byStage, CARD_TAG, casesHeader, changeVsBase, countedCases, lessonsOf, matchesSearch, noCaseYet, PIPELINE_LABEL, segmentsFilled, splitCases } from '@/lib/project/cases-view'
 
 const run = (id: number, value: number) => ({ run_id: id, headline: { value, unit: 'kg CO2 eq' } })
-const base = { case_id: 1, case_name: 'Base case', case_type: 'base', created_by: 9, author: 'Elena Rivera', stage: 'run' as const, latest_run: run(301, 1.7196) }
+const base = { case_id: 1, case_name: 'Base case', case_type: 'base', created_by: 9, author: 'Elena Rivera', stage: 'run' as const, latest_run: run(301, 1.7199667) }
 const whatIf = { case_id: 2, case_name: 'Shorter cure cycle', case_type: 'comparative', created_by: 9, author: 'Elena Rivera', stage: 'run' as const, latest_run: run(302, 1.6674667) }
 const ana = { case_id: 3, case_name: "Ana's case", case_type: 'comparative', created_by: 20, author: 'Ana Ruiz', stage: 'handed_in' as const, latest_run: run(214, 1.682) }
 const sam = { case_id: 4, case_name: "Sam's case", case_type: 'comparative', created_by: 21, author: 'Sam Ortiz', stage: 'not_run' as const, latest_run: null }

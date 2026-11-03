@@ -6,7 +6,7 @@
  * case, and Cost beside impact. Pure, so every phrase is tested.
  */
 
-import { caseTotal, fixed, share, sig3 } from '@/lib/ui/format'
+import { caseTotal, fixed, share, sig3, sig3n } from '@/lib/ui/format'
 import { isClimate, sourceKindOf } from '@/lib/workspace/inventory'
 import type { SourceKind } from '@/lib/ui/words'
 
@@ -105,7 +105,7 @@ export function whatBuilds(run: RunInput, caseType: string): BuildRow[] {
         component_id: s.component_id,
         name: s.name,
         value,
-        share: share(Number(fixed(value, 3)), shown),
+        share: share(value, climate.value),
         fraction: climate.value ? Math.max(0, Math.min(1, value / climate.value)) : 0,
       }
     })
@@ -189,7 +189,7 @@ export function howSure(run: RunInput, caseType: string): { sentence: string; gr
   const list = [...groups.entries()]
     .map(([kind, g]) => ({
       kind,
-      share: share(Number(fixed(g.value, 3)), shown),
+      share: share(g.value, climate.value),
       fraction: g.value / climate.value,
       substances: [...g.substances],
     }))
@@ -217,15 +217,16 @@ export function compareNote(
   other: { label: string; run_id: number; case_run_number?: number | null; total: number },
   isCopy: boolean,
 ): { chip: string; note: string } {
-  const a = Number(fixed(thisTotal, 3))
-  const b = Number(fixed(other.total, 3))
-  const diff = Number(fixed(a - b, 3))
+  // The same when the two read the same (3 significant figures); the size and
+  // the percentage from the exact values.
+  const diff = sig3n(thisTotal) === sig3n(other.total) ? 0 : thisTotal - other.total
+  const b = other.total
   // An empty label is the case's own previous run: "Same as Run #100".
   const run = other.case_run_number ? `Run ${other.case_run_number}` : `Run #${other.run_id}`
   const against = other.label ? `the ${other.label}, ${run}` : run
   if (diff === 0) return { chip: `Same as ${against}`, note: isCopy ? 'Nothing in your copy differs yet.' : 'The two totals agree.' }
   const word = diff < 0 ? 'lower' : 'higher'
-  const pct = b ? `${fixed((Math.abs(diff) / b) * 100, 1)}% ${word}` : ''
+  const pct = b ? `${fixed((Math.abs(diff) / Math.abs(b)) * 100, 1)}% ${word}` : ''
   // The size is the exact difference at 3 significant figures (UX 7), as Compare prints it.
   return { chip: `${sig3(Math.abs(thisTotal - other.total))} ${word} than ${against}`, note: pct }
 }
@@ -275,9 +276,7 @@ export function otherCategories(run: Pick<RunInput, 'impacts'>): Array<{ name: s
 
 /** The short form on the Write-up (E06): "▼ 2.2% vs the Base case"; equal: "Same as the Base case". */
 export function deltaChip(thisTotal: number, other: { label: string; total: number }): string {
-  const a = Number(fixed(thisTotal, 3))
-  const b = Number(fixed(other.total, 3))
   const against = other.label ? `the ${other.label}` : 'the previous run'
-  if (a === b || !b) return `Same as ${against}`
-  return `${a < b ? '▼' : '▲'} ${fixed((Math.abs(a - b) / b) * 100, 1)}% vs ${against}`
+  if (sig3n(thisTotal) === sig3n(other.total) || !other.total) return `Same as ${against}`
+  return `${thisTotal < other.total ? '▼' : '▲'} ${fixed((Math.abs(thisTotal - other.total) / Math.abs(other.total)) * 100, 1)}% vs ${against}`
 }

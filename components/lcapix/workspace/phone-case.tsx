@@ -319,7 +319,7 @@ function PhoneResults({
                 </span>
                 <span style={{ textAlign: 'right' }}>
                   <span className="ds-mono" style={{ display: 'block', fontWeight: 600 }}>
-                    {fixed(s.factor, 3)}
+                    {result3(s.factor)}
                   </span>
                   <span className="ds-mono" style={{ fontSize: 13, color: 'var(--ds-text-2)' }}>
                     {s.per}

@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Segmented, TextDialog, ConfirmDialog } from '@/components/lcapix/ds'
-import { caseTotal, fixed, money, share } from '@/lib/ui/format'
+import { caseTotal, fixed, money, result3, share, sig3n } from '@/lib/ui/format'
 import { NODE_H, NODE_W, TIER_COLOURS, TIER_LABEL, TIERS, fitScale, moveFrom, ZOOM_CEIL, ZOOM_FLOOR, type Tier } from '@/lib/workspace/tier-layout'
 import { stepKicker, stepSubLine } from '@/lib/workspace/step-text'
 import type { WorkspaceCase, WorkspaceInventory, WorkspaceStep } from '@/lib/workspace/use-workspace'
@@ -333,12 +333,12 @@ export function TreeTab({
               const c = TIER_COLOURS[p.tier]
               // Results: an operation reads its run value and share ("1.538 · 89.4%", "no factor · 0%").
               const runOp = results && runValues && p.tier === 'operation' ? runValues.sums.get(p.id) ?? 0 : null
-              const sub = runOp === null ? live : { ...live, text: runOp ? fixed(runOp, 3) : 'no factor' }
-              const shownTotal = runValues ? Number(caseTotal(runValues.total, kase.case_type)) : 0
+              const sub = runOp === null ? live : { ...live, text: runOp ? result3(runOp) : 'no factor' }
+              const shownTotal = runValues ? runValues.total : 0
               const chip =
                 runOp !== null
                   ? runOp
-                    ? share(Number(fixed(runOp, 3)), shownTotal)
+                    ? share(runOp, shownTotal)
                     : '0%'
                   : results
                     ? null

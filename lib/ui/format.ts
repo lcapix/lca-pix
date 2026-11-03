@@ -87,6 +87,11 @@ export function grouped(s: string): string {
   return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${dec !== undefined ? `.${dec}` : ''}`
 }
 
+/** `x` at 3 significant figures, as a number: two values are the same when they read the same (UX 7). */
+export function sig3n(x: number): number {
+  return Number(caseTotal(x))
+}
+
 /** A case's answer as the screens print it: 3 significant figures with thousands grouped. */
 export function answer(x: number, caseType?: 'base' | 'comparative' | string): string {
   return grouped(caseTotal(x, caseType))

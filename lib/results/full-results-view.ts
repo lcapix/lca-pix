@@ -5,7 +5,7 @@
  * the page never mixes a run's impacts with today's costs. Pure, so tested.
  */
 
-import { fixed, share } from '@/lib/ui/format'
+import { fixed, share, sig3n } from '@/lib/ui/format'
 import type { RunStep } from '@/lib/workspace/results-view'
 
 /** "Run 2": the run's place in its own case (2.8). "Run #57" only when the number is unknown. */
@@ -82,10 +82,8 @@ export function previousComparable<T extends Comparable>(runs: T[], run: Compara
 /** "up 4.2%", "down 4.2%" or "the same", read at the decimals a person sees. */
 export function changeWords(value: number, against: number): string {
   if (!against) return 'no base value to compare'
-  const a = Number(fixed(value, 3))
-  const b = Number(fixed(against, 3))
-  if (a === b) return 'the same'
-  return `${a < b ? 'down' : 'up'} ${share(Math.abs(a - b), Math.abs(b))}`
+  if (sig3n(value) === sig3n(against)) return 'the same'
+  return `${value < against ? 'down' : 'up'} ${share(Math.abs(value - against), Math.abs(against))}`
 }
 
 export interface StepDiffRow {

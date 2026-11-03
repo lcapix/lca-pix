@@ -5,7 +5,7 @@
  * said in full, and the example write-up. Pure, so each sentence is tested.
  */
 
-import { caseTotal, fixed, sig3 } from '@/lib/ui/format'
+import { caseTotal, fixed, sig3, sig3n } from '@/lib/ui/format'
 import type { InventoryRow } from '@/lib/workspace/inventory'
 import type { SureGroup } from '@/lib/workspace/results-view'
 
@@ -70,7 +70,7 @@ export function whatChanged(base: FlowAmount[], whatIf: FlowAmount[], baseTotal:
     .map((f) => ({ ...f, from: was.get(key(f))!.amount }))
   const added = whatIf.filter((f) => !was.has(key(f)))
   const gone = base.filter((f) => !whatIf.some((g) => key(g) === key(f)))
-  const delta = Number(fixed(whatIfTotal, 3)) - Number(fixed(baseTotal, 3))
+  const delta = sig3n(whatIfTotal) - sig3n(baseTotal)
   const size = `${sig3(Math.abs(whatIfTotal - baseTotal))} ${unit} ${delta < 0 ? 'less' : 'more'}`
   if (Math.abs(delta) < 0.0005 && !changes.length && !added.length && !gone.length) return { changes, sentence: 'Nothing differs from the base case yet.' }
   const box = (v: number | null) => (v === null ? 'no amount' : fixed(v, 2))

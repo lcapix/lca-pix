@@ -5,7 +5,7 @@
  * way to make it). Pure; the cards read the project and progress routes.
  */
 
-import { caseTotal, fixed } from '@/lib/ui/format'
+import { caseTotal, fixed, sig3n } from '@/lib/ui/format'
 import type { HomeProject } from './home-view'
 
 /** No project of their own to run (owner or admin), and at least one shared with them. */
@@ -64,9 +64,8 @@ export function staffCases<C extends ListedCase>(cases: C[], staff: Set<number>)
     const answer = v == null ? null : caseTotal(v, c.case_type)
     let change: string | null = null
     if (v != null && base != null && c.case_type !== 'base' && base !== 0) {
-      const a = Number(fixed(v, 3))
-      const b = Number(fixed(base, 3))
-      change = a === b ? 'same as the base' : `${fixed((Math.abs(a - b) / Math.abs(b)) * 100, 1)}% ${a < b ? 'lower' : 'higher'}`
+      // The same when the two read the same; the percentage from the exact values.
+      change = sig3n(v) === sig3n(base) ? 'same as the base' : `${fixed((Math.abs(v - base) / Math.abs(base)) * 100, 1)}% ${v < base ? 'lower' : 'higher'}`
     }
     return { ...c, answer, change }
   })

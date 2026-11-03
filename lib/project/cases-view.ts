@@ -5,7 +5,7 @@
  */
 
 import { PIPELINE_LABEL as STAGE_WORDS, type PipelineStage } from '@/lib/summary/case-summary'
-import { caseTotal, fixed } from '@/lib/ui/format'
+import { caseTotal, fixed, sig3n } from '@/lib/ui/format'
 
 export interface ProgressCase {
   case_id: number
@@ -101,8 +101,9 @@ export function changeVsBase(c: ProgressCase, base: ProgressCase | undefined): s
   const a = c.latest_run?.headline?.value
   const b = base?.latest_run?.headline?.value
   if (a == null || b == null || !b || c.case_id === base?.case_id) return null
-  const d = (Number(fixed(a, 3)) - Number(fixed(b, 3))) / Number(fixed(b, 3))
-  if (Math.abs(d) < 0.0005) return 'Same'
+  // The same when the two read the same (3 significant figures); the percentage from the exact values.
+  if (sig3n(a) === sig3n(b)) return 'Same'
+  const d = (a - b) / b
   return `${d < 0 ? '▼' : '▲'} ${fixed(Math.abs(d) * 100, 1)}%`
 }
 

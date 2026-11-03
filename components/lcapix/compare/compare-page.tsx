@@ -570,7 +570,7 @@ export function ComparePage() {
                         <dl className="cmp-what-kv">
                           <dt>Factor</dt>
                           <dd className="ds-mono">
-                            {fixed(changed.factor.value, 3)} {changed.factor.unit}
+                            {result3(changed.factor.value)} {changed.factor.unit}
                           </dd>
                           <dt>Everything else</dt>
                           <dd>{changed.nothingElse ? 'Nothing else changed.' : `${changed.lines.length - 1} more ${changed.lines.length === 2 ? 'change' : 'changes'}, below.`}</dd>

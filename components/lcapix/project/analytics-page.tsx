@@ -14,7 +14,7 @@ import { LMS_NAME } from '@/lib/lms-name'
 import { useShellData } from '@/lib/shell/use-shell'
 import { useProjectCases } from '@/lib/project/use-project-cases'
 import { perNoun } from '@/lib/compare/compare-view'
-import { caseTotal, co2Unit, fixed } from '@/lib/ui/format'
+import { caseTotal, co2Unit, fixed, result3 } from '@/lib/ui/format'
 import {
   axisTicks,
   classCounts,
@@ -307,14 +307,14 @@ function DotPlot({ dots, base, unit }: { dots: Dot[]; base: number | null; unit:
   const stackOf = new Map<number, number>()
   const seen = new Map<string, number>()
   for (const d of dots) {
-    const k = fixed(d.value, 3)
+    const k = result3(d.value)
     const n = seen.get(k) ?? 0
     stackOf.set(d.case_id, n)
     seen.set(k, n + 1)
   }
   const labels = dots
     .filter((d) => named.has(d.case_id))
-    .map((d) => ({ id: d.case_id, x: x(d.value), width: (d.who.length + fixed(d.value, 3).length + 1) * 9 + 8 }))
+    .map((d) => ({ id: d.case_id, x: x(d.value), width: (d.who.length + result3(d.value).length + 1) * 9 + 8 }))
   const rows = labelRows(labels, 3)
   const rowY = (r: number) => 26 + r * 34
   const baseBoxX = base == null ? 0 : x(base) + 8 + BASE_BOX > W ? x(base) - 8 - BASE_BOX : x(base) + 8
@@ -348,12 +348,12 @@ function DotPlot({ dots, base, unit }: { dots: Dot[]; base: number | null; unit:
               <>
                 <line x1={cx} x2={cx} y1={rowY(row) + 8} y2={cy - DOT_R - 2} className="an-stem" />
                 <text x={cx} y={rowY(row)} textAnchor="middle" className="an-label">
-                  {d.who} <tspan className="an-mono">{fixed(d.value, 3)}</tspan>
+                  {d.who} <tspan className="an-mono">{result3(d.value)}</tspan>
                 </text>
               </>
             )}
             <circle cx={cx} cy={cy} r={DOT_R} className={d.ticked ? 'an-dot an-dot--ticked' : 'an-dot'}>
-              <title>{`${d.who} · ${d.case_name} · ${fixed(d.value, 3)} ${unit}${d.ticked ? ' · ticked as hand-in' : ''}`}</title>
+              <title>{`${d.who} · ${d.case_name} · ${result3(d.value)} ${unit}${d.ticked ? ' · ticked as hand-in' : ''}`}</title>
             </circle>
           </g>
         )
@@ -382,7 +382,7 @@ function LandedTable({ dots, unit }: { dots: Dot[]; unit: string }) {
               <td>{d.who}</td>
               <td>{d.case_name}</td>
               <td className="ds-mono" style={{ textAlign: 'right' }}>
-                {fixed(d.value, 3)}
+                {result3(d.value)}
               </td>
               <td>{d.ticked ? '✓ Ticked' : '–'}</td>
             </tr>
