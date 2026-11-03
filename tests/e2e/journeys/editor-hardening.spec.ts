@@ -116,26 +116,32 @@ test.describe('editor hardening: the step panel', () => {
     await expect(p.locator('.ws-sum').first()).toContainText('800 g (1 g = 0.001 kg) ×');
   });
 
-  test('A1 a unit that cannot convert is refused with the reason; the amount typed in it then saves', async ({ api, newUser, signIn }) => {
+  test('A1 only units that convert are offered; a unit that cannot convert is refused with the reason and changes nothing', async ({ api, newUser, signIn }) => {
+    // The sample no longer carries a flow in a unit its factors cannot take
+    // (C6), and new flows are refused one, so the refusal is met through the
+    // API (an older or imported row); the reason's wording is pinned in
+    // tests/lib/workspace/flow-edit.test.ts.
     const user = await newUser('unit-refuse');
     const { projectId, caseId } = await workedExample(api, user);
-    const fold = await idOf(api, user, caseId, 'Fold and tape');
+    const cut = await idOf(api, user, caseId, '10. Cut blank');
+    const steel = (await flowsOf(api, user, cut)).find((f) => f.substance_name === 'Steel')!;
     const { page } = await signIn(user);
     await openCase(page, projectId, caseId);
-    await page.getByRole('button', { name: 'Hide panel' }).click();
-    await step(page, 'Fold and tape').click();
-    await page.getByRole('button', { name: 'Show panel' }).click();
-    const p = panel(page, 'Fold and tape');
-    // Packaging tape is recorded as 1 roll; a roll is no mass, so kg cannot be worked out from it.
-    await p.getByRole('combobox', { name: 'Unit for Packaging tape' }).selectOption('kg');
-    await expect(p.getByRole('alert').filter({ hasText: 'roll and kg measure different things, so 1 roll cannot be turned into kg' })).toBeVisible();
-    await expect(p.getByRole('button', { name: 'Save Packaging tape on Fold and tape' })).toBeDisabled();
-    // Typed in kg, it saves as typed.
-    await p.getByRole('textbox', { name: 'Packaging tape, amount in kg' }).fill('0.01');
-    await p.getByRole('button', { name: 'Save Packaging tape on Fold and tape' }).click();
-    await expect(p.getByText(/Saved · Packaging tape 0\.01 kg/)).toBeVisible();
-    const tape = (await flowsOf(api, user, fold)).find((f) => f.substance_name === 'Packaging tape')!;
-    expect([Number(tape.quantity), tape.unit]).toEqual([0.01, 'kg']);
+    await step(page, '10. Cut blank').click();
+    const p = panel(page, '10. Cut blank');
+    const offered = await p.getByRole('combobox', { name: 'Unit for Steel' }).locator('option').allInnerTexts();
+    expect(offered).toContain('kg');
+    expect(offered).toContain('g');
+    for (const wrong of ['kWh', 'MJ', 'tkm', 'm3']) expect(offered, `${wrong} is not offered for Steel`).not.toContain(wrong);
+
+    const refused = await api.as(user.token).put(`/api/flows/${steel.flow_id}`, { unit: 'kWh' }).then(
+      () => null,
+      (e) => e as { status: number; body: string },
+    );
+    expect(refused?.status).toBe(400);
+    expect(refused?.body).toMatch(/kg and kWh measure different things/);
+    const after = (await flowsOf(api, user, cut)).find((f) => f.flow_id === steel.flow_id)!;
+    expect([Number(after.quantity), after.unit]).toEqual([Number(steel.quantity), steel.unit]);
   });
 
   test('B1 direction waits for Save and the Saved line says what was stored; E6 Step under opens on the parent; stage waits for Save', async ({ api, newUser, signIn }) => {
@@ -177,12 +183,14 @@ test.describe('editor hardening: the step panel', () => {
     await expect(page.getByText('Saved · 10. Cut blank is now under Welding')).toBeVisible();
     expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.parent_component_id).toBe(welding);
 
-    // The stage too.
-    await p.getByRole('combobox', { name: 'Life-cycle stage' }).selectOption('materials');
-    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage ?? null).not.toBe('materials');
-    await p.getByRole('button', { name: 'Save the life-cycle stage' }).click();
-    await expect(page.getByText('Saved · stage Materials')).toBeVisible();
+    // The stage too (the sample puts 10. Cut blank in Materials; move it to Use).
     expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('materials');
+    await p.getByRole('combobox', { name: 'Life-cycle stage' }).selectOption('use');
+    expect(sent.filter((s) => s === `PUT /api/components/${cut}`)).toHaveLength(1); // only the Step under save
+    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('materials');
+    await p.getByRole('button', { name: 'Save the life-cycle stage' }).click();
+    await expect(page.getByText('Saved · stage Use')).toBeVisible();
+    expect((await components(api, user, caseId)).find((c) => c.component_id === cut)!.life_cycle_stage).toBe('use');
   });
 
   test('E7 one Impact/Cost switch; a step under the panel scrolls clear and can be clicked; the add list is ranked and reads 8.6', async ({ api, newUser, signIn }) => {
