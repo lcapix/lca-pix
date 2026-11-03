@@ -11,6 +11,7 @@
  *
  * Pure module: build + parse only, no DB.
  */
+import { flowStage, type StageId } from '@/lib/life-cycle';
 import type { DataQualitySummary, LCAResult } from './lca-engine';
 import { stepCostBasis, type CostBasis } from './costs/cost-basis';
 
@@ -118,6 +119,8 @@ export interface SnapshotFlowRow {
   allocation?: number;
   /** 'hand': the person's own number for this flow (migrate-034); scope reads "Entered by hand". */
   origin?: 'hand';
+  /** The life-cycle stage this flow's burden belongs to, frozen at run time (lib/life-cycle.ts flowStage). Older runs have none. */
+  stage?: StageId;
 }
 
 /** Case total for one impact category (v3). */
@@ -250,6 +253,14 @@ export function buildRunSnapshot(
           ? { allocation: f.allocation_factor }
           : {}),
         ...(f.factor_origin === 'hand' ? { origin: 'hand' as const } : {}),
+        stage: flowStage({
+          explicit: f.flow_stage,
+          stepStage: comp.life_cycle_stage ?? null,
+          direction: f.flow_type,
+          substanceUnit: f.substance_unit,
+          unit: f.unit,
+          substanceCategory: f.substance_category,
+        }),
       });
     }
   }
@@ -472,6 +483,10 @@ export function snapshotReportParts(snap: RunSnapshot | null | undefined) {
       amount: f.amount,
       unit: f.unit,
     })),
+    // Each flow's impact in the stage it counted in, for the report's by-stage split.
+    stage_impacts: snap.flow_detail
+      .filter((f) => f.stage)
+      .map((f) => ({ stage: f.stage as string, category_name: f.category_name, impact: f.impact })),
   };
 }
 

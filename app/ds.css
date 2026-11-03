@@ -1567,3 +1567,5 @@
 }
 /* claude: a document row wraps when it carries Import and Delete */
 .ws-docs-row { flex-wrap: wrap; }
+/* claude: a flow's life-cycle stage under its name in the Inventory */
+.ws-inv-stage { display: block; margin-top: 2px; font-size: 11px; color: var(--ds-text-3); letter-spacing: 0.02em; }

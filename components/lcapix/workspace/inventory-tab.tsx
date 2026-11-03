@@ -1,5 +1,6 @@
 'use client'
 
+import { stageLabel } from '@/lib/life-cycle'
 import Link from 'next/link'
 
 // The Inventory tab (E04, behaviour spec "Inventory tab"): a slim indented
@@ -40,6 +41,7 @@ import {
   FactorTag,
   OwnFactorForm,
   READ_ONLY_LINE,
+  StageSelect,
   StepSelect,
   SubstanceSwap,
   deleteFlow,
@@ -407,6 +409,11 @@ function InventoryRowView({
               </select>
             )}
           </span>
+          {/* The stage this flow counts in: the rule's, or one the student set. */}
+          <span className="ws-inv-stage" title={row.stage_set ? 'Set by you' : 'From the rule: a material going in is Materials; energy and outputs follow the step'}>
+            {stageLabel(row.stage)}
+            {row.stage_set ? ' · set by you' : ''}
+          </span>
         </td>
         <td>
           {readOnly ? (
@@ -505,6 +512,7 @@ function InventoryRowView({
                 {swap && <SubstanceSwap row={row} method={method} draft={draft} onClose={() => setSwap(false)} />}
               </div>
               <StepSelect row={row} steps={steps} draft={draft} />
+              <StageSelect row={row} draft={draft} />
               <div>
                 <span className="ds-label" style={{ marginBottom: 4 }}>
                   Factor

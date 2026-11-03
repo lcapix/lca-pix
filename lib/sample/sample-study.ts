@@ -155,7 +155,7 @@ export const SAMPLE_STEPS: SampleStep[] = [
     name: '10. Cut blank',
     tier: 'operation',
     parent: 'Cutting',
-    stage: 'materials',
+    stage: 'production',
     description: 'A 2 mm sheet is cut to one blank.',
     flows: [
       { substance: 'Steel', direction: 'input', quantity: 0.8, unit: 'kg', note: 'Illustrative: the blank weight. Weigh your own part and replace it.' },
@@ -201,7 +201,7 @@ export const SAMPLE_STEPS: SampleStep[] = [
     name: 'Shear blank',
     tier: 'elemental_task',
     parent: '10. Cut blank',
-    stage: 'materials',
+    stage: 'production',
     quantity: 12,
     unit: 's',
     flows: [{ substance: 'Electricity', direction: 'input', quantity: 0.05, unit: 'kWh', note: 'Illustrative: shear power x cutting time.' }],
@@ -211,7 +211,7 @@ export const SAMPLE_STEPS: SampleStep[] = [
     name: 'Deburr edges',
     tier: 'elemental_task',
     parent: '10. Cut blank',
-    stage: 'materials',
+    stage: 'production',
     description: 'A 0.75 kW grinder for 8 seconds.',
     flows: [
       { substance: 'Electricity', direction: 'input', quantity: 0.0013, unit: 'kWh', note: 'Machine calculator: 0.75 kW x 8 s x 80% load = 0.0013 kWh.' },

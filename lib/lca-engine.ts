@@ -62,6 +62,11 @@ export interface FlowContribution {
   source_tier?: SourceTier;
   /** Share of this unit process's burden allocated to the product (ISO 14044 4.3.4). */
   allocation_factor?: number;
+  /** The flow's own stage when a person set one (migrate-046); null = the rule decides. */
+  flow_stage?: string | null;
+  /** The substance's unit and category, which the stage rule reads (lib/life-cycle.ts flowStage). */
+  substance_unit?: string | null;
+  substance_category?: string | null;
   /** 'hand': the person's own number for this flow (migrate-034), not a library factor. */
   factor_origin?: 'hand';
 }
@@ -233,9 +238,11 @@ function flowFactorSql(scope: 'component' | 'case'): string {
        s.substance_name,
        s.cas_number,
        s.unit as substance_default_unit,
+       s.category as substance_category,
        f.flow_type,
        f.quantity,
        f.unit as flow_unit,
+       f.life_cycle_stage as flow_stage,
        dif.category_id,
        dif.geographic_scope,
        dif.factor_basis,
@@ -436,6 +443,9 @@ export async function calculateComponentImpacts(
       unit_conversion: conversionNote,
       factor_source: row.factor_source ?? null,
       source_tier: classifyFactorSource(row.factor_source),
+      flow_stage: row.flow_stage ?? null,
+      substance_unit: row.substance_default_unit ?? null,
+      substance_category: row.substance_category ?? null,
       ...(row.factor_origin === 'hand' ? { factor_origin: 'hand' as const } : {}),
     });
   }
@@ -575,8 +585,8 @@ async function queryFactorOverrides(
     const [rows] = await connection.query<RowDataPacket[]>(
       `SELECT ${scope === 'case' ? 'f.component_id AS row_component_id, ' : ''}o.flow_id, o.category_id, o.factor_value, o.impact_unit, o.per_unit, o.source, o.note,
               ic.category_name, ic.unit AS category_unit,
-              f.substance_id, s.substance_name, s.cas_number, s.unit AS substance_default_unit,
-              f.flow_type, f.quantity, f.unit AS flow_unit,
+              f.substance_id, s.substance_name, s.cas_number, s.unit AS substance_default_unit, s.category AS substance_category,
+              f.flow_type, f.quantity, f.unit AS flow_unit, f.life_cycle_stage AS flow_stage,
               (SELECT string_agg(DISTINCT TRIM(split_part(d.unit COLLATE "C", '/', 1)) COLLATE ci, '|')
                  FROM driver_impact_factors d
                 WHERE d.method_name = ? AND d.category_id = o.category_id) AS method_units

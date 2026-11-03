@@ -43,6 +43,8 @@ function snapshotFlowDetail(snapshot: RunSnapshot) {
     source_tier: r.source_tier ?? null,
     source: r.source ?? null,
     allocation: r.allocation ?? null,
+    // The stage the flow counted in, frozen at run time (null on older runs).
+    stage: r.stage ?? null,
   }));
 }
 

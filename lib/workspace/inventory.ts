@@ -5,6 +5,7 @@
  * would count). Pure: the route feeds it the case's flows and an engine pass.
  */
 
+import { flowStage, type StageId } from '@/lib/life-cycle'
 import { convertQuantity } from '@/lib/units'
 import { basisUnitOf } from './flow-edit'
 import type { FlowStatus, SourceKind } from '@/lib/ui/words'
@@ -23,6 +24,11 @@ export interface CaseFlowRow {
   quantity: number | null
   unit: string
   driver_description?: string | null
+  /** The flow's own stage when a person set one (migrate-046). */
+  flow_stage?: string | null
+  /** The step's stage and the substance's category, which the stage rule reads. */
+  step_stage?: string | null
+  substance_category?: string | null
 }
 
 export interface InventoryRow {
@@ -36,6 +42,9 @@ export interface InventoryRow {
   /** The substance's own unit (what "Pick kg or g" offers). */
   substance_unit: string | null
   note: string | null
+  /** The stage this flow counts in, and whether a person set it (else the rule did). */
+  stage: StageId
+  stage_set: boolean
   status: FlowStatus
   /** The climate arithmetic, when the flow is counted for climate. */
   climate: {
@@ -105,6 +114,15 @@ export function buildInventory(flows: CaseFlowRow[], result: Pick<LCAResult, 'co
       unit: f.unit,
       substance_unit: f.substance_unit,
       note: f.driver_description ?? null,
+      stage: flowStage({
+        explicit: f.flow_stage,
+        stepStage: f.step_stage,
+        direction: f.flow_type,
+        substanceUnit: f.substance_unit,
+        unit: f.unit,
+        substanceCategory: f.substance_category,
+      }),
+      stage_set: !!f.flow_stage,
       status: flowStatus({
         quantity: f.quantity === null || f.quantity === undefined ? null : Number(f.quantity),
         unit: f.unit,

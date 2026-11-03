@@ -37,7 +37,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const flows = await query<any>(
       `SELECT f.flow_id, f.component_id, f.substance_id, s.substance_name, s.unit AS substance_unit,
-              f.flow_type, f.quantity, f.unit, f.driver_description
+              f.flow_type, f.quantity, f.unit, f.driver_description,
+              f.life_cycle_stage AS flow_stage, c.life_cycle_stage AS step_stage, s.category AS substance_category
          FROM flows f
          JOIN component c ON c.component_id = f.component_id
          JOIN substances s ON s.substance_id = f.substance_id

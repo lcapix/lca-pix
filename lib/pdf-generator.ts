@@ -12,7 +12,7 @@
 
 import PDFDocument from 'pdfkit';
 import type { GoalScope } from './run-snapshot';
-import { boundaryGaps, groupByStage, STAGE_IDS, stageLabel, stageOf } from './life-cycle';
+import { boundaryGaps, groupByStage, STAGE_IDS, stageLabel, stageOf, stageRowsFromFlows } from './life-cycle';
 import type { DataQualitySummary } from './lca-engine';
 import { changeText, reportRunLabel, type ReportComparison } from './results/report-text';
 import { fixed } from './ui/format';
@@ -92,6 +92,8 @@ export interface ReportData {
     impact_factor_sources: string[];  // unique source_reference values
     cost_rate_sources: string[];      // unique cost_rates.source values
   };
+  /** Each flow's impact in the stage it counted in (runs made since flows had stages). */
+  stage_impacts?: Array<{ stage: string; category_name: string; impact: number }>;
   /** ISO 14044 goal & scope frozen with the run (4.2); null for runs made before it was stored. */
   goal_scope?: GoalScope | null;
   /** Data-quality statement frozen with the run (ISO 14044 4.2.3.6). */
@@ -635,7 +637,10 @@ export function stageSplit(data: ReportData) {
   const stageOfStep = (s: { id: number | null; name: string }) =>
     s.id != null && stageById.has(s.id) ? stageById.get(s.id) ?? null : stageByName.get(s.name) ?? null;
 
-  const rows = groupByStage(hot.steps.map((s) => ({ stage: stageOfStep(s), value: s.value })));
+  const headlineCategory =
+    (data.total_impacts.find((t) => /global warming|climate/i.test(t.category_name)) ?? data.total_impacts[0])?.category_name ?? ''
+  const byFlow = stageRowsFromFlows(data.stage_impacts ?? [], headlineCategory);
+  const rows = groupByStage(byFlow ?? hot.steps.map((s) => ({ stage: stageOfStep(s), value: s.value })));
   if (!rows.length) return null;
 
   const declared = data.goal_scope?.system_boundary ?? null;
@@ -644,14 +649,16 @@ export function stageSplit(data: ReportData) {
     STAGE_IDS.map((id) => ({
       stage: id,
       steps: [...stageById.values()].filter((v) => stageOf(v) === id).length,
-      flows: rows.find((r) => r.stage === id) ? 1 : 0,
+      flows: byFlow ? byFlow.find((r) => r.stage === id)?.flows ?? 0 : rows.find((r) => r.stage === id) ? 1 : 0,
     })),
   );
 
   const note =
     rows.length === 1
       ? `Every step in this study sits in one stage: ${rows[0].label}.`
-      : 'Each step counts in the stage set on it.';
+      : byFlow
+        ? 'Each flow counts in its own stage: a material going in under Materials, the energy and emissions of a step under that step\'s stage.'
+        : 'Each step counts in the stage set on it.';
   const gapNote = gaps.missing.length
     ? ` The declared boundary also covers ${gaps.missing
         .map((g) => stageLabel(g).toLowerCase())

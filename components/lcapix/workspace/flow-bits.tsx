@@ -10,6 +10,7 @@
 // stored. A unit change converts the amount in the box (0.035 kg becomes 35
 // g) before Save; units that cannot convert are refused with the reason.
 
+import { STAGES, stageLabel } from '@/lib/life-cycle'
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Callout, SavedLine, SourceTag } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
@@ -128,6 +129,9 @@ export function useFlowDraft(row: InventoryRow, stepName: string, steps: StepOpt
   const [direction, setDirection] = useState<'input' | 'output'>(row.direction)
   const [substance, setSubstance] = useState<{ id: number; name: string } | null>(null)
   const [stepId, setStepId] = useState(row.component_id)
+  // The flow's own stage: '' hands it to the rule (materials in, else the step's stage).
+  const storedStage = row.stage_set ? row.stage : ''
+  const [stageChoice, setStageChoice] = useState<string>(storedStage)
   const [unitNote, setUnitNote] = useState<string | null>(null)
   const [unitProblem, setUnitProblem] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -144,6 +148,7 @@ export function useFlowDraft(row: InventoryRow, stepName: string, steps: StepOpt
     setDirection(row.direction)
     setSubstance(null)
     setStepId(row.component_id)
+    setStageChoice(row.stage_set ? row.stage : '')
     setUnitNote(null)
     setUnitProblem(null)
     setError(null)
@@ -151,11 +156,11 @@ export function useFlowDraft(row: InventoryRow, stepName: string, steps: StepOpt
     setJustSaved(false)
   }
   // A reload (after any save) puts the boxes back to what is stored.
-  useEffect(reset, [row.flow_id, row.amount, row.unit, row.direction, row.substance_id, row.component_id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(reset, [row.flow_id, row.amount, row.unit, row.direction, row.substance_id, row.component_id, row.stage, row.stage_set]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const unitChanged = unit !== row.unit
   const amountEdited = amountChanged(amount, shown)
-  const dirty = !justSaved && (amountEdited || unitChanged || direction !== row.direction || substance !== null || stepId !== row.component_id)
+  const dirty = !justSaved && (amountEdited || unitChanged || direction !== row.direction || substance !== null || stepId !== row.component_id || stageChoice !== storedStage)
 
   /** Typing an amount; after a unit that could not convert, the typed amount is the amount in that unit. */
   const setAmount = (v: string) => {
@@ -215,6 +220,7 @@ export function useFlowDraft(row: InventoryRow, stepName: string, steps: StepOpt
     if (direction !== row.direction) body.flow_type = direction
     if (substance) body.substance_id = substance.id
     if (stepId !== row.component_id) body.component_id = stepId
+    if (stageChoice !== storedStage) body.life_cycle_stage = stageChoice || null
     body.expected_quantity = known
     body.expected_unit = row.unit
     setBusy(true)
@@ -237,6 +243,7 @@ export function useFlowDraft(row: InventoryRow, stepName: string, steps: StepOpt
     const parts = [`${name} ${q === null ? 'no amount' : `${amountBox(q)} ${f.unit ?? unit}`}`]
     if (unitChanged && row.amount !== null) parts[0] += ` (was ${amountBox(row.amount)} ${row.unit})`
     if (direction !== row.direction || (f.flow_type && f.flow_type !== row.direction)) parts.push(`${directionWord(f.flow_type ?? direction)}`)
+    if (stageChoice !== storedStage) parts.push(stageChoice ? `stage ${stageLabel(stageChoice)}` : 'stage from the rule')
     const line = `Saved · ${parts.join(', ')} on ${toStep}`
     setSaved(line)
     setKnown(q)
@@ -261,6 +268,7 @@ export function useFlowDraft(row: InventoryRow, stepName: string, steps: StepOpt
     amount, setAmount, unit, setUnit, units, direction, setDirection: (d: 'input' | 'output') => (setDirection(d), setSaved(null), setJustSaved(false)),
     substance, setSubstance: (s: { id: number; name: string } | null) => (setSubstance(s), setSaved(null), setJustSaved(false)),
     stepId, setStepId: (id: number) => (setStepId(id), setSaved(null), setJustSaved(false)),
+    stageChoice, setStageChoice: (v: string) => (setStageChoice(v), setSaved(null), setJustSaved(false)),
     dirty, canSave, busy, error, saved, unitNote, unitProblem, save, reset,
   }
 }
@@ -351,6 +359,28 @@ export function StepSelect({ row, steps, draft }: { row: InventoryRow; steps: St
             {'  '.repeat(s.depth ?? 0)}
             {s.name}
             {s.id === row.component_id ? ' (now)' : ''}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+/**
+ * The life-cycle stage this flow counts in: the rule's choice (a material going
+ * in is Materials; energy, transport and outputs follow the step), or one the
+ * student sets. Save stores it with the rest of the flow.
+ */
+export function StageSelect({ row, draft }: { row: InventoryRow; draft: FlowDraft }) {
+  const rule = row.stage_set ? null : row.stage
+  return (
+    <label className="ds-label" style={{ marginBottom: 0 }}>
+      Life-cycle stage
+      <select className="ds-input" style={{ width: '100%', marginTop: 4 }} aria-label={`Stage for ${row.substance}`} value={draft.stageChoice} onChange={(e) => draft.setStageChoice(e.target.value)}>
+        <option value="">{rule ? `From the rule: ${stageLabel(rule)}` : 'From the rule'}</option>
+        {STAGES.map((st) => (
+          <option key={st.id} value={st.id}>
+            {st.label} (set by you)
           </option>
         ))}
       </select>

@@ -66,6 +66,14 @@ export async function PUT(
     const unitTooLong = lengthError('Unit', unit, COLUMN_LIMITS.flows.unit);
     if (unitTooLong) return NextResponse.json({ error: unitTooLong }, { status: 400 });
 
+    // The flow's own life-cycle stage (migrate-046): a stage overrides the
+    // rule; null (or '') hands it back to the rule; absent leaves it as it is.
+    const stageSent = Object.prototype.hasOwnProperty.call(body, 'life_cycle_stage');
+    const stageValue = stageSent && body.life_cycle_stage ? String(body.life_cycle_stage).trim().toLowerCase() : null;
+    if (stageValue !== null && !['materials', 'production', 'distribution', 'use', 'end_of_life'].includes(stageValue)) {
+      return NextResponse.json({ error: 'life_cycle_stage must be materials, production, distribution, use or end_of_life' }, { status: 400 });
+    }
+
     // E1: a flow can move to another step of the same case, never out of it.
     const moveRaw = body.component_id;
     let moveTo: number | null = null;
@@ -174,7 +182,8 @@ export async function PUT(
              flow_type = COALESCE(?, flow_type),
              quantity = CASE WHEN ? = 1 THEN NULL ELSE COALESCE(?, quantity) END,
              unit = COALESCE(?, unit),
-             component_id = COALESCE(?, component_id)
+             component_id = COALESCE(?, component_id),
+             life_cycle_stage = CASE WHEN ? = 1 THEN ? ELSE life_cycle_stage END
          WHERE flow_id = ?${guarded ? ' AND quantity IS NOT DISTINCT FROM ?::float8' : ''}${expectedUnit ? ' AND unit = ?' : ''}`;
       const updateParams = [
         substance_id != null ? Number(substance_id) : null,
@@ -183,6 +192,8 @@ export async function PUT(
         convertedQuantity !== undefined ? convertedQuantity : quantity,
         unit ?? null,
         moveTo,
+        stageSent ? 1 : 0,
+        stageValue,
         flowId,
         ...(guarded ? [expected] : []),
         ...(expectedUnit ? [expectedUnit] : []),

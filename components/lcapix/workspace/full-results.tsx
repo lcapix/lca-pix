@@ -11,7 +11,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { BigValue, Button, Callout, Card, EmptyState, ErrorCard, KeyValue, SectionLabel, Segmented } from '@/components/lcapix/ds'
 import { MagicInsightsModal } from '@/components/lcapix/magic-insights-modal'
 import { insightsBreakdownOf, insightsMaterialsOf } from '@/lib/results/insights-inputs'
-import { boundaryGaps, groupByStage, stageLabel, STAGES, type StageId } from '@/lib/life-cycle'
+import { boundaryGaps, groupByStage, stageLabel, stageRowsFromFlows, STAGES, type StageId } from '@/lib/life-cycle'
 import { amount, grouped, money, result3, share } from '@/lib/ui/format'
 import { categoryNumber, headlineNumber } from '@/lib/results/number-view'
 import { howSure } from '@/lib/workspace/results-view'
@@ -600,11 +600,16 @@ function IsoSummary({ run }: { run: WorkspaceRun }) {
 /** The chosen category by life-cycle stage, and what the declared boundary says is missing (R08). */
 function StagePanel({ run, category, unit }: { run: WorkspaceRun; category: string | null; unit: string }) {
   if (!category) return null
-  const rows = run.componentBreakdown.map((c) => ({
-    stage: c.life_cycle_stage ?? null,
-    value: Number(c.impacts.find((i) => i.category_name === category)?.impact_value ?? 0) || 0,
-    flows: Number(c.flows_processed ?? 0),
-  }))
+  // Each flow in its own stage (a material going in under Materials); a run
+  // made before flows had stages splits by step, as it always did.
+  const byFlow = stageRowsFromFlows((run.flowDetail ?? []) as any[], category)
+  const rows =
+    byFlow ??
+    run.componentBreakdown.map((c) => ({
+      stage: c.life_cycle_stage ?? null,
+      value: Number(c.impacts.find((i) => i.category_name === category)?.impact_value ?? 0) || 0,
+      flows: Number(c.flows_processed ?? 0),
+    }))
   const totals = groupByStage(rows)
   const presence = STAGES.map((s) => {
     const mine = rows.filter((r) => (r.stage ?? 'production') === s.id)

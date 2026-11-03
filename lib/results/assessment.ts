@@ -38,6 +38,8 @@ export interface FlowDetailRow {
   scope?: string
   /** Unit conversion the engine applied (e.g. "1 g = 0.001 kg"); snapshot runs only. */
   conversion?: string | null
+  /** The life-cycle stage this flow counted in, frozen with the run (null on runs made before flows had stages). */
+  stage?: string | null
   /** Provenance tier of the factor (authoritative / industry_average / unverified / unknown). */
   source_tier?: string | null
   /** The factor's cited source. */

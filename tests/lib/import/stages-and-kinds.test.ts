@@ -26,7 +26,7 @@ describe('importStages (F4: a stage where the file implies one)', () => {
     { id: 4, name: '40. Ship', tier: 'operation', stage: 'distribution', created: false },
     { id: 5, name: '20. Weld', tier: 'operation', stage: null, created: false },
   ]
-  it('puts the steps that take in a bill of materials in Materials, never over a stage a person chose', () => {
+  it('leaves the steps that take in a bill of materials in Production (the materials count in Materials by their flows), never over a stage a person chose', () => {
     const out = importStages({
       docType: 'bom',
       steps,
@@ -36,10 +36,8 @@ describe('importStages (F4: a stage where the file implies one)', () => {
         { step_id: 4, direction: 'input', unit: 'kg', substance_text: 'Tape' },
       ],
     })
-    expect(out).toEqual([
-      { id: 2, name: '10. Cut tube', stage: 'materials' },
-      { id: 3, name: '30. Pack', stage: 'materials' },
-    ])
+    // 10. Cut tube is Production already; 40. Ship keeps the Distribution a person chose.
+    expect(out).toEqual([{ id: 3, name: '30. Pack', stage: 'production' }])
   })
   it('gives an equipment list or a routing Production, only where no stage is set', () => {
     const out = importStages({

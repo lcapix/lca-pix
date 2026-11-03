@@ -10,6 +10,8 @@
  * Pure module: no database, fully unit-testable.
  */
 
+import { unitFamily } from '@/lib/units';
+
 export type StageId = 'materials' | 'production' | 'distribution' | 'use' | 'end_of_life';
 
 export type Stage = {
@@ -57,6 +59,30 @@ export const STAGE_IDS = STAGES.map((s) => s.id);
 export function stageOf(value?: string | null): StageId {
   const v = String(value ?? '').trim().toLowerCase();
   return (STAGE_IDS as string[]).includes(v) ? (v as StageId) : 'production';
+}
+
+/**
+ * The stage a flow's burden belongs to (ISO 14040/14044): a person's own
+ * setting wins; else a material going in (measured by mass, count or area, and
+ * not an emission) is Materials, because its burden is the extraction and
+ * making of the material; energy, volumes (gas, water), transport and every
+ * output follow the step's own stage.
+ */
+export function flowStage(f: {
+  explicit?: string | null;
+  stepStage?: string | null;
+  direction: string;
+  substanceUnit?: string | null;
+  unit?: string | null;
+  substanceCategory?: string | null;
+}): StageId {
+  const own = String(f.explicit ?? '').trim().toLowerCase();
+  if ((STAGE_IDS as string[]).includes(own)) return own as StageId;
+  const fam = unitFamily(f.substanceUnit) ?? unitFamily(f.unit);
+  const category = String(f.substanceCategory ?? '').toLowerCase();
+  const isInput = String(f.direction).toLowerCase().startsWith('in');
+  if (isInput && !category.startsWith('emission') && (fam === 'mass' || fam === 'count' || fam === 'area')) return 'materials';
+  return stageOf(f.stepStage);
 }
 
 export function stageLabel(id?: string | null): string {
@@ -113,4 +139,27 @@ export function groupByStage<T extends { stage?: string | null; value: number }>
     value: totals.get(s) ?? 0,
     share: sum > 0 ? (totals.get(s) ?? 0) / sum : 0,
   }));
+}
+
+/**
+ * One category by stage, from a run's frozen flows: each flow counts in its
+ * own stage (materials going in under Materials, the step's energy under the
+ * step's stage). Null when no flow carries a stage (a run made before flows
+ * had stages): the caller then splits by step, as that run always did.
+ */
+export function stageRowsFromFlows(
+  flows: Array<{ stage?: string | null; category_name: string; impact: number }>,
+  category: string,
+): Array<{ stage: StageId; value: number; flows: number }> | null {
+  if (!flows.some((f) => f.stage)) return null;
+  const out = new Map<StageId, { stage: StageId; value: number; flows: number }>();
+  for (const f of flows) {
+    if (f.category_name !== category) continue;
+    const st = stageOf(f.stage);
+    const row = out.get(st) ?? { stage: st, value: 0, flows: 0 };
+    row.value += Number(f.impact) || 0;
+    row.flows += 1;
+    out.set(st, row);
+  }
+  return [...out.values()];
 }

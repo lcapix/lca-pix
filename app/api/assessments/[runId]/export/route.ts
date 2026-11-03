@@ -252,6 +252,7 @@ export async function GET(
 
     // 7. Build report data
     const reportData: ReportData = {
+      stage_impacts: frozen?.stage_impacts ?? [],
       goal_scope: snapshot?.goal_scope ?? null,
       data_quality: snapshot?.data_quality ?? null,
       interpretation: writeup.interpretation ?? null,
