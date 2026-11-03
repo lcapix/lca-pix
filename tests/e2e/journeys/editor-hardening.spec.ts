@@ -364,6 +364,8 @@ test.describe('editor hardening: own factors', () => {
     expect(run.status()).toBe(201);
     const runId = (await run.json()).run_id;
     const results = `/project/${projectId}/case/${caseId}/results?run=${runId}`;
+    // A run opens the Results tab by itself: let that land before going on, or the two navigations race (WebKit).
+    await expect(page).toHaveURL(/[?&]tab=results/, NAV);
     await open(page, results);
     await expect(page.getByText(/Hand-entered: Mill EPD 2025/).first()).toBeVisible(NAV);
     await expect(page.getByText('(source not on record)')).toHaveCount(0);
