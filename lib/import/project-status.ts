@@ -14,7 +14,9 @@ export interface ProjectStatus {
 /** The project's cases from a /api/projects/:id/cases answer, or null when it has no cases array. */
 export function projectCasesFrom(d: any): ProjectCase[] | null {
   if (!Array.isArray(d?.cases)) return null
-  return d.cases.map((c: any) => ({
+  // Nothing can be added to a read-only case (a handed-in copy, the sample's
+  // base case): the server refuses it, so it is not offered as "Into".
+  return d.cases.filter((c: any) => Number(c.read_only ?? 0) !== 1).map((c: any) => ({
     case_id: c.case_id ?? c.id,
     case_name: c.case_name ?? c.name,
   }))

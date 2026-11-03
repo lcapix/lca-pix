@@ -90,8 +90,7 @@ export function ColumnsCard({
         </h2>
         <p style={{ margin: '6px 0 0', fontSize: 15 }}>{info.message}</p>
         <p className="edu-hint" style={{ margin: '6px 0 12px' }}>
-          Say what each column holds. It needs {info.needed}. This project remembers your choice for the next file laid
-          out the same way.
+          Say what each column holds. This project remembers your choice for the next file laid out the same way.
         </p>
         {table}
       </div>

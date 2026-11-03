@@ -3,6 +3,12 @@ import { describe, it, expect } from 'vitest'
 import { docsHint, mergeProjectStatus, projectCasesFrom } from '@/lib/import/project-status'
 
 describe('projectCasesFrom', () => {
+  it('leaves out read-only cases (a handed-in copy, the sample base): nothing can be added to them', () => {
+    expect(projectCasesFrom({ cases: [{ case_id: 1, case_name: 'Mine', read_only: 0 }, { case_id: 2, case_name: 'Handed in', read_only: 1 }] })).toEqual([
+      { case_id: 1, case_name: 'Mine' },
+    ])
+  })
+
   it('reads case_id / case_name, falling back to id / name', () => {
     expect(
       projectCasesFrom({ cases: [{ case_id: 1, case_name: 'A', extra: true }, { id: 2, name: 'B' }] }),
