@@ -410,7 +410,7 @@ export function ComparePage() {
           <Ranking cases={compared} baseId={base.caseId} category={category} unit={unit} blocked={noPct} />
           <p>
             <Link className="ds-btn" href={`/project/${projectId}/case/new?kind=whatif&from=${base.caseId}`}>
-              Duplicate the base
+              Make a what-if of the base
             </Link>
           </p>
 

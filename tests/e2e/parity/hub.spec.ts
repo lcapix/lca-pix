@@ -239,7 +239,7 @@ test('P59 P60 P63 P65 P67 P68 P69 P71 P72 P74 P75 P77 P78 P79 P80 P81 P84 G126 P
   await expect.soft(page, note('P68', 'the picked run is in the address')).toHaveURL(/runs=\d+:\d+/);
   await row(cards.getByText(/Compared on Run 1 because you picked it\./), 'P69', '"Compared on run #x because ..."');
   await row(page.getByRole('region', { name: 'Ranking' }), 'P74', 'Ranking with not-ranked reasons');
-  await row(page.getByRole('link', { name: 'Duplicate the base' }), 'P75', '"Duplicate the base" button');
+  await row(page.getByRole('link', { name: 'Make a what-if of the base' }), 'P75', '"Duplicate the base" button, now named for a what-if (UX 5)');
   const totals = page.getByRole('region', { name: 'Totals' });
   const nums = await totals.locator('.cmp-total-num').allTextContents();
   expect.soft(new Set(nums.map((n) => (n.split('.')[1] ?? '').length)).size, note('P139', 'A and B show the same decimals (2.9)')).toBe(1);
