@@ -106,13 +106,15 @@ test('the screens print the run, per functional unit, at 3 significant figures',
     }
 
     // The Inventory: each row's amount × factor = impact, as the case holds it (the documents' amounts).
-    const inv = await as.get<{ rows: Array<{ substance: string; amount: number | null; climate: { factor: number; impact: number; conversion: string | null } | null }> }>(`/api/cases/${id}/inventory`);
+    const inv = await as.get<{ rows: Array<{ component_id: number; substance: string; amount: number | null; climate: { factor: number; impact: number; conversion: string | null } | null }> }>(`/api/cases/${id}/inventory`);
+    const stepName = new Map((await as.get<{ components: Array<{ component_id: number; component_name: string }> }>(`/api/cases/${id}/components`)).components.map((c) => [Number(c.component_id), c.component_name]));
     await open(page, `/project/${projectId}/case/${id}?tab=inventory`, { ready: 'All flows' });
     if (scale !== 1) await expect(page.getByRole('note').filter({ hasText: 'The inventory covers' }), `${where}: Inventory basis line`).toBeVisible();
     // Rows with no unit conversion, where the amount shown is the amount multiplied.
     for (const r of inv.rows.filter((x) => x.climate && x.amount != null && !x.climate.conversion).slice(0, 8)) {
       expect(Math.abs(r.amount! * r.climate!.factor - r.climate!.impact), `${where}: ${r.substance} amount × factor = impact`).toBeLessThan(1e-9 * Math.max(1, Math.abs(r.climate!.impact)));
-      const cell = page.getByRole('row').filter({ hasText: r.substance }).first();
+      // The row of this substance on this step (a case can hold the same substance on several).
+      const cell = page.getByRole('row').filter({ hasText: r.substance }).filter({ hasText: `${stepName.get(Number(r.component_id))} ·` }).first();
       await expect(cell, `${where}: Inventory row ${r.substance}`).toContainText(`= ${result3(r.climate!.impact)}`);
     }
   }
