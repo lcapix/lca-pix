@@ -56,13 +56,12 @@ async function expectLean(page: Page) {
   expect(await fit.evaluate((el) => el.scrollWidth <= el.clientWidth + 1), 'the lines table fits its card').toBe(true);
   const nameCell = page.locator('.ip-lines-table tbody tr').first().locator('td').nth(1);
   expect((await nameCell.boundingBox())!.width, 'the name column is readable').toBeGreaterThan(150);
-  // A line that is simply counted starts closed; one that needs a look (no
-  // match, a match to check, no climate factor, no step) starts open, so a
-  // wrong read can be changed without hunting for it.
+  // A line that is simply counted starts closed; one whose match needs a look
+  // (no match, a match to check, no climate factor) starts open, so a wrong
+  // read can be changed without hunting for it.
   for (const row of await page.locator('.ip-lines-table tbody tr.ip-line-row').all()) {
     const status = (await row.locator('.ip-status').innerText()).trim();
-    const warn = ((await row.getAttribute('class')) ?? '').includes('ws-row-warn');
-    await expect(row.locator('.ip-edit-toggle')).toHaveAttribute('aria-expanded', status === 'Counted' && !warn ? 'false' : 'true');
+    await expect(row.locator('.ip-edit-toggle')).toHaveAttribute('aria-expanded', status === 'Counted' ? 'false' : 'true');
   }
   await expect(page.getByRole('region', { name: 'Next:' })).toBeVisible();
 }

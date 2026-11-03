@@ -53,12 +53,12 @@ export function FlowsTable({
     need_match: rows.filter((r) => lineShows('need_match', status(r), true)).length,
   }
   const [wider, setWider] = useState<Record<number, SubstanceCandidate[]>>({})
-  // The lines whose changes are open: the ones that need a look (no match, a
-  // match to check, no climate factor, or no step yet) start open; a line
-  // that is simply counted stays closed until its Change is pressed.
-  const [open, setOpen] = useState<Set<number>>(
-    () => new Set(rows.filter((r) => status(r) !== 'counted' || !placed(r.i)).map((r) => r.i)),
-  )
+  // The lines whose changes are open: the ones whose match needs a look (no
+  // match, a match to check, no climate factor) start open; a line that is
+  // simply counted stays closed until its Change is pressed. Placement is not
+  // read here: it settles after the first render, and a line with no step is
+  // already marked and has its own filter ("Need a step").
+  const [open, setOpen] = useState<Set<number>>(() => new Set(rows.filter((r) => status(r) !== 'counted').map((r) => r.i)))
   const toggle = (i: number) =>
     setOpen((prev) => {
       const next = new Set(prev)
