@@ -1,16 +1,17 @@
 import { LegalShell } from '../legal-layout'
+import { CONTACT_EMAIL } from '@/lib/contact'
 
 export const metadata = { title: 'Security: LCAPIX' }
 
 // Every line here is something the code or the hosting does today; a claim
 // goes on this page only once it is true (checked 2026-10-20 against the code
-// on v1-hardening). Planned work is not listed as done.
+// on v1-hardening; the policy, deletion and contact lines again 2026-11-03). Planned work is not listed as done.
 export default function SecurityPage() {
   return (
     <LegalShell
       eyebrow="SECURITY"
       title="Security"
-      effective="October 20, 2026"
+      effective="November 3, 2026"
     >
       <p>
         This page says what LCAPIX does today to protect your data. It lists only what is in place now.
@@ -32,6 +33,7 @@ export default function SecurityPage() {
         <li>
           A session is a signed token that lasts up to 7 days. It stops working when the password changes.
           Signing out removes it from this browser; a copy of the token kept elsewhere works until it expires.
+          Deleting your account stops every one of its sessions at once.
         </li>
         <li>Sign-in attempts are limited to 5 a minute, and new accounts to 60 an hour from one address, so a class on one network can sign up together.</li>
       </ul>
@@ -52,8 +54,8 @@ export default function SecurityPage() {
         <li>Uploads are limited to known file types, checked by their content as well as their name, and by size.</li>
         <li>Costly actions (runs, file reads, AI narration, rate look-ups) are limited per person.</li>
         <li>
-          Pages are sent with security headers, including a content security policy, which currently reports
-          rather than blocks.
+          Pages are sent with security headers, including a content security policy that blocks scripts from other
+          sites and requests to other sites. It still allows the app&apos;s own inline scripts.
         </li>
       </ul>
 
@@ -67,7 +69,7 @@ export default function SecurityPage() {
           Every number in the model&apos;s reply is checked against the run before you see it. A reply with any
           other number is discarded, and LCAPIX shows its own computed reading instead.
         </li>
-        <li>Without a model configured, the reading is computed by LCAPIX and nothing is sent anywhere.</li>
+        <li>In this beta no model is configured: every reading is computed by LCAPIX and nothing is sent anywhere.</li>
         <li>
           A project&apos;s owner can turn AI narration off for that project. Its readings are then computed by
           LCAPIX and nothing from it is sent.
@@ -77,8 +79,8 @@ export default function SecurityPage() {
 
       <h2>6. Reporting a problem</h2>
       <p>
-        Found a vulnerability? Email security@lcapix.com. We acknowledge within 24h, fix or mitigate within 7
-        days for critical issues, and credit you in the changelog if you&apos;d like.
+        Found a vulnerability? Email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>. We read every report,
+        fix what we can as soon as we can, and credit you in the changelog if you&apos;d like.
       </p>
     </LegalShell>
   )
