@@ -54,14 +54,14 @@ export function caseStands(i: StandsInput): StandsRow[] {
       key: 'materials',
       label: 'Materials',
       detail: i.layers.includes('materials') ? 'What goes in, placed on its steps' : 'Add the bill of materials.',
-      value: i.layers.includes('materials') ? 'In' : 'Not yet',
+      value: i.layers.includes('materials') ? 'Added' : 'Not yet',
       done: i.layers.includes('materials'),
     },
     {
       key: 'energy',
       label: 'Energy',
       detail: i.layers.includes('energy') ? 'Electricity and fuels on their steps' : 'Add the equipment list for machine energy.',
-      value: i.layers.includes('energy') ? 'In' : 'Not yet',
+      value: i.layers.includes('energy') ? 'Added' : 'Not yet',
       done: i.layers.includes('energy'),
     },
     {

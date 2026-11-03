@@ -194,19 +194,19 @@ function AssignmentForm({
       </SectionLabel>
       <label className="np-field">
         <span className="edu-field-label">Title</span>
-        <input className="ds-input" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+        <input className="ds-input" aria-label="Title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
       </label>
       <label className="np-field">
         <span className="edu-field-label">Instructions</span>
-        <textarea className="ds-input" rows={4} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
+        <textarea className="ds-input" aria-label="Instructions" rows={4} value={instructions} onChange={(e) => setInstructions(e.target.value)} />
       </label>
       <label className="np-field">
         <span className="edu-field-label">Due</span>
-        <input className="ds-input" type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
+        <input className="ds-input" aria-label="Due" type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
       </label>
       <label className="np-field">
         <span className="edu-field-label">Students start from</span>
-        <select className="ds-input" value={template} onChange={(e) => setTemplate(e.target.value)}>
+        <select className="ds-input" aria-label="Students start from" value={template} onChange={(e) => setTemplate(e.target.value)}>
           <option value="">Choose a case</option>
           {templates.map((t) => (
             <option key={t.id} value={t.id}>
@@ -323,7 +323,7 @@ function AssignmentCard({
             </Button>
           )}
           {a.my_case_id && !a.my_submitted_at && (
-            <span className="np-sub">Run your case and write it up first: the hand-in keeps your latest run and your write-up.</span>
+            <span className="np-sub">Hand in sends a read-only copy of your case with its latest run and your saved write-up.</span>
           )}
           {a.my_submitted_at && (
             <span>
