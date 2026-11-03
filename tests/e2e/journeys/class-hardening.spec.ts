@@ -11,7 +11,7 @@
  *   D2  Hand-ins: the hand-in opens the frozen copy, "Its run" the copy's run, and the
  *       working case is a separate, labelled link
  *   D3  Cases and Home show the hand-in as handed in, never a second unrun case
- *   D4  after a run on an assignment case: "Write up, then hand in"
+ *   D4  after a run on an assignment case the step bar's Next is the write-up, then Hand in
  *   D5  one Start that starts; a can-read student is told why there is none; the case
  *       is named "<assignment> · <student>"; the teacher reads a student's case only
  */
@@ -118,7 +118,7 @@ test('journey 6, hardened: set, start, run, hand in, and the teacher opens the h
   let frozenId = 0;
   const a = await signIn(ana);
   const ap = a.page;
-  await test.step('D5 D4 Ana presses Start on Home: her own case, named for her; she runs it; next is write up, then hand in', async () => {
+  await test.step('D5 D4 Ana presses Start on Home: her own case, named for her; she runs it; the step bar takes her to the write-up, then to Hand in', async () => {
     await open(ap, '/home', { ready: 'Assigned to you' });
     const assigned = ap.getByRole('region', { name: /Assigned to you/ });
     // One way in: Start. No second, untied "Make your own case".
@@ -138,16 +138,16 @@ test('journey 6, hardened: set, start, run, hand in, and the teacher opens the h
     await ap.getByRole('dialog', { name: 'Run assessment' }).getByRole('button', { name: 'Run', exact: true }).click();
     expect((await ran).status()).toBe(201);
     await expect(ap).toHaveURL(/tab=results/, NAV);
-    await expect(ap.getByText('Next: write up, then hand in.')).toBeVisible(NAV);
-    await ap.getByRole('button', { name: 'Write up', exact: true }).click();
+    const bar = ap.getByRole('navigation', { name: 'Where this case stands' });
+    await expect(bar.getByRole('button', { name: /^Impact assessment: done\. Run 1\./ })).toBeVisible(NAV);
+    await bar.getByRole('button', { name: 'Next: Write the interpretation' }).click();
     await expect(ap).toHaveURL(/tab=writeup/, NAV);
     await ap.getByRole('textbox', { name: 'Interpretation' }).fill('Steel is all of it, so a lighter blank is the lever.');
     const wrote = answered(ap, /^\/api\/cases\/\d+$/, 'PUT');
     await ap.getByRole('button', { name: 'Save the write-up' }).click();
     expect((await wrote).status()).toBe(200);
-    await ap.goBack();
-    await expect(ap).toHaveURL(/tab=results/, NAV);
-    await ap.getByRole('link', { name: 'Hand in on Assignments' }).click();
+    await expect(bar.getByRole('button', { name: /^Interpretation: done\./ })).toBeVisible(NAV);
+    await bar.getByRole('button', { name: 'Next: Hand it in' }).click();
     await expect(ap).toHaveURL(new RegExp(`/project/${projectId}/assignments$`), NAV);
   });
 

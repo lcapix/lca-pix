@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Button, ConfirmDialog, ErrorCard, Segmented, TextDialog } from '@/components/lcapix/ds'
 import { apiRequest } from '@/lib/api-client'
 import { ProjectSettingsPanel } from '@/components/lcapix/workspace/project-settings'
@@ -61,7 +61,9 @@ export function CasesPage() {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [allRows, setAllRows] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // A case's step bar opens settings here (?settings=1) for its goal and scope.
+  const search = useSearchParams()
+  const [settingsOpen, setSettingsOpen] = useState(search.get('settings') === '1')
 
   const split = useMemo(() => (data ? splitCases(data.cases, userId) : { mine: [], others: [] }), [data, userId])
   if (error) {

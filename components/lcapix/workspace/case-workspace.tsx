@@ -30,6 +30,8 @@ import { inventoryBadge } from '@/lib/workspace/inventory'
 import { pickRun, useCaseRuns, type CompareTarget } from '@/lib/workspace/use-runs'
 import { useCaseWorkspace } from '@/lib/workspace/use-workspace'
 import { CaseHeader } from './case-header'
+import { CaseSteps } from './case-steps'
+import { caseSteps, type CaseStepKey } from '@/lib/workspace/case-steps'
 import { InventoryTab } from './inventory-tab'
 import { ResultsPanel } from './results-panel'
 import { TreeTab, type TreeView } from './tree-tab'
@@ -65,7 +67,7 @@ export function CaseWorkspace() {
   const router = useRouter()
   const search = useSearchParams()
   const caseId = Number(params.caseId)
-  const { kase, steps, inventory, siblings, layout, status, error, reload, readOnly: caseReadOnly } = useCaseWorkspace(caseId)
+  const { kase, steps, inventory, siblings, layout, status, error, reload, readOnly: caseReadOnly, caps } = useCaseWorkspace(caseId)
   const { profile, projects } = useShellData()
   // D5: someone else's assignment case (a student's working case or hand-in)
   // reads only, until the case list says whose it is.
@@ -259,28 +261,42 @@ export function CaseWorkspace() {
     startAddFlow: search.get('add') === 'flow',
   }
 
-  // D4: an assignment case that has an answer: write it up, then hand it in.
-  const handInNext =
-    !!kase.assignment_id && !readOnly && !!run && tab === 'results' ? (
-      <div className="pc-next">
-        <Callout
-          tone="info"
-          lead="Next: write up, then hand in."
-          action={
-            <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Button size="small" variant="primary" onClick={() => go('writeup')}>
-                Write up
-              </Button>
-              <Link className="ds-btn ds-btn--small" href={`/project/${kase.project_id}/assignments`}>
-                Hand in on Assignments
-              </Link>
-            </span>
-          }
-        >
-          Say what the answer means in the write-up. Hand in sends your instructor a read-only copy with this run and your write-up.
-        </Callout>
-      </div>
-    ) : null
+  const openRun = () => {
+    setRunMethod(kase.project_lcia_method ?? '')
+    setRunRegion(kase.region_code ?? '')
+    setRunOpen(true)
+  }
+
+  // The step bar (ISO 14044's four phases, then Hand in on an assignment case). D4:
+  // after a run on an assignment case its Next is the write-up, then Hand in.
+  const latestRun = inventory?.latest_run ?? null
+  const barSteps = caseSteps({
+    functionalUnit: kase.project_functional_unit,
+    referenceFlow: kase.reference_flow,
+    canSetScope: caps.canManage,
+    stepCount: steps.length,
+    flowCount: inventory?.rows.length ?? 0,
+    countedFlows: (counts?.counted ?? 0) + (counts?.no_factor ?? 0),
+    needsAmount: counts?.needs_amount ?? 0,
+    leftOut: counts?.left_out ?? 0,
+    runLabel: latestRun ? runLabel(latestRun) : null,
+    changedAfterRun: !!latestRun?.changed_after_run,
+    hasWriteUp: !!kase.interpretation?.trim(),
+    assignment: !!kase.assignment_id,
+    handedIn: siblings.some((s) => s.read_only && s.assignment_id === kase.assignment_id && s.created_by === profile?.id),
+  })
+  const actOn = (key: CaseStepKey) => {
+    const s = barSteps.find((x) => x.key === key)
+    if (key === 'scope') router.push(`/project/${kase.project_id}/cases?settings=1`)
+    else if (key === 'inventory') {
+      if (!steps.length) router.push(`/project/${kase.project_id}/case/${kase.case_id}?add=step`)
+      else go(inventory?.rows.length ? 'inventory' : 'tree')
+    } else if (key === 'impact') {
+      if (s?.done) go('results')
+      else openRun()
+    } else if (key === 'interpretation') go('writeup')
+    else router.push(`/project/${kase.project_id}/assignments`)
+  }
 
   const latestBuild = run ? whatBuilds(run, kase.case_type)[0] : null
   const topStep = latestBuild && latestBuild.value > 0 ? { name: latestBuild.name, share: latestBuild.share } : null
@@ -338,11 +354,7 @@ export function CaseWorkspace() {
         readOnly={readOnly}
         canRun={canRun}
         ownName={ownName}
-        onRun={() => {
-          setRunMethod(kase.project_lcia_method ?? '')
-          setRunRegion(kase.region_code ?? '')
-          setRunOpen(true)
-        }}
+        onRun={openRun}
         running={running}
         runSeconds={seconds}
         runError={runError}
@@ -350,6 +362,7 @@ export function CaseWorkspace() {
         runReason={steps.length ? 'Add a counted flow first' : 'Add a step first'}
         noSteps={!steps.length}
       />
+      {!readOnly && <CaseSteps steps={barSteps} onAct={actOn} />}
       <LearnOffer asked={search.get('learn') === '1'} />
       {othersAssignment && ownerOfCase !== undefined && !caseReadOnly && (
         <div className="pc-next">
@@ -358,7 +371,6 @@ export function CaseWorkspace() {
           </Callout>
         </div>
       )}
-      {handInNext}
       {error && status === 'ready' && (
         <div style={{ padding: '12px 24px 0' }}>
           <ErrorCard title="The case did not refresh" cause={error} fix="What you see may be a moment old." onRetry={reload} />
