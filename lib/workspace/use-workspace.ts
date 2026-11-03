@@ -32,6 +32,8 @@ export interface WorkspaceCase {
   project_lcia_method: string | null
   reference_flow: number | null
   reference_flow_unit: string | null
+  /** How many units the inventory covers (the data basis); 1 unless an import recorded more. */
+  modeled_output?: number | null
   interpretation: string | null
   assumptions: string | null
   /** The write-up's Limits (migrate-045); null before it is written or on a database without it. */
@@ -155,6 +157,7 @@ export function useCaseWorkspace(caseId: number) {
         project_lcia_method: cj.project_lcia_method ?? null,
         reference_flow: num(cj.reference_flow),
         reference_flow_unit: cj.reference_flow_unit ?? null,
+        modeled_output: num(cj.modeled_output),
         interpretation: cj.interpretation ?? null,
         assumptions: cj.assumptions ?? null,
         limitations: cj.limitations ?? null,

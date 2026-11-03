@@ -25,6 +25,7 @@ import { FloatingPanel } from './floating-panel'
 import { previousComparable, runLabel } from '@/lib/results/full-results-view'
 import { notCounted } from '@/lib/runs/method-categories-view'
 import { ExerciseSlot } from './exercise-card'
+import { dataBasisLine, type PerUnitRun } from '@/lib/workspace/per-fu'
 
 const SURE_COLOUR: Record<string, string> = {
   global: '#C99A3A',
@@ -74,6 +75,7 @@ export function ResultsPanel({
   }
 
   const climate = runClimate(run)
+  const basisLine = dataBasisLine((run as PerUnitRun).dataBasis, unit)
   const builds = whatBuilds(run, kase.case_type)
   const sentence = answerSentence(run, builds)
   const sure = howSure(run, kase.case_type)
@@ -178,6 +180,11 @@ export function ResultsPanel({
               {co2Unit(climate.unit)} per {unit}
             </span>
           </div>
+          {basisLine && (
+            <p className="ws-basis-line" style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--ds-text-2)' }}>
+              {basisLine}
+            </p>
+          )}
           {sentence && <p style={{ margin: '12px 0 0', fontSize: 17, lineHeight: '24px' }}>{sentence}</p>}
           {note && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>

@@ -41,6 +41,8 @@ import { TreeTab, type TreeView } from './tree-tab'
 import { WriteUpPanel } from './write-up-panel'
 import { DocumentsPanel } from './documents-panel'
 import { SidePanel, type SideShows } from './side-panel'
+import { dataBasisLine } from '@/lib/workspace/per-fu'
+import { perUnit } from '@/lib/workspace/per-unit'
 import { SideSlotContext } from './floating-panel'
 import { ExerciseProvider, exerciseFacts } from './exercise-card'
 import { usePhone } from '@/lib/shell/use-phone'
@@ -337,7 +339,14 @@ export function CaseWorkspace() {
       <div id="ws-tabpanel" role="tabpanel" aria-labelledby={`tab-${tab}`} className="ws-body">
           {tab === 'tree' && <TreeTab {...treeProps} />}
           {tab === 'inventory' && (
-            <InventoryTab caseId={kase.case_id} steps={steps} inventory={inventory} readOnly={readOnly} onOpenInsights={() => setInsightsOpen(true)} />
+            <InventoryTab
+              caseId={kase.case_id}
+              steps={steps}
+              inventory={inventory}
+              readOnly={readOnly}
+              onOpenInsights={() => setInsightsOpen(true)}
+              basisLine={dataBasisLine({ modeledOutput: kase.modeled_output ?? 1, referenceFlow: kase.reference_flow ?? 1 }, perUnit(kase))}
+            />
           )}
           {tab === 'results' && (
             <TreeTab

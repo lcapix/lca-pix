@@ -102,12 +102,15 @@ export function InventoryTab({
   inventory,
   readOnly,
   onOpenInsights,
+  basisLine = null,
 }: {
   caseId: number
   steps: WorkspaceStep[]
   inventory: WorkspaceInventory | null
   readOnly: boolean
   onOpenInsights: () => void
+  /** The inventory covers more than one unit (an import): said once, as Results says it (per-fu.ts). */
+  basisLine?: string | null
 }) {
   const [guided, setGuided] = useGuidedMode()
   const [filter, setFilter] = useState<Filter>('all')
@@ -229,6 +232,11 @@ export function InventoryTab({
           </div>
         )}
         {/* UX 6: one line for the case, not a notice on every flow that uses the Global average. */}
+        {basisLine && (
+          <div className="ws-global-line" role="note">
+            {basisLine}
+          </div>
+        )}
         {globalLine && (
           <div className="ws-global-line" role="note">
             {globalLine}

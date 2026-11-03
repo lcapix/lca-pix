@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiRequest } from '@/lib/api-client'
 import { toAssessmentResult } from '@/lib/results/assessment'
+import { perFunctionalUnit } from '@/lib/workspace/per-fu'
 import type { WorkspaceRun } from '@/lib/workspace/use-runs'
 import { orderSteps, toStep, type WorkspaceInventory, type WorkspaceStep } from '@/lib/workspace/use-workspace'
 
@@ -52,7 +53,8 @@ const json = async (path: string) => {
   if (!r.ok) throw new Error(`${path.split('?')[0]} answered ${r.status}`)
   return r.json()
 }
-const toRun = (a: any): WorkspaceRun | null => (a ? { ...toAssessmentResult(a), run_steps: Array.isArray(a.run_steps) ? a.run_steps : undefined } : null)
+const toRun = (a: any): WorkspaceRun | null =>
+  a ? perFunctionalUnit({ ...toAssessmentResult(a), run_steps: Array.isArray(a.run_steps) ? a.run_steps : undefined }) : null
 
 export function useSampleStudy(projectId: number | null, userId: number | null = null) {
   const [project, setProject] = useState<SampleProject | null>(null)

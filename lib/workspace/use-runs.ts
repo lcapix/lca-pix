@@ -10,10 +10,13 @@ import { apiRequest } from '@/lib/api-client'
 import { toAssessmentResult, type AssessmentResult } from '@/lib/results/assessment'
 import { isCompletedRun } from '@/lib/results/run-math'
 import { runClimate, type RunStep } from './results-view'
+import { perFunctionalUnit } from './per-fu'
 
 export type WorkspaceRun = AssessmentResult & { run_steps?: RunStep[] }
 
-const toRun = (a: any): WorkspaceRun => ({ ...toAssessmentResult(a), run_steps: Array.isArray(a.run_steps) ? a.run_steps : undefined })
+// Every number a run gives the screens is per functional unit (per-fu.ts).
+const toRun = (a: any): WorkspaceRun =>
+  perFunctionalUnit({ ...toAssessmentResult(a), run_steps: Array.isArray(a.run_steps) ? a.run_steps : undefined })
 
 export interface CompareTarget {
   caseId: number

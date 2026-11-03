@@ -558,18 +558,18 @@ function IsoSummary({ run }: { run: WorkspaceRun }) {
                   <thead>
                     <tr>
                       <th>Category</th>
-                      <th className="ds-num">Case total</th>
-                      <th className="ds-num">Per functional unit (× {grouped(amount(scale))})</th>
+                      <th className="ds-num">Per functional unit</th>
+                      <th className="ds-num">For the whole inventory (÷ {grouped(amount(scale))})</th>
                     </tr>
                   </thead>
                   <tbody>
                     {Object.entries(run.impacts).map(([name, v]) => (
                       <tr key={name}>
                         <td>{name}</td>
-                        <td className="ds-num">{result3(v.value)}</td>
                         <td className="ds-num">
-                          {result3(v.value * scale)} {v.unit}
+                          {result3(v.value)} {v.unit}
                         </td>
+                        <td className="ds-num">{result3(v.value / scale)}</td>
                       </tr>
                     ))}
                   </tbody>
