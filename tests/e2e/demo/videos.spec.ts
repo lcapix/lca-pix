@@ -44,6 +44,9 @@ async function scene(page: Page, video: string, name: string, fn: () => Promise<
     await fn();
   } catch (e: any) {
     failed.push(`${video} / ${name}: ${String(e?.message ?? e).split('\n')[0]}`);
+    // What the page showed, to fix the scene before the video goes out.
+    const dir = process.env.E2E_ARTIFACTS_DIR;
+    if (dir) await page.screenshot({ path: path.join(dir, 'skipped', `${video}-${name.replace(/[^a-z0-9]+/gi, '-')}.png`) }).catch(() => {});
     await caption(page, `(${name}: skipped)`, 800).catch(() => {});
   }
 }
@@ -69,6 +72,8 @@ async function importDoc(api: Api, user: ApiUser, kind: string, file: { name: st
   });
   expect(pre.status(), await pre.text()).toBe(200);
   const plan = (await pre.json()).plan;
+  // Each line with the substance the review screen would show chosen: its match, else its first candidate.
+  plan.flows = (plan.flows ?? []).map((f: any) => ({ ...f, substance_id: f.substance_id ?? f.candidates?.[0]?.substance_id ?? null }));
   const body = into.caseId
     ? { target_case_id: into.caseId, nodes: plan.nodes, flows: plan.flows, costs: plan.costs, notes: plan.notes }
     : { project_id: into.projectId, case_name: into.caseName, nodes: plan.nodes, flows: plan.flows, costs: plan.costs, notes: plan.notes };
@@ -341,7 +346,7 @@ test('4. Editing: the tree, the inventory, your own factor, costs and documents'
     await tree(page, '15. Deburr edges').click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Delete step' }).click();
     await caption(page, 'Deleting asks first, and says what goes with it.', 2200);
-    await page.getByRole('alertdialog').getByRole('button', { name: /^Delete/ }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete step', exact: true }).click();
   });
 
   await scene(page, V, 'The inventory', async () => {

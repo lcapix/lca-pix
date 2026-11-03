@@ -216,6 +216,7 @@ export function TreeTab({
   })
   const [renameFor, setRenameFor] = useState<number | null>(null)
   const [deleteFor, setDeleteFor] = useState<number | null>(null)
+  const deleteKids = deleteFor != null ? childCount(steps, deleteFor) : 0
 
   if (!steps.length && !results) {
     return (
@@ -491,12 +492,15 @@ export function TreeTab({
         title="Delete this step?"
         consequence={
           deleteFor != null
-            ? `${byId.get(deleteFor)?.name ?? 'This step'} has ${childCount(steps, deleteFor)} steps under it. Cancel deletes nothing.`
+            ? deleteKids === 0
+              ? `${byId.get(deleteFor)?.name ?? 'This step'} has no steps under it. Cancel deletes nothing.`
+              : `${byId.get(deleteFor)?.name ?? 'This step'} has ${deleteKids} ${deleteKids === 1 ? 'step' : 'steps'} under it. Cancel deletes nothing.`
             : ''
         }
-        confirmLabel={deleteFor != null ? `Delete it and its ${childCount(steps, deleteFor)} steps` : 'Delete it'}
+        // A step with nothing under it has one way to go; "keep its 0 steps" would only confuse.
+        confirmLabel={deleteFor == null ? 'Delete it' : deleteKids === 0 ? 'Delete step' : `Delete it and its ${deleteKids} ${deleteKids === 1 ? 'step' : 'steps'}`}
         secondary={
-          deleteFor != null
+          deleteFor != null && deleteKids > 0
             ? {
                 label: 'Delete it, keep its steps',
                 onClick: async () => {
