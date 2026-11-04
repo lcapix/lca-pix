@@ -72,6 +72,16 @@ async function importDoc(api: Api, user: ApiUser, kind: string, file: { name: st
   });
   expect(pre.status(), await pre.text()).toBe(200);
   const plan = (await pre.json()).plan;
+  // A new case's product is named after the case, as the review screen does (else it carries the file name).
+  if (!into.caseId && into.caseName) {
+    const product = (plan.nodes ?? []).find((n: any) => n.tier === 'product');
+    if (product) {
+      const old = product.name;
+      plan.nodes = plan.nodes.map((n: any) => ({ ...n, name: n.name === old ? into.caseName : n.name, parent: n.parent === old ? into.caseName : n.parent }));
+      plan.flows = (plan.flows ?? []).map((f: any) => ({ ...f, node: f.node === old ? into.caseName : f.node }));
+      plan.costs = (plan.costs ?? []).map((c: any) => ({ ...c, node: c.node === old ? into.caseName : c.node }));
+    }
+  }
   // Each line with the substance the review screen would show chosen: its match, else its first candidate.
   plan.flows = (plan.flows ?? []).map((f: any) => ({ ...f, substance_id: f.substance_id ?? f.candidates?.[0]?.substance_id ?? null }));
   // Appending: every step the file names attaches to the case's step of the same name, as the review screen sends by default.
