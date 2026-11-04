@@ -109,7 +109,7 @@ test.describe('F6 process tree', () => {
 
       await page.getByRole('button', { name: 'Delete step' }).click();
       const del = page.waitForResponse((r) => r.request().method() === 'DELETE' && /\/api\/components\/\d+/.test(r.url()));
-      await confirm.getByRole('button', { name: /Delete it and its \d+ steps/ }).click();
+      await confirm.getByRole('button', { name: /Delete it and its \d+ steps?$/ }).click();
       expect((await del).status()).toBe(200);
       await expect(step(page, 'Finishing')).toHaveCount(0);
       await expect(step(page, 'Degrease')).toHaveCount(0);
