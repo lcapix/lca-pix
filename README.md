@@ -45,6 +45,9 @@ The release on the `v1-finish` branch, for classrooms:
 - **Class privacy**: a project with an assignment shows each student only their own case; only the student
   changes their assignment case.
 
+The full record of this release, every change and bug fix with its commit, is in
+[docs/release/RELEASE_LOG_2026-11-04.md](docs/release/RELEASE_LOG_2026-11-04.md).
+
 ## How it was checked
 
 - **The math.** A test works out every total and every step's value a second time from the case's own rows with
