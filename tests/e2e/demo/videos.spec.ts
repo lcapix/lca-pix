@@ -74,8 +74,15 @@ async function importDoc(api: Api, user: ApiUser, kind: string, file: { name: st
   const plan = (await pre.json()).plan;
   // Each line with the substance the review screen would show chosen: its match, else its first candidate.
   plan.flows = (plan.flows ?? []).map((f: any) => ({ ...f, substance_id: f.substance_id ?? f.candidates?.[0]?.substance_id ?? null }));
+  // Appending: every step the file names attaches to the case's step of the same name, as the review screen sends by default.
+  let node_actions: Record<string, unknown> | undefined
+  if (into.caseId) {
+    const comps = (await api.as(user.token).get<{ components: Array<{ component_id: number; component_name: string }> }>(`/api/cases/${into.caseId}/components`)).components
+    const ids = new Map(comps.map((c) => [c.component_name, Number(c.component_id)]))
+    node_actions = Object.fromEntries((plan.nodes ?? []).filter((n: any) => ids.has(n.name)).map((n: any) => [n.name, { action: 'attach', component_id: ids.get(n.name) }]))
+  }
   const body = into.caseId
-    ? { target_case_id: into.caseId, nodes: plan.nodes, flows: plan.flows, costs: plan.costs, notes: plan.notes }
+    ? { target_case_id: into.caseId, nodes: plan.nodes, flows: plan.flows, costs: plan.costs, notes: plan.notes, node_actions }
     : { project_id: into.projectId, case_name: into.caseName, nodes: plan.nodes, flows: plan.flows, costs: plan.costs, notes: plan.notes };
   const done = await api.as(user.token).post<{ case_id: number }>('/api/ingest/apply', body);
   return Number(done.case_id ?? into.caseId);
@@ -89,8 +96,21 @@ async function bikeClass(api: Api, teacher: ApiUser, students: ApiUser[]) {
   const projectId = (await as.post<{ project: { project_id: number } }>('/api/projects', { project_name: 'Touring bike frame', description: 'Which step of a touring bike frame drives its climate impact?' })).project.project_id;
   await as.put(`/api/projects/${projectId}`, { functional_unit: '1 bike frame', lcia_method: 'TRACI 2.1', region_code: 'US' });
   const baseId = await importDoc(api, teacher, 'routing', csv('routing'), { projectId, caseName: 'Touring bike' });
-  await importDoc(api, teacher, 'bom', csv('bom'), { projectId, caseId: baseId });
   await importDoc(api, teacher, 'equipment', csv('equipment'), { projectId, caseId: baseId });
+  // The bill of materials as the review screen places it: each row on the routing step its Op Seq
+  // names, its mass from the file (kg as given, else count × unit weight). The import screen itself
+  // is in video 3.
+  const comps = (await as.get<{ components: Array<{ component_id: number; component_name: string }> }>(`/api/cases/${baseId}/components`)).components;
+  const library = (await as.get<{ substances: Array<{ substance_id: number; substance_name: string }> }>('/api/substances')).substances;
+  for (const line of SAMPLE_DOCS.bom.content.split('\n').slice(1)) {
+    const cells = line.match(/("[^"]*"|[^,]*)(,|$)/g)!.map((c) => c.replace(/,$/, '').replace(/^"|"$/g, ''));
+    const [, , material, qty, uom, weight, , op] = cells;
+    const step = comps.find((c) => c.component_name.startsWith(`${op}. `));
+    const substance = library.find((x) => x.substance_name.toLowerCase() === material.toLowerCase());
+    const kg = uom === 'kg' ? Number(qty) : Number(qty) * Number(weight);
+    if (!step || !substance || !(kg > 0)) continue;
+    await as.post(`/api/components/${step.component_id}/flows`, { substance_id: substance.substance_id, flow_type: 'input', quantity: Number(kg.toPrecision(6)), unit: 'kg' });
+  }
   await as.post(`/api/cases/${baseId}/assessments`, {});
   for (const s of students) await as.post(`/api/projects/${projectId}/members`, { email: s.email, role: 'editor' });
   await as.post(`/api/projects/${projectId}/assignments`, {
